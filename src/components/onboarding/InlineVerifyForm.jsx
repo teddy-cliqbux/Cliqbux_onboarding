@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ShieldCheck, CheckCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { formatSSN, rawSSN, formatPhone, rawPhone } from '@/lib/textUtils';
 
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
@@ -18,6 +19,7 @@ const labelCls = 'text-xs font-semibold text-gray-600 block mb-1.5';
 export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
   const [expanded, setExpanded] = useState(false);
   const [showSsn, setShowSsn] = useState(false);
+  const [ssnFocused, setSsnFocused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({
@@ -37,7 +39,7 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
   const handleVerify = async (e) => {
     e && e.preventDefault();
     if (!form.dobMonth || !form.dobDay || !form.dobYear) { setError('Date of birth is required.'); return; }
-    if (!form.ssn || form.ssn.replace(/\D/g, '').length !== 9) { setError('A valid 9-digit SSN is required.'); return; }
+    if (!form.ssn || rawSSN(form.ssn).length !== 9) { setError('A valid 9-digit SSN is required.'); return; }
     if (!form.homeStreet || !form.homeCity || !form.homeState || !form.homeZip) { setError('Home address is required.'); return; }
 
     setSaving(true);
@@ -47,7 +49,7 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
         action: 'inlineVerify',
         corporateId,
         signerId: signer.id,
-        signerData: { ...form, ssn: form.ssn.replace(/\D/g, '') }
+        signerData: { ...form, ssn: rawSSN(form.ssn), corporatePhone: rawPhone(form.corporatePhone) }
       });
       if (res.data?.error) throw new Error(res.data.error);
       onVerified({ ...signer, ...res.data.signer, identityStatus: 'Verified' });
@@ -104,12 +106,14 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
         <label className={labelCls}>Social Security Number (SSN)</label>
         <div className="relative">
           <input
-            type={showSsn ? 'text' : 'password'}
-            maxLength={9}
-            className={`${inputCls} pr-9`}
-            value={form.ssn}
+            type="text"
+            maxLength={11}
+            className={`${inputCls} pr-9 font-mono tracking-[0.2em]`}
+            value={ssnFocused && !showSsn ? '••••••' : formatSSN(form.ssn || '')}
+            onFocus={() => setSsnFocused(true)}
+            onBlur={() => setSsnFocused(false)}
             onChange={e => set('ssn', e.target.value.replace(/\D/g, '').slice(0, 9))}
-            placeholder="9 digits — encrypted"
+            placeholder="XXX-XX-XXXX"
           />
           <button
             type="button"
@@ -135,7 +139,7 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
       {/* Phone */}
       <div>
         <label className={labelCls}>Phone Number</label>
-        <input type="tel" className={inputCls} value={form.corporatePhone} onChange={e => set('corporatePhone', e.target.value)} placeholder="10-digit phone" />
+        <input type="tel" className={inputCls} value={formatPhone(form.corporatePhone)} onChange={e => set('corporatePhone', e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="(555) 555-5555" />
       </div>
 
       {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}

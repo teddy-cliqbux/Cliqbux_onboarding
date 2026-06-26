@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Lock, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Lock, FileText, Loader2, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import SignerRoster from '@/components/onboarding/SignerRoster';
 
@@ -17,10 +17,22 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
   const [submitError, setSubmitError] = useState('');
   const iframeRef = useRef(null);
 
-  // When all required signers are cleared (verified or invite sent) → unlock submission
+  // Identity check — gate the envelope fetch behind this
+  const [identityResolved, setIdentityResolved] = useState(false);
+
+  // When all required signers are cleared → unlock submission
   useEffect(() => {
-    if (allVerified && !envelopeUrl && !loadingEnvelope) {
+    if (allVerified && !envelopeUrl && !loadingEnvelope && identityResolved) {
       fetchEnvelope();
+    }
+  }, [allVerified, identityResolved]);
+
+  // Signal to parent SignerRoster that identity verification is complete
+  useEffect(() => {
+    if (allVerified && !identityResolved) {
+      // Settle background identity ops before requesting the envelope
+      const timer = setTimeout(() => setIdentityResolved(true), 800);
+      return () => clearTimeout(timer);
     }
   }, [allVerified]);
 
@@ -140,11 +152,15 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
           )}
 
           {/* Loading envelope */}
-          {allVerified && loadingEnvelope && (
+          {allVerified && !envelopeUrl && (
             <div className="border border-gray-200 rounded-xl flex flex-col items-center justify-center py-14 gap-3 bg-white">
               <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
-              <p className="text-sm font-semibold text-gray-500">Preparing your signing document...</p>
-              <p className="text-xs text-gray-400">Compiling multi-location agreement package</p>
+              <p className="text-sm font-semibold text-gray-500">
+                {identityResolved ? 'Preparing your signing document...' : 'Verifying Identity and Compiling Custom Merchant Processing Agreement...'}
+              </p>
+              <p className="text-xs text-gray-400">
+                {identityResolved ? 'Compiling multi-location agreement package' : 'Completing background identity verification handshake'}
+              </p>
             </div>
           )}
 

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Loader2, ArrowRight, CheckCircle, CreditCard, Percent } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import CliqbuxLogo from './CliqbuxLogo';
+import { normalizeBusinessName } from '@/lib/textUtils';
 
 const PRICING_CARDS = [
   {
@@ -66,8 +67,9 @@ export default function SelfServePricing({ onComplete }) {
     setError('');
 
     try {
+      const normalizedName = normalizeBusinessName(form.businessName);
       const response = await base44.functions.invoke('createHubspotDeal', {
-        businessName: form.businessName,
+        businessName: normalizedName,
         signerName: form.signerName,
         signerEmail: form.signerEmail,
         pricingTier: selectedTier
@@ -81,7 +83,7 @@ export default function SelfServePricing({ onComplete }) {
         corporateId: data.corporateId,
         firstName: form.signerName.split(' ')[0] || form.signerName,
         lastName: form.signerName.split(' ').slice(1).join(' ') || '',
-        legalName: form.businessName,
+        legalName: normalizedName,
         signerEmail: form.signerEmail,
         pricingTier: selectedTier,
         applicationStatus: 'Pricing Selected'
