@@ -6,31 +6,16 @@ import CliqbuxLogo from './CliqbuxLogo';
 const PRICING_CARDS = [
   {
     key: 'TRADITIONAL',
-    label: 'Traditional Swiped',
+    label: 'Traditional Processing',
     icon: CreditCard,
-    rate: '2.49%',
-    fee: '$0.10',
-    description: 'Best for in-person card-present transactions with a physical terminal. Card-not-present (keyed) transactions are also covered at 2.89% + $0.30.',
+    description: 'One account covering both in-person and card-not-present transactions — no separate applications needed.',
     badge: 'Most Popular',
     badgeColor: 'bg-blue-100 text-blue-700',
     accentColor: 'border-blue-200 hover:border-blue-400',
     selectedColor: 'border-blue-500 bg-blue-50',
     iconColor: 'text-blue-600',
-    iconBg: 'bg-blue-100'
-  },
-  {
-    key: 'TRADITIONAL',
-    label: 'Traditional Keyed',
-    icon: Zap,
-    rate: '2.89%',
-    fee: '$0.30',
-    description: 'Ideal for phone orders, mail orders, or card-not-present transactions. In-person swiped transactions are also covered at 2.49% + $0.10.',
-    badge: 'Card Not Present',
-    badgeColor: 'bg-purple-100 text-purple-700',
-    accentColor: 'border-purple-200 hover:border-purple-400',
-    selectedColor: 'border-purple-500 bg-purple-50',
-    iconColor: 'text-purple-600',
-    iconBg: 'bg-purple-100'
+    iconBg: 'bg-blue-100',
+    dualRate: true
   },
   {
     key: 'CASH_DISCOUNT',
@@ -127,13 +112,13 @@ export default function SelfServePricing({ onComplete }) {
         </div>
 
         {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl mb-10">
           {PRICING_CARDS.map((card, index) => {
             const Icon = card.icon;
             const isSelected = selectedCardIndex === index;
             return (
               <button
-                key={card.key}
+                key={index}
                 onClick={() => handleSelectTier(card.key, index)}
                 className={`relative text-left rounded-2xl border-2 p-7 transition-all duration-200 bg-white shadow-lg cursor-pointer
                   ${isSelected ? card.selectedColor + ' shadow-xl scale-[1.02]' : 'border-gray-200 hover:shadow-xl hover:scale-[1.01] ' + card.accentColor}
@@ -159,14 +144,26 @@ export default function SelfServePricing({ onComplete }) {
                 <p className="text-gray-500 text-sm mb-6 leading-relaxed">{card.description}</p>
 
                 <div className="border-t border-gray-100 pt-5">
-                  <div className="flex items-baseline gap-1 mb-1">
-                    <span className="text-3xl font-black text-gray-900">{card.rate}</span>
-                    {card.rate !== '0%' && <span className="text-gray-400 text-sm font-medium">+ {card.fee} / txn</span>}
-                    {card.rate === '0%' && <span className="text-gray-400 text-sm font-medium">{card.fee}</span>}
-                  </div>
-                  <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">
-                    {card.rate === '0%' ? 'Zero processing cost' : 'Per transaction'}
-                  </p>
+                  {card.dualRate ? (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2.5">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Swiped / Card-Present</span>
+                        <span className="font-black text-gray-900 text-lg">2.49% <span className="text-gray-400 text-sm font-medium">+ $0.10</span></span>
+                      </div>
+                      <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2.5">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Keyed / Card-Not-Present</span>
+                        <span className="font-black text-gray-900 text-lg">2.89% <span className="text-gray-400 text-sm font-medium">+ $0.30</span></span>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-baseline gap-1 mb-1">
+                        <span className="text-3xl font-black text-gray-900">{card.rate}</span>
+                        <span className="text-gray-400 text-sm font-medium">{card.fee}</span>
+                      </div>
+                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Zero processing cost</p>
+                    </>
+                  )}
                 </div>
               </button>
             );
@@ -179,7 +176,7 @@ export default function SelfServePricing({ onComplete }) {
             <div className="mb-6">
               <h2 className="text-xl font-bold text-gray-900 mb-1">Tell Us About Your Business</h2>
               <p className="text-gray-500 text-sm">
-                Selected: <span className="font-semibold text-gray-700">{PRICING_CARDS.find(c => c.key === selectedTier)?.label}</span>
+                Selected: <span className="font-semibold text-gray-700">{PRICING_CARDS[selectedCardIndex]?.label}</span>
               </p>
             </div>
 
