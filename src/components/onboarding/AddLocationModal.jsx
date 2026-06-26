@@ -10,6 +10,17 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
   const addressRef = useRef(null);
   const autocompleteRef = useRef(null);
 
+  // Inject pac-container z-index override once
+  useEffect(() => {
+    const styleId = 'pac-z-index-fix';
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style');
+      style.id = styleId;
+      style.textContent = '.pac-container { z-index: 9999 !important; }';
+      document.head.appendChild(style);
+    }
+  }, []);
+
   useEffect(() => {
     const tryInit = () => {
       if (window.google?.maps?.places?.Autocomplete && addressRef.current) {
@@ -19,7 +30,11 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
         });
         autocompleteRef.current.addListener('place_changed', () => {
           const place = autocompleteRef.current.getPlace();
-          if (place?.formatted_address) setBusinessAddress(place.formatted_address);
+          if (place?.formatted_address) {
+            // Set state only on valid selection; the input's DOM value is already correct
+            setBusinessAddress(place.formatted_address);
+            if (addressRef.current) addressRef.current.value = place.formatted_address;
+          }
         });
       }
     };
@@ -52,8 +67,8 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" style={{ overflow: 'visible' }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" style={{ overflow: 'visible' }}>
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
@@ -80,12 +95,12 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
             />
           </div>
 
-          <div>
+          <div style={{ overflow: 'visible' }}>
             <label className="text-xs font-semibold text-gray-600 mb-1.5 block">Business Physical Address</label>
             <input
               ref={addressRef}
               type="text"
-              value={businessAddress}
+              defaultValue={businessAddress}
               onChange={(e) => setBusinessAddress(e.target.value)}
               placeholder="Start typing your address..."
               className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
