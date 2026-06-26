@@ -115,7 +115,7 @@ export default function SelfServePricing({ onComplete }) {
         </div>
 
         {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl mb-10">
           {PRICING_CARDS.map((card, index) => {
             const Icon = card.icon;
             const isSelected = selectedCardIndex === index;
