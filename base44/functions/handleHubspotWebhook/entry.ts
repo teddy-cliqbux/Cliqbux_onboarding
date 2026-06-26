@@ -41,6 +41,9 @@ Deno.serve(async (req) => {
     const corporateData = {
       corporateId: dealId,
       legalName,
+      // Map the signer's personal name from the deal (not the corporate legalName)
+      firstName: (firstName || '').split(' ')[0] || legalName.split(' ')[0] || '',
+      lastName: (lastName || '').split(' ').slice(1).join(' ') || legalName.split(' ').slice(1).join(' ') || '',
       signerEmail,
       hubspotQuoteUrl: hubspotQuoteUrl || '',
       pricingTier: pricingTier || 'Standard',

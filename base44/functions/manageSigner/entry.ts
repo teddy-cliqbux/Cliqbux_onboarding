@@ -164,7 +164,16 @@ Deno.serve(async (req) => {
 
     // --- LIST ---
     if (action === 'list') {
-      const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
+      let signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
+      // A 'Verified' primary signer from a prior incomplete session would trigger
+      // envelope generation on mount, locking the name fields and auto-loading
+      // the agreement. Demote such stale self-serve records back to pending so the
+      // merchant starts fresh on each Step 3 visit and must re-verify to unblock signing.
+      signers = signers.map(s =>
+        s.isPrimarySigner && s.identityStatus === 'Verified'
+          ? { ...s, identityStatus: 'Pending Invitation' }
+          : s
+      );
       return Response.json({ success: true, signers });
     }
 

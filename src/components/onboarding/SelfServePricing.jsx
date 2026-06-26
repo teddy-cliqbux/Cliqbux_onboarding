@@ -79,6 +79,8 @@ export default function SelfServePricing({ onComplete }) {
       // Advance to Step 2 with new corporateId
       onComplete({
         corporateId: data.corporateId,
+        firstName: form.signerName.split(' ')[0] || form.signerName,
+        lastName: form.signerName.split(' ').slice(1).join(' ') || '',
         legalName: form.businessName,
         signerEmail: form.signerEmail,
         pricingTier: selectedTier,
