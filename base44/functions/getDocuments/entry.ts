@@ -231,11 +231,50 @@ function buildScarecrowApplication(profile: Record<string, string>, location: Re
   };
 }
 
+// vendorInfo: Cliqbux partner identity sent with every document request
+const VENDOR_INFO = {
+  representativeName: 'Cliqbux',
+  representativeSalesCode: SALES_REP_CODE
+};
+
+// bankAccountDetailsMap: additional bank info required by MerchantAgreementDocumentInput
+const BANK_ACCOUNT_DETAILS_MAP = {
+  DEPOSIT:    { bankName: '', directDebitAuthorized: true },
+  CHARGEBACK: { bankName: '' },
+  BILLING:    { bankName: '' }
+};
+
+// Helper: try to extract HTML string from Elavon's documents map
+function extractHtml(documents: Record<string, unknown>): string | null {
+  for (const key of Object.keys(documents)) {
+    const doc = documents[key];
+    if (typeof doc === 'string' && doc.trimStart().startsWith('<')) return doc;
+    if (doc && typeof doc === 'object') {
+      const d = doc as Record<string, unknown>;
+      const candidate = d.content ?? d.html ?? d.htmlContent ?? d.body ?? d.data;
+      if (typeof candidate === 'string' && candidate.trimStart().startsWith('<')) return candidate;
+    }
+  }
+  return null;
+}
+
+function extractDocumentUrl(documents: Record<string, unknown>): string | null {
+  for (const key of Object.keys(documents)) {
+    const doc = documents[key];
+    if (doc && typeof doc === 'object') {
+      const d = doc as Record<string, unknown>;
+      const candidate = d.url ?? d.signingUrl ?? d.documentUrl ?? d.link;
+      if (typeof candidate === 'string' && candidate.startsWith('http')) return candidate;
+    }
+  }
+  return null;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const { corporateId, locationId, documentList } = await req.json();
+    const { corporateId, locationId, userDocumentListMap } = await req.json();
     if (!corporateId) return Response.json({ error: 'corporateId is required' }, { status: 400 });
 
     const elavonBase = (Deno.env.get('ELAVON_ENDPOINT') || 'https://uat-buynow-na.elavon.net').replace(/\/api\/.*$/, '');
@@ -256,54 +295,44 @@ Deno.serve(async (req) => {
 
     const scarecrowApp = buildScarecrowApplication(profile, location, primarySigner || {}, additionalSigners);
 
-    // Derive agreementId from corporateId (last 8 digits, padded)
+    // agreementId = MID placeholder (no MID pre-boarding — Postman uses "12345678")
     const agreementId = String(corporateId).replace(/\D/g, '').slice(-8).padStart(8, '0');
 
-    // Use document IDs from listDocuments response if available; else use Postman defaults
-    function docId(type: string, fallback: string): string {
-      if (!documentList) return fallback;
-      // Try to find in an array format { documentType, documentId }
-      if (Array.isArray(documentList)) {
-        const found = documentList.find((d: Record<string, string>) => d.documentType === type);
-        return found?.documentId || fallback;
-      }
-      // Try object keyed by type
-      return documentList[type]?.documentId || fallback;
-    }
-
-    const baseDocInput = (type: string, fallback: string) => ({
-      documentId: docId(type, fallback),
+    // userDocumentListMap from listdocuments: keyed by doc type, value has no documentId —
+    // doc IDs are profile-fixed (Cliqbux profile: 1-5). Ignore the map for IDs; use defaults.
+    const baseDoc = (fallbackId: string) => ({
+      documentId: fallbackId,
       agreementId,
       language: 'en'
     });
+
+    const merchantAgreementInput = {
+      ...baseDoc('3'),
+      signed: false,
+      groupedApplication: false,
+      wetSigned: false,
+      scarecrowApplication: scarecrowApp,
+      vendorInfo: VENDOR_INFO,
+      bankAccountDetailsMap: BANK_ACCOUNT_DETAILS_MAP,
+      displayedCurrency: 'USD'
+    };
 
     const payload = {
       profileCode: PROFILE_CODE,
       html: true,
       documentInputs: {
-        TERMS_OF_SERVICE: baseDocInput('TERMS_OF_SERVICE', '1'),
-        OPERATING_GUIDE: baseDocInput('OPERATING_GUIDE', '2'),
-        MERCHANT_AGREEMENT: {
-          ...baseDocInput('MERCHANT_AGREEMENT', '3'),
-          signed: false,
-          groupedApplication: false,
-          wetSigned: false,
-          scarecrowApplication: scarecrowApp
-        },
-        APPLICATION_ADDENDUM: {
-          ...baseDocInput('APPLICATION_ADDENDUM', '4'),
-          signed: false,
-          groupedApplication: false,
-          wetSigned: false,
-          scarecrowApplication: scarecrowApp
-        },
+        TERMS_OF_SERVICE:    { ...baseDoc('1') },
+        OPERATING_GUIDE:     { ...baseDoc('2') },
+        MERCHANT_AGREEMENT:  merchantAgreementInput,
+        APPLICATION_ADDENDUM: { ...merchantAgreementInput, documentId: '4' },
         SELF_GUARANTEE: {
-          ...baseDocInput('SELF_GUARANTEE', '5'),
+          ...baseDoc('5'),
           signed: false,
           groupedApplication: false,
           wetSigned: false,
           principal: buildPrincipal(profile, primarySigner || {}),
-          businessInfo: buildBusinessInfo(profile, location)
+          businessInfo: buildBusinessInfo(profile, location),
+          equipmentInfo: buildEquipmentInfo()
         }
       }
     };
@@ -322,6 +351,10 @@ Deno.serve(async (req) => {
       data = await res.json();
     } else {
       rawText = await res.text();
+      // Raw HTML response (non-JSON) — treat as the document content directly
+      if (rawText.trimStart().startsWith('<')) {
+        return Response.json({ success: true, htmlContent: rawText, documentUrl: null, raw: null });
+      }
       data = { raw: rawText.slice(0, 5000) };
     }
 
@@ -329,18 +362,20 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Elavon getdocuments failed', elavonStatus: res.status, details: data }, { status: 500 });
     }
 
-    // Try to surface HTML content regardless of where Elavon puts it
+    // GetDocumentsResponse: { responseId, error, documents: { [UserDocumentCode]: { ... } } }
+    // Try to find HTML from documents map first (per OpenAPI schema), then top-level fields
+    const documentsMap = data.documents as Record<string, unknown> | undefined;
     const htmlContent =
+      (documentsMap ? extractHtml(documentsMap) : null) ||
       (typeof data.html === 'string' ? data.html : null) ||
       (typeof data.content === 'string' ? data.content : null) ||
-      (typeof data.htmlContent === 'string' ? data.htmlContent : null) ||
       (rawText && rawText.trimStart().startsWith('<') ? rawText : null) ||
       null;
 
     const documentUrl =
+      (documentsMap ? extractDocumentUrl(documentsMap) : null) ||
       (typeof data.url === 'string' ? data.url : null) ||
       (typeof data.signingUrl === 'string' ? data.signingUrl : null) ||
-      (typeof data.documentUrl === 'string' ? data.documentUrl : null) ||
       null;
 
     return Response.json({ success: true, htmlContent, documentUrl, raw: data });

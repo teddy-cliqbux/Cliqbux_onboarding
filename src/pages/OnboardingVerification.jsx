@@ -53,13 +53,13 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
       const listRes = await base44.functions.invoke('listDocuments', {
         corporateId: profile.corporateId
       });
-      const documentList = listRes.data?.documents || null;
+      const userDocumentListMap = listRes.data?.userDocumentListMap || null;
 
       // Step 2 — retrieve signing document content
       setLoadingStep('Compiling your Merchant Processing Agreement...');
       const getRes = await base44.functions.invoke('getDocuments', {
         corporateId: profile.corporateId,
-        documentList
+        userDocumentListMap
       });
 
       const { htmlContent, documentUrl } = getRes.data || {};

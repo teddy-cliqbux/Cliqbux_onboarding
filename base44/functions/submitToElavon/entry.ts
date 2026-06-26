@@ -287,9 +287,11 @@ Deno.serve(async (req) => {
         console.log(`[submitToElavon] Response ${res.status} for "${location.dbaName}":`, JSON.stringify(resData, null, 2));
 
         if (res.ok) {
-          const elavonMID = resData?.merchantId || resData?.mid || resData?.MID || resData?.scarecrowId || null;
-          await base44.asServiceRole.entities.MerchantLocations.update(location.id, { applicationStepStatus: 'Approved', elavonMID });
-          results.push({ locationId: location.id, dbaName: location.dbaName, status: 'success', elavonMID, httpStatus: res.status });
+          // BoardingResponse fields: merchantId (MID), boardingId (AWB/chain ref)
+          const elavonMID = resData?.merchantId || resData?.mid || resData?.MID || null;
+          const boardingId = resData?.boardingId || resData?.chainId || null;
+          await base44.asServiceRole.entities.MerchantLocations.update(location.id, { applicationStepStatus: 'Approved', elavonMID, boardingId });
+          results.push({ locationId: location.id, dbaName: location.dbaName, status: 'success', elavonMID, boardingId, httpStatus: res.status });
         } else {
           console.error(`[submitToElavon] ERROR "${location.dbaName}" HTTP ${res.status}:`, JSON.stringify(resData));
           await base44.asServiceRole.entities.MerchantLocations.update(location.id, { applicationStepStatus: 'Error' });

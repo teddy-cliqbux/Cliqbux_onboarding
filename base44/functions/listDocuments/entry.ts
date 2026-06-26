@@ -195,7 +195,9 @@ Deno.serve(async (req) => {
 
     if (!res.ok) return Response.json({ error: 'Elavon listdocuments failed', elavonStatus: res.status, details: data }, { status: 500 });
 
-    return Response.json({ success: true, documents: data });
+    // ListDocumentsResponse: { responseId, error, userDocumentListMap: { [UserDocumentCode]: UserDocumentInfo } }
+    // UserDocumentInfo has contentType (PDF|URL), signType (SIGNABLE|NOT_SIGNABLE), contextType
+    return Response.json({ success: true, userDocumentListMap: data.userDocumentListMap || null, raw: data });
 
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
