@@ -48,6 +48,12 @@
     "taxId": {
       "type": "string"
     },
+    "corporatePhone": {
+      "type": "string"
+    },
+    "ownershipPercentage": {
+      "type": "number"
+    },
     "pricingTier": {
       "type": "string",
       "enum": [

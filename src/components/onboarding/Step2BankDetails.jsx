@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import FileDropZone from './FileDropZone';
 import LocationsGrid from './LocationsGrid';
 import AddLocationModal from './AddLocationModal';
+import UnderwritingPanel, { isUnderwritingValid } from './UnderwritingPanel';
 
 export default function Step2BankDetails({ profile, locations: initialLocations, plaidAccounts = [], onStatusChange }) {
   const [locations, setLocations] = useState(initialLocations);
@@ -16,6 +17,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submissionResults, setSubmissionResults] = useState([]);
+  const [underwritingValid, setUnderwritingValid] = useState(false);
 
   const handleExtracted = ({ routingNumber, accountNumber }) => {
     if (routingNumber) setCorporateRouting(routingNumber);
@@ -30,10 +32,11 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
     setLocations(prev => [...prev, { ...newLocation, hasRoutingNumber: false, hasAccountNumber: false }]);
   };
 
-  // Submit enabled when at least 1 location exists and all non-approved locations have banking
-  const canSubmit = locations.length >= 1 && locationRows.length > 0 && locationRows.every(
+  // Submit enabled when: locations have banking + underwriting panel is valid
+  const locationsBankingReady = locations.length >= 1 && locationRows.length > 0 && locationRows.every(
     row => row.applicationStepStatus === 'Approved' || (row.routingInput && row.accountInput)
   );
+  const canSubmit = locationsBankingReady && underwritingValid;
 
   const handleSave = async () => {
     setSaving(true);
@@ -181,6 +184,12 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
           />
         </div>
 
+        {/* Principal & Corporate Verification Panel */}
+        <UnderwritingPanel
+          profile={profile}
+          onValidChange={setUnderwritingValid}
+        />
+
         {/* Error message */}
         {submitError && (
           <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-5 py-4">
@@ -221,9 +230,14 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
               Add at least one business location above before submitting.
             </p>
           )}
-          {locations.length > 0 && !canSubmit && locationRows.length > 0 && (
+          {locations.length > 0 && !locationsBankingReady && locationRows.length > 0 && (
             <p className="text-center text-xs text-gray-400 mt-3">
               Select a bank account for all locations to continue.
+            </p>
+          )}
+          {locationsBankingReady && !underwritingValid && (
+            <p className="text-center text-xs text-gray-400 mt-3">
+              Complete the Principal & Corporate Verification fields above to continue.
             </p>
           )}
         </div>

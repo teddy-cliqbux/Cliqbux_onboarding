@@ -14,7 +14,8 @@ Deno.serve(async (req) => {
     const ALLOWED = [
       'firstName', 'lastName', 'dobYear', 'dobMonth', 'dobDay',
       'ssn', 'homeStreet', 'homeCity', 'homeState', 'homeZip',
-      'taxId', 'isManualMode', 'applicationStatus'
+      'taxId', 'isManualMode', 'applicationStatus',
+      'corporatePhone', 'ownershipPercentage'
     ];
 
     const update = {};
