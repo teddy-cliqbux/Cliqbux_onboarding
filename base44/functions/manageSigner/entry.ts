@@ -9,8 +9,9 @@ function generateToken() {
 function getVerifyBaseUrl() {
   // Prefer the explicitly configured PUBLIC_APP_URL; fall back to the Base44 staging domain
   const configured = Deno.env.get('PUBLIC_APP_URL');
-  if (configured && configured.startsWith('http')) return configured.replace(/\/$/, '');
   const appId = Deno.env.get('BASE44_APP_ID');
+  console.log('DEBUG: PUBLIC_APP_URL=' + (configured || 'NOT_SET') + ' | BASE44_APP_ID=' + (appId || 'NOT_SET'));
+  if (configured && configured.startsWith('http')) return configured.replace(/\/$/, '');
   if (appId) return `https://${appId}.base44.app`;
   return 'https://onboarding.cliqbux.com';
 }
@@ -74,6 +75,8 @@ function buildInviteEmail(firstName, verifyUrl, businessName) {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+    console.log('ENV_CHECK PUBLIC_APP_URL=' + (Deno.env.get('PUBLIC_APP_URL') || 'NOT_SET'));
+    console.log('ENV_CHECK BASE44_APP_ID=' + (Deno.env.get('BASE44_APP_ID') || 'NOT_SET'));
     const body = await req.json();
     const { action, corporateId, signerId, signerData, sendInvite } = body;
 
