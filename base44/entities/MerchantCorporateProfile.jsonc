@@ -1,0 +1,50 @@
+{
+  "name": "MerchantCorporateProfile",
+  "type": "object",
+  "properties": {
+    "corporateId": {
+      "type": "string",
+      "description": "Primary Key \u2014 matches HubSpot dealId"
+    },
+    "legalName": {
+      "type": "string"
+    },
+    "signerEmail": {
+      "type": "string"
+    },
+    "hubspotQuoteUrl": {
+      "type": "string"
+    },
+    "taxId": {
+      "type": "string"
+    },
+    "pricingTier": {
+      "type": "string",
+      "enum": [
+        "Standard",
+        "Premium",
+        "Custom"
+      ]
+    },
+    "customMarkupPercentage": {
+      "type": "number"
+    },
+    "customPerTxFee": {
+      "type": "number"
+    },
+    "applicationStatus": {
+      "type": "string",
+      "enum": [
+        "Incomplete",
+        "Quote Signed",
+        "Submitted"
+      ],
+      "default": "Incomplete"
+    }
+  },
+  "required": [
+    "corporateId",
+    "legalName",
+    "signerEmail"
+  ]
+}

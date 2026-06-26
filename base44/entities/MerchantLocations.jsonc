@@ -1,0 +1,43 @@
+{
+  "name": "MerchantLocations",
+  "type": "object",
+  "properties": {
+    "locationId": {
+      "type": "string",
+      "description": "Auto-generated unique identifier"
+    },
+    "corporateId": {
+      "type": "string",
+      "description": "Foreign Key linking to MerchantCorporateProfile"
+    },
+    "dbaName": {
+      "type": "string"
+    },
+    "businessAddress": {
+      "type": "string"
+    },
+    "routingNumber": {
+      "type": "string"
+    },
+    "accountNumber": {
+      "type": "string"
+    },
+    "elavonMID": {
+      "type": "string"
+    },
+    "applicationStepStatus": {
+      "type": "string",
+      "enum": [
+        "In Review",
+        "Approved",
+        "Error"
+      ],
+      "default": "In Review"
+    }
+  },
+  "required": [
+    "corporateId",
+    "dbaName",
+    "businessAddress"
+  ]
+}
