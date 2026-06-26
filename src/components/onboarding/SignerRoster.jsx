@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, CheckCircle2, AlertCircle, Clock, Mail, Trash2, Send, Loader2, ShieldCheck, Users } from 'lucide-react';
+import { UserPlus, CheckCircle2, AlertCircle, Clock, Mail, Trash2, Send, Loader2, Users } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import SignerModal from './SignerModal';
 
@@ -46,10 +46,14 @@ export default function SignerRoster({ profile, onValidChange }) {
   };
 
   // Notify parent of validity whenever signers change
+  // Elavon rule: only owners with >= 25% stake require identity verification
+  // Invited (Sent) signers unblock submission — Elavon routes doc access via email
   useEffect(() => {
     const totalPct = signers.reduce((sum, s) => sum + (Number(s.ownershipPercentage) || 0), 0);
-    const allVerified = signers.length > 0 && signers.every(s => s.identityStatus === 'Verified');
-    const valid = allVerified && totalPct <= 100;
+    const requiredSigners = signers.filter(s => (Number(s.ownershipPercentage) || 0) >= 25);
+    const allRequiredCleared = requiredSigners.length > 0 &&
+      requiredSigners.every(s => s.identityStatus === 'Verified' || s.identityStatus === 'Sent');
+    const valid = signers.length > 0 && (requiredSigners.length === 0 || allRequiredCleared);
     onValidChange(valid, totalPct, signers.length);
   }, [signers]);
 
@@ -79,8 +83,9 @@ export default function SignerRoster({ profile, onValidChange }) {
   };
 
   const totalPct = signers.reduce((sum, s) => sum + (Number(s.ownershipPercentage) || 0), 0);
-  const overLimit = totalPct > 100;
-  const allVerified = signers.length > 0 && signers.every(s => s.identityStatus === 'Verified');
+  const requiredSigners = signers.filter(s => (Number(s.ownershipPercentage) || 0) >= 25);
+  const allRequiredCleared = requiredSigners.length > 0 &&
+    requiredSigners.every(s => s.identityStatus === 'Verified' || s.identityStatus === 'Sent');
 
   return (
     <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -92,22 +97,22 @@ export default function SignerRoster({ profile, onValidChange }) {
           </div>
           <div>
             <p className="text-sm font-semibold text-gray-900">Beneficial Owners & Signers</p>
-            <p className="text-xs text-gray-500 mt-0.5">All owners with ≥25% stake must be verified</p>
+            <p className="text-xs text-gray-500 mt-0.5">Owners with ≥25% stake must verify or receive an invitation</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           {signers.length > 0 && (
-            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${overLimit ? 'bg-red-50 text-red-600 border-red-200' : 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-gray-100 text-gray-600 border-gray-200">
               {totalPct}% ownership
             </span>
           )}
-          {allVerified && !overLimit ? (
+          {allRequiredCleared ? (
             <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> All Verified
+              <CheckCircle2 className="w-3 h-3" /> Ready to Submit
             </span>
-          ) : signers.length > 0 ? (
+          ) : requiredSigners.length > 0 ? (
             <span className="text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-full">
-              Action Required
+              Verification Needed
             </span>
           ) : null}
         </div>
@@ -155,15 +160,13 @@ export default function SignerRoster({ profile, onValidChange }) {
                     {signer.identityStatus === 'Sent' ? 'Resend' : 'Send Invite'}
                   </button>
                 )}
-                {!signer.isPrimarySigner && (
-                  <button
-                    onClick={() => handleDelete(signer.id)}
-                    className="text-gray-300 hover:text-red-500 p-1.5 rounded-lg transition-colors"
-                    title="Remove signer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
+                <button
+                  onClick={() => handleDelete(signer.id)}
+                  className="text-gray-300 hover:text-red-500 p-1.5 rounded-lg transition-colors"
+                  title="Remove signer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           ))
@@ -172,12 +175,6 @@ export default function SignerRoster({ profile, onValidChange }) {
 
       {/* Add button */}
       <div className="px-5 py-4 border-t border-gray-100">
-        {overLimit && (
-          <p className="text-xs text-red-600 font-medium mb-3 flex items-center gap-1.5">
-            <AlertCircle className="w-3.5 h-3.5" />
-            Total ownership exceeds 100%. Please review percentages before submitting.
-          </p>
-        )}
         <button
           onClick={() => setShowModal(true)}
           className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-gray-700 border border-dashed border-gray-300 hover:border-gray-400 hover:bg-gray-50 rounded-xl py-2.5 transition-all"

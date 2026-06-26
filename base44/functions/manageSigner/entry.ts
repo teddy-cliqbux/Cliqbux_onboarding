@@ -6,6 +6,71 @@ function generateToken() {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+function getVerifyBaseUrl() {
+  // Prefer the explicitly configured PUBLIC_APP_URL; fall back to the Base44 staging domain
+  const configured = Deno.env.get('PUBLIC_APP_URL');
+  if (configured && configured.startsWith('http')) return configured.replace(/\/$/, '');
+  const appId = Deno.env.get('BASE44_APP_ID');
+  if (appId) return `https://${appId}.base44.app`;
+  return 'https://onboarding.cliqbux.com';
+}
+
+function buildInviteEmail(firstName, verifyUrl, businessName) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Inter,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <!-- Header -->
+        <tr>
+          <td style="background:#111827;padding:28px 40px;text-align:center;">
+            <span style="color:#F59E0B;font-size:22px;font-weight:800;letter-spacing:-0.5px;">⬡ cliqbux</span>
+          </td>
+        </tr>
+        <!-- Body -->
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.06em;">Action Required</p>
+            <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">Complete Your Identity Verification</h1>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+              Hi ${firstName},<br><br>
+              You've been added as a <strong>beneficial owner</strong> on the <strong>${businessName || 'Cliqbux'}</strong> merchant application. To comply with financial regulations, we need to verify your identity before the application can be submitted.
+            </p>
+            <!-- CTA Button -->
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="padding:8px 0 28px;">
+                  <a href="${verifyUrl}" target="_blank" style="display:inline-block;background:#111827;color:#ffffff;font-size:15px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;letter-spacing:0.01em;">
+                    Verify My Identity →
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0 0 8px;font-size:13px;color:#6B7280;line-height:1.6;">
+              This link is unique to you — please do not share it. It expires after 7 days.
+            </p>
+            <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0;">
+            <p style="margin:0;font-size:12px;color:#9CA3AF;">
+              Having trouble? Copy and paste this link into your browser:<br>
+              <span style="color:#3B82F6;word-break:break-all;">${verifyUrl}</span>
+            </p>
+          </td>
+        </tr>
+        <!-- Footer -->
+        <tr>
+          <td style="background:#F9FAFB;border-top:1px solid #E5E7EB;padding:20px 40px;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9CA3AF;">© ${new Date().getFullYear()} Cliqbux · onboarding.cliqbux.com</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -38,25 +103,11 @@ Deno.serve(async (req) => {
       });
 
       if (sendInvite) {
-        const verifyUrl = `${Deno.env.get('PUBLIC_APP_URL') || 'https://onboarding.cliqbux.com'}/verify?token=${token}`;
+        const verifyUrl = `${getVerifyBaseUrl()}/verify?token=${token}`;
         await base44.asServiceRole.integrations.Core.SendEmail({
           to: signerData.signerEmail,
-          subject: `Action Required: Complete Your Identity Verification for ${signerData.legalName || 'Cliqbux'}`,
-          body: `
-Hello ${signerData.firstName},
-
-You have been added as a beneficial owner / authorized signer for a merchant application.
-
-Please complete your identity verification using the secure link below:
-
-${verifyUrl}
-
-This link is unique to you. Please do not share it.
-
-If you have questions, contact your Cliqbux representative.
-
-— The Cliqbux Team
-          `.trim()
+          subject: `Action Required: Verify Your Identity — ${signerData.legalName || 'Cliqbux'} Merchant Application`,
+          body: buildInviteEmail(signerData.firstName, verifyUrl, signerData.legalName)
         });
         await base44.asServiceRole.entities.MerchantSigners.update(record.id, { identityStatus: 'Sent' });
         record.identityStatus = 'Sent';
@@ -86,22 +137,12 @@ If you have questions, contact your Cliqbux representative.
       if (!signer) return Response.json({ error: 'Signer not found' }, { status: 404 });
 
       const token = signer.verifyToken || generateToken();
-      const verifyUrl = `${Deno.env.get('PUBLIC_APP_URL') || 'https://onboarding.cliqbux.com'}/verify?token=${token}`;
+      const verifyUrl = `${getVerifyBaseUrl()}/verify?token=${token}`;
 
       await base44.asServiceRole.integrations.Core.SendEmail({
         to: signer.signerEmail,
-        subject: `Action Required: Complete Your Identity Verification`,
-        body: `
-Hello ${signer.firstName},
-
-Please complete your identity verification using the secure link below:
-
-${verifyUrl}
-
-This link is unique to you. Please do not share it.
-
-— The Cliqbux Team
-        `.trim()
+        subject: `Action Required: Verify Your Identity — Cliqbux Merchant Application`,
+        body: buildInviteEmail(signer.firstName, verifyUrl, null)
       });
 
       const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, {

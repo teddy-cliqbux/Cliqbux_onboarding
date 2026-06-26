@@ -17,7 +17,7 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
   const [submitError, setSubmitError] = useState('');
   const iframeRef = useRef(null);
 
-  // When all signers verified → fetch the signing envelope URL
+  // When all required signers are cleared (verified or invite sent) → unlock submission
   useEffect(() => {
     if (allVerified && !envelopeUrl && !loadingEnvelope) {
       fetchEnvelope();
@@ -134,7 +134,7 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
               </div>
               <p className="text-sm font-semibold text-gray-400">Signing Locked</p>
               <p className="text-xs text-gray-400 text-center max-w-xs">
-                All beneficial owners must be verified before the agreement can be presented for signature.
+                All beneficial owners with ≥25% ownership must be verified or have a pending invitation before proceeding.
               </p>
             </div>
           )}
