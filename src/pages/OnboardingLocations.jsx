@@ -182,11 +182,28 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
   // --- Per-location helpers ---
 
-  const selectAccount = (locId, accountId) => {
+  const selectAccount = async (locId, accountId) => {
+    const account = plaidAccounts[entityById[locs.find(l => l.id === locId)?.entityId || '']]?.find(a => a.accountId === accountId);
+    if (!account) return;
+
     setLocationState(prev => ({
       ...prev,
       [locId]: { ...prev[locId], selectedBankId: accountId, isManualMode: false, manualRouting: '', manualAccount: '' }
     }));
+    setLocs(prev => prev.map(l => l.id === locId ? { ...l, bankCleared: false } : l));
+
+    const bankDetails = {
+      routingNumber: account.routingNumber || '',
+      accountNumber: account.accountNumber || '',
+      accountNumberMasked: account.mask ? `••••${account.mask}` : '',
+      accountType: account.subtype || 'checking',
+      authMethod: 'Plaid',
+    };
+    if (bankDetails.routingNumber && bankDetails.accountNumber) {
+      try {
+        await base44.functions.invoke('saveLocationBankDetails', { locations: [{ id: locId, bankDetails }] });
+      } catch (_) { /* best-effort; Continue button retries save */ }
+    }
   };
 
   const changeBank = (locId) => {
