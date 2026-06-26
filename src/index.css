@@ -123,3 +123,8 @@
 .animate-spin-slow {
   animation: spin-slow 1.5s linear infinite;
 }
+
+/* Google Places autocomplete dropdown — must sit above all modals */
+.pac-container {
+  z-index: 99999 !important;
+}
