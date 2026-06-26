@@ -11,10 +11,22 @@ export default function StorefrontBankingCell({
   const entityAccounts = plaidAccounts[entityId] || [];
   const hasPlaidEntity = entityAccounts.length > 0;
 
-  // Local buffer to prevent focus loss from global state updates on every keystroke.
-  // Sync back to parent only on blur (not on every onChange).
-  const [localRouting, setLocalRouting] = useState('');
-  const [localAccount, setLocalAccount] = useState('');
+  // Stable controlled entry: use a growing counter so that each time manual mode is
+  // (re-)entered we render a fresh uncontrolled input — React values it from defaultValue,
+  // then syncOrigin flushes it to the parent on blur / confirm.
+  const manualKeyRef = useRef(0); // increments each time manual mode is entered
+  const syncOrigin = () => {
+    const inpEl = document.getElementById(`loc-${locId}-routing`);
+    const inpAc = document.getElementById(`loc-${locId}-account`);
+    const r = inpEl?.value || '';
+    const a = inpAc?.value || '';
+    onUpdateManualField(locId, 'manualRouting', r);
+    onUpdateManualField(locId, 'manualAccount', a);
+    return { r, a };
+  };
+
+  // Manual-mode state — managed inside this component with a mount-key gating, so
+  // uncontrolled inputs never flicker and focus is never stolen during typing.
   const [cachedInManual, setCachedInManual] = useState(false);
   const [cachedSelectedBankId, setCachedSelectedBankId] = useState('');
 
@@ -38,26 +50,18 @@ export default function StorefrontBankingCell({
     onSelectBank(locId, first.accountId);
   }, [hasPlaidEntity, entityAccounts.length, row.bankCleared]);
 
-  // Initialize mode from parent state once, then re-hydrate local buffer when parent switches mode.
+  // React once to the parent telling us we are in Manual mode (either on mount or
+  // at runtime via "Set Up Manually..."). Mute the parent before doing so.
   const initRef = useRef(false);
   useEffect(() => {
-    if (!initRef.current) {
-      if (bankDetails?.authMethod === 'Manual') setCachedInManual(true);
-      initRef.current = true;
-    } else {
-      // React to parent switching into Manual mode at runtime (click "Set Up Manually...").
-      if (bankDetails?.authMethod === 'Manual') setCachedInManual(true);
-    }
-    setLocalRouting('');
-    setLocalAccount('');
-    setCachedSelectedBankId('');
-  }, [bankDetails?.authMethod, bankDetails?.accountNumberMasked]);
+    if (bankDetails?.authMethod !== 'Manual') return;
+    if (!initRef.current) initRef.current = true;
+    manualKeyRef.current += 1;
+    setCachedInManual(true);
+  }, [bankDetails?.authMethod]);
 
   const syncManualDetails = () => {
-    if (cachedInManual) {
-      onUpdateManualField(locId, 'manualRouting', localRouting);
-      onUpdateManualField(locId, 'manualAccount', localAccount);
-    }
+    syncOrigin();
   };
 
   const handleToggleManual = () => {
@@ -82,30 +86,21 @@ export default function StorefrontBankingCell({
 
   const clearSym = (v) => (v || '').replace(/\D/g, '');
 
-  // STATE C: Manual Entry Mode
+  // STATE C: Manual Entry Mode — uncontrolled inputs keyed on enter of manual mode so
+  // focus is never lost during typing.
   if (cachedInManual) {
     return (
       <div className="flex flex-col items-center justify-center gap-1 w-full">
-        <div className="flex items-center gap-1 w-full justify-center">
-          <input
-            type="text" placeholder="Routing #" maxLength={9} value={localRouting}
+        <div key={`manual-${manualKeyRef.current}`} className="flex items-center gap-1 w-full justify-center">
+          <input id={`loc-${locId}-routing`}
+            type="text" placeholder="Routing #" maxLength={9} defaultValue=""
             className="w-[6rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={(e) => {
-              const val = clearSym(e.target.value).slice(0, 9);
-              setLocalRouting(val);
-              onUpdateManualField(locId, 'manualRouting', val);
-            }}
-            onBlur={() => onUpdateManualField(locId, 'manualRouting', localRouting)}
+            onBlur={syncOrigin}
           />
-          <input
-            type="text" placeholder="Account #" value={localAccount}
+          <input id={`loc-${locId}-account`}
+            type="text" placeholder="Account #" defaultValue=""
             className="w-[7rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={(e) => {
-              const val = clearSym(e.target.value).slice(0, 17);
-              setLocalAccount(val);
-              onUpdateManualField(locId, 'manualAccount', val);
-            }}
-            onBlur={() => onUpdateManualField(locId, 'manualAccount', localAccount)}
+            onBlur={syncOrigin}
           />
           <button onClick={handleConfirmManual}
             className="text-[10px] font-semibold bg-gray-900 text-white rounded-lg px-2 py-1.5"><Check className="w-3 h-3" /></button>
