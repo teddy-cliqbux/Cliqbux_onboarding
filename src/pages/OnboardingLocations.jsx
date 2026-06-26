@@ -227,7 +227,6 @@ export default function OnboardingLocations({ profile, onContinue }) {
             entityName={primaryEntity?.legalBusinessName}
             initialDbaName={loc.dbaName}
             initialBusinessAddress={loc.businessAddress}
-            initialBanking={loc.bankDetails}
             onLocationAdded={handleLocationUpdated}
             onClose={() => setEditLocId(null)}
           />

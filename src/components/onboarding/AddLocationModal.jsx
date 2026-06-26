@@ -1,14 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, MapPin, Loader2, Plus, CheckCircle2, AlertTriangle, Pencil, Landmark, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, MapPin, Loader2, Plus, CheckCircle2, AlertTriangle, Pencil, ChevronDown, ChevronRight } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import EINValidator from '@/components/onboarding/EINValidator';
-
-function Masked({ val }) {
-  if (!val) return null;
-  const s = String(val);
-  return <span className="text-xs font-mono font-semibold text-gray-900">••••{s.slice(-4)}</span>;
-}
 
 export default function AddLocationModal({
   corporateId,
@@ -18,7 +12,6 @@ export default function AddLocationModal({
   onClose,
   initialDbaName = '',
   initialBusinessAddress = '',
-  initialBanking = null,
   initialSeparateEntity = null,
 }) {
   const isEdit = !!(initialDbaName || initialBusinessAddress);
@@ -34,16 +27,6 @@ export default function AddLocationModal({
   const [separateLegalName, setSeparateLegalName] = useState(initialSeparateEntity?.legalBusinessName || '');
   const [separateEIN, setSeparateEIN] = useState(initialSeparateEntity?.federalEIN || '');
   const [separateEINValidated, setSeparateEINValidated] = useState(null); // formatted EIN or null
-
-  // — Section C: Banking —
-  const [plaidToken, setPlaidToken] = useState(null);
-  const [plaidLoading, setPlaidLoading] = useState(false);
-  const [connecting, setConnecting] = useState(false);
-  const [manualMode, setManualMode] = useState(false);
-  const [mRouting, setMRouting] = useState('');
-  const [mAccount, setMAccount] = useState('');
-  const [bankingResult, setBankingResult] = useState(initialBanking || null);
-  const [plaidError, setPlaidError] = useState('');
 
   const inputRef = useRef(null);
   const autocompleteRef = useRef(null);
@@ -69,45 +52,6 @@ export default function AddLocationModal({
   const handleAddressKeyDown = (e) => { if (e.key === 'Enter') e.preventDefault(); };
 
   const clearAddress = () => { setAddressDisplay(''); setParsedAddress(null); setUnverifiedWarning(false); setTimeout(() => inputRef.current?.focus(), 0); };
-
-  // — Plaid —
-  const fetchPlaidToken = async () => {
-    setPlaidLoading(true);
-    setPlaidError('');
-    try {
-      const r = await base44.functions.invoke('createPlaidLinkToken', { corporateId });
-      setPlaidToken(r.data?.link_token || null);
-      if (!r.data?.link_token) setPlaidError('Could not initialize bank connection.');
-    } catch { setPlaidError('Could not initialize bank connection.'); }
-    finally { setPlaidLoading(false); }
-  };
-
-  const openPlaid = async () => {
-    if (!plaidToken) { await fetchPlaidToken(); return; }
-    if (!window.Plaid) { setPlaidError('Plaid unavailable. Enter banking manually.'); return; }
-    setConnecting(true);
-    setPlaidError('');
-    const handler = window.Plaid.create({
-      token: plaidToken,
-      onSuccess: async (publicToken, metadata) => {
-        try {
-          const res = await base44.functions.invoke('exchangePlaidToken', { publicToken, accountId: metadata.account_id });
-          const accounts = res.data?.accounts || [];
-          const sel = accounts.find(a => a.accountId === metadata.account_id) || accounts[0];
-          if (sel) setBankingResult({ routingNumber: sel.routingNumber || '', accountNumber: sel.accountNumber || '', accountNumberMasked: sel.mask ? `••••${sel.mask}` : '', accountType: sel.subtype || 'checking', authMethod: 'Plaid' });
-        } catch { setPlaidError('Failed to retrieve account details.'); }
-        finally { setConnecting(false); }
-      },
-      onExit: (err) => { setConnecting(false); if (err) setPlaidError('Bank connection cancelled.'); },
-    });
-    handler.open();
-  };
-
-  const confirmManual = () => {
-    if (!mRouting || !mAccount) return;
-    setBankingResult({ routingNumber: mRouting, accountNumber: mAccount, accountNumberMasked: `••••${mAccount.slice(-4)}`, accountType: 'checking', authMethod: 'Manual' });
-    setManualMode(false);
-  };
 
   const buildEntityFields = () => {
     const ef = {};
@@ -145,7 +89,6 @@ export default function AddLocationModal({
       onLocationAdded({
         location: loc,
         addressVerified: !!parsedAddress,
-        banking: bankingResult,
       });
       onClose();
     } catch (err) {
@@ -178,7 +121,7 @@ export default function AddLocationModal({
               <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center"><MapPin className="w-4.5 h-4.5 text-blue-500" /></div>
               <div>
                 <h3 className="font-bold text-gray-900 text-base">{isEdit ? 'Edit Business Location' : 'Add Business Location'}</h3>
-                <p className="text-xs text-gray-400">DBA, Address, Legal Entity &amp; Banking</p>
+                <p className="text-xs text-gray-400">DBA Name, Address &amp; Legal Entity</p>
               </div>
             </div>
             <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"><X size={18} /></button>
@@ -263,54 +206,7 @@ export default function AddLocationModal({
                     )}
                   </div>
                 ) : entityId && (
-                  <p className="text-xs text-gray-400 mt-2">This storefront will be grouped under your primary legal entity. Banking and processing are per storefront.</p>
-                )}
-              </div>
-            </div>
-
-            {/* — Section C: Localized Banking Assign — */}
-            <div className="border-t border-gray-100 pt-5">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-gray-800 text-white text-[9px] font-bold flex items-center justify-center">C</span> Banking
-              </h4>
-              <div className="pl-7">
-                {bankingResult ? (
-                  <div className="border border-green-200 bg-green-50 rounded-lg p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Landmark className="w-4 h-4 text-blue-500" />
-                      <span><Masked val={bankingResult.accountNumberMasked || bankingResult.accountNumber} /> <span className="text-[10px] text-gray-400 ml-1">{bankingResult.authMethod}</span></span>
-                    </div>
-                    <button type="button" onClick={() => setBankingResult(null)} className="text-[10px] text-gray-500 underline hover:text-red-600">Remove</button>
-                  </div>
-                ) : (
-                  <>
-                    {manualMode ? (
-                      <div className="flex flex-col gap-2">
-                        <div className="flex gap-2">
-                          <input type="text" value={mRouting} onChange={(e) => setMRouting(e.target.value.replace(/\D/g, ''))} placeholder="Routing #" maxLength={9}
-                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                          <input type="text" value={mAccount} onChange={(e) => setMAccount(e.target.value)} placeholder="Account #"
-                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                        </div>
-                        <div className="flex gap-2">
-                          <button type="button" onClick={confirmManual} disabled={!mRouting || !mAccount}
-                            className="flex-1 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 rounded-lg py-2 px-3">Confirm Banking</button>
-                          <button type="button" onClick={() => setManualMode(false)} className="text-xs text-gray-500 border border-gray-200 rounded-lg py-2 px-3 hover:text-gray-700">Back</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={openPlaid} disabled={connecting}
-                          className="flex items-center gap-1.5 border border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 rounded-lg py-2 px-3 text-xs font-semibold text-gray-600 hover:text-blue-700 transition-all disabled:opacity-50">
-                          {connecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Landmark className="w-3.5 h-3.5" />}
-                          {connecting ? 'Connecting...' : 'Link Bank Account'}
-                        </button>
-                        <span className="text-xs text-gray-300">or</span>
-                        <button type="button" onClick={() => { setManualMode(true); fetchPlaidToken(); }} className="text-[11px] text-gray-400 underline hover:text-blue-600 transition-colors">Set Up Manually</button>
-                      </div>
-                    )}
-                    {plaidError && <p className="text-xs text-amber-700 mt-1">{plaidError}</p>}
-                  </>
+                  <p className="text-xs text-gray-400 mt-2">This storefront will be grouped under your primary legal entity.</p>
                 )}
               </div>
             </div>
