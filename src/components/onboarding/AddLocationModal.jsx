@@ -1,102 +1,152 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, MapPin, Loader2, Plus, CheckCircle2, AlertTriangle, Pencil } from 'lucide-react';
+import { X, MapPin, Loader2, Plus, CheckCircle2, AlertTriangle, Pencil, Landmark, ChevronDown, ChevronRight } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import EINValidator from '@/components/onboarding/EINValidator';
 
-const inputStyle = {
-  width: '100%', border: '1px solid #E5E7EB', borderRadius: '8px',
-  padding: '9px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box',
-  fontFamily: 'Inter, sans-serif', color: '#111827',
-};
-const labelStyle = { fontSize: '11px', fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.04em' };
+function Masked({ val }) {
+  if (!val) return null;
+  const s = String(val);
+  return <span className="text-xs font-mono font-semibold text-gray-900">••••{s.slice(-4)}</span>;
+}
 
-export default function AddLocationModal({ corporateId, entityId, onLocationAdded, onClose, mode = 'add', initialDbaName = '', initialBusinessAddress = '' }) {
-  const isEdit = mode === 'edit';
+export default function AddLocationModal({
+  corporateId,
+  entityId,              // the primary entity UUID to assign by default
+  entityName,            // primary entity legal name (shown in default state)
+  onLocationAdded,
+  onClose,
+  initialDbaName = '',
+  initialBusinessAddress = '',
+  initialBanking = null,
+  initialSeparateEntity = null,
+}) {
+  const isEdit = !!(initialDbaName || initialBusinessAddress);
   const [dbaName, setDbaName] = useState(initialDbaName);
   const [addressDisplay, setAddressDisplay] = useState(initialBusinessAddress);
   const [parsedAddress, setParsedAddress] = useState(null);
+  const [unverifiedWarning, setUnverifiedWarning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [unverifiedWarning, setUnverifiedWarning] = useState(false);
+
+  // — Section B: Entity Expansion —
+  const [useAdvancedEntity, setUseAdvancedEntity] = useState(!!initialSeparateEntity);
+  const [separateLegalName, setSeparateLegalName] = useState(initialSeparateEntity?.legalBusinessName || '');
+  const [separateEIN, setSeparateEIN] = useState(initialSeparateEntity?.federalEIN || '');
+  const [separateEINValidated, setSeparateEINValidated] = useState(null); // formatted EIN or null
+
+  // — Section C: Banking —
+  const [plaidToken, setPlaidToken] = useState(null);
+  const [plaidLoading, setPlaidLoading] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
+  const [mRouting, setMRouting] = useState('');
+  const [mAccount, setMAccount] = useState('');
+  const [bankingResult, setBankingResult] = useState(initialBanking || null);
+  const [plaidError, setPlaidError] = useState('');
+
   const inputRef = useRef(null);
   const autocompleteRef = useRef(null);
 
+  // — Google Places —
   useEffect(() => {
     if (!inputRef.current || !window.google?.maps?.places) return;
     autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
-      types: ['address'],
-      componentRestrictions: { country: 'us' },
-      fields: ['address_components', 'formatted_address'],
+      types: ['address'], componentRestrictions: { country: 'us' }, fields: ['address_components', 'formatted_address'],
     });
     autocompleteRef.current.addListener('place_changed', () => {
       const place = autocompleteRef.current.getPlace();
       if (!place?.address_components) return;
       const get = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).long_name || '';
-      const getShort = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).short_name || '';
-      const streetNumber = get(['street_number']);
-      const route = get(['route']);
-      setParsedAddress({
-        streetName: streetNumber ? `${streetNumber} ${route}` : route,
-        city: get(['locality', 'sublocality']),
-        state: getShort(['administrative_area_level_1']),
-        postcode: get(['postal_code']),
-      });
+      const getS = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).short_name || '';
+      setParsedAddress({ streetName: (get(['street_number']) ? `${get(['street_number'])} ` : '') + get(['route']), city: get(['locality', 'sublocality']), state: getS(['administrative_area_level_1']), postcode: get(['postal_code']) });
       setAddressDisplay(place.formatted_address || '');
       setUnverifiedWarning(false);
     });
-    return () => {
-      if (autocompleteRef.current) window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
-    };
+    return () => { if (autocompleteRef.current) window.google.maps.event.clearInstanceListeners(autocompleteRef.current); };
   }, []);
 
-  const handleAddressInput = (e) => {
-    setAddressDisplay(e.target.value);
-    if (parsedAddress) setParsedAddress(null);
-    setUnverifiedWarning(false);
+  const handleAddressKeyDown = (e) => { if (e.key === 'Enter') e.preventDefault(); };
+
+  const clearAddress = () => { setAddressDisplay(''); setParsedAddress(null); setUnverifiedWarning(false); setTimeout(() => inputRef.current?.focus(), 0); };
+
+  // — Plaid —
+  const fetchPlaidToken = async () => {
+    setPlaidLoading(true);
+    setPlaidError('');
+    try {
+      const r = await base44.functions.invoke('createPlaidLinkToken', { corporateId });
+      setPlaidToken(r.data?.link_token || null);
+      if (!r.data?.link_token) setPlaidError('Could not initialize bank connection.');
+    } catch { setPlaidError('Could not initialize bank connection.'); }
+    finally { setPlaidLoading(false); }
   };
 
-  const handleAddressKeyDown = (e) => {
-    // Prevent Enter from submitting form — force user to pick from dropdown
-    if (e.key === 'Enter') e.preventDefault();
+  const openPlaid = async () => {
+    if (!plaidToken) { await fetchPlaidToken(); return; }
+    if (!window.Plaid) { setPlaidError('Plaid unavailable. Enter banking manually.'); return; }
+    setConnecting(true);
+    setPlaidError('');
+    const handler = window.Plaid.create({
+      token: plaidToken,
+      onSuccess: async (publicToken, metadata) => {
+        try {
+          const res = await base44.functions.invoke('exchangePlaidToken', { publicToken, accountId: metadata.account_id });
+          const accounts = res.data?.accounts || [];
+          const sel = accounts.find(a => a.accountId === metadata.account_id) || accounts[0];
+          if (sel) setBankingResult({ routingNumber: sel.routingNumber || '', accountNumber: sel.accountNumber || '', accountNumberMasked: sel.mask ? `••••${sel.mask}` : '', accountType: sel.subtype || 'checking', authMethod: 'Plaid' });
+        } catch { setPlaidError('Failed to retrieve account details.'); }
+        finally { setConnecting(false); }
+      },
+      onExit: (err) => { setConnecting(false); if (err) setPlaidError('Bank connection cancelled.'); },
+    });
+    handler.open();
   };
 
-  const handleClearAddress = () => {
-    setAddressDisplay('');
-    setParsedAddress(null);
-    setUnverifiedWarning(false);
-    setTimeout(() => inputRef.current?.focus(), 0);
+  const confirmManual = () => {
+    if (!mRouting || !mAccount) return;
+    setBankingResult({ routingNumber: mRouting, accountNumber: mAccount, accountNumberMasked: `••••${mAccount.slice(-4)}`, accountType: 'checking', authMethod: 'Manual' });
+    setManualMode(false);
+  };
+
+  const buildEntityFields = () => {
+    const ef = {};
+    if (useAdvancedEntity) {
+      ef.separateLegalName = separateLegalName.trim();
+      ef.separateEIN = separateEINValidated || separateEIN.replace(/\D/g, '');
+    }
+    return ef;
   };
 
   const doSave = async (addressToUse, businessAddressStr) => {
     setSaving(true);
     setError('');
     try {
-      if (isEdit) {
-        // Edit mode: return the updated data directly, no API call for location creation
-        onLocationAdded({
-          dbaName: dbaName.trim(),
-          businessAddress: businessAddressStr,
-          addressVerified: !!parsedAddress,
-        });
-        onClose();
-        return;
-      }
+      const entityFields = buildEntityFields();
+
+      // Create the location
       const res = await base44.functions.invoke('addSelfServeLocation', {
         corporateId,
         dbaName: dbaName.trim(),
         businessAddress: businessAddressStr,
-        entityId: entityId || undefined,
-        businessInfo: {
-          address: {
-            streetName: addressToUse?.streetName || '',
-            city: addressToUse?.city || '',
-            state: addressToUse?.state || '',
-            postcode: addressToUse?.postcode || '',
-          }
-        }
+        entityId: useAdvancedEntity ? separateEINValidated : entityId,
       });
       if (res.data?.error) throw new Error(res.data.error);
-      onLocationAdded({ ...res.data.location, addressVerified: !!parsedAddress });
+      const loc = res.data.location;
+
+      // If separate entity was entered, register it as a legal entity
+      if (useAdvancedEntity && separateLegalName.trim() && (separateEINValidated || separateEIN.replace(/\D/g, ''))) {
+        await base44.functions.invoke('manageLegalEntity', {
+          corporateId, action: 'add', legalBusinessName: separateLegalName.trim(),
+          federalEIN: separateEINValidated || separateEIN.replace(/\D/g, ''),
+        });
+      }
+
+      onLocationAdded({
+        location: loc,
+        addressVerified: !!parsedAddress,
+        banking: bankingResult,
+      });
       onClose();
     } catch (err) {
       setError(err.message || 'Failed to save location.');
@@ -107,166 +157,176 @@ export default function AddLocationModal({ corporateId, entityId, onLocationAdde
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!dbaName.trim() || !addressDisplay.trim()) {
-      setError('Both fields are required.');
-      return;
-    }
-    if (!parsedAddress) {
-      // Show unverified warning — user must explicitly confirm
-      setUnverifiedWarning(true);
-      return;
-    }
-    const businessAddress = `${parsedAddress.streetName}, ${parsedAddress.city}, ${parsedAddress.state} ${parsedAddress.postcode}`;
-    await doSave(parsedAddress, businessAddress);
+    if (!dbaName.trim() || !addressDisplay.trim()) { setError('Both fields are required.'); return; }
+    if (!parsedAddress) { setUnverifiedWarning(true); return; }
+    const busAddr = `${parsedAddress.streetName}, ${parsedAddress.city}, ${parsedAddress.state} ${parsedAddress.postcode}`;
+    await doSave(parsedAddress, busAddr);
   };
 
-  const handleSaveUnverified = async () => {
-    await doSave(null, addressDisplay.trim());
-  };
+  const handleSaveUnverified = async () => { await doSave(null, addressDisplay.trim()); };
+
+  const validAddr = !!parsedAddress;
+  const canSave = dbaName.trim() && addressDisplay.trim() && (validAddr || unverifiedWarning);
 
   const modal = (
-    <div
-      style={{ position: 'fixed', inset: 0, zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.45)', padding: '0 16px' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{ background: '#fff', borderRadius: '16px', boxShadow: '0 25px 50px rgba(0,0,0,0.3)', width: '100%', maxWidth: '460px', padding: '28px' }}>
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <MapPin size={16} color="#2563EB" />
+    <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/45 px-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[520px] max-h-[90vh] overflow-y-auto">
+        <form onSubmit={handleSubmit}>
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center"><MapPin className="w-4.5 h-4.5 text-blue-500" /></div>
+              <div>
+                <h3 className="font-bold text-gray-900 text-base">{isEdit ? 'Edit Business Location' : 'Add Business Location'}</h3>
+                <p className="text-xs text-gray-400">DBA, Address, Legal Entity &amp; Banking</p>
+              </div>
             </div>
+            <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"><X size={18} /></button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* — Section A: Storefront Profile — */}
             <div>
-              <h3 style={{ fontWeight: 700, color: '#111827', fontSize: '15px', margin: 0 }}>{isEdit ? 'Edit Business Location' : 'Add Business Location'}</h3>
-              <p style={{ fontSize: '12px', color: '#9CA3AF', margin: 0, marginTop: 2 }}>{isEdit ? 'Update the storefront details below' : 'Enter storefront details below'}</p>
-            </div>
-          </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, borderRadius: 6 }}>
-            <X size={18} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          {/* DBA Name */}
-          <div>
-            <label style={labelStyle}>Location Name / DBA</label>
-            <input
-              type="text"
-              value={dbaName}
-              onChange={(e) => setDbaName(e.target.value)}
-              placeholder="e.g. Cliqbux Cafe - Downtown"
-              autoFocus
-              style={inputStyle}
-            />
-          </div>
-
-          {/* Address */}
-          <div>
-            <label style={labelStyle}>Business Physical Address</label>
-
-            {/* If verified: show locked chip with change option */}
-            {parsedAddress ? (
-              <div style={{ border: '1px solid #BBF7D0', borderRadius: '8px', background: '#F0FDF4', padding: '10px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <CheckCircle2 size={15} color="#16A34A" />
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: '#15803D' }}>Address Verified</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleClearAddress}
-                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#6B7280', background: 'none', border: '1px solid #D1D5DB', borderRadius: '6px', padding: '3px 8px', cursor: 'pointer' }}
-                  >
-                    <Pencil size={11} /> Change
-                  </button>
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-gray-800 text-white text-[9px] font-bold flex items-center justify-center">A</span> Storefront Profile
+              </h4>
+              <div className="space-y-3 pl-7">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Storefront DBA Name</label>
+                  <input type="text" value={dbaName} onChange={(e) => setDbaName(e.target.value)} placeholder="e.g. Cliqbux Cafe - Downtown" autoFocus
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
                 </div>
-                <p style={{ fontSize: '13px', color: '#374151', marginTop: 6, marginBottom: 0 }}>
-                  {parsedAddress.streetName}, {parsedAddress.city}, {parsedAddress.state} {parsedAddress.postcode}
-                </p>
-              </div>
-            ) : (
-              <>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={addressDisplay}
-                  onChange={handleAddressInput}
-                  onKeyDown={handleAddressKeyDown}
-                  placeholder="Start typing to search address..."
-                  autoComplete="off"
-                  style={{ ...inputStyle, borderColor: unverifiedWarning ? '#FCA5A5' : '#E5E7EB', background: unverifiedWarning ? '#FFF7F7' : '#fff' }}
-                />
-                <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '5px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <MapPin size={10} />
-                  Select from the dropdown to verify
-                </p>
-              </>
-            )}
-
-            {/* Unverified address warning block */}
-            {unverifiedWarning && !parsedAddress && (
-              <div style={{ marginTop: '10px', background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: '8px', padding: '12px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
-                  <AlertTriangle size={15} color="#D97706" style={{ marginTop: 1, flexShrink: 0 }} />
-                  <div>
-                    <p style={{ fontSize: '12px', fontWeight: 700, color: '#92400E', margin: 0 }}>Address not verified</p>
-                    <p style={{ fontSize: '11px', color: '#B45309', margin: '3px 0 10px' }}>
-                      Unverified addresses may cause processing delays during underwriting. We recommend selecting from the dropdown.
-                    </p>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        type="button"
-                        onClick={handleSaveUnverified}
-                        disabled={saving}
-                        style={{ flex: 1, fontSize: '12px', fontWeight: 600, color: '#92400E', background: '#FEF3C7', border: '1px solid #FCD34D', borderRadius: '6px', padding: '7px 12px', cursor: 'pointer' }}
-                      >
-                        {saving ? 'Saving...' : 'Continue Without Verification'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setUnverifiedWarning(false)}
-                        style={{ fontSize: '12px', fontWeight: 500, color: '#6B7280', background: '#fff', border: '1px solid #E5E7EB', borderRadius: '6px', padding: '7px 12px', cursor: 'pointer' }}
-                      >
-                        Go Back
-                      </button>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Storefront Physical Address</label>
+                  {validAddr ? (
+                    <div className="border border-green-200 bg-green-50 rounded-lg p-3">
+                      <div className="flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700"><CheckCircle2 className="w-3.5 h-3.5" /> Address Verified</span>
+                        <button type="button" onClick={clearAddress} className="flex items-center gap-1 text-[10px] text-gray-500 border border-gray-300 rounded px-2 py-1 hover:text-blue-600"><Pencil className="w-3 h-3" /> Change</button>
+                      </div>
+                      <p className="text-sm text-gray-700 mt-1.5">{parsedAddress.streetName}, {parsedAddress.city}, {parsedAddress.state} {parsedAddress.postcode}</p>
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      <input ref={inputRef} type="text" value={addressDisplay} onChange={(e) => { setAddressDisplay(e.target.value); if (parsedAddress) setParsedAddress(null); setUnverifiedWarning(false); }} onKeyDown={handleAddressKeyDown}
+                        placeholder="Start typing to search address..." autoComplete="off"
+                        className={`w-full border rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 ${unverifiedWarning ? 'border-red-300 bg-red-50 focus:ring-red-400' : 'border-gray-200 focus:ring-blue-500'}`}
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Select from the dropdown to verify</p>
+                    </>
+                  )}
+                  {unverifiedWarning && !validAddr && (
+                    <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-[11px]">
+                        <p className="font-semibold text-amber-800">Address not verified</p>
+                        <p className="text-amber-600 mt-0.5">Unverified addresses may cause processing delays. Prefer selecting from the dropdown.</p>
+                        <div className="flex gap-2 mt-2">
+                          <button type="button" onClick={handleSaveUnverified} disabled={saving} className="text-xs font-semibold text-amber-800 bg-amber-100 border border-amber-200 rounded-lg px-3 py-1.5 hover:bg-amber-200 disabled:opacity-50">{saving ? 'Saving...' : 'Continue Without Verification'}</button>
+                          <button type="button" onClick={() => setUnverifiedWarning(false)} className="text-xs text-gray-500 bg-white border border-gray-200 rounded-lg px-3 py-1.5 hover:text-gray-700">Go Back</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
+            </div>
+
+            {/* — Section B: Auto-Inherited Legal Entity — */}
+            <div className="border-t border-gray-100 pt-5">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-gray-800 text-white text-[9px] font-bold flex items-center justify-center">B</span> Legal Entity
+              </h4>
+              <div className="pl-7">
+                <button type="button" onClick={() => setUseAdvancedEntity(!useAdvancedEntity)}
+                  className="flex items-center gap-2 text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors">
+                  {useAdvancedEntity ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                  ⚙️ Advanced: This storefront operates under a separate Legal Entity or unique EIN
+                </button>
+
+                {useAdvancedEntity ? (
+                  <div className="mt-3 space-y-3">
+                    <p className="text-[11px] text-gray-400">By default each storefront is grouped under your primary business. Check this to assign a <strong className="text-gray-600">separate corporate shell</strong> — this will board as its own processing account with a distinct MID.</p>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Legal Corporate Name</label>
+                      <input type="text" value={separateLegalName} onChange={(e) => setSeparateLegalName(e.target.value)}
+                        placeholder="e.g. Cliqbux Holdings LLC" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Federal EIN</label>
+                      <EINValidator corporateId={corporateId} value={separateEIN} onChange={setSeparateEIN} onValidated={(f) => setSeparateEINValidated(f)} />
+                    </div>
+                    {!separateEINValidated && separateEIN.replace(/\D/g, '').length === 9 && (
+                      <p className="text-xs text-gray-400">Click <strong>Verify</strong> to confirm this EIN is valid before saving.</p>
+                    )}
+                  </div>
+                ) : entityId && (
+                  <p className="text-xs text-gray-400 mt-2">This storefront will be grouped under your primary legal entity. Banking and processing are per storefront.</p>
+                )}
+              </div>
+            </div>
+
+            {/* — Section C: Localized Banking Assign — */}
+            <div className="border-t border-gray-100 pt-5">
+              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-gray-800 text-white text-[9px] font-bold flex items-center justify-center">C</span> Banking
+              </h4>
+              <div className="pl-7">
+                {bankingResult ? (
+                  <div className="border border-green-200 bg-green-50 rounded-lg p-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Landmark className="w-4 h-4 text-blue-500" />
+                      <span><Masked val={bankingResult.accountNumberMasked || bankingResult.accountNumber} /> <span className="text-[10px] text-gray-400 ml-1">{bankingResult.authMethod}</span></span>
+                    </div>
+                    <button type="button" onClick={() => setBankingResult(null)} className="text-[10px] text-gray-500 underline hover:text-red-600">Remove</button>
+                  </div>
+                ) : (
+                  <>
+                    {manualMode ? (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex gap-2">
+                          <input type="text" value={mRouting} onChange={(e) => setMRouting(e.target.value.replace(/\D/g, ''))} placeholder="Routing #" maxLength={9}
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          <input type="text" value={mAccount} onChange={(e) => setMAccount(e.target.value)} placeholder="Account #"
+                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" onClick={confirmManual} disabled={!mRouting || !mAccount}
+                            className="flex-1 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 rounded-lg py-2 px-3">Confirm Banking</button>
+                          <button type="button" onClick={() => setManualMode(false)} className="text-xs text-gray-500 border border-gray-200 rounded-lg py-2 px-3 hover:text-gray-700">Back</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button type="button" onClick={openPlaid} disabled={connecting}
+                          className="flex items-center gap-1.5 border border-dashed border-gray-300 hover:border-blue-400 hover:bg-blue-50 rounded-lg py-2 px-3 text-xs font-semibold text-gray-600 hover:text-blue-700 transition-all disabled:opacity-50">
+                          {connecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Landmark className="w-3.5 h-3.5" />}
+                          {connecting ? 'Connecting...' : 'Link Bank Account'}
+                        </button>
+                        <span className="text-xs text-gray-300">or</span>
+                        <button type="button" onClick={() => { setManualMode(true); fetchPlaidToken(); }} className="text-[11px] text-gray-400 underline hover:text-blue-600 transition-colors">Set Up Manually</button>
+                      </div>
+                    )}
+                    {plaidError && <p className="text-xs text-amber-700 mt-1">{plaidError}</p>}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700">{error}</div>}
           </div>
 
-          {error && (
-            <p style={{ fontSize: '12px', color: '#DC2626', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '8px 12px', margin: 0 }}>
-              {error}
-            </p>
-          )}
-
-          {/* Action buttons — only show when not in unverified-warning state */}
-          {!unverifiedWarning && (
-            <div style={{ display: 'flex', gap: '10px', paddingTop: '2px' }}>
-              <button
-                type="submit"
-                disabled={saving}
-                style={{
-                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                  background: saving ? '#D1D5DB' : '#111827', color: '#fff', fontWeight: 600,
-                  padding: '11px 20px', borderRadius: '9px', fontSize: '13px', border: 'none', cursor: saving ? 'not-allowed' : 'pointer',
-                  fontFamily: 'Inter, sans-serif',
-                }}
-              >
-                {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-                {isEdit ? 'Update Location' : 'Save Location'}
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                style={{ padding: '11px 16px', fontSize: '13px', fontWeight: 500, color: '#6B7280', border: '1px solid #E5E7EB', borderRadius: '9px', background: '#fff', cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
-              >
-                Cancel
-              </button>
-            </div>
-          )}
+          {/* Footer */}
+          <div className="px-6 py-4 border-t border-gray-100 flex gap-3">
+            <button type="submit" disabled={!canSave || saving}
+              className="flex-1 flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold py-3 px-5 rounded-xl text-sm transition-all">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              {isEdit ? 'Update Location' : 'Save Location'}
+            </button>
+            <button type="button" onClick={onClose} className="text-sm font-medium text-gray-500 border border-gray-200 rounded-xl py-3 px-5 hover:bg-gray-50 transition-all">Cancel</button>
+          </div>
         </form>
       </div>
     </div>
