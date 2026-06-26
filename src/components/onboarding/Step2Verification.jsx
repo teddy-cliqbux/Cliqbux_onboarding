@@ -36,38 +36,37 @@ export default function Step2Verification({ profile, onVerified }) {
       token,
       onSuccess: async (publicToken, metadata) => {
         try {
-          // Fetch bank account details
+          // Fetch bank account details — account_id may be null for multi-account flows
           const bankRes = await base44.functions.invoke('exchangePlaidToken', {
             publicToken,
-            accountId: metadata.account_id
+            accountId: metadata.account_id || ''
           });
+
+          if (bankRes.data?.error) throw new Error(bankRes.data.error);
+
           const accounts = bankRes.data?.accounts || [];
           setPlaidAccounts(accounts);
 
-          // Fetch IDV identity data if available
+          // Best-effort IDV fetch — never block the success flow if this fails
           let identity = null;
-          const idvId = metadata.identity_verification_id || metadata.link_session_id;
+          const idvId = metadata.identity_verification_id;
           if (idvId) {
-            const idvRes = await base44.functions.invoke('exchangePlaidToken', {
-              identityVerificationId: idvId
-            });
-            identity = idvRes.data?.identity || null;
+            try {
+              const idvRes = await base44.functions.invoke('exchangePlaidToken', {
+                identityVerificationId: idvId
+              });
+              identity = idvRes.data?.identity || null;
+            } catch (_) { /* non-critical */ }
           }
 
-          // Persist identity fields to the merchant profile
+          // Persist identity fields if present
           if (identity) {
             const updatePayload = { corporateId: profile.corporateId };
-            if (identity.firstName) updatePayload.firstName = identity.firstName;
-            if (identity.lastName) updatePayload.lastName = identity.lastName;
-            if (identity.dobYear) updatePayload.dobYear = identity.dobYear;
-            if (identity.dobMonth) updatePayload.dobMonth = identity.dobMonth;
-            if (identity.dobDay) updatePayload.dobDay = identity.dobDay;
-            if (identity.ssn) updatePayload.ssn = identity.ssn;
-            if (identity.homeStreet) updatePayload.homeStreet = identity.homeStreet;
-            if (identity.homeCity) updatePayload.homeCity = identity.homeCity;
-            if (identity.homeState) updatePayload.homeState = identity.homeState;
-            if (identity.homeZip) updatePayload.homeZip = identity.homeZip;
-            await base44.functions.invoke('updateMerchantProfile', updatePayload);
+            const fields = ['firstName','lastName','dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip'];
+            fields.forEach(f => { if (identity[f]) updatePayload[f] = identity[f]; });
+            try {
+              await base44.functions.invoke('updateMerchantProfile', updatePayload);
+            } catch (_) { /* non-critical */ }
           }
 
           setPlaidState('linked');
