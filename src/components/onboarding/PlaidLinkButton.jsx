@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Landmark, Loader2, CheckCircle, ChevronDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
-export default function PlaidLinkButton({ corporateId, onAccountsLinked }) {
+export default function PlaidLinkButton({ corporateId, onAccountsLinked, onAllAccountsLinked }) {
   const [linkToken, setLinkToken] = useState(null);
   const [loading, setLoading] = useState(false);
   const [linked, setLinked] = useState(false);
@@ -44,11 +44,13 @@ export default function PlaidLinkButton({ corporateId, onAccountsLinked }) {
           setAccounts(fetchedAccounts);
           setLinked(true);
 
+          // Notify parent with all accounts for per-location dropdowns
+          if (onAccountsLinked) onAccountsLinked(fetchedAccounts);
+
           // Auto-select first depository checking account
           const checking = fetchedAccounts.find(a => a.subtype === 'checking') || fetchedAccounts[0];
           if (checking) {
             setSelectedAccount(checking);
-            onAccountsLinked(checking);
           }
         } catch (e) {
           setError('Failed to retrieve account details from Plaid.');
@@ -67,10 +69,7 @@ export default function PlaidLinkButton({ corporateId, onAccountsLinked }) {
 
   const handleAccountSelect = (e) => {
     const acct = accounts.find(a => a.accountId === e.target.value);
-    if (acct) {
-      setSelectedAccount(acct);
-      onAccountsLinked(acct);
-    }
+    if (acct) setSelectedAccount(acct);
   };
 
   if (linked && accounts.length > 0) {
