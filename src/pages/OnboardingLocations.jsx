@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Plus, ArrowRight, Loader2, Store, Landmark, Trash2, CheckCircle2, AlertCircle, Pencil, Check, MapPin, Building2, Hash, Layers, ChevronDown, AlertTriangle } from 'lucide-react';
+import { Plus, ArrowRight, Loader2, Store, Landmark, Trash2, CheckCircle2, AlertCircle, Pencil, MapPin, Building2, Hash, Layers, AlertTriangle } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import AddLocationModal from '@/components/onboarding/AddLocationModal';
 import EntityPlaidButton from '@/components/onboarding/EntityPlaidButton';
+import StorefrontBankingCell from '@/components/onboarding/StorefrontBankingCell';
 
 function formatEIN(raw) {
   const d = (raw || '').replace(/\D/g, '');
@@ -284,56 +285,6 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     setLocationState(prev => ({ ...prev }));
   };
 
-  const BankingColumn = ({ row }) => {
-    const ls = locationState[row.id];
-    const bk = getLocBankDetails(row);
-    const entityAccounts = plaidAccounts[row.entityId] || [];
-    const hasPlaidEntity = entityAccounts.length > 0;
-    const inManual = ls?.isManualMode;
-
-    // STATE C: Manual Entry Mode — activated via the "Set Up Manually..." link
-    if (inManual) {
-      return (
-        <div className="flex flex-col items-center justify-center gap-1 w-full">
-          <div className="flex items-center gap-1 w-full justify-center">
-            <input type="text" placeholder="Routing #" maxLength={9} value={ls.manualRouting || ''} className="w-[6rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-              onChange={(e) => updateManualField(row.id, 'manualRouting', e.target.value.replace(/\D/g, '').slice(0, 9))} />
-            <input type="text" placeholder="Account #" value={ls.manualAccount || ''} className="w-[7rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-              onChange={(e) => updateManualField(row.id, 'manualAccount', e.target.value.replace(/\D/g, '')?.slice(0, 17))} />
-            <button onClick={() => confirmManual(row.id)}
-              className="text-[10px] font-semibold bg-gray-900 text-white rounded-lg px-2 py-1.5"><Check className="w-3 h-3" /></button>
-          </div>
-          <button onClick={() => toggleManual(row.id)} className="text-[10px] text-gray-400 hover:text-blue-600 underline whitespace-nowrap">← Use Plaid instead</button>
-        </div>
-      );
-    }
-
-    // STATE B: Entity Plaid is connected — dropdown with account selections
-    if (hasPlaidEntity) {
-      return (
-        <div className="flex flex-col items-center justify-center gap-1 w-full">
-          <select value={ls?.selectedBankId || ''}
-            onChange={(e) => selectAccount(row.id, e.target.value)}
-            className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[14rem]">
-            <option value="">Select account...</option>
-            {entityAccounts.map(a => (
-              <option key={a.accountId} value={a.accountId}>{a.name} ••••{a.mask || (a.accountNumber || '').slice(-4)}</option>
-            ))}
-          </select>
-          <button onClick={() => toggleManual(row.id)} className="text-[10px] text-gray-400 hover:text-blue-600 underline whitespace-nowrap">Set Up Manually...</button>
-        </div>
-      );
-    }
-
-    // STATE A: No bank connected — entity-scoped Plaid button with manual fallback underneath
-    return (
-      <div className="flex flex-col items-center justify-center gap-1 w-full">
-        <EntityPlaidButton corporateId={profile.corporateId} entityId={row.entityId} onAccountsConnected={handleAccountsConnected} />
-        <button onClick={() => toggleManual(row.id)} className="text-[10px] text-gray-400 hover:text-blue-600 underline whitespace-nowrap">Set Up Manually...</button>
-      </div>
-    );
-  };
-
   const LocationRow = ({ row, suppressColDef }) => {
     const hasBanking = !!getLocBankDetails(row);
     const ls = locationState[row.id];
@@ -353,8 +304,18 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             {row.elavonMID && <p className="text-[10px] text-gray-400 font-mono mt-0.5">MID: {row.elavonMID}</p>}
           </div>
         </div>
-        <div className="md:col-span-4 flex items-center">
-          <BankingColumn row={row} />
+        <div className="md:col-span-4 flex items-center justify-center">
+          <StorefrontBankingCell
+            row={row}
+            corporateId={profile.corporateId}
+            plaidAccounts={plaidAccounts}
+            bankDetails={getLocBankDetails(row)}
+            onSelectBank={selectAccount}
+            onPlaidAccountsConnected={handleAccountsConnected}
+            onToggleManual={toggleManual}
+            onConfirmManual={confirmManual}
+            onUpdateManualField={updateManualField}
+          />
         </div>
         <div className="md:col-span-3 flex items-center md:justify-center">
           {isApproved ? <div className="flex items-center gap-1 text-green-700 font-semibold text-xs"><CheckCircle2 className="w-4 h-4" /> Approved</div>
