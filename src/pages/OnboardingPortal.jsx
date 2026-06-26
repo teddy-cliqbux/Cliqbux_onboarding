@@ -2,67 +2,71 @@ import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import TopNav from '@/components/onboarding/TopNav';
 import Step1Agreement from '@/components/onboarding/Step1Agreement';
-import Step2BankDetails from '@/components/onboarding/Step2BankDetails';
-import SuccessScreen from '@/components/onboarding/SuccessScreen';
 import ErrorScreen from '@/components/onboarding/ErrorScreen';
 import LoadingScreen from '@/components/onboarding/LoadingScreen';
 import SelfServePricing from '@/components/onboarding/SelfServePricing';
 import Step2Verification from '@/components/onboarding/Step2Verification';
+import OnboardingLocations from './OnboardingLocations';
+import OnboardingVerification from './OnboardingVerification';
+import OnboardingSuccess from './OnboardingSuccess';
 
 const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'];
 
+// Steps within the post-agreement flow
+const STEP_LOCATIONS    = 'locations';
+const STEP_VERIFICATION = 'verification';
+const STEP_SUCCESS      = 'success';
+
+const TIER_LABELS = {
+  Standard: 'Standard', Premium: 'Premium', Custom: 'Custom',
+  Self_Swiped: 'Traditional Swiped', Self_Keyed: 'Traditional Keyed', Self_CashDiscount: 'Cash Discount'
+};
+const TIER_CLASSES = {
+  Premium:         'bg-amber-500/20 text-amber-400 border border-amber-500/30',
+  Custom:          'bg-purple-500/20 text-purple-400 border border-purple-500/30',
+  Standard:        'bg-gray-700 text-gray-300 border border-gray-600',
+  Self_Swiped:     'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+  Self_Keyed:      'bg-purple-500/20 text-purple-400 border border-purple-500/30',
+  Self_CashDiscount: 'bg-green-500/20 text-green-400 border border-green-500/30',
+};
+
 export default function OnboardingPortal() {
-  const [mode, setMode] = useState(null); // 'sales' | 'self_serve'
-  const [dealId, setDealId] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [locations, setLocations] = useState([]);
+  const [mode, setMode]               = useState(null); // 'sales' | 'self_serve'
+  const [dealId, setDealId]           = useState(null);
+  const [profile, setProfile]         = useState(null);
+  const [locations, setLocations]     = useState([]);
   const [plaidAccounts, setPlaidAccounts] = useState([]);
   const [verificationDone, setVerificationDone] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [step, setStep]               = useState(STEP_LOCATIONS); // within post-agreement flow
+  const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const id = params.get('dealId') || params.get('corporateId');
-
-    if (id) {
-      setMode('sales');
-      setDealId(id);
-    } else {
-      // Self-serve: no deal ID in URL
-      setMode('self_serve');
-      setLoading(false);
-    }
+    if (id) { setMode('sales'); setDealId(id); }
+    else    { setMode('self_serve'); setLoading(false); }
   }, []);
 
   useEffect(() => {
-    if (mode === 'sales' && dealId) {
-      fetchMerchantData(dealId);
-    }
+    if (mode === 'sales' && dealId) fetchMerchantData(dealId);
   }, [mode, dealId]);
 
   const fetchMerchantData = async (id) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await base44.functions.invoke('getMerchantData', { corporateId: id });
-      const data = response.data;
-
+      const res = await base44.functions.invoke('getMerchantData', { corporateId: id });
+      const data = res.data;
       if (data?.error) {
-        setError({
-          title: 'Merchant Not Found',
-          message: "We couldn't find your merchant profile. Please verify your link or contact your Cliqbux representative."
-        });
+        setError({ title: 'Merchant Not Found', message: "We couldn't find your merchant profile. Please verify your link or contact your Cliqbux representative." });
         return;
       }
-
       setProfile(data.profile);
       setLocations(data.locations || []);
-    } catch (err) {
-      setError({
-        title: 'Connection Error',
-        message: "We're having trouble loading your portal. Please try refreshing the page."
-      });
+      if (data.profile?.applicationStatus === 'Submitted') setStep(STEP_SUCCESS);
+    } catch {
+      setError({ title: 'Connection Error', message: "We're having trouble loading your portal. Please try refreshing the page." });
     } finally {
       setLoading(false);
     }
@@ -70,12 +74,9 @@ export default function OnboardingPortal() {
 
   const handleStatusChange = (newStatus) => {
     setProfile(prev => ({ ...prev, applicationStatus: newStatus }));
-    if (newStatus === 'Quote Signed') {
-      fetchMerchantData(profile.corporateId);
-    }
+    if (newStatus === 'Quote Signed') fetchMerchantData(profile.corporateId);
   };
 
-  // Self-serve: after pricing selection + HubSpot deal created
   const handleSelfServeComplete = (newProfile) => {
     setProfile(newProfile);
     setLocations([]);
@@ -84,63 +85,79 @@ export default function OnboardingPortal() {
 
   const handleVerificationComplete = async (bankingInfo) => {
     setPlaidAccounts(bankingInfo.plaidAccounts || []);
-    // Refresh profile so UnderwritingPanel gets the IDV-populated identity fields
     if (bankingInfo.identity && profile?.corporateId) {
       try {
         const refreshed = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
         if (refreshed.data?.profile) setProfile(refreshed.data.profile);
-      } catch (_) { /* non-critical — panel will still show manual fields */ }
+      } catch (_) {}
     }
     setVerificationDone(true);
   };
 
-  // — Loading & Error states —
+  const handleLocationsContinue = ({ locations: updatedLocations }) => {
+    setLocations(updatedLocations);
+    setStep(STEP_VERIFICATION);
+  };
+
+  const handleSigningComplete = async () => {
+    // Mark submitted and refresh locations for MID tracker
+    setProfile(prev => ({ ...prev, applicationStatus: 'Submitted' }));
+    try {
+      const res = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
+      if (res.data?.locations) setLocations(res.data.locations);
+    } catch (_) {}
+    setStep(STEP_SUCCESS);
+  };
+
+  // — Loading & Error —
   if (loading) return <LoadingScreen />;
-  if (error) return <ErrorScreen title={error.title} message={error.message} />;
+  if (error)   return <ErrorScreen title={error.title} message={error.message} />;
 
-  // — Self-serve flow: no dealId yet, show pricing cards —
-  if (mode === 'self_serve' && !profile) {
-    return <SelfServePricing onComplete={handleSelfServeComplete} />;
-  }
-
+  // — Self-serve pricing —
+  if (mode === 'self_serve' && !profile) return <SelfServePricing onComplete={handleSelfServeComplete} />;
   if (!profile) return <ErrorScreen />;
 
   const { applicationStatus, pricingTier } = profile;
   const isSelfServe = SELF_SERVE_TIERS.includes(pricingTier);
+  const pricingTierLabel = TIER_LABELS[pricingTier] || pricingTier;
+  const pricingTierClass = TIER_CLASSES[pricingTier] || 'bg-gray-700 text-gray-300 border border-gray-600';
+
+  // — Success screen (full-page, no nav card) —
+  if (applicationStatus === 'Submitted' || step === STEP_SUCCESS) {
+    return <OnboardingSuccess profile={profile} locations={locations} />;
+  }
 
   const renderStep = () => {
-    // Pricing confirmed → show verification first, then banking
+    // Pricing confirmed → Plaid verification gate first
     if (applicationStatus === 'Pricing Selected' || applicationStatus === 'Quote Signed') {
       if (!verificationDone) {
+        return <Step2Verification profile={profile} onVerified={handleVerificationComplete} />;
+      }
+      if (step === STEP_LOCATIONS) {
         return (
-          <Step2Verification
+          <OnboardingLocations
             profile={profile}
-            onVerified={handleVerificationComplete}
+            locations={locations}
+            plaidAccounts={plaidAccounts}
+            onContinue={handleLocationsContinue}
           />
         );
       }
-      return (
-        <Step2BankDetails
-          profile={profile}
-          locations={locations}
-          plaidAccounts={plaidAccounts}
-          onStatusChange={handleStatusChange}
-        />
-      );
+      if (step === STEP_VERIFICATION) {
+        return (
+          <OnboardingVerification
+            profile={profile}
+            locations={locations}
+            onBack={() => setStep(STEP_LOCATIONS)}
+            onComplete={handleSigningComplete}
+          />
+        );
+      }
     }
 
-    // Sales flow — show agreement iframe first
+    // Sales flow: agreement signing first
     if (applicationStatus === 'Incomplete') {
-      return (
-        <Step1Agreement
-          profile={profile}
-          onStatusChange={handleStatusChange}
-        />
-      );
-    }
-
-    if (applicationStatus === 'Submitted') {
-      return <SuccessScreen profile={profile} locations={locations} />;
+      return <Step1Agreement profile={profile} onStatusChange={handleStatusChange} />;
     }
 
     return (
@@ -151,30 +168,12 @@ export default function OnboardingPortal() {
     );
   };
 
-  const pricingTierLabel = {
-    Standard: 'Standard',
-    Premium: 'Premium',
-    Custom: 'Custom',
-    Self_Swiped: 'Traditional Swiped',
-    Self_Keyed: 'Traditional Keyed',
-    Self_CashDiscount: 'Cash Discount'
-  }[pricingTier] || pricingTier;
-
-  const pricingTierClass = {
-    Premium: 'bg-amber-500/20 text-amber-400 border border-amber-500/30',
-    Custom: 'bg-purple-500/20 text-purple-400 border border-purple-500/30',
-    Standard: 'bg-gray-700 text-gray-300 border border-gray-600',
-    Self_Swiped: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
-    Self_Keyed: 'bg-purple-500/20 text-purple-400 border border-purple-500/30',
-    Self_CashDiscount: 'bg-green-500/20 text-green-400 border border-green-500/30'
-  }[pricingTier] || 'bg-gray-700 text-gray-300 border border-gray-600';
-
   return (
     <div className="portal-bg" style={{ fontFamily: 'Inter, sans-serif' }}>
       <TopNav applicationStatus={applicationStatus} verificationDone={verificationDone} />
 
       <div className="pt-16 min-h-screen flex flex-col items-center justify-start px-4 py-10">
-        {/* Merchant greeting strip */}
+        {/* Merchant greeting */}
         <div className="w-full max-w-4xl mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
@@ -198,12 +197,11 @@ export default function OnboardingPortal() {
           </div>
         </div>
 
-        {/* Main onboarding card */}
+        {/* Main card */}
         <div className="w-full max-w-4xl portal-card overflow-hidden">
           {renderStep()}
         </div>
 
-        {/* Footer */}
         <div className="mt-8 text-center">
           <p className="text-gray-600 text-xs">
             Secured by <span className="text-amber-500 font-semibold">Cliqbux</span> &nbsp;·&nbsp; onboarding.cliqbux.com &nbsp;·&nbsp; {new Date().getFullYear()}
