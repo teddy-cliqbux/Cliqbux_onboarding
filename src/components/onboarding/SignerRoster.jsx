@@ -38,7 +38,36 @@ export default function SignerRoster({ profile, onValidChange }) {
     setLoading(true);
     try {
       const res = await base44.functions.invoke('manageSigner', { action: 'list', corporateId: profile.corporateId });
-      setSigners(res.data?.signers || []);
+      let list = res.data?.signers || [];
+      // Auto-seed primary signer from Step 1 profile when roster is empty
+      if (list.length === 0 && profile.signerEmail && (profile.firstName || profile.lastName || profile.legalName)) {
+        const signerRes = await base44.functions.invoke('manageSigner', {
+          action: 'create',
+          corporateId: profile.corporateId,
+          signerData: {
+            firstName: profile.firstName || profile.legalName.split(' ')[0] || '',
+            lastName: profile.lastName || profile.legalName.split(' ').slice(1).join(' ') || '',
+            signerEmail: profile.signerEmail,
+            ownershipPercentage: 100,
+            isPrimarySigner: true,
+            // Map personal details from Step 1 if already entered
+            dobYear: profile.dobYear || '',
+            dobMonth: profile.dobMonth || '',
+            dobDay: profile.dobDay || '',
+            ssn: profile.ssn || '',
+            homeStreet: profile.homeStreet || '',
+            homeCity: profile.homeCity || '',
+            homeState: profile.homeState || '',
+            homeZip: profile.homeZip || '',
+            corporatePhone: profile.corporatePhone || '',
+          },
+          sendInvite: false,
+        });
+        if (signerRes.data?.signer) {
+          list = [signerRes.data.signer];
+        }
+      }
+      setSigners(list);
     } catch (_) {
       setSigners([]);
     } finally {

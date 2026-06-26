@@ -98,7 +98,9 @@ Deno.serve(async (req) => {
         legalName: businessName,
         signerEmail,
         pricingTier,
-        applicationStatus: 'Pricing Selected'
+        applicationStatus: 'Pricing Selected',
+        firstName: signerName.split(' ')[0] || signerName,
+        lastName: signerName.split(' ').slice(1).join(' ') || '',
       });
     }
 

@@ -25,6 +25,8 @@ Deno.serve(async (req) => {
       corporateId: profile.corporateId,
       legalName: profile.legalName,
       signerEmail: profile.signerEmail,
+      firstName: profile.firstName || '',
+      lastName: profile.lastName || '',
       hubspotQuoteUrl: profile.hubspotQuoteUrl,
       pricingTier: profile.pricingTier,
       applicationStatus: profile.applicationStatus,
