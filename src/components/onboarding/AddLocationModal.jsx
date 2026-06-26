@@ -1,30 +1,95 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, MapPin, Loader2, Plus } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 export default function AddLocationModal({ corporateId, onLocationAdded, onClose }) {
   const [dbaName, setDbaName] = useState('');
-  const [businessAddress, setBusinessAddress] = useState('');
+  const [addressDisplay, setAddressDisplay] = useState('');
+  const [parsedAddress, setParsedAddress] = useState(null); // { streetName, city, state, postcode }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const inputRef = useRef(null);
+  const autocompleteRef = useRef(null);
 
+  useEffect(() => {
+    if (!inputRef.current || !window.google?.maps?.places) return;
 
-  // Google Places disabled — using plain text input
+    autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
+      types: ['address'],
+      componentRestrictions: { country: 'us' },
+      fields: ['address_components', 'formatted_address'],
+    });
+
+    autocompleteRef.current.addListener('place_changed', () => {
+      const place = autocompleteRef.current.getPlace();
+      if (!place?.address_components) return;
+
+      const get = (types) => {
+        const comp = place.address_components.find(c => types.some(t => c.types.includes(t)));
+        return comp ? comp.long_name : '';
+      };
+      const getShort = (types) => {
+        const comp = place.address_components.find(c => types.some(t => c.types.includes(t)));
+        return comp ? comp.short_name : '';
+      };
+
+      const streetNumber = get(['street_number']);
+      const streetName = get(['route']);
+      const fullStreet = streetNumber ? `${streetNumber} ${streetName}` : streetName;
+
+      const parsed = {
+        streetName: fullStreet,
+        city: get(['locality', 'sublocality']),
+        state: getShort(['administrative_area_level_1']),
+        postcode: get(['postal_code']),
+      };
+
+      setParsedAddress(parsed);
+      setAddressDisplay(place.formatted_address || '');
+    });
+
+    return () => {
+      if (autocompleteRef.current) {
+        window.google.maps.event.clearInstanceListeners(autocompleteRef.current);
+      }
+    };
+  }, []);
+
+  const handleAddressInput = (e) => {
+    setAddressDisplay(e.target.value);
+    // If user edits after selection, clear parsed data to avoid stale values
+    if (parsedAddress) setParsedAddress(null);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!dbaName.trim() || !businessAddress.trim()) {
+    if (!dbaName.trim() || !addressDisplay.trim()) {
       setError('Both fields are required.');
       return;
     }
+
+    // Build businessAddress string for storage
+    const businessAddress = parsedAddress
+      ? `${parsedAddress.streetName}, ${parsedAddress.city}, ${parsedAddress.state} ${parsedAddress.postcode}`
+      : addressDisplay.trim();
+
     setSaving(true);
     setError('');
     try {
       const res = await base44.functions.invoke('addSelfServeLocation', {
         corporateId,
         dbaName: dbaName.trim(),
-        businessAddress: businessAddress.trim()
+        businessAddress,
+        // Pass structured fields for backend use
+        businessInfo: {
+          address: {
+            streetName: parsedAddress?.streetName || '',
+            city: parsedAddress?.city || '',
+            state: parsedAddress?.state || '',
+            postcode: parsedAddress?.postcode || '',
+          }
+        }
       });
       if (res.data?.error) throw new Error(res.data.error);
       onLocationAdded(res.data.location);
@@ -92,24 +157,34 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
             />
           </div>
 
-          {/* Address — uncontrolled to allow Google Places to manage DOM value */}
-          <div>
+          {/* Address — Google Places Autocomplete */}
+          <div style={{ position: 'relative' }}>
             <label style={{ fontSize: '11px', fontWeight: 600, color: '#4B5563', display: 'block', marginBottom: '6px' }}>
               Business Physical Address
             </label>
             <input
+              ref={inputRef}
               type="text"
-              value={businessAddress}
-              onChange={(e) => setBusinessAddress(e.target.value)}
-              placeholder="e.g. 123 Main St, San Francisco, CA 94102"
+              value={addressDisplay}
+              onChange={handleAddressInput}
+              placeholder="Start typing your address..."
+              autoComplete="off"
               style={{
                 width: '100%', border: '1px solid #E5E7EB', borderRadius: '8px',
                 padding: '10px 12px', fontSize: '14px', outline: 'none', boxSizing: 'border-box'
               }}
             />
             <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <MapPin size={11} /> Enter full street address including city, state, and zip
+              <MapPin size={11} />
+              {parsedAddress
+                ? <span style={{ color: '#16A34A', fontWeight: 600 }}>Address verified ✓</span>
+                : 'Select your address from the dropdown suggestions'}
             </p>
+            {parsedAddress && (
+              <div style={{ marginTop: '6px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '8px 12px', fontSize: '11px', color: '#15803D' }}>
+                {parsedAddress.streetName} · {parsedAddress.city}, {parsedAddress.state} {parsedAddress.postcode}
+              </div>
+            )}
           </div>
 
           {error && (
