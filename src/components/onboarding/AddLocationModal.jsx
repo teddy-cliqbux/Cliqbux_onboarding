@@ -6,32 +6,54 @@ import EINValidator from '@/components/onboarding/EINValidator';
 
 export default function AddLocationModal({
   corporateId,
-  entityId,              // the primary entity UUID to assign by default
-  entityName,            // primary entity legal name (shown in default state)
+  entities = [],
   onLocationAdded,
   onClose,
   initialDbaName = '',
   initialBusinessAddress = '',
-  initialSeparateEntity = null,
 }) {
   const isEdit = !!(initialDbaName || initialBusinessAddress);
+  const isFirstLocation = !isEdit && entities.length === 0;
+
   const [dbaName, setDbaName] = useState(initialDbaName);
   const [addressDisplay, setAddressDisplay] = useState(initialBusinessAddress);
   const [parsedAddress, setParsedAddress] = useState(null);
   const [unverifiedWarning, setUnverifiedWarning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-
-  // — Section B: Entity Expansion —
-  const [useAdvancedEntity, setUseAdvancedEntity] = useState(!!initialSeparateEntity);
-  const [separateLegalName, setSeparateLegalName] = useState(initialSeparateEntity?.legalBusinessName || '');
-  const [separateEIN, setSeparateEIN] = useState(initialSeparateEntity?.federalEIN || '');
-  const [separateEINValidated, setSeparateEINValidated] = useState(null); // formatted EIN or null
-
   const inputRef = useRef(null);
-  const autocompleteRef = useRef(null);
 
-  // — Google Places —
+  // — Section B: Entity Setup (first-location) or choice (subsequent) —
+  const [corporateLegalName, setCorporateLegalName] = useState(initialDbaName || '');
+  const [federalEIN, setFederalEIN] = useState('');
+  const [einValidated, setEinValidated] = useState(null);
+  const [corporateMailingAddress, setCorporateMailingAddress] = useState(initialBusinessAddress || '');
+
+  // subsequent locations: dropdown choice
+  const [entityChoice, setEntityChoice] = useState('existing'); // 'existing' | 'new'
+  const [selectedEntityId, setSelectedEntityId] = useState(entities[0]?.entityId || '');
+
+  const autocompleteRef = useRef(null);
+  const mailRef = useRef(null);
+  const mailAutocompleteRef = useRef(null);
+
+  // Helper to initialize Google Places on a given input ref
+  const initPlaces = (ref, setter) => {
+    if (!ref.current || !window.google?.maps?.places) return;
+    const ac = new window.google.maps.places.Autocomplete(ref.current, {
+      types: ['address'], componentRestrictions: { country: 'us' }, fields: ['address_components', 'formatted_address'],
+    });
+    ac.addListener('place_changed', () => {
+      const place = ac.getPlace();
+      if (!place?.address_components) return;
+      const get = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).long_name || '';
+      const getS = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).short_name || '';
+      const addr = `${get(['street_number']) ? `${get(['street_number'])} ` : ''}${get(['route'])}, ${get(['locality', 'sublocality'])}, ${getS(['administrative_area_level_1'])} ${get(['postal_code'])}`;
+      setter(addr);
+    });
+    return () => { if (ac) window.google.maps.event.clearInstanceListeners(ac); };
+  };
+
   useEffect(() => {
     if (!inputRef.current || !window.google?.maps?.places) return;
     autocompleteRef.current = new window.google.maps.places.Autocomplete(inputRef.current, {
@@ -42,53 +64,75 @@ export default function AddLocationModal({
       if (!place?.address_components) return;
       const get = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).long_name || '';
       const getS = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).short_name || '';
-      setParsedAddress({ streetName: (get(['street_number']) ? `${get(['street_number'])} ` : '') + get(['route']), city: get(['locality', 'sublocality']), state: getS(['administrative_area_level_1']), postcode: get(['postal_code']) });
-      setAddressDisplay(place.formatted_address || '');
+      const street = (get(['street_number']) ? `${get(['street_number'])} ` : '') + get(['route']);
+      const city = get(['locality', 'sublocality']);
+      const state = getS(['administrative_area_level_1']);
+      const postcode = get(['postal_code']);
+      setParsedAddress({ streetName: street, city, state, postcode });
+      const formatted = `${street}, ${city}, ${state} ${postcode}`;
+      setAddressDisplay(formatted);
       setUnverifiedWarning(false);
+      // Pre-fill corporate mailing address on first location if not yet edited
+      if (isFirstLocation && !corporateMailingAddress.trim()) {
+        setCorporateMailingAddress(formatted);
+      }
     });
     return () => { if (autocompleteRef.current) window.google.maps.event.clearInstanceListeners(autocompleteRef.current); };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFirstLocation]);
+
+  useEffect(() => { return initPlaces(mailRef, setCorporateMailingAddress); }, []);
 
   const handleAddressKeyDown = (e) => { if (e.key === 'Enter') e.preventDefault(); };
 
+  // Sync corporate legal name with DBA on first location when not already edited
+  const handleDbaChange = (v) => {
+    setDbaName(v);
+    if (isFirstLocation && corporateLegalName === addressDisplay.substring(0, corporateLegalName.length)) {
+      setCorporateLegalName(v);
+    }
+  };
+
   const clearAddress = () => { setAddressDisplay(''); setParsedAddress(null); setUnverifiedWarning(false); setTimeout(() => inputRef.current?.focus(), 0); };
 
-  const buildEntityFields = () => {
-    const ef = {};
-    if (useAdvancedEntity) {
-      ef.separateLegalName = separateLegalName.trim();
-      ef.separateEIN = separateEINValidated || separateEIN.replace(/\D/g, '');
-    }
-    return ef;
+  const formatEIN = (d) => {
+    const nd = d.replace(/\D/g, '');
+    return nd.length > 2 ? `${nd.slice(0, 2)}-${nd.slice(2, 9)}` : nd;
   };
 
   const doSave = async (addressToUse, businessAddressStr) => {
     setSaving(true);
     setError('');
     try {
-      const entityFields = buildEntityFields();
+      let targetEntityId = '';
+      let shouldReloadEntities = false;
 
-      // Create the location
-      const res = await base44.functions.invoke('addSelfServeLocation', {
-        corporateId,
-        dbaName: dbaName.trim(),
-        businessAddress: businessAddressStr,
-        entityId: useAdvancedEntity ? separateEINValidated : entityId,
-      });
-      if (res.data?.error) throw new Error(res.data.error);
-      const loc = res.data.location;
-
-      // If separate entity was entered, register it as a legal entity
-      if (useAdvancedEntity && separateLegalName.trim() && (separateEINValidated || separateEIN.replace(/\D/g, ''))) {
-        await base44.functions.invoke('manageLegalEntity', {
-          corporateId, action: 'add', legalBusinessName: separateLegalName.trim(),
-          federalEIN: separateEINValidated || separateEIN.replace(/\D/g, ''),
+      if (isFirstLocation || entityChoice === 'new') {
+        const name = (corporateLegalName || dbaName).trim();
+        const ein = einValidated || federalEIN.replace(/\D/g, '');
+        if (!name || ein.length !== 9) throw new Error('Legal corporate name and a valid 9-digit EIN are required.');
+        const res = await base44.functions.invoke('manageLegalEntity', {
+          corporateId, action: 'add', legalBusinessName: name, federalEIN: ein,
         });
+        if (res.data?.error) throw new Error(res.data.error);
+        targetEntityId = res.data.entities[res.data.entities.length - 1].entityId;
+        shouldReloadEntities = true;
+      } else {
+        targetEntityId = selectedEntityId;
       }
 
+      const locRes = await base44.functions.invoke('addSelfServeLocation', {
+        corporateId,
+        entityId: targetEntityId,
+        dbaName: dbaName.trim(),
+        businessAddress: businessAddressStr,
+      });
+      if (locRes.data?.error) throw new Error(locRes.data.error);
+
       onLocationAdded({
-        location: loc,
+        location: locRes.data.location,
         addressVerified: !!parsedAddress,
+        reloadEntities: shouldReloadEntities,
       });
       onClose();
     } catch (err) {
@@ -101,19 +145,108 @@ export default function AddLocationModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!dbaName.trim() || !addressDisplay.trim()) { setError('Both fields are required.'); return; }
+    if (isFirstLocation || entityChoice === 'new') {
+      const name = (corporateLegalName || dbaName).trim();
+      const ein = einValidated || federalEIN.replace(/\D/g, '');
+      if (!name) { setError('Corporate Legal Name is required.'); return; }
+      if (ein.length !== 9) { setError('A valid 9-digit Federal EIN is required.'); return; }
+    }
     if (!parsedAddress) { setUnverifiedWarning(true); return; }
     const busAddr = `${parsedAddress.streetName}, ${parsedAddress.city}, ${parsedAddress.state} ${parsedAddress.postcode}`;
     await doSave(parsedAddress, busAddr);
   };
 
-  const handleSaveUnverified = async () => { await doSave(null, addressDisplay.trim()); };
+  const handleSaveUnverified = async () => {
+    if (isFirstLocation || entityChoice === 'new') {
+      const name = (corporateLegalName || dbaName).trim();
+      const ein = einValidated || federalEIN.replace(/\D/g, '');
+      if (!name) { setError('Corporate Legal Name is required.'); return; }
+      if (ein.length !== 9) { setError('A valid 9-digit Federal EIN is required.'); return; }
+    }
+    await doSave(null, addressDisplay.trim());
+  };
 
   const validAddr = !!parsedAddress;
   const canSave = dbaName.trim() && addressDisplay.trim() && (validAddr || unverifiedWarning);
 
+  const renderEntitySection = () => {
+    if (isFirstLocation) {
+      // First location: mandatory Corporate Name + EIN + Corporate Mailing Address
+      return (
+        <div className="border-t border-gray-100 pt-5">
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-gray-800 text-white text-[9px] font-bold flex items-center justify-center">B</span> Corporate Entity (Primary Legal Name)
+          </h4>
+          <div className="space-y-3 pl-7">
+            <p className="text-[11px] text-gray-400 bg-blue-50 border border-blue-100 rounded-lg p-2.5">💡 Note: These fields default to your storefront identity. Only change them if your official corporate tax registration or billing address is legally different from your store name.</p>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Corporate Legal Name</label>
+              <input type="text" value={corporateLegalName} onChange={(e) => setCorporateLegalName(e.target.value)}
+                placeholder="Legal corporate name (pre-filled from storefront)" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Federal EIN</label>
+              <EINValidator corporateId={corporateId} value={federalEIN} onChange={setFederalEIN} onValidated={(f) => setEinValidated(f)} />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Corporate Mailing Address</label>
+              <input ref={mailRef} type="text" value={corporateMailingAddress} onChange={(e) => setCorporateMailingAddress(e.target.value)} onKeyDown={handleAddressKeyDown}
+                placeholder="Start typing to search address..." autoComplete="off" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Pre-filled from your storefront address. Change only if different.</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Subsequent locations: entity picker with optional create-new hatch
+    return (
+      <div className="border-t border-gray-100 pt-5">
+        <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <span className="w-5 h-5 rounded-full bg-gray-800 text-white text-[9px] font-bold flex items-center justify-center">B</span> Legal Entity Assignment
+        </h4>
+        <div className="pl-7 space-y-3">
+          {entityChoice === 'existing' ? (
+            <>
+              <div className="flex items-center gap-2">
+                <select value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value)}
+                  className="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                  {entities.map(e => (
+                    <option key={e.entityId} value={e.entityId}>{e.legalBusinessName} — EIN: {e.federalEIN && formatEIN(e.federalEIN)}</option>
+                  ))}
+                </select>
+              </div>
+              <p className="text-[11px] text-gray-400">This storefront will be grouped under the selected legal entity above.</p>
+            </>
+          ) : (
+            <>
+              <p className="text-[11px] text-gray-400 bg-blue-50 border border-blue-100 rounded-lg p-2.5">💡 Note: These fields default to your storefront identity. Only change them if your official corporate tax registration is legally different from your store name.</p>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Corporate Legal Name</label>
+                <input type="text" value={corporateLegalName} onChange={(e) => setCorporateLegalName(e.target.value)}
+                  placeholder="Legal corporate name" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Federal EIN</label>
+                <EINValidator corporateId={corporateId} value={federalEIN} onChange={setFederalEIN} onValidated={(f) => setEinValidated(f)} />
+              </div>
+            </>
+          )}
+
+          <div className="flex items-center gap-2 pt-1">
+            <button type="button" onClick={() => setEntityChoice(entityChoice === 'existing' ? 'new' : 'existing')}
+              className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 border border-blue-200 hover:bg-blue-50 rounded-lg px-3 py-1.5 transition-all">
+              {entityChoice === 'existing' ? '+ Create New Legal Entity / EIN' : '← Assign to Existing Entity'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const modal = (
-    <div className="fixed inset-0 z-[9998] flex items-center justify-center bg-black/45 px-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[520px] max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-[9998] flex items-start justify-center bg-black/45 px-4 pt-8 pb-8 overflow-y-auto" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[540px] my-auto">
         <form onSubmit={handleSubmit}>
           {/* Header */}
           <div className="flex items-center justify-between p-6 pb-4 border-b border-gray-100">
@@ -136,7 +269,7 @@ export default function AddLocationModal({
               <div className="space-y-3 pl-7">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Storefront DBA Name</label>
-                  <input type="text" value={dbaName} onChange={(e) => setDbaName(e.target.value)} placeholder="e.g. Cliqbux Cafe - Downtown" autoFocus
+                  <input type="text" value={dbaName} onChange={(e) => handleDbaChange(e.target.value)} placeholder="e.g. Cliqbux Cafe - Downtown" autoFocus
                     className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
@@ -176,40 +309,7 @@ export default function AddLocationModal({
               </div>
             </div>
 
-            {/* — Section B: Auto-Inherited Legal Entity — */}
-            <div className="border-t border-gray-100 pt-5">
-              <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <span className="w-5 h-5 rounded-full bg-gray-800 text-white text-[9px] font-bold flex items-center justify-center">B</span> Legal Entity
-              </h4>
-              <div className="pl-7">
-                <button type="button" onClick={() => setUseAdvancedEntity(!useAdvancedEntity)}
-                  className="flex items-center gap-2 text-xs font-medium text-gray-500 hover:text-gray-800 transition-colors">
-                  {useAdvancedEntity ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                  ⚙️ Advanced: This storefront operates under a separate Legal Entity or unique EIN
-                </button>
-
-                {useAdvancedEntity ? (
-                  <div className="mt-3 space-y-3">
-                    <p className="text-[11px] text-gray-400">By default each storefront is grouped under your primary business. Check this to assign a <strong className="text-gray-600">separate corporate shell</strong> — this will board as its own processing account with a distinct MID.</p>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Legal Corporate Name</label>
-                      <input type="text" value={separateLegalName} onChange={(e) => setSeparateLegalName(e.target.value)}
-                        placeholder="e.g. Cliqbux Holdings LLC" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Federal EIN</label>
-                      <EINValidator corporateId={corporateId} value={separateEIN} onChange={setSeparateEIN} onValidated={(f) => setSeparateEINValidated(f)} />
-                    </div>
-                    {!separateEINValidated && separateEIN.replace(/\D/g, '').length === 9 && (
-                      <p className="text-xs text-gray-400">Click <strong>Verify</strong> to confirm this EIN is valid before saving.</p>
-                    )}
-                  </div>
-                ) : entityId && (
-                  <p className="text-xs text-gray-400 mt-2">This storefront will be grouped under your primary legal entity.</p>
-                )}
-              </div>
-            </div>
+            {renderEntitySection()}
 
             {error && <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-700">{error}</div>}
           </div>
