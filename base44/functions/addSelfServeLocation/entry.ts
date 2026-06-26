@@ -6,8 +6,8 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { corporateId, dbaName, businessAddress, entityId, businessStreet, businessCity, businessState, businessZip } = body;
 
-    if (!corporateId || !dbaName || !businessAddress) {
-      return Response.json({ error: 'corporateId, dbaName, and businessAddress are required' }, { status: 400 });
+    if (!corporateId || !dbaName) {
+      return Response.json({ error: 'corporateId and dbaName are required' }, { status: 400 });
     }
 
     const profile = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });

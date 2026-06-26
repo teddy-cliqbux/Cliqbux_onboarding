@@ -6,7 +6,6 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       businessName, signerName, signerEmail, pricingTier,
-      // Business details
       corporatePhone, ownershipType, taxClassType, industryClass, mccCode,
       productDescription, establishmentYear, currentOwnershipYears, currentOwnershipMonths,
       titleType, avgSaleAmount, monthlyCardSales, annualRevenue, highestTicketAmount,
@@ -19,7 +18,7 @@ Deno.serve(async (req) => {
 
     const hsApiKey = Deno.env.get('HUBSPOT_API_KEY');
     if (!hsApiKey) {
-      return Response.json({ error: 'HubSpot API key not configured' }, { status: 500 });
+      return Response.json({ error: 'HUBSPOT_API_KEY is not configured in Base44 environment variables' }, { status: 500 });
     }
 
     const headers = {
@@ -27,40 +26,67 @@ Deno.serve(async (req) => {
       'Content-Type': 'application/json'
     };
 
-    // 1. Create or find Contact
-    const contactRes = await fetch('https://api.hubapi.com/crm/v3/objects/contacts', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        properties: {
-          email: signerEmail,
-          firstname: signerName.split(' ')[0] || signerName,
-          lastname: signerName.split(' ').slice(1).join(' ') || '',
-          phone: corporatePhone || ''
-        }
-      })
-    });
-    const contactData = await contactRes.json();
-    const contactId = contactData.id || null;
+    // 1. Create or find Contact — treat 409 (duplicate email) as success
+    let contactId: string | null = null;
+    try {
+      const contactRes = await fetch('https://api.hubapi.com/crm/v3/objects/contacts', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          properties: {
+            email: signerEmail,
+            firstname: signerName.split(' ')[0] || signerName,
+            lastname: signerName.split(' ').slice(1).join(' ') || '',
+          }
+        })
+      });
+      const contactData = await contactRes.json();
+      if (contactRes.ok) {
+        contactId = contactData.id || null;
+      } else if (contactRes.status === 409) {
+        // Contact already exists — extract id from error and continue
+        contactId = contactData.error === 'CONTACT_EXISTS' ? (contactData.identityProfile?.vid?.toString() || null) : null;
+      }
+    } catch (_) { /* contact creation is best-effort */ }
 
-    // 2. Create Company
+    // 2. Create Company — only use standard, safe HubSpot properties
     const companyRes = await fetch('https://api.hubapi.com/crm/v3/objects/companies', {
       method: 'POST',
       headers,
       body: JSON.stringify({
         properties: {
           name: businessName,
-          domain: signerEmail.split('@')[1] || '',
-          phone: corporatePhone || '',
-          industry: industryClass || ''
+          domain: signerEmail.split('@')[1] || ''
         }
       })
     });
     const companyData = await companyRes.json();
-    const companyId = companyData.id;
+
+    let companyId: string | null = null;
+    if (companyRes.ok) {
+      companyId = companyData.id;
+    } else if (companyRes.status === 409) {
+      // Company with this domain already exists — search for it
+      const searchRes = await fetch('https://api.hubapi.com/crm/v3/objects/companies/search', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          filterGroups: [{
+            filters: [{ propertyName: 'domain', operator: 'EQ', value: signerEmail.split('@')[1] || '' }]
+          }],
+          limit: 1
+        })
+      });
+      const searchData = await searchRes.json();
+      companyId = searchData.results?.[0]?.id || null;
+    }
 
     if (!companyId) {
-      return Response.json({ error: 'Failed to create HubSpot company', details: companyData }, { status: 500 });
+      return Response.json({
+        error: 'Failed to create or find HubSpot company',
+        hubspotStatus: companyRes.status,
+        hubspotError: companyData
+      }, { status: 500 });
     }
 
     // 3. Create Deal
@@ -81,24 +107,20 @@ Deno.serve(async (req) => {
     const dealId = dealData.id;
 
     if (!dealId) {
-      return Response.json({ error: 'Failed to create HubSpot deal', details: dealData }, { status: 500 });
+      return Response.json({
+        error: 'Failed to create HubSpot deal',
+        hubspotStatus: dealRes.status,
+        hubspotError: dealData
+      }, { status: 500 });
     }
 
-    // 4. Associate deal with company
-    await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}/associations/companies/${companyId}/deal_to_company`, {
-      method: 'PUT',
-      headers
-    });
-
-    // 5. Associate deal with contact if created
+    // 4. Associate deal with company and contact (best-effort)
+    await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}/associations/companies/${companyId}/deal_to_company`, { method: 'PUT', headers });
     if (contactId) {
-      await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}/associations/contacts/${contactId}/deal_to_contact`, {
-        method: 'PUT',
-        headers
-      });
+      await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}/associations/contacts/${contactId}/deal_to_contact`, { method: 'PUT', headers });
     }
 
-    // 6. Create MerchantCorporateProfile in Base44
+    // 5. Create MerchantCorporateProfile in Base44
     const corporateId = dealId;
     const existing = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
 
@@ -135,15 +157,9 @@ Deno.serve(async (req) => {
       await base44.asServiceRole.entities.MerchantCorporateProfile.create(profileFields);
     }
 
-    return Response.json({
-      success: true,
-      corporateId,
-      dealId,
-      companyId,
-      contactId
-    });
+    return Response.json({ success: true, corporateId, dealId, companyId, contactId });
 
   } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ error: error.message, stack: error.stack?.split('\n').slice(0, 3).join(' | ') }, { status: 500 });
   }
 });
