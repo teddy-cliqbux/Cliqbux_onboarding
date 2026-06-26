@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, CheckCircle2, AlertCircle, Clock, Mail, Trash2, Send, Loader2, Users } from 'lucide-react';
+import { UserPlus, CheckCircle2, AlertCircle, Clock, Mail, Trash2, Send, Loader2, Users, Shield } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import SignerModal from './SignerModal';
+import InlineVerifyForm from './InlineVerifyForm';
 
 function StatusBadge({ status }) {
   const map = {
@@ -129,47 +130,65 @@ export default function SignerRoster({ profile, onValidChange }) {
             No signers added yet — add the primary beneficial owner below.
           </div>
         ) : (
-          signers.map(signer => (
-            <div key={signer.id} className="px-5 py-3.5 flex items-center gap-4">
-              {/* Avatar */}
-              <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 text-sm font-bold text-gray-500">
-                {signer.firstName?.[0]}{signer.lastName?.[0]}
-              </div>
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-semibold text-gray-900">{signer.firstName} {signer.lastName}</p>
-                  {signer.isPrimarySigner && (
-                    <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">Primary</span>
+          signers.map(signer => {
+            const isPrimary = signer.isPrimarySigner === true;
+            const needsInvite = signer.identityStatus === 'Pending Invitation' || signer.identityStatus === 'Sent';
+            const inviteBtnLabel = signer.identityStatus === 'Sent' ? 'Resend' : 'Send Invite';
+
+            return (
+              <div key={signer.id} className="px-5 py-3.5">
+                {/* Row main */}
+                <div className="flex items-center gap-4">
+                  {/* Avatar */}
+                  <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 text-sm font-bold text-gray-500">
+                    {signer.firstName?.[0]}{signer.lastName?.[0]}
+                  </div>
+                  {/* Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-gray-900">{signer.firstName} {signer.lastName}</p>
+                      {isPrimary && (
+                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">Primary</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
+                  </div>
+                  {/* Status badge — hidden for unverified primary (verifies inline instead) */}
+                  {!(isPrimary && signer.identityStatus === 'Pending Invitation') && (
+                    <StatusBadge status={signer.identityStatus} />
                   )}
+                  {/* Actions */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {isPrimary ? (
+                      <InlineVerifyForm signer={signer} corporateId={profile.corporateId} onVerified={(updated) => {
+                        setSigners(prev => prev.map(s => s.id === updated.id ? updated : s));
+                      }} />
+                    ) : (
+                      needsInvite && (
+                        <button
+                          onClick={() => handleResendInvite(signer)}
+                          disabled={resendingId === signer.id}
+                          className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
+                          title="Send verification invite"
+                        >
+                          {resendingId === signer.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                          {inviteBtnLabel}
+                        </button>
+                      )
+                    )}
+                    <button
+                      onClick={() => handleDelete(signer.id)}
+                      className="text-gray-300 hover:text-red-500 p-1.5 rounded-lg transition-colors"
+                      title="Remove signer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <p className="text-xs text-gray-400 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
+                {/* Inline verify form expands inside actions area when primary clicks Verify Now */}
               </div>
-              {/* Status */}
-              <StatusBadge status={signer.identityStatus} />
-              {/* Actions */}
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                {(signer.identityStatus === 'Pending Invitation' || signer.identityStatus === 'Sent') && (
-                  <button
-                    onClick={() => handleResendInvite(signer)}
-                    disabled={resendingId === signer.id}
-                    className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
-                    title="Resend invite"
-                  >
-                    {resendingId === signer.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                    {signer.identityStatus === 'Sent' ? 'Resend' : 'Send Invite'}
-                  </button>
-                )}
-                <button
-                  onClick={() => handleDelete(signer.id)}
-                  className="text-gray-300 hover:text-red-500 p-1.5 rounded-lg transition-colors"
-                  title="Remove signer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 

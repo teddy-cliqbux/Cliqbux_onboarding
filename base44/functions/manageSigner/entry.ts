@@ -168,6 +168,18 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, signers });
     }
 
+    // --- INLINE VERIFY (primary owner verifies directly on the portal, no email) ---
+    if (action === 'inlineVerify') {
+      if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
+      const ALLOWED = ['dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone'];
+      const update = { identityStatus: 'Verified' };
+      for (const key of ALLOWED) {
+        if (signerData && signerData[key] !== undefined) update[key] = signerData[key];
+      }
+      const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, update);
+      return Response.json({ success: true, signer: updated });
+    }
+
     return Response.json({ error: 'Unknown action' }, { status: 400 });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
