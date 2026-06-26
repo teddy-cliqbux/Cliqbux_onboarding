@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, CheckCircle2, AlertCircle, Clock, Mail, Trash2, Send, Loader2, Users, Shield } from 'lucide-react';
+import { UserPlus, CheckCircle2, AlertCircle, Clock, Mail, Trash2, Send, Loader2, Users, Pencil, Save } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import SignerModal from './SignerModal';
 import InlineVerifyForm from './InlineVerifyForm';
@@ -112,6 +112,51 @@ export default function SignerRoster({ profile, onValidChange }) {
     setResendingId(null);
   };
 
+  // Inline editing lifecycle
+  const [editingRowId, setEditingRowId] = useState(null);
+  // Draft state: { [id]: { firstName, lastName, signerEmail, ownershipPercentage } }
+  const [drafts, setDrafts] = useState({});
+
+  const editDraft = (signer) => {
+    setDrafts(prev => ({ ...prev, [signer.id]: { firstName: signer.firstName || '', lastName: signer.lastName || '', signerEmail: signer.signerEmail || '', ownershipPercentage: signer.ownershipPercentage || 0 } }));
+    setEditingRowId(signer.id);
+  };
+
+  const handleSaveRow = async (signerId) => {
+    const draft = drafts[signerId];
+    if (!draft) { setEditingRowId(null); return; }
+    if (!draft.firstName.trim() || !draft.lastName.trim() || !draft.signerEmail.trim()) return;
+    const isPrimary = signers.find(s => s.id === signerId)?.isPrimarySigner;
+    try {
+      const res = await base44.functions.invoke('manageSigner', {
+        action: 'update',
+        corporateId: profile.corporateId,
+        signerId,
+        signerData: {
+          firstName: draft.firstName.trim(),
+          lastName: draft.lastName.trim(),
+          signerEmail: draft.signerEmail.trim(),
+          ownershipPercentage: Number(draft.ownershipPercentage) || 0,
+        },
+      });
+      if (res.data?.signer) {
+        setSigners(prev => prev.map(s => s.id === signerId ? { ...s, firstName: res.data.signer.firstName, lastName: res.data.signer.lastName, signerEmail: res.data.signer.signerEmail, ownershipPercentage: res.data.signer.ownershipPercentage } : s));
+        // If this is the primary signer, sync the root session profile to prevent data drift
+        if (isPrimary && profile) {
+          await base44.functions.invoke('updateMerchantProfile', {
+            corporateId: profile.corporateId,
+            firstName: draft.firstName.trim(),
+            lastName: draft.lastName.trim(),
+          });
+          if (profile.firstName !== undefined) {
+            Object.assign(profile, { firstName: draft.firstName.trim(), lastName: draft.lastName.trim() });
+          }
+        }
+      }
+    } catch (_) {}
+    setEditingRowId(null);
+  };
+
   const totalPct = signers.reduce((sum, s) => sum + (Number(s.ownershipPercentage) || 0), 0);
   const requiredSigners = signers.filter(s => (Number(s.ownershipPercentage) || 0) >= 25);
   const allRequiredCleared = requiredSigners.length > 0 &&
@@ -163,6 +208,9 @@ export default function SignerRoster({ profile, onValidChange }) {
             const isPrimary = signer.isPrimarySigner === true;
             const needsInvite = signer.identityStatus === 'Pending Invitation' || signer.identityStatus === 'Sent';
             const inviteBtnLabel = signer.identityStatus === 'Sent' ? 'Resend' : 'Send Invite';
+            const isEditing = editingRowId === signer.id;
+            const draft = drafts[signer.id] || {};
+            const inputCls = 'w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500';
 
             return (
               <div key={signer.id} className="px-5 py-3.5">
@@ -170,17 +218,33 @@ export default function SignerRoster({ profile, onValidChange }) {
                 <div className="flex items-center gap-4">
                   {/* Avatar */}
                   <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 text-sm font-bold text-gray-500">
-                    {signer.firstName?.[0]}{signer.lastName?.[0]}
+                    {(draft.firstName || signer.firstName)?.[0]}{(draft.lastName || signer.lastName)?.[0]}
                   </div>
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold text-gray-900">{signer.firstName} {signer.lastName}</p>
-                      {isPrimary && (
-                        <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">Primary</span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-400 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
+                    {isEditing ? (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                        <input type="text" value={draft.firstName || ''} placeholder="First"
+                          onChange={(e) => setDrafts(prev => ({ ...prev, [signer.id]: { ...prev[signer.id], firstName: e.target.value } }))}
+                          className={`${inputCls} w-28`} />
+                        <input type="text" value={draft.lastName || ''} placeholder="Last"
+                          onChange={(e) => setDrafts(prev => ({ ...prev, [signer.id]: { ...prev[signer.id], lastName: e.target.value } }))}
+                          className={`${inputCls} w-28`} />
+                        <input type="text" value={draft.signerEmail || ''} placeholder="Email"
+                          onChange={(e) => setDrafts(prev => ({ ...prev, [signer.id]: { ...prev[signer.id], signerEmail: e.target.value } }))}
+                          className={`${inputCls} w-44`} />
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold text-gray-900">{signer.firstName} {signer.lastName}</p>
+                          {isPrimary && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">Primary</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
+                      </>
+                    )}
                   </div>
                   {/* Status badge — hidden for unverified primary (verifies inline instead) */}
                   {!(isPrimary && signer.identityStatus === 'Pending Invitation') && (
@@ -204,6 +268,19 @@ export default function SignerRoster({ profile, onValidChange }) {
                           {inviteBtnLabel}
                         </button>
                       )
+                    )}
+                    {/* Inline Edit/Save lifecycle toggle */}
+                    {isEditing ? (
+                      <button onClick={() => handleSaveRow(signer.id)}
+                        className="text-xs text-green-700 font-semibold hover:text-green-900 border border-green-200 bg-green-50 hover:bg-green-100 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap">
+                        <Save className="w-3.5 h-3.5" /> Save
+                      </button>
+                    ) : (
+                      <button onClick={() => editDraft(signer)}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                        title="Edit">
+                        <Pencil className="w-3.5 h-3.5" /> Edit
+                      </button>
                     )}
                     <button
                       onClick={() => handleDelete(signer.id)}
