@@ -68,6 +68,12 @@ Deno.serve(async (req) => {
     } else {
       const created = await base44.asServiceRole.entities.MerchantCorporateProfile.create(corporateData);
       profileId = created.id;
+
+      // Auto-create a synthetic legal entity for HubSpot-sourced deals
+      const entityId = (`ent-${dealId}`).slice(0, 60);
+      await base44.asServiceRole.entities.MerchantCorporateProfile.update(created.id, {
+        legalEntities: [{ entityId, legalBusinessName: legalName, federalEIN: dealId && dealId.length >= 9 ? dealId : (legalName) }]
+      });
     }
 
     // Loop through locations and upsert each
@@ -83,15 +89,16 @@ Deno.serve(async (req) => {
       });
 
       if (existingLocs && existingLocs.length > 0) {
-        await base44.asServiceRole.entities.MerchantLocations.update(existingLocs[0].id, {
-          businessAddress
-        });
+        const patch = { businessAddress };
+        if (!existingLocs[0].entityId) patch.entityId = `ent-${dealId}`;
+        await base44.asServiceRole.entities.MerchantLocations.update(existingLocs[0].id, patch);
         locationResults.push({ dbaName, action: 'updated' });
       } else {
         await base44.asServiceRole.entities.MerchantLocations.create({
           corporateId: dealId,
           dbaName,
           businessAddress,
+          entityId: `ent-${dealId}`,
           applicationStepStatus: 'In Review'
         });
         locationResults.push({ dbaName, action: 'created' });

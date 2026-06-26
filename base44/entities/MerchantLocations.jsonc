@@ -10,6 +10,10 @@
       "type": "string",
       "description": "Foreign Key linking to MerchantCorporateProfile"
     },
+    "entityId": {
+      "type": "string",
+      "description": "Links this location to a LegalEntity inside the profile's legalEntities array"
+    },
     "dbaName": {
       "type": "string"
     },

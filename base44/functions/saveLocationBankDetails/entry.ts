@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
 
     const results = [];
     for (const loc of locations) {
-      const { id } = loc;
+      const { id, entityId } = loc;
       if (!id) continue;
 
       const bankDetails = loc.bankDetails || {};
@@ -26,6 +26,8 @@ Deno.serve(async (req) => {
           authMethod: bankDetails.authMethod || null,
         }
       };
+      // Preserve entityId on the location record (maps to a LegalEntity)
+      if (entityId) update.entityId = entityId;
       if (update.bankDetails.routingNumber || update.bankDetails.accountNumber) {
         await base44.asServiceRole.entities.MerchantLocations.update(id, update);
       }

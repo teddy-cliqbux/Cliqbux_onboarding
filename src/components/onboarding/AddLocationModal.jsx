@@ -10,7 +10,7 @@ const inputStyle = {
 };
 const labelStyle = { fontSize: '11px', fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.04em' };
 
-export default function AddLocationModal({ corporateId, onLocationAdded, onClose, mode = 'add', initialDbaName = '', initialBusinessAddress = '' }) {
+export default function AddLocationModal({ corporateId, entityId, onLocationAdded, onClose, mode = 'add', initialDbaName = '', initialBusinessAddress = '' }) {
   const isEdit = mode === 'edit';
   const [dbaName, setDbaName] = useState(initialDbaName);
   const [addressDisplay, setAddressDisplay] = useState(initialBusinessAddress);
@@ -85,6 +85,7 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
         corporateId,
         dbaName: dbaName.trim(),
         businessAddress: businessAddressStr,
+        entityId: entityId || undefined,
         businessInfo: {
           address: {
             streetName: addressToUse?.streetName || '',

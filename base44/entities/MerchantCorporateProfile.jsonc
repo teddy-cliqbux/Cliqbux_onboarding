@@ -83,6 +83,28 @@
     "isManualMode": {
       "type": "boolean",
       "default": false
+    },
+    "legalEntities": {
+      "type": "array",
+      "description": "Multi-EIN corporate entities \u2014 each owning a subset of locations",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "UUID \u2014 unique identifier for this legal entity"
+          },
+          "legalBusinessName": {
+            "type": "string"
+          },
+          "tradeNameDBA": {
+            "type": "string"
+          },
+          "federalEIN": {
+            "type": "string"
+          }
+        }
+      }
     }
   },
   "required": [

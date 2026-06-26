@@ -28,7 +28,13 @@ Deno.serve(async (req) => {
       hubspotQuoteUrl: profile.hubspotQuoteUrl,
       pricingTier: profile.pricingTier,
       applicationStatus: profile.applicationStatus,
-      hasTaxId: !!profile.taxId
+      hasTaxId: !!profile.taxId,
+      // Multi-EIN entity structure — each maps to a subset of locations
+      legalEntities: (profile.legalEntities || []).map(e => ({
+        entityId: e.entityId,
+        legalBusinessName: e.legalBusinessName,
+        federalEIN: e.federalEIN
+      }))
     };
 
     const locations = await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId });
@@ -37,11 +43,19 @@ Deno.serve(async (req) => {
       id: loc.id,
       locationId: loc.locationId,
       corporateId: loc.corporateId,
+      entityId: loc.entityId || '',
       dbaName: loc.dbaName,
       businessAddress: loc.businessAddress,
       hasRoutingNumber: !!(loc.bankDetails?.routingNumber || loc.routingNumber),
       hasAccountNumber: !!(loc.bankDetails?.accountNumber || loc.accountNumber),
       elavonMID: loc.elavonMID,
+      bankDetails: loc.bankDetails || {
+        routingNumber: loc.routingNumber || '',
+        accountNumber: loc.accountNumber || '',
+        authMethod: null
+      },
+      routingNumber: loc.routingNumber || '',
+      accountNumber: loc.accountNumber || '',
       applicationStepStatus: loc.applicationStepStatus
     }));
 
