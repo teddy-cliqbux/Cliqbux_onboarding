@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, MapPin, Loader2, Plus } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -8,52 +8,13 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
   const [businessAddress, setBusinessAddress] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const addressRef = useRef(null);
-  const autocompleteRef = useRef(null);
 
-  // Inject pac-container z-index override once
-  useEffect(() => {
-    const styleId = 'pac-z-index-fix';
-    if (!document.getElementById(styleId)) {
-      const style = document.createElement('style');
-      style.id = styleId;
-      style.textContent = '.pac-container { z-index: 99999 !important; pointer-events: auto !important; }';
-      document.head.appendChild(style);
-    }
-  }, []);
 
-  useEffect(() => {
-    const tryInit = (attempts = 0) => {
-      if (window.google?.maps?.places?.Autocomplete && addressRef.current) {
-        try {
-          autocompleteRef.current = new window.google.maps.places.Autocomplete(addressRef.current, {
-            types: ['address'],
-            componentRestrictions: { country: 'us' }
-          });
-          autocompleteRef.current.addListener('place_changed', () => {
-            const place = autocompleteRef.current.getPlace();
-            if (place?.formatted_address) {
-              setBusinessAddress(place.formatted_address);
-              if (addressRef.current) addressRef.current.value = place.formatted_address;
-            }
-          });
-        } catch (e) {
-          console.warn('Google Places init failed:', e);
-        }
-      } else if (attempts < 10) {
-        // Retry up to 10 times (5s total) waiting for Maps SDK to load
-        setTimeout(() => tryInit(attempts + 1), 500);
-      }
-    };
-    const timer = setTimeout(() => tryInit(0), 200);
-    return () => clearTimeout(timer);
-  }, []);
+  // Google Places disabled — using plain text input
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Read the raw DOM value in case state is stale (uncontrolled input)
-    const addressValue = addressRef.current?.value || businessAddress;
-    if (!dbaName.trim() || !addressValue.trim()) {
+    if (!dbaName.trim() || !businessAddress.trim()) {
       setError('Both fields are required.');
       return;
     }
@@ -63,7 +24,7 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
       const res = await base44.functions.invoke('addSelfServeLocation', {
         corporateId,
         dbaName: dbaName.trim(),
-        businessAddress: addressValue.trim()
+        businessAddress: businessAddress.trim()
       });
       if (res.data?.error) throw new Error(res.data.error);
       onLocationAdded(res.data.location);
@@ -137,16 +98,17 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
               Business Physical Address
             </label>
             <input
-              ref={addressRef}
               type="text"
-              placeholder="Start typing your address..."
+              value={businessAddress}
+              onChange={(e) => setBusinessAddress(e.target.value)}
+              placeholder="e.g. 123 Main St, San Francisco, CA 94102"
               style={{
                 width: '100%', border: '1px solid #E5E7EB', borderRadius: '8px',
                 padding: '10px 12px', fontSize: '14px', outline: 'none', boxSizing: 'border-box'
               }}
             />
             <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <MapPin size={11} /> Google Places verified
+              <MapPin size={11} /> Enter full street address including city, state, and zip
             </p>
           </div>
 
