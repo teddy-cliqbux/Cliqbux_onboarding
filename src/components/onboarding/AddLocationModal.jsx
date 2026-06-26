@@ -221,7 +221,7 @@ export default function AddLocationModal({
                   ))}
                 </select>
               </div>
-              <p className="text-[11px] text-gray-400">This storefront will be grouped under the selected legal entity above.</p>
+              <p className="text-[11px] text-gray-400">This location will automatically group under your primary corporate entity above. Use the button below only if this specific store runs under a legally distinct EIN.</p>
             </>
           ) : (
             <>
@@ -239,7 +239,22 @@ export default function AddLocationModal({
           )}
 
           <div className="flex items-center gap-2 pt-1">
-            <button type="button" onClick={() => setEntityChoice(entityChoice === 'existing' ? 'new' : 'existing')}
+            <button type="button" onClick={() => {
+              if (entityChoice === 'existing') {
+                // Switch to new-entity mode — re-select dropdown, clear manual fields
+                setSelectedEntityId(entities[0]?.entityId || '');
+                setCorporateLegalName('');
+                setFederalEIN('');
+                setEinValidated(null);
+                setEntityChoice('new');
+              } else {
+                // Switch back to existing dropdown
+                setCorporateLegalName('');
+                setFederalEIN('');
+                setEinValidated(null);
+                setEntityChoice('existing');
+              }
+            }}
               className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 border border-blue-200 hover:bg-blue-50 rounded-lg px-3 py-1.5 transition-all">
               {entityChoice === 'existing' ? '+ Create New Legal Entity / EIN' : '← Assign to Existing Entity'}
             </button>
