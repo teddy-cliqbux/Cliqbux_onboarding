@@ -214,13 +214,10 @@ export default function AddLocationModal({
           {entityChoice === 'existing' ? (
             <>
               <div className="flex items-center gap-2">
-                <select value={selectedEntityId || entities[0]?.entityId || ''} onChange={(e) => setSelectedEntityId(e.target.value)}
+                <select value={selectedEntityId || ''} onChange={(e) => setSelectedEntityId(e.target.value)}
                   className="flex-1 border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                  <option value={entities[0]?.entityId || ''} style={{ fontWeight: 600 }}>
-                    {entities[0]?.legalBusinessName || 'Primary Corporate Entity'} {entities[0]?.federalEIN ? `— EIN: ${formatEIN(entities[0].federalEIN)}` : ''}
-                  </option>
-                  {entities.slice(1).map(e => (
-                    <option key={e.entityId} value={e.entityId}>{e.legalBusinessName} — EIN: {e.federalEIN && formatEIN(e.federalEIN)}</option>
+                  {entities.map(e => (
+                    <option key={e.entityId} value={e.entityId}>{e.legalBusinessName} — EIN: {e.federalEIN ? formatEIN(e.federalEIN) : 'Pending'}</option>
                   ))}
                 </select>
               </div>
