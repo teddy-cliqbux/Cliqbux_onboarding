@@ -104,13 +104,9 @@ export default function OnboardingPortal() {
   };
 
   const handleSigningComplete = async () => {
-    // Mark submitted and refresh locations for MID tracker
+    // Mark submitted and redirect to dashboard
     setProfile(prev => ({ ...prev, applicationStatus: 'Submitted' }));
-    try {
-      const res = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
-      if (res.data?.locations) setLocations(res.data.locations);
-    } catch (_) {}
-    setStep(STEP_SUCCESS);
+    navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`, { replace: true });
   };
 
   // — Loading & Error —
