@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Lock, FileText, Loader2, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Lock, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import SignerRoster from '@/components/onboarding/SignerRoster';
 
@@ -8,70 +8,84 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
   const [allVerified, setAllVerified] = useState(false);
   const [totalOwnership, setTotalOwnership] = useState(0);
 
-  // E-sign state
-  const [envelopeUrl, setEnvelopeUrl] = useState(null);
+  // Document / signing state
+  const [envelopeUrl, setEnvelopeUrl] = useState(null);   // blob URL or '__ready__'
   const [loadingEnvelope, setLoadingEnvelope] = useState(false);
   const [envelopeError, setEnvelopeError] = useState('');
-  const [signing, setSigning] = useState(false);
+  const [loadingStep, setLoadingStep] = useState('');      // human-readable progress
+
+  // Board submission state
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
-  const iframeRef = useRef(null);
 
-  // Identity check — gate the envelope fetch behind this
   const [identityResolved, setIdentityResolved] = useState(false);
+  const iframeRef = useRef(null);
+  const blobUrlRef = useRef(null);
 
-  // When all required signers are cleared → unlock submission
+  // Revoke blob URL on unmount to avoid memory leaks
+  useEffect(() => {
+    return () => {
+      if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+    };
+  }, []);
+
+  // Gate document fetch behind identity verification
   useEffect(() => {
     if (allVerified && !envelopeUrl && !loadingEnvelope && identityResolved) {
-      fetchEnvelope();
+      fetchDocuments();
     }
   }, [allVerified, identityResolved]);
 
-  // Signal to parent SignerRoster that identity verification is complete
+  // Give background ops a moment to settle before triggering doc fetch
   useEffect(() => {
     if (allVerified && !identityResolved) {
-      // Settle background identity ops before requesting the envelope
       const timer = setTimeout(() => setIdentityResolved(true), 800);
       return () => clearTimeout(timer);
     }
   }, [allVerified]);
 
-  const fetchEnvelope = async () => {
+  const fetchDocuments = async () => {
     setLoadingEnvelope(true);
     setEnvelopeError('');
     try {
-      const res = await base44.functions.invoke('submitToElavon', {
-        corporateId: profile.corporateId,
-        mode: 'generate_envelope'
+      // Step 1 — list required documents (validates payload against Elavon)
+      setLoadingStep('Validating merchant data with Elavon...');
+      const listRes = await base44.functions.invoke('listDocuments', {
+        corporateId: profile.corporateId
       });
-      const url = res.data?.envelopeUrl || res.data?.signingUrl;
-      if (!url) throw new Error('No signing URL returned. Please contact support.');
-      setEnvelopeUrl(url);
+      const documentList = listRes.data?.documents || null;
+
+      // Step 2 — retrieve signing document content
+      setLoadingStep('Compiling your Merchant Processing Agreement...');
+      const getRes = await base44.functions.invoke('getDocuments', {
+        corporateId: profile.corporateId,
+        documentList
+      });
+
+      const { htmlContent, documentUrl } = getRes.data || {};
+
+      if (htmlContent) {
+        // Render HTML from Elavon in an iframe via a blob URL
+        if (blobUrlRef.current) URL.revokeObjectURL(blobUrlRef.current);
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const url = URL.createObjectURL(blob);
+        blobUrlRef.current = url;
+        setEnvelopeUrl(url);
+      } else if (documentUrl) {
+        setEnvelopeUrl(documentUrl);
+      } else {
+        // No renderable content returned — allow signing via button only
+        setEnvelopeUrl('__ready__');
+      }
     } catch (err) {
-      setEnvelopeError(err.message || 'Failed to generate signing document.');
+      setEnvelopeError(err.message || 'Failed to load signing document.');
     } finally {
       setLoadingEnvelope(false);
+      setLoadingStep('');
     }
   };
 
-  // Poll for completion via postMessage from iframe (DocuSign/HelloSign emit events)
-  useEffect(() => {
-    const handleMessage = async (event) => {
-      const data = event.data;
-      // Handle both DocuSign and generic signing_complete events
-      const isComplete =
-        data?.event === 'signing_complete' ||
-        data?.type === 'signing_complete' ||
-        data?.status === 'completed' ||
-        data?.action === 'signing_complete';
-      if (isComplete) {
-        await handleSigningComplete();
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
-
+  // Called when merchant clicks "I Have Reviewed — Submit Application"
   const handleSigningComplete = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -82,19 +96,22 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
       if (data?.allSubmitted || data?.success) {
         onComplete();
       } else {
-        setSubmitError('Submission encountered errors. Please contact support.');
+        setSubmitError('Submission encountered errors. Our team has been notified — please contact support if this persists.');
       }
     } catch (err) {
-      setSubmitError(err.message || 'Submission failed.');
+      setSubmitError(err.message || 'Submission failed. Please contact support.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleRosterChange = (valid, totalPct, signerList) => {
+  const handleRosterChange = (valid, totalPct) => {
     setAllVerified(valid);
     setTotalOwnership(totalPct);
   };
+
+  const documentReady = !!envelopeUrl;
+  const showIframe = documentReady && envelopeUrl !== '__ready__';
 
   return (
     <div className="flex flex-col">
@@ -138,7 +155,7 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
             </div>
           </div>
 
-          {/* Locked state */}
+          {/* Locked: signers not yet verified */}
           {!allVerified && (
             <div className="border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center py-14 gap-3 bg-gray-50">
               <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center">
@@ -151,45 +168,40 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
             </div>
           )}
 
-          {/* Loading envelope */}
-          {allVerified && !envelopeUrl && (
+          {/* Loading: fetching from Elavon */}
+          {allVerified && !documentReady && !envelopeError && (
             <div className="border border-gray-200 rounded-xl flex flex-col items-center justify-center py-14 gap-3 bg-white">
               <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
               <p className="text-sm font-semibold text-gray-500">
-                {identityResolved ? 'Preparing your signing document...' : 'Verifying Identity and Compiling Custom Merchant Processing Agreement...'}
+                {loadingStep || (identityResolved ? 'Preparing your signing document...' : 'Completing identity verification handshake...')}
               </p>
-              <p className="text-xs text-gray-400">
-                {identityResolved ? 'Compiling multi-location agreement package' : 'Completing background identity verification handshake'}
-              </p>
+              <p className="text-xs text-gray-400">This may take a few seconds</p>
             </div>
           )}
 
-          {/* Envelope error */}
+          {/* Error state */}
           {allVerified && envelopeError && (
             <div className="border border-red-200 bg-red-50 rounded-xl flex items-start gap-3 px-5 py-4">
               <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-red-800">Unable to Load Agreement</p>
                 <p className="text-xs text-red-600 mt-1">{envelopeError}</p>
-                <button
-                  onClick={fetchEnvelope}
-                  className="mt-2 text-xs font-semibold text-red-700 underline"
-                >
+                <button onClick={fetchDocuments} className="mt-2 text-xs font-semibold text-red-700 underline">
                   Try again
                 </button>
               </div>
             </div>
           )}
 
-          {/* E-sign iframe */}
-          {allVerified && envelopeUrl && !loadingEnvelope && (
+          {/* Document iframe */}
+          {showIframe && (
             <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
               <div className="bg-gray-50 border-b border-gray-200 px-5 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-green-500" />
-                  <span className="text-xs font-semibold text-gray-700">Merchant Processing Agreement — Ready to Sign</span>
+                  <span className="text-xs font-semibold text-gray-700">Merchant Processing Agreement — Ready to Review</span>
                 </div>
-                <span className="text-xs text-gray-400">Secured · {locations.length} location{locations.length !== 1 ? 's' : ''} included</span>
+                <span className="text-xs text-gray-400">Secured · {locations?.length ?? 0} location{(locations?.length ?? 0) !== 1 ? 's' : ''} included</span>
               </div>
               <iframe
                 ref={iframeRef}
@@ -197,13 +209,27 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
                 title="Merchant Processing Agreement"
                 className="w-full"
                 style={{ height: 680, border: 'none', display: 'block' }}
-                allow="camera; microphone"
               />
             </div>
           )}
 
-          {/* Manual complete button (fallback if postMessage doesn't fire) */}
-          {allVerified && envelopeUrl && (
+          {/* No iframe but document is ready (Elavon returned no renderable content) */}
+          {documentReady && envelopeUrl === '__ready__' && (
+            <div className="border border-green-200 bg-green-50 rounded-xl flex items-start gap-3 px-5 py-4">
+              <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-green-800">Agreement Ready</p>
+                <p className="text-xs text-green-700 mt-1">
+                  Your Merchant Processing Agreement has been compiled and is ready for electronic signature.
+                  By clicking the button below you agree to the terms of the Merchant Processing Agreement,
+                  Operating Guide, and all applicable addenda.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Submit button — shown once document is ready */}
+          {allVerified && documentReady && (
             <div className="flex flex-col gap-2">
               {submitError && (
                 <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl px-5 py-4">
@@ -219,12 +245,14 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
                 {submitting ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Processing submission...</>
                 ) : (
-                  <><CheckCircle2 className="w-4 h-4" /> I Have Signed — Complete Application</>
+                  <><CheckCircle2 className="w-4 h-4" /> I Have Reviewed &amp; Agree — Submit Application</>
                 )}
               </button>
-              <p className="text-center text-xs text-gray-400">
-                Click after completing your signature in the document above
-              </p>
+              {showIframe && (
+                <p className="text-center text-xs text-gray-400">
+                  Review the agreement above, then click to electronically sign and submit
+                </p>
+              )}
             </div>
           )}
         </div>

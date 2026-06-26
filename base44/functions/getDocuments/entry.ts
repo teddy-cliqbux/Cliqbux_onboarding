@@ -131,12 +131,11 @@ function buildFinancialInfo(profile: Record<string, string>) {
   };
 }
 
-function buildBankAccounts(location: Record<string, string>) {
+function buildBankAccounts(location: Record<string, string>, tapeId = '14') {
   const routing = location.bankDetails?.routingNumber || location.routingNumber || '';
   const account = location.bankDetails?.accountNumber || location.accountNumber || '';
-  // tapeId "20" is the board value (vs "14" used in listdocuments/getdocuments)
   return {
-    DEPOSIT: { fundingMethod: 'GROSS', accountNumber: account, sortCode: routing, country: 'USA', trueDaily: false, tapeId: '20' },
+    DEPOSIT: { fundingMethod: 'GROSS', accountNumber: account, sortCode: routing, country: 'USA', trueDaily: false, tapeId },
     CHARGEBACK: { accountNumber: account, sortCode: routing, country: 'USA' },
     BILLING: { accountNumber: account, sortCode: routing, country: 'USA' }
   };
@@ -183,7 +182,7 @@ function buildScarecrowApplication(profile: Record<string, string>, location: Re
   const principal = buildPrincipal(profile, primarySigner);
   const businessInfo = buildBusinessInfo(profile, location);
   const financialInfo = buildFinancialInfo(profile);
-  const bankAccounts = buildBankAccounts(location);
+  const bankAccounts = buildBankAccounts(location, '14');
   const cardPricing = buildCardPricing(profile.pricingTier);
   const shortName = (profile.legalName || 'MERCH').replace(/[^A-Z0-9]/gi, '').slice(0, 8).toUpperCase();
   const additionalShareholders = additionalSigners.map(s => buildPrincipal(profile, s));
@@ -236,80 +235,117 @@ function buildScarecrowApplication(profile: Record<string, string>, location: Re
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const { corporateId } = await req.json();
-
+    const { corporateId, locationId, documentList } = await req.json();
     if (!corporateId) return Response.json({ error: 'corporateId is required' }, { status: 400 });
 
     const elavonBase = (Deno.env.get('ELAVON_ENDPOINT') || 'https://uat-buynow-na.elavon.net').replace(/\/api\/.*$/, '');
     const auth = btoa(`${Deno.env.get('ELAVON_USERNAME')}:${Deno.env.get('ELAVON_PASSWORD')}`);
 
-    const [profiles, allLocs, signers] = await Promise.all([
+    const [profiles, locs, signers] = await Promise.all([
       base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }),
     ]);
 
     const profile = profiles[0];
-    if (!profile) return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
-    if (!allLocs?.length) return Response.json({ error: 'No locations found' }, { status: 404 });
+    const location = locationId ? locs.find((l: Record<string, string>) => l.id === locationId) : locs[0];
+    const primarySigner = signers.find((s: Record<string, boolean>) => s.isPrimarySigner) || signers[0];
+    const additionalSigners = signers.filter((s: Record<string, boolean>) => !s.isPrimarySigner);
 
-    const primarySigner = signers?.find((s: Record<string, boolean>) => s.isPrimarySigner) || signers?.[0] || {};
-    const additionalSigners = signers?.filter((s: Record<string, boolean>) => !s.isPrimarySigner) || [];
+    if (!profile || !location) return Response.json({ error: 'Profile or location not found' }, { status: 404 });
 
-    const results = [];
-    let allSuccessful = true;
+    const scarecrowApp = buildScarecrowApplication(profile, location, primarySigner || {}, additionalSigners);
 
-    for (const location of allLocs) {
-      const routing = location.bankDetails?.routingNumber || location.routingNumber || '';
-      const account = location.bankDetails?.accountNumber || location.accountNumber || '';
+    // Derive agreementId from corporateId (last 8 digits, padded)
+    const agreementId = String(corporateId).replace(/\D/g, '').slice(-8).padStart(8, '0');
 
-      if (!routing || !account) {
-        results.push({ locationId: location.id, dbaName: location.dbaName, status: 'skipped', reason: 'Missing bank account details' });
-        continue;
+    // Use document IDs from listDocuments response if available; else use Postman defaults
+    function docId(type: string, fallback: string): string {
+      if (!documentList) return fallback;
+      // Try to find in an array format { documentType, documentId }
+      if (Array.isArray(documentList)) {
+        const found = documentList.find((d: Record<string, string>) => d.documentType === type);
+        return found?.documentId || fallback;
       }
+      // Try object keyed by type
+      return documentList[type]?.documentId || fallback;
+    }
 
-      const scarecrowApplication = buildScarecrowApplication(profile, location, primarySigner, additionalSigners);
-      const payload = { profileCode: PROFILE_CODE, scarecrowApplication };
+    const baseDocInput = (type: string, fallback: string) => ({
+      documentId: docId(type, fallback),
+      agreementId,
+      language: 'en'
+    });
 
-      console.log(`[submitToElavon] Boarding "${location.dbaName}" (${corporateId})`, JSON.stringify(payload, null, 2));
-
-      try {
-        const res = await fetch(`${elavonBase}/api/v4/board`, {
-          method: 'POST',
-          headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        const resText = await res.text();
-        let resData: Record<string, unknown> = {};
-        try { resData = JSON.parse(resText); } catch { resData = { raw: resText.slice(0, 2000) }; }
-
-        console.log(`[submitToElavon] Response ${res.status} for "${location.dbaName}":`, JSON.stringify(resData, null, 2));
-
-        if (res.ok) {
-          const elavonMID = resData?.merchantId || resData?.mid || resData?.MID || resData?.scarecrowId || null;
-          await base44.asServiceRole.entities.MerchantLocations.update(location.id, { applicationStepStatus: 'Approved', elavonMID });
-          results.push({ locationId: location.id, dbaName: location.dbaName, status: 'success', elavonMID, httpStatus: res.status });
-        } else {
-          console.error(`[submitToElavon] ERROR "${location.dbaName}" HTTP ${res.status}:`, JSON.stringify(resData));
-          await base44.asServiceRole.entities.MerchantLocations.update(location.id, { applicationStepStatus: 'Error' });
-          results.push({ locationId: location.id, dbaName: location.dbaName, status: 'error', error: resData?.message || resData?.error || `HTTP ${res.status}`, httpStatus: res.status });
-          allSuccessful = false;
+    const payload = {
+      profileCode: PROFILE_CODE,
+      html: true,
+      documentInputs: {
+        TERMS_OF_SERVICE: baseDocInput('TERMS_OF_SERVICE', '1'),
+        OPERATING_GUIDE: baseDocInput('OPERATING_GUIDE', '2'),
+        MERCHANT_AGREEMENT: {
+          ...baseDocInput('MERCHANT_AGREEMENT', '3'),
+          signed: false,
+          groupedApplication: false,
+          wetSigned: false,
+          scarecrowApplication: scarecrowApp
+        },
+        APPLICATION_ADDENDUM: {
+          ...baseDocInput('APPLICATION_ADDENDUM', '4'),
+          signed: false,
+          groupedApplication: false,
+          wetSigned: false,
+          scarecrowApplication: scarecrowApp
+        },
+        SELF_GUARANTEE: {
+          ...baseDocInput('SELF_GUARANTEE', '5'),
+          signed: false,
+          groupedApplication: false,
+          wetSigned: false,
+          principal: buildPrincipal(profile, primarySigner || {}),
+          businessInfo: buildBusinessInfo(profile, location)
         }
-      } catch (fetchError) {
-        await base44.asServiceRole.entities.MerchantLocations.update(location.id, { applicationStepStatus: 'Error' });
-        results.push({ locationId: location.id, dbaName: location.dbaName, status: 'error', error: fetchError.message });
-        allSuccessful = false;
       }
+    };
+
+    const res = await fetch(`${elavonBase}/api/getdocuments`, {
+      method: 'POST',
+      headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const contentType = res.headers.get('content-type') || '';
+    let data: Record<string, unknown>;
+    let rawText = '';
+
+    if (contentType.includes('application/json')) {
+      data = await res.json();
+    } else {
+      rawText = await res.text();
+      data = { raw: rawText.slice(0, 5000) };
     }
 
-    if (allSuccessful) {
-      await base44.asServiceRole.entities.MerchantCorporateProfile.update(profile.id, { applicationStatus: 'Submitted' });
+    if (!res.ok) {
+      return Response.json({ error: 'Elavon getdocuments failed', elavonStatus: res.status, details: data }, { status: 500 });
     }
 
-    return Response.json({ success: allSuccessful, allSubmitted: allSuccessful, corporateId, results });
+    // Try to surface HTML content regardless of where Elavon puts it
+    const htmlContent =
+      (typeof data.html === 'string' ? data.html : null) ||
+      (typeof data.content === 'string' ? data.content : null) ||
+      (typeof data.htmlContent === 'string' ? data.htmlContent : null) ||
+      (rawText && rawText.trimStart().startsWith('<') ? rawText : null) ||
+      null;
+
+    const documentUrl =
+      (typeof data.url === 'string' ? data.url : null) ||
+      (typeof data.signingUrl === 'string' ? data.signingUrl : null) ||
+      (typeof data.documentUrl === 'string' ? data.documentUrl : null) ||
+      null;
+
+    return Response.json({ success: true, htmlContent, documentUrl, raw: data });
 
   } catch (error) {
-    return Response.json({ error: error.message, stack: error.stack?.split('\n').slice(0, 3).join(' | ') }, { status: 500 });
+    return Response.json({ error: error.message }, { status: 500 });
   }
 });
