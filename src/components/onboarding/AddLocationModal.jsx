@@ -10,9 +10,10 @@ const inputStyle = {
 };
 const labelStyle = { fontSize: '11px', fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.04em' };
 
-export default function AddLocationModal({ corporateId, onLocationAdded, onClose }) {
-  const [dbaName, setDbaName] = useState('');
-  const [addressDisplay, setAddressDisplay] = useState('');
+export default function AddLocationModal({ corporateId, onLocationAdded, onClose, mode = 'add', initialDbaName = '', initialBusinessAddress = '' }) {
+  const isEdit = mode === 'edit';
+  const [dbaName, setDbaName] = useState(initialDbaName);
+  const [addressDisplay, setAddressDisplay] = useState(initialBusinessAddress);
   const [parsedAddress, setParsedAddress] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -70,6 +71,16 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
     setSaving(true);
     setError('');
     try {
+      if (isEdit) {
+        // Edit mode: return the updated data directly, no API call for location creation
+        onLocationAdded({
+          dbaName: dbaName.trim(),
+          businessAddress: businessAddressStr,
+          addressVerified: !!parsedAddress,
+        });
+        onClose();
+        return;
+      }
       const res = await base44.functions.invoke('addSelfServeLocation', {
         corporateId,
         dbaName: dbaName.trim(),
@@ -87,7 +98,7 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
       onLocationAdded({ ...res.data.location, addressVerified: !!parsedAddress });
       onClose();
     } catch (err) {
-      setError(err.message || 'Failed to add location.');
+      setError(err.message || 'Failed to save location.');
     } finally {
       setSaving(false);
     }
@@ -125,8 +136,8 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
               <MapPin size={16} color="#2563EB" />
             </div>
             <div>
-              <h3 style={{ fontWeight: 700, color: '#111827', fontSize: '15px', margin: 0 }}>Add Business Location</h3>
-              <p style={{ fontSize: '12px', color: '#9CA3AF', margin: 0, marginTop: 2 }}>Enter storefront details below</p>
+              <h3 style={{ fontWeight: 700, color: '#111827', fontSize: '15px', margin: 0 }}>{isEdit ? 'Edit Business Location' : 'Add Business Location'}</h3>
+              <p style={{ fontSize: '12px', color: '#9CA3AF', margin: 0, marginTop: 2 }}>{isEdit ? 'Update the storefront details below' : 'Enter storefront details below'}</p>
             </div>
           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, borderRadius: 6 }}>
@@ -244,7 +255,7 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
                 }}
               >
                 {saving ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-                Save Location
+                {isEdit ? 'Update Location' : 'Save Location'}
               </button>
               <button
                 type="button"
