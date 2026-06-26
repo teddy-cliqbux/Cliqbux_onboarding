@@ -289,42 +289,29 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     const bk = getLocBankDetails(row);
     const entityAccounts = plaidAccounts[row.entityId] || [];
     const hasPlaidEntity = entityAccounts.length > 0;
+    const inManual = ls?.isManualMode;
 
-    if (bk && bk.routingNumber && bk.accountNumber && !ls?.isManualMode) {
-      const isPlaid = bk.authMethod === 'Plaid';
+    // STATE C: Manual Entry Mode — activated via the "Set Up Manually..." link
+    if (inManual) {
       return (
-        <div className="flex items-center gap-2">
-          <Landmark className={`w-4 h-4 flex-shrink-0 ${isPlaid ? 'text-blue-500' : 'text-gray-400'}`} />
-          <div>
-            <span className="text-xs font-mono font-semibold text-gray-900">{bk.accountNumberMasked || `••••${(bk.accountNumber || '').slice(-4)}`}</span>
-            <p className="text-[10px] text-gray-400">{(bk.accountType === 'savings' ? 'Savings' : 'Checking')} · {bk.authMethod}</p>
-          </div>
-          <button onClick={() => changeBank(row.id)} className="text-[10px] text-blue-500 hover:text-blue-700 underline whitespace-nowrap flex-shrink-0">Change</button>
-        </div>
-      );
-    }
-
-    // Manual entry mode — persistent, never resets
-    if (ls?.isManualMode) {
-      return (
-        <div className="flex flex-wrap items-center gap-1 w-full">
-          <div className="flex items-center gap-1 w-full">
-            <input type="text" placeholder="Routing" maxLength={9} value={ls.manualRouting || ''} className="w-[6rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+        <div className="flex flex-col items-center justify-center gap-1 w-full">
+          <div className="flex items-center gap-1 w-full justify-center">
+            <input type="text" placeholder="Routing #" maxLength={9} value={ls.manualRouting || ''} className="w-[6rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
               onChange={(e) => updateManualField(row.id, 'manualRouting', e.target.value.replace(/\D/g, '').slice(0, 9))} />
-            <input type="text" placeholder="Account" value={ls.manualAccount || ''} className="w-[7rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+            <input type="text" placeholder="Account #" value={ls.manualAccount || ''} className="w-[7rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
               onChange={(e) => updateManualField(row.id, 'manualAccount', e.target.value.replace(/\D/g, '')?.slice(0, 17))} />
             <button onClick={() => confirmManual(row.id)}
               className="text-[10px] font-semibold bg-gray-900 text-white rounded-lg px-2 py-1.5"><Check className="w-3 h-3" /></button>
           </div>
-          <button onClick={() => cancelManual(row.id)} className="text-[10px] text-gray-400 hover:text-blue-600 underline whitespace-nowrap">Cancel</button>
+          <button onClick={() => toggleManual(row.id)} className="text-[10px] text-gray-400 hover:text-blue-600 underline whitespace-nowrap">← Use Plaid instead</button>
         </div>
       );
     }
 
-    // Plaid dropdown when parent entity is connected
+    // STATE B: Entity Plaid is connected — dropdown with account selections
     if (hasPlaidEntity) {
       return (
-        <div className="flex flex-col gap-0.5 w-full">
+        <div className="flex flex-col items-center justify-center gap-1 w-full">
           <select value={ls?.selectedBankId || ''}
             onChange={(e) => selectAccount(row.id, e.target.value)}
             className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[14rem]">
@@ -333,15 +320,16 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
               <option key={a.accountId} value={a.accountId}>{a.name} ••••{a.mask || (a.accountNumber || '').slice(-4)}</option>
             ))}
           </select>
-          <button onClick={() => toggleManual(row.id)} className="text-[10px] text-gray-400 hover:text-blue-600 underline whitespace-nowrap text-left">Set Up Manually...</button>
+          <button onClick={() => toggleManual(row.id)} className="text-[10px] text-gray-400 hover:text-blue-600 underline whitespace-nowrap">Set Up Manually...</button>
         </div>
       );
     }
 
-    // No entity Plaid yet — render the entity-level connect button inline
+    // STATE A: No bank connected — entity-scoped Plaid button with manual fallback underneath
     return (
-      <div className="flex flex-col gap-0.5">
+      <div className="flex flex-col items-center justify-center gap-1 w-full">
         <EntityPlaidButton corporateId={profile.corporateId} entityId={row.entityId} onAccountsConnected={handleAccountsConnected} />
+        <button onClick={() => toggleManual(row.id)} className="text-[10px] text-gray-400 hover:text-blue-600 underline whitespace-nowrap">Set Up Manually...</button>
       </div>
     );
   };
