@@ -113,33 +113,45 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
           <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
           STEP 3 OF 3 — LOCATIONS &amp; BANKING
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-1.5">Add Your Business Locations</h2>
-        <p className="text-gray-500 text-sm">
-          Add each storefront, then assign a bank account or upload a voided check for each location.
-        </p>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-1.5">Add Your Business Locations</h2>
+            <p className="text-gray-500 text-sm">
+              Add each storefront, then assign a bank account for each location.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex-shrink-0 flex items-center gap-2 text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 px-5 py-2.5 rounded-xl transition-all shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            Add Business Location
+          </button>
+        </div>
       </div>
 
       <div className="px-8 py-6 flex flex-col gap-8">
-        {/* Document Upload */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-800 text-sm">Document Upload (AI Extraction)</h3>
-            <div className="flex items-center gap-1.5 text-xs text-gray-400">
-              <Info className="w-3.5 h-3.5" />
-              <span>EIN Letter or Voided Check</span>
+        {/* Document Upload — hidden when Plaid already connected */}
+        {plaidAccounts.length === 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-800 text-sm">Document Upload (AI Extraction)</h3>
+              <div className="flex items-center gap-1.5 text-xs text-gray-400">
+                <Info className="w-3.5 h-3.5" />
+                <span>EIN Letter or Voided Check</span>
+              </div>
             </div>
+            <FileDropZone onExtracted={handleExtracted} corporateId={profile.corporateId} />
+            {(corporateRouting || corporateAccount) && (
+              <div className="mt-3 flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                <p className="text-green-800 text-xs">
+                  <span className="font-semibold">Banking details captured.</span> Toggle "Corp Acct" on any location row to apply them automatically.
+                </p>
+              </div>
+            )}
           </div>
-          <FileDropZone onExtracted={handleExtracted} corporateId={profile.corporateId} />
-
-          {(corporateRouting || corporateAccount) && (
-            <div className="mt-3 flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-              <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-              <p className="text-green-800 text-xs">
-                <span className="font-semibold">Banking details captured.</span> Toggle "Corp Acct" on any location row to apply them automatically.
-              </p>
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Locations Section */}
         <div>
@@ -148,25 +160,16 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
               Location Banking Details
               <span className="ml-2 text-xs text-gray-400 font-normal">({locations.length} location{locations.length !== 1 ? 's' : ''})</span>
             </h3>
-            <div className="flex items-center gap-2">
-              {locationRows.length > 0 && (
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700 border border-blue-200 hover:border-blue-300 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg transition-all disabled:opacity-60"
-                >
-                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  {saveSuccess ? 'Saved!' : 'Save'}
-                </button>
-              )}
+            {locationRows.length > 0 && (
               <button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-2 text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 px-4 py-2 rounded-lg transition-all shadow-sm"
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 text-sm font-semibold text-blue-600 hover:text-blue-700 border border-blue-200 hover:border-blue-300 bg-blue-50 hover:bg-blue-100 px-4 py-2 rounded-lg transition-all disabled:opacity-60"
               >
-                <Plus className="w-4 h-4" />
-                Add Business Location
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {saveSuccess ? 'Saved!' : 'Save'}
               </button>
-            </div>
+            )}
           </div>
 
           <LocationsGrid
