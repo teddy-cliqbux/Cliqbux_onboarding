@@ -36,8 +36,13 @@ export default function OnboardingLocations({ profile, locations: initialLocatio
         activeEntities = await fetchEntities();
       }
       setEntities(activeEntities);
+
+      // Load locations from the backend so newly created rows always appear
+      const liveRes = await base44.functions.invoke('listLocations', { corporateId: profile.corporateId });
+      const liveLocs = liveRes.data?.locations || [];
+
       const activeEntityIds = new Set(activeEntities.map(e => e.entityId));
-      setLocs(initialLocations.map(loc => ({
+      setLocs(liveLocs.map(loc => ({
         id: loc.id || loc.locationId,
         entityId: activeEntityIds.has(loc.entityId) ? loc.entityId : activeEntities[0]?.entityId,
         dbaName: loc.dbaName,
