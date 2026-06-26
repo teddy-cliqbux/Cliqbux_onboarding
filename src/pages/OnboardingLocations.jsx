@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, ArrowRight, Loader2, Store, Landmark, Trash2, CheckCircle2, AlertCircle, Pencil, Check, MapPin, Building2, Hash, Layers, ChevronDown } from 'lucide-react';
+import { Plus, ArrowRight, Loader2, Store, Landmark, Trash2, CheckCircle2, AlertCircle, Pencil, Check, MapPin, Building2, Hash, Layers, ChevronDown, AlertTriangle } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import AddLocationModal from '@/components/onboarding/AddLocationModal';
 import EntityPlaidButton from '@/components/onboarding/EntityPlaidButton';
@@ -9,13 +9,16 @@ function formatEIN(raw) {
   return d.length >= 9 ? `${d.slice(0, 2)}-${d.slice(2, 9)}` : raw || '';
 }
 
-export default function OnboardingLocations({ profile, onContinue }) {
+export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const [entities, setEntities] = useState([]);
   const [locs, setLocs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddLoc, setShowAddLoc] = useState(false);
   const [editLocId, setEditLocId] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [showBackConfirm, setShowBackConfirm] = useState(false);
+
+  const isSelfServe = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'].includes(profile?.pricingTier);
 
   // Entity-level Plaid accounts: { [entityId]: accounts[] }
   const [plaidAccounts, setPlaidAccounts] = useState({});
@@ -432,9 +435,14 @@ export default function OnboardingLocations({ profile, onContinue }) {
         </div>
       </div>
 
-      {/* Single CTA button */}
-      <div className="px-8 pt-6 pb-4">
-        <button onClick={() => setShowAddLoc(true)} className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3.5 px-6 rounded-xl text-sm transition-all shadow-sm">
+      {/* Back + CTA buttons */}
+      <div className="px-8 pt-6 pb-4 flex gap-3">
+        {onBack && (
+          <button onClick={() => setShowBackConfirm(true)} className="flex items-center justify-center gap-2 border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-3.5 px-5 rounded-xl text-sm transition-all flex-shrink-0">
+            ← Back
+          </button>
+        )}
+        <button onClick={() => setShowAddLoc(true)} className="flex-1 flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white font-semibold py-3.5 px-6 rounded-xl text-sm transition-all shadow-sm">
           <Plus className="w-4 h-4" /> + Add Business Location
         </button>
         {locs.length === 0 && (
@@ -469,9 +477,39 @@ export default function OnboardingLocations({ profile, onContinue }) {
           entities={entities}
           initialLegalName={profile.legalName}
           initialTaxId={profile.taxId}
+          initialDbaName={profile.legalName}
           onLocationAdded={handleLocationAdded}
           onClose={() => setShowAddLoc(false)}
         />
+      )}
+
+      {/* Back confirmation dialog */}
+      {showBackConfirm && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 px-4" onClick={(e) => { if (e.target === e.currentTarget) setShowBackConfirm(false); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-amber-600" /></div>
+              <div>
+                <h3 className="font-bold text-gray-900 text-base">Go Back?</h3>
+                <p className="text-xs text-gray-400">
+                  {isSelfServe
+                    ? 'Returning to the pricing page will let you pick a different plan. Any locations and banking you\'ve added will be saved in this session and reappear when you continue.'
+                    : 'Returning to Step 1 will keep your agreement status intact.'}
+                </p>
+              </div>
+            </div>
+            {isSelfServe && (
+              <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-start gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                Picking a new pricing tier creates a fresh deal. Locations added to the current deal will still be visible here if you continue with any plan — they are only lost if a new deal ID replaces this one.
+              </p>
+            )}
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setShowBackConfirm(false)} className="text-sm font-medium text-gray-500 border border-gray-200 rounded-xl py-2.5 px-5 hover:bg-gray-50 transition-all">Stay Here</button>
+              <button onClick={() => { setShowBackConfirm(false); onBack(); }} className="text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 rounded-xl py-2.5 px-5 transition-all">Go Back</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Edit Modal */}

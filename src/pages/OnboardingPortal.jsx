@@ -93,6 +93,16 @@ export default function OnboardingPortal() {
     setStep(STEP_VERIFICATION);
   };
 
+  const onBackStep = () => {
+    // Returns to Step 1 (pricing). This step clears the profile so SelfServePricing
+    // re-renders — when pricing is confirmed again, the portal re-enters Locations
+    // with the *same saved locations* from state (sent via onContinue). Note:
+    // picking a *different* pricing tier creates a new deal with a new corporateId,
+    // so locations belonging to the old deal are naturally lost — that's expected.
+    // Step 1 Agreement shows the signed quote as-is.
+    setStep(STEP_LOCATIONS);
+  };
+
   const handleSigningComplete = async () => {
     // Mark submitted and refresh locations for MID tracker
     setProfile(prev => ({ ...prev, applicationStatus: 'Submitted' }));
@@ -125,6 +135,7 @@ export default function OnboardingPortal() {
             profile={profile}
             locations={locations}
             onContinue={handleLocationsContinue}
+            onBack={onBackStep}
           />
         );
       }
