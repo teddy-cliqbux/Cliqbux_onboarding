@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Building2, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Pencil, Landmark, Check } from 'lucide-react';
 import AddLocationModal from './AddLocationModal';
 import PerRowPlaidLink from './PerRowPlaidLink';
+import ManualBankInputs from './ManualBankInputs';
 
 const GRID = '2fr 2.5fr 3fr 1fr 1.5fr';
 
@@ -119,15 +120,16 @@ export default function LocationsGrid({ corporateId, locations, corporateRouting
     updateRows(prev => prev.map(row => row.id !== id ? row : { ...row, [field]: value }));
   };
 
-  const handleManualSave = (rowId) => {
-    const row = rowsMapRef.current[rowId];
-    if (!row?.routingInput || !row?.accountInput) return;
+  const handleManualSave = (rowId, routing, account) => {
     updateRows(prev => prev.map(r => {
       if (r.id !== rowId) return r;
-      const masked = `••••${r.accountInput.slice(-4)}`;
+      const masked = `••••${(account || '').slice(-4)}`;
       return {
         ...r,
-        bankDetails: { routingNumber: r.routingInput, accountNumber: r.accountInput, accountNumberMasked: masked, authMethod: 'Manual' },
+        isManualMode: true,
+        routingInput: routing || '',
+        accountInput: account || '',
+        bankDetails: { routingNumber: routing || '', accountNumber: account || '', accountNumberMasked: masked, authMethod: 'Manual' },
         useCorpAccount: false
       };
     }));
@@ -210,32 +212,7 @@ export default function LocationsGrid({ corporateId, locations, corporateRouting
 
     if (row.isManualMode) {
       return (
-        <div className="w-full flex flex-col gap-1.5">
-          <div className="flex gap-1.5 w-full">
-            <input
-              type="text"
-              value={row.routingInput}
-              onChange={(e) => updateField(row.id, 'routingInput', e.target.value)}
-              placeholder="Routing #"
-              maxLength={9}
-              className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-            />
-            <input
-              type="text"
-              value={row.accountInput}
-              onChange={(e) => updateField(row.id, 'accountInput', e.target.value)}
-              placeholder="Account #"
-              className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
-            />
-          </div>
-          <button
-            onClick={() => handleManualSave(row.id)}
-            disabled={!row.routingInput || !row.accountInput}
-            className="flex items-center justify-center gap-1 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 rounded-lg py-1.5 px-3 transition-all"
-          >
-            <Check className="w-3 h-3" /> Confirm Banking
-          </button>
-        </div>
+        <ManualBankInputs rowId={row.id} onConfirm={handleManualSave} />
       );
     }
 
