@@ -20,6 +20,7 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
           id,
           dbaName: loc.dbaName,
           businessAddress: loc.businessAddress,
+          addressVerified: loc.addressVerified || false,
           useCorpAccount: false,
           routingInput: loc.routingNumber || '',
           accountInput: loc.accountNumber || '',
@@ -273,6 +274,11 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
               </div>
               <div className="min-w-0">
                 <p className="text-xs text-gray-500 leading-tight break-words">{row.businessAddress}</p>
+                {row.addressVerified && (
+                  <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium mt-0.5">
+                    <CheckCircle2 className="w-3 h-3" /> Verified
+                  </span>
+                )}
               </div>
               <BankingCell row={row} isMaster={isMaster} />
               <div className="flex justify-center">

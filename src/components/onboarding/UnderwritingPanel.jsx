@@ -191,6 +191,9 @@ export default function UnderwritingPanel({ profile, onValidChange }) {
     );
   }
 
+  // Compute whether the full form is currently valid (live, not just on submit)
+  const formIsValid = Object.keys(errors).length === 0;
+
   // — Full expanded form —
   return (
     <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -205,7 +208,13 @@ export default function UnderwritingPanel({ profile, onValidChange }) {
             <p className="text-xs text-gray-500 mt-0.5">Required by Elavon for underwriting — please complete all fields</p>
           </div>
         </div>
-        <span className="text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-full">Action Required</span>
+        {formIsValid ? (
+          <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" /> Complete
+          </span>
+        ) : (
+          <span className="text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-full">Action Required</span>
+        )}
       </div>
 
       <div className="px-6 py-5 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
