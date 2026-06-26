@@ -171,14 +171,22 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const getLocBankDetails = (loc) => {
     const ls = locationState[loc.id];
     if (!ls) return loc.bankDetails || null;
-    if (ls.isManualMode && ls.manualRouting && ls.manualAccount) {
-      return {
-        routingNumber: ls.manualRouting,
-        accountNumber: ls.manualAccount,
-        accountNumberMasked: `••••${(ls.manualAccount || '').slice(-4)}`,
-        authMethod: 'Manual',
-      };
+
+    if (ls.isManualMode) {
+      if (ls.manualRouting && ls.manualAccount) {
+        return {
+          routingNumber: ls.manualRouting,
+          accountNumber: ls.manualAccount,
+          accountNumberMasked: `••••${(ls.manualAccount || '').slice(-4)}`,
+          authMethod: 'Manual',
+        };
+      }
+      // In manual mode but fields not yet filled → still return a Manual object
+      // so the row enters manual-editing state; Continue stays disabled since
+      // routing/account are falsy.
+      return { routingNumber: '', accountNumber: '', authMethod: 'Manual' };
     }
+
     if (ls.selectedBankId && plaidAccounts[loc.entityId]) {
       const acct = plaidAccounts[loc.entityId].find(a => a.accountId === ls.selectedBankId);
       if (acct) {
@@ -191,7 +199,10 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         };
       }
     }
+
     if (loc.bankCleared) return null;
+    // If the location has existing bank data but the user hasn't picked Plaid or manual,
+    // return it so the row shows "Ready" with its stored banking.
     return loc.bankDetails || null;
   };
 
@@ -260,10 +271,10 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     }));
   };
 
-  const toggleManual = (locId) => {
+  const toggleManual = (locId, isManualMode = true) => {
     setLocationState(prev => ({
       ...prev,
-      [locId]: { ...prev[locId], isManualMode: true, selectedBankId: null }
+      [locId]: { ...prev[locId], isManualMode, selectedBankId: null }
     }));
   };
 

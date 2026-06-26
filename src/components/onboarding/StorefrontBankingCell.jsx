@@ -41,10 +41,13 @@ export default function StorefrontBankingCell({
   // Initialize mode from parent state once, then re-hydrate local buffer when parent switches mode.
   const initRef = useRef(false);
   useEffect(() => {
-    if (!initRef.current && bankDetails?.authMethod === 'Manual') {
-      setCachedInManual(true);
+    if (!initRef.current) {
+      if (bankDetails?.authMethod === 'Manual') setCachedInManual(true);
+      initRef.current = true;
+    } else {
+      // React to parent switching into Manual mode at runtime (click "Set Up Manually...").
+      if (bankDetails?.authMethod === 'Manual') setCachedInManual(true);
     }
-    initRef.current = true;
     setLocalRouting('');
     setLocalAccount('');
     setCachedSelectedBankId('');
@@ -58,7 +61,8 @@ export default function StorefrontBankingCell({
   };
 
   const handleToggleManual = () => {
-    if (cachedInManual) {
+    const enteringManual = !cachedInManual;
+    if (!enteringManual) {
       // Exiting manual → sync typed values before switching away from Plaid.
       syncManualDetails();
     } else {
@@ -66,8 +70,8 @@ export default function StorefrontBankingCell({
       onUpdateManualField(locId, 'manualRouting', '');
       onUpdateManualField(locId, 'manualAccount', '');
     }
-    onToggleManual(locId);
-    setCachedInManual(!cachedInManual);
+    onToggleManual(locId, enteringManual);
+    setCachedInManual(enteringManual);
   };
 
   const handleConfirmManual = () => {
