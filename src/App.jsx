@@ -8,6 +8,7 @@ import ScrollToTop from './components/ScrollToTop';
 import OnboardingPortal from './pages/OnboardingPortal';
 import VerifyIdentity from './pages/VerifyIdentity';
 import PostSubmissionDashboard from './pages/PostSubmissionDashboard';
+import SystemAdminHidden from './pages/SystemAdminHidden';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
             <Route path="/" element={<OnboardingPortal />} />
             <Route path="/verify" element={<VerifyIdentity />} />
             <Route path="/onboarding/dashboard" element={<PostSubmissionDashboard />} />
+            <Route path="/admin/architecture" element={<SystemAdminHidden />} />
             <Route path="*" element={<PageNotFound />} />
           </Routes>
         </Router>
