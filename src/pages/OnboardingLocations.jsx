@@ -260,6 +260,8 @@ export default function OnboardingLocations({ profile, onContinue }) {
         <AddLocationModal
           corporateId={profile.corporateId}
           entities={entities}
+          initialLegalName={profile.legalName}
+          initialTaxId={profile.taxId}
           onLocationAdded={handleLocationAdded}
           onClose={() => setShowAddLoc(false)}
         />
@@ -273,6 +275,8 @@ export default function OnboardingLocations({ profile, onContinue }) {
           <AddLocationModal
             corporateId={profile.corporateId}
             entities={entities}
+            initialLegalName={profile.legalName}
+            initialTaxId={profile.taxId}
             initialDbaName={loc.dbaName}
             initialBusinessAddress={loc.businessAddress}
             onLocationAdded={handleLocationUpdated}

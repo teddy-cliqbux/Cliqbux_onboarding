@@ -7,6 +7,8 @@ import EINValidator from '@/components/onboarding/EINValidator';
 export default function AddLocationModal({
   corporateId,
   entities = [],
+  initialLegalName = '',
+  initialTaxId = '',
   onLocationAdded,
   onClose,
   initialDbaName = '',
@@ -23,9 +25,9 @@ export default function AddLocationModal({
   const [error, setError] = useState('');
   const inputRef = useRef(null);
 
-  // — Section B: Entity Setup (first-location) or choice (subsequent) —
-  const [corporateLegalName, setCorporateLegalName] = useState(initialDbaName || '');
-  const [federalEIN, setFederalEIN] = useState('');
+  // — Section B: Inherit from Step 1 (profile.legalName + profile.taxId) —
+  const [corporateLegalName, setCorporateLegalName] = useState(initialLegalName || initialDbaName || '');
+  const [federalEIN, setFederalEIN] = useState(initialTaxId || '');
   const [einValidated, setEinValidated] = useState(null);
   const [corporateMailingAddress, setCorporateMailingAddress] = useState(initialBusinessAddress || '');
 
@@ -85,20 +87,22 @@ export default function AddLocationModal({
 
   const handleAddressKeyDown = (e) => { if (e.key === 'Enter') e.preventDefault(); };
 
-  // Sync corporate legal name with DBA on first location when not already edited
-  const handleDbaChange = (v) => {
-    setDbaName(v);
-    if (isFirstLocation && corporateLegalName === addressDisplay.substring(0, corporateLegalName.length)) {
-      setCorporateLegalName(v);
-    }
-  };
-
   const clearAddress = () => { setAddressDisplay(''); setParsedAddress(null); setUnverifiedWarning(false); setTimeout(() => inputRef.current?.focus(), 0); };
 
   const formatEIN = (d) => {
     const nd = d.replace(/\D/g, '');
     return nd.length > 2 ? `${nd.slice(0, 2)}-${nd.slice(2, 9)}` : nd;
   };
+
+  // Normalize EIN to raw 9-digit string — strips dashes for reliable length checks
+  const rawEIN = () => {
+    const val = einValidated || federalEIN;
+    return (val || '').replace(/[^0-9]/g, '').slice(0, 9);
+  };
+
+  const isValidRawEIN = () => /^\d{9}$/.test(rawEIN());
+
+  const setEinError = (msg) => { if (msg) setError(msg); };
 
   const doSave = async (addressToUse, businessAddressStr) => {
     setSaving(true);
@@ -109,7 +113,7 @@ export default function AddLocationModal({
 
       if (isFirstLocation || entityChoice === 'new') {
         const name = (corporateLegalName || dbaName).trim();
-        const ein = einValidated || federalEIN.replace(/\D/g, '');
+        const ein = rawEIN();
         if (!name || ein.length !== 9) throw new Error('Legal corporate name and a valid 9-digit EIN are required.');
         const res = await base44.functions.invoke('manageLegalEntity', {
           corporateId, action: 'add', legalBusinessName: name, federalEIN: ein,
@@ -144,12 +148,12 @@ export default function AddLocationModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
     if (!dbaName.trim() || !addressDisplay.trim()) { setError('Both fields are required.'); return; }
     if (isFirstLocation || entityChoice === 'new') {
       const name = (corporateLegalName || dbaName).trim();
-      const ein = einValidated || federalEIN.replace(/\D/g, '');
       if (!name) { setError('Corporate Legal Name is required.'); return; }
-      if (ein.length !== 9) { setError('A valid 9-digit Federal EIN is required.'); return; }
+      if (!isValidRawEIN()) { setError('A valid 9-digit Federal EIN is required.'); return; }
     }
     if (!parsedAddress) { setUnverifiedWarning(true); return; }
     const busAddr = `${parsedAddress.streetName}, ${parsedAddress.city}, ${parsedAddress.state} ${parsedAddress.postcode}`;
@@ -157,11 +161,11 @@ export default function AddLocationModal({
   };
 
   const handleSaveUnverified = async () => {
+    setError('');
     if (isFirstLocation || entityChoice === 'new') {
       const name = (corporateLegalName || dbaName).trim();
-      const ein = einValidated || federalEIN.replace(/\D/g, '');
       if (!name) { setError('Corporate Legal Name is required.'); return; }
-      if (ein.length !== 9) { setError('A valid 9-digit Federal EIN is required.'); return; }
+      if (!isValidRawEIN()) { setError('A valid 9-digit Federal EIN is required.'); return; }
     }
     await doSave(null, addressDisplay.trim());
   };
@@ -269,7 +273,7 @@ export default function AddLocationModal({
               <div className="space-y-3 pl-7">
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Storefront DBA Name</label>
-                  <input type="text" value={dbaName} onChange={(e) => handleDbaChange(e.target.value)} placeholder="e.g. Cliqbux Cafe - Downtown" autoFocus
+                  <input type="text" value={dbaName} onChange={(e) => setDbaName(e.target.value)} placeholder="e.g. Cliqbux Cafe - Downtown" autoFocus
                     className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>

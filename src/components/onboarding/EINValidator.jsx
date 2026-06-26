@@ -21,7 +21,7 @@ export default function EINValidator({ corporateId, value, onChange, onValidated
       if (d?.valid) {
         setStatus('valid');
         setMessage(d.message || 'Verified');
-        onValidated(d.formatted || digits);
+        onValidated(digits);  // pass raw 9 digits, not formatted (dashes break length checks)
       } else {
         setStatus('invalid');
         setMessage((d?.errors || []).join(', ') || 'Invalid EIN');
@@ -38,9 +38,9 @@ export default function EINValidator({ corporateId, value, onChange, onValidated
         <input
           type="text"
           value={value}
-          onChange={(e) => { onChange(e.target.value.replace(/[^0-9-]/g, '')); setStatus(null); }}
+          onChange={(e) => { onChange(e.target.value.replace(/\D/g, '').slice(0, 9)); setStatus(null); }}
           placeholder="00-0000000"
-          maxLength={10}
+          maxLength={9}
           className={`w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 ${
             status === 'valid' ? 'border-green-300 bg-green-50 focus:ring-green-400' :
             status === 'invalid' ? 'border-red-300 bg-red-50 focus:ring-red-400' :

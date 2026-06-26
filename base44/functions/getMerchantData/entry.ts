@@ -28,8 +28,8 @@ Deno.serve(async (req) => {
       hubspotQuoteUrl: profile.hubspotQuoteUrl,
       pricingTier: profile.pricingTier,
       applicationStatus: profile.applicationStatus,
-      hasTaxId: !!profile.taxId,
-      // Multi-EIN entity structure — each maps to a subset of locations
+      // Inherited EIN from Step 1 (self-serve) — used for first-location defaults
+      taxId: profile.taxId || '',
       legalEntities: (profile.legalEntities || []).map(e => ({
         entityId: e.entityId,
         legalBusinessName: e.legalBusinessName,
