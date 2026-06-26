@@ -308,11 +308,16 @@ Deno.serve(async (req) => {
         console.log(`[submitToElavon] Response ${res.status} for "${location.dbaName}":`, JSON.stringify(resData, null, 2));
 
         if (res.ok) {
-          // BoardingResponse fields: merchantId (MID), boardingId (AWB/chain ref)
-          const elavonMID = resData?.merchantId || resData?.mid || resData?.MID || null;
-          const boardingId = resData?.boardingId || resData?.chainId || null;
-          await base44.asServiceRole.entities.MerchantLocations.update(location.id, { applicationStepStatus: 'Approved', elavonMID, boardingId });
-          results.push({ locationId: location.id, dbaName: location.dbaName, status: 'success', elavonMID, boardingId, httpStatus: res.status });
+          // Elavon /board returns an AWB (Application Work Basket tracking ID), NOT a MID.
+          // The MID is assigned asynchronously once status reaches COMPLETE.
+          // We store the AWB and poll /boardstatus via pollBoardingStatus function.
+          const awb = resData?.awb || resData?.applicationId || resData?.boardingId || resData?.chainId || null;
+          await base44.asServiceRole.entities.MerchantLocations.update(location.id, {
+            applicationStepStatus: 'Pending MID',
+            awb,
+            boardingId: awb,
+          });
+          results.push({ locationId: location.id, dbaName: location.dbaName, status: 'success', awb, httpStatus: res.status, rawElavonResponse: resData });
         } else {
           console.error(`[submitToElavon] ERROR "${location.dbaName}" HTTP ${res.status}:`, JSON.stringify(resData));
           await base44.asServiceRole.entities.MerchantLocations.update(location.id, { applicationStepStatus: 'Error' });

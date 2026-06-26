@@ -75,17 +75,28 @@
       "description": "Legacy flat field — prefer bankDetails.accountNumber"
     },
     "elavonMID": {
-      "type": "string"
+      "type": "string",
+      "description": "Merchant ID assigned by Elavon — populated asynchronously after board status reaches COMPLETE"
+    },
+    "awb": {
+      "type": "string",
+      "description": "Application Work Basket ID returned by Elavon /board — used to poll /boardstatus for async MID assignment"
+    },
+    "boardingId": {
+      "type": "string",
+      "description": "Alias for awb — chain reference returned by Elavon at boarding time"
     },
     "applicationStepStatus": {
       "type": "string",
       "enum": [
         "In Review",
         "Ready to Submit",
-        "Approved",
+        "Pending MID",
+        "Active",
         "Error"
       ],
-      "default": "In Review"
+      "default": "In Review",
+      "description": "Pending MID = board accepted by Elavon, awaiting async MID assignment. Active = MID received."
     }
   },
   "required": [
