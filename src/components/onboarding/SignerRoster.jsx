@@ -233,6 +233,9 @@ export default function SignerRoster({ profile, onValidChange }) {
                         <input type="text" value={draft.signerEmail || ''} placeholder="Email"
                           onChange={(e) => setDrafts(prev => ({ ...prev, [signer.id]: { ...prev[signer.id], signerEmail: e.target.value } }))}
                           className={`${inputCls} w-44`} />
+                        <input type="number" min="1" max="100" placeholder="%" value={draft.ownershipPercentage || ''}
+                          onChange={(e) => { const v = Math.min(100, Math.max(1, parseInt(e.target.value, 10) || 0)); setDrafts(prev => ({ ...prev, [signer.id]: { ...prev[signer.id], ownershipPercentage: v || '' } })); }}
+                          className={`${inputCls} w-[76px] text-center`} />
                       </div>
                     ) : (
                       <>
