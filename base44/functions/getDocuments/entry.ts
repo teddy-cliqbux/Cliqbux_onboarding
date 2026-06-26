@@ -22,6 +22,24 @@ function toStateCode(state: string): string {
   return state ? `USA_${state.toUpperCase().replace(/^USA_/, '')}` : 'USA_TN';
 }
 
+function mapTitleType(t: string): string {
+  const map: Record<string, string> = {
+    'OWNER':   'PROPRIETOR_OR_OWNER',
+    'PARTNER': 'PARTNER_OR_PRINCIPAL',
+    'MANAGER': 'GENERAL_MANAGER',
+  };
+  return map[t] || t || 'PROPRIETOR_OR_OWNER';
+}
+
+function mapTaxClassType(t: string): string {
+  const map: Record<string, string> = {
+    'LLC_CORPORATION': 'CORPORATION',
+    'LLC_PARTNERSHIP': 'PARTNERSHIP',
+    'SOLE_PROP':       'DISREGARDED_ENTITY',
+  };
+  return map[t] || t || 'CORPORATION';
+}
+
 function parsePhone(phone: string) {
   const d = (phone || '').replace(/\D/g, '');
   return { intlCode: '1', areaCode: d.slice(0, 3) || '000', number: d.slice(3, 10) || '0000000' };
@@ -55,8 +73,8 @@ function buildPrincipal(profile: Record<string, string>, signer?: Record<string,
       AUTHORIZED_SIGNER: !!(src.isAuthorizedSigner)
     },
     ownershipPct: String(src.ownershipPercentage || profile.ownershipPercentage || '100'),
-    ids: [{ idType: src.idType || 'ID_CARD', idNumber: src.idNumber || src.ssn || '', expiryDate: {} }],
-    titleType: src.titleType || profile.titleType || 'OWNER',
+    ids: [{ idType: 'ID_CARD', idNumber: (src.ssn || profile.ssn || '').replace(/\D/g, ''), expiryDate: {} }],
+    titleType: mapTitleType(src.titleType || profile.titleType || ''),
     signingPersonalGuarantee: true,
     responsibleParty: true,
     residingCountry: 'USA', primaryNationality: 'USA',
@@ -92,7 +110,7 @@ function buildBusinessInfo(profile: Record<string, string>, location: Record<str
     additionalAddresses: { LEGAL: addr },
     ownershipType: profile.ownershipType || 'LIMITED_COMPANY',
     taxID: taxDigits,
-    taxClassType: profile.taxClassType || 'CORPORATION',
+    taxClassType: mapTaxClassType(profile.taxClassType || ''),
     industryClass: profile.industryClass || 'RETAIL',
     productDescription: profile.productDescription || 'Retail goods and services',
     mccCode: (profile.mccCode || '5999') + 'J',

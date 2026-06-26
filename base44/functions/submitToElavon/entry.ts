@@ -5,9 +5,9 @@ const PROFILE_CODE              = "PAPI_USA_CLIQBUX1";
 const REFERRER_NAME             = "PAPI_USA_CLIQBUX";
 const CLIENT_ID                 = "PAHCLIQBUX";
 const CLIENT_GROUP_NUMBER       = "17";
-const SALES_REP_CODE            = "45000";
-const PARENT_ENTITY             = "46408";
-const MONETARY_PRICING_PROGRAM  = "145";
+const SALES_REP_CODE            = "86764";
+const PARENT_ENTITY             = "48603"; // Schedule A – Buy Rate entity under client group 17
+const MONETARY_PRICING_PROGRAM  = "09828";
 const AUTH_PRICING_PROGRAM      = "49999";
 
 // ─── Shared Helpers ───────────────────────────────────────────────────────────
@@ -20,6 +20,26 @@ function toMonthAbbr(month: string | number): string {
 
 function toStateCode(state: string): string {
   return state ? `USA_${state.toUpperCase().replace(/^USA_/, '')}` : 'USA_TN';
+}
+
+// Elavon TitleType enum — maps legacy/UI values to valid API values
+function mapTitleType(t: string): string {
+  const map: Record<string, string> = {
+    'OWNER':   'PROPRIETOR_OR_OWNER',
+    'PARTNER': 'PARTNER_OR_PRINCIPAL',
+    'MANAGER': 'GENERAL_MANAGER',
+  };
+  return map[t] || t || 'PROPRIETOR_OR_OWNER';
+}
+
+// Elavon TaxClassificationType — maps UI values to valid API values
+function mapTaxClassType(t: string): string {
+  const map: Record<string, string> = {
+    'LLC_CORPORATION': 'CORPORATION',
+    'LLC_PARTNERSHIP': 'PARTNERSHIP',
+    'SOLE_PROP':       'DISREGARDED_ENTITY',
+  };
+  return map[t] || t || 'CORPORATION';
 }
 
 function parsePhone(phone: string) {
@@ -55,8 +75,9 @@ function buildPrincipal(profile: Record<string, string>, signer?: Record<string,
       AUTHORIZED_SIGNER: !!(src.isAuthorizedSigner)
     },
     ownershipPct: String(src.ownershipPercentage || profile.ownershipPercentage || '100'),
-    ids: [{ idType: src.idType || 'ID_CARD', idNumber: src.idNumber || src.ssn || '', expiryDate: {} }],
-    titleType: src.titleType || profile.titleType || 'OWNER',
+    // ids[0] = SSN slot — must be numeric; idType 'ID_CARD' maps to SSN in Elavon's system
+    ids: [{ idType: 'ID_CARD', idNumber: (src.ssn || profile.ssn || '').replace(/\D/g, ''), expiryDate: {} }],
+    titleType: mapTitleType(src.titleType || profile.titleType || ''),
     signingPersonalGuarantee: true,
     responsibleParty: true,
     residingCountry: 'USA', primaryNationality: 'USA',
@@ -92,7 +113,7 @@ function buildBusinessInfo(profile: Record<string, string>, location: Record<str
     additionalAddresses: { LEGAL: addr },
     ownershipType: profile.ownershipType || 'LIMITED_COMPANY',
     taxID: taxDigits,
-    taxClassType: profile.taxClassType || 'CORPORATION',
+    taxClassType: mapTaxClassType(profile.taxClassType || ''),
     industryClass: profile.industryClass || 'RETAIL',
     productDescription: profile.productDescription || 'Retail goods and services',
     mccCode: (profile.mccCode || '5999') + 'J',
@@ -206,7 +227,7 @@ function buildScarecrowApplication(profile: Record<string, string>, location: Re
     },
     bankAccounts,
     cardPricing,
-    fees: [{ type: '92438', quantity: 1, amount: 0, frequency: 'MONTHLY' }],
+    fees: [],
     monetaryPricingProgram: MONETARY_PRICING_PROGRAM,
     authenticatePricingProgram: AUTH_PRICING_PROGRAM,
     parentEntity: PARENT_ENTITY,

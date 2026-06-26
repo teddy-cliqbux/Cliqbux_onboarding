@@ -99,13 +99,14 @@
     },
     "taxClassType": {
       "type": "string",
-      "description": "IRS tax classification — maps to Elavon businessInfo.taxClassType",
+      "description": "IRS tax classification — maps to Elavon businessInfo.taxClassType. LLC_CORPORATION→CORPORATION, LLC_PARTNERSHIP→PARTNERSHIP, SOLE_PROP→DISREGARDED_ENTITY at submission time.",
       "enum": [
         "CORPORATION",
         "LLC_CORPORATION",
         "LLC_PARTNERSHIP",
         "SOLE_PROP",
-        "PARTNERSHIP"
+        "PARTNERSHIP",
+        "DISREGARDED_ENTITY"
       ]
     },
     "industryClass": {
@@ -150,16 +151,22 @@
     },
     "titleType": {
       "type": "string",
-      "description": "Owner's title — maps to Elavon principal.titleType",
+      "description": "Owner's title — maps to Elavon principal.titleType. OWNER→PROPRIETOR_OR_OWNER, PARTNER→PARTNER_OR_PRINCIPAL, MANAGER→GENERAL_MANAGER at submission time.",
       "enum": [
         "CHIEF_EXECUTIVE_OFFICER",
+        "CHIEF_FINANCIAL_OFFICER",
         "PRESIDENT",
-        "OWNER",
-        "DIRECTOR",
-        "PARTNER",
         "VICE_PRESIDENT",
+        "DIRECTOR",
         "SECRETARY",
         "TREASURER",
+        "PROPRIETOR_OR_OWNER",
+        "PARTNER_OR_PRINCIPAL",
+        "GENERAL_MANAGER",
+        "MANAGING_MEMBER",
+        "AUTHORIZED_SIGNER",
+        "OWNER",
+        "PARTNER",
         "MANAGER"
       ]
     },
