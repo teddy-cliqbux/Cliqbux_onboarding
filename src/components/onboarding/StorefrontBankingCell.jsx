@@ -58,7 +58,14 @@ export default function StorefrontBankingCell({
   };
 
   const handleToggleManual = () => {
-    syncManualDetails();
+    if (cachedInManual) {
+      // Exiting manual → sync typed values before switching away from Plaid.
+      syncManualDetails();
+    } else {
+      // Entering manual → clear any stale Plaid state and reset manual fields.
+      onUpdateManualField(locId, 'manualRouting', '');
+      onUpdateManualField(locId, 'manualAccount', '');
+    }
     onToggleManual(locId);
     setCachedInManual(!cachedInManual);
   };
@@ -79,13 +86,21 @@ export default function StorefrontBankingCell({
           <input
             type="text" placeholder="Routing #" maxLength={9} value={localRouting}
             className="w-[6rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={(e) => setLocalRouting(clearSym(e.target.value).slice(0, 9))}
+            onChange={(e) => {
+              const val = clearSym(e.target.value).slice(0, 9);
+              setLocalRouting(val);
+              onUpdateManualField(locId, 'manualRouting', val);
+            }}
             onBlur={() => onUpdateManualField(locId, 'manualRouting', localRouting)}
           />
           <input
             type="text" placeholder="Account #" value={localAccount}
             className="w-[7rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onChange={(e) => setLocalAccount(clearSym(e.target.value).slice(0, 17))}
+            onChange={(e) => {
+              const val = clearSym(e.target.value).slice(0, 17);
+              setLocalAccount(val);
+              onUpdateManualField(locId, 'manualAccount', val);
+            }}
             onBlur={() => onUpdateManualField(locId, 'manualAccount', localAccount)}
           />
           <button onClick={handleConfirmManual}
