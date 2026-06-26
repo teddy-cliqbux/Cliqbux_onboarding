@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { Loader2, ArrowRight, CheckCircle, Zap, CreditCard, Percent } from 'lucide-react';
+import { Loader2, ArrowRight, CheckCircle, CreditCard, Percent } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import CliqbuxLogo from './CliqbuxLogo';
 
 const PRICING_CARDS = [
   {
     key: 'TRADITIONAL',
-    label: 'Traditional Swiped',
+    label: 'Swiped & Keyed',
     icon: CreditCard,
-    description: 'Best for in-person card-present transactions with a physical terminal. Card-not-present transactions also covered.',
+    description: 'Covers both in-person card-present and card-not-present transactions. Swiped rate at 2.49% + $0.10, keyed rate at 2.89% + $0.30.',
     badge: 'Most Popular',
     badgeColor: 'bg-blue-100 text-blue-700',
     accentColor: 'border-blue-200 hover:border-blue-400',
@@ -17,22 +17,7 @@ const PRICING_CARDS = [
     iconBg: 'bg-blue-100',
     rate: '2.49%',
     fee: '$0.10',
-    rateLabel: 'PER TRANSACTION (SWIPED)'
-  },
-  {
-    key: 'TRADITIONAL',
-    label: 'Traditional Keyed',
-    icon: Zap,
-    description: 'Ideal for phone orders, mail orders, or card-not-present transactions. In-person swiped also covered.',
-    badge: 'Card Not Present',
-    badgeColor: 'bg-purple-100 text-purple-700',
-    accentColor: 'border-purple-200 hover:border-purple-400',
-    selectedColor: 'border-purple-500 bg-purple-50',
-    iconColor: 'text-purple-600',
-    iconBg: 'bg-purple-100',
-    rate: '2.89%',
-    fee: '$0.30',
-    rateLabel: 'PER TRANSACTION (KEYED)'
+    rateLabel: 'SWIPED · 2.89% + $0.30 KEYED'
   },
   {
     key: 'CASH_DISCOUNT',
