@@ -39,8 +39,8 @@ Deno.serve(async (req) => {
       corporateId: loc.corporateId,
       dbaName: loc.dbaName,
       businessAddress: loc.businessAddress,
-      hasRoutingNumber: !!loc.routingNumber,
-      hasAccountNumber: !!loc.accountNumber,
+      hasRoutingNumber: !!(loc.bankDetails?.routingNumber || loc.routingNumber),
+      hasAccountNumber: !!(loc.bankDetails?.accountNumber || loc.accountNumber),
       elavonMID: loc.elavonMID,
       applicationStepStatus: loc.applicationStepStatus
     }));

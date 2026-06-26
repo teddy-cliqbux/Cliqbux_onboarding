@@ -1,18 +1,17 @@
 import { useState } from 'react';
-import { Plus, Save, Info, ArrowRight, Loader2 } from 'lucide-react';
+import { Plus, Info, ArrowRight, Loader2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import FileDropZone from '@/components/onboarding/FileDropZone';
 import LocationsGrid from '@/components/onboarding/LocationsGrid';
 import AddLocationModal from '@/components/onboarding/AddLocationModal';
 
-export default function OnboardingLocations({ profile, locations: initialLocations, plaidAccounts = [], onContinue }) {
+export default function OnboardingLocations({ profile, locations: initialLocations, onContinue }) {
   const [locations, setLocations] = useState(initialLocations);
   const [locationRows, setLocationRows] = useState([]);
   const [corporateRouting, setCorporateRouting] = useState('');
   const [corporateAccount, setCorporateAccount] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const handleExtracted = ({ routingNumber, accountNumber }) => {
     if (routingNumber) setCorporateRouting(routingNumber);
@@ -20,11 +19,11 @@ export default function OnboardingLocations({ profile, locations: initialLocatio
   };
 
   const handleLocationAdded = (newLocation) => {
-    setLocations(prev => [...prev, { ...newLocation, hasRoutingNumber: false, hasAccountNumber: false }]);
+    setLocations(prev => [...prev, { ...newLocation }]);
   };
 
   const locationsBankingReady = locations.length >= 1 && locationRows.length > 0 && locationRows.every(
-    row => row.applicationStepStatus === 'Approved' || (row.routingInput && row.accountInput)
+    row => row.applicationStepStatus === 'Approved' || (row.bankDetails?.routingNumber && row.bankDetails?.accountNumber)
   );
 
   const handleSaveAndContinue = async () => {
@@ -32,7 +31,7 @@ export default function OnboardingLocations({ profile, locations: initialLocatio
     try {
       const toSave = locationRows
         .filter(row => row.applicationStepStatus !== 'Approved')
-        .map(row => ({ id: row.id, routingNumber: row.routingInput, accountNumber: row.accountInput }));
+        .map(row => ({ id: row.id, bankDetails: row.bankDetails }));
       if (toSave.length > 0) {
         await base44.functions.invoke('saveLocationBankDetails', { locations: toSave });
       }
@@ -68,27 +67,25 @@ export default function OnboardingLocations({ profile, locations: initialLocatio
       </div>
 
       <div className="px-8 py-6 flex flex-col gap-8">
-        {/* Document Upload — hidden when Plaid already connected */}
-        {plaidAccounts.length === 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-800 text-sm">Document Upload (AI Extraction)</h3>
-              <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                <Info className="w-3.5 h-3.5" />
-                <span>EIN Letter or Voided Check</span>
-              </div>
+        {/* Document Upload — AI extraction for EIN/banking */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-800 text-sm">Document Upload (AI Extraction)</h3>
+            <div className="flex items-center gap-1.5 text-xs text-gray-400">
+              <Info className="w-3.5 h-3.5" />
+              <span>EIN Letter or Voided Check</span>
             </div>
-            <FileDropZone onExtracted={handleExtracted} corporateId={profile.corporateId} />
-            {(corporateRouting || corporateAccount) && (
-              <div className="mt-3 flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-                <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
-                <p className="text-green-800 text-xs">
-                  <span className="font-semibold">Banking details captured.</span> Toggle "Corp Acct" on any location row to apply them automatically.
-                </p>
-              </div>
-            )}
           </div>
-        )}
+          <FileDropZone onExtracted={handleExtracted} corporateId={profile.corporateId} />
+          {(corporateRouting || corporateAccount) && (
+            <div className="mt-3 flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+              <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+              <p className="text-green-800 text-xs">
+                <span className="font-semibold">Banking details captured.</span> Toggle "Corp Acct" on any location row to apply them automatically.
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* Locations Grid */}
         <div>
@@ -99,10 +96,10 @@ export default function OnboardingLocations({ profile, locations: initialLocatio
             </h3>
           </div>
           <LocationsGrid
+            corporateId={profile.corporateId}
             locations={locations}
             corporateRouting={corporateRouting}
             corporateAccount={corporateAccount}
-            plaidAccounts={plaidAccounts}
             onLocationsChange={setLocationRows}
           />
         </div>

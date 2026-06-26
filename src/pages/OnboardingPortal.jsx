@@ -5,7 +5,7 @@ import Step1Agreement from '@/components/onboarding/Step1Agreement';
 import ErrorScreen from '@/components/onboarding/ErrorScreen';
 import LoadingScreen from '@/components/onboarding/LoadingScreen';
 import SelfServePricing from '@/components/onboarding/SelfServePricing';
-import Step2Verification from '@/components/onboarding/Step2Verification';
+// Plaid verification is now handled per-location inside OnboardingLocations
 import OnboardingLocations from './OnboardingLocations';
 import OnboardingVerification from './OnboardingVerification';
 import OnboardingSuccess from './OnboardingSuccess';
@@ -35,8 +35,6 @@ export default function OnboardingPortal() {
   const [dealId, setDealId]           = useState(null);
   const [profile, setProfile]         = useState(null);
   const [locations, setLocations]     = useState([]);
-  const [plaidAccounts, setPlaidAccounts] = useState([]);
-  const [verificationDone, setVerificationDone] = useState(false);
   const [step, setStep]               = useState(STEP_LOCATIONS); // within post-agreement flow
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
@@ -83,17 +81,6 @@ export default function OnboardingPortal() {
     setMode('sales');
   };
 
-  const handleVerificationComplete = async (bankingInfo) => {
-    setPlaidAccounts(bankingInfo.plaidAccounts || []);
-    if (bankingInfo.identity && profile?.corporateId) {
-      try {
-        const refreshed = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
-        if (refreshed.data?.profile) setProfile(refreshed.data.profile);
-      } catch (_) {}
-    }
-    setVerificationDone(true);
-  };
-
   const handleLocationsContinue = ({ locations: updatedLocations }) => {
     setLocations(updatedLocations);
     setStep(STEP_VERIFICATION);
@@ -128,17 +115,13 @@ export default function OnboardingPortal() {
   }
 
   const renderStep = () => {
-    // Pricing confirmed → Plaid verification gate first
+    // Pricing confirmed → locations & per-location banking
     if (applicationStatus === 'Pricing Selected' || applicationStatus === 'Quote Signed') {
-      if (!verificationDone) {
-        return <Step2Verification profile={profile} onVerified={handleVerificationComplete} />;
-      }
       if (step === STEP_LOCATIONS) {
         return (
           <OnboardingLocations
             profile={profile}
             locations={locations}
-            plaidAccounts={plaidAccounts}
             onContinue={handleLocationsContinue}
           />
         );
@@ -170,7 +153,7 @@ export default function OnboardingPortal() {
 
   return (
     <div className="portal-bg" style={{ fontFamily: 'Inter, sans-serif' }}>
-      <TopNav applicationStatus={applicationStatus} verificationDone={verificationDone} />
+      <TopNav applicationStatus={applicationStatus} />
 
       <div className="pt-16 min-h-screen flex flex-col items-center justify-start px-4 py-10">
         {/* Merchant greeting */}

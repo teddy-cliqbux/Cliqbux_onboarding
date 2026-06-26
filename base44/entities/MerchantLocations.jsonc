@@ -16,6 +16,35 @@
     "businessAddress": {
       "type": "string"
     },
+    "bankDetails": {
+      "type": "object",
+      "description": "Per-location banking details",
+      "properties": {
+        "routingNumber": {
+          "type": "string"
+        },
+        "accountNumber": {
+          "type": "string"
+        },
+        "accountNumberMasked": {
+          "type": "string"
+        },
+        "accountType": {
+          "type": "string",
+          "enum": [
+            "checking",
+            "savings"
+          ]
+        },
+        "authMethod": {
+          "type": "string",
+          "enum": [
+            "Plaid",
+            "Manual"
+          ]
+        }
+      }
+    },
     "routingNumber": {
       "type": "string"
     },
@@ -28,11 +57,12 @@
     "applicationStepStatus": {
       "type": "string",
       "enum": [
+        "In Review",
         "Ready to Submit",
         "Approved",
         "Error"
       ],
-      "default": "Ready to Submit"
+      "default": "In Review"
     }
   },
   "required": [

@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { Building2, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, ChevronDown, Pencil } from 'lucide-react';
+import { Building2, ToggleLeft, ToggleRight, AlertCircle, CheckCircle2, Pencil, Landmark, Check } from 'lucide-react';
 import AddLocationModal from './AddLocationModal';
+import PerRowPlaidLink from './PerRowPlaidLink';
 
 const GRID = '2fr 2.5fr 3fr 1fr 1.5fr';
 
-export default function LocationsGrid({ locations, corporateRouting, corporateAccount, plaidAccounts, onLocationsChange, onLocationUpdated }) {
+export default function LocationsGrid({ corporateId, locations, corporateRouting, corporateAccount, onLocationsChange, onLocationUpdated }) {
   const rowsMapRef = useRef({});
   const [rows, setRows] = useState([]);
-  const [editingLocation, setEditingLocation] = useState(null); // { id, dbaName, businessAddress, addressVerified }
+  const [editingLocation, setEditingLocation] = useState(null);
+  const [bankEditingId, setBankEditingId] = useState(null);
 
   const stableId = (loc) => loc.id || loc.locationId || loc.dbaName;
 
@@ -22,9 +24,13 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
           businessAddress: loc.businessAddress,
           addressVerified: loc.addressVerified || false,
           useCorpAccount: false,
-          routingInput: loc.routingNumber || '',
-          accountInput: loc.accountNumber || '',
-          selectedPlaidAccountId: null,
+          bankDetails: loc.bankDetails || {
+            routingNumber: loc.routingNumber || '',
+            accountNumber: loc.accountNumber || '',
+            authMethod: null
+          },
+          routingInput: loc.bankDetails?.routingNumber || loc.routingNumber || '',
+          accountInput: loc.bankDetails?.accountNumber || loc.accountNumber || '',
           applicationStepStatus: loc.applicationStepStatus || 'In Review',
           elavonMID: loc.elavonMID,
         };
@@ -47,11 +53,12 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
     onLocationsChange(ordered);
   }, [locations]);
 
+  // Sync corporate routing to rows using Corp Acct toggle
   useEffect(() => {
     setRows(prev => {
       const updated = prev.map(row => {
         if (!row.useCorpAccount) return row;
-        const next = { ...row, routingInput: corporateRouting || '', accountInput: corporateAccount || '' };
+        const next = { ...row, routingInput: corporateRouting || '', accountInput: corporateAccount || '', bankDetails: { authMethod: 'Manual', routingNumber: corporateRouting || '', accountNumber: corporateAccount || '' } };
         rowsMapRef.current[row.id] = next;
         return next;
       });
@@ -71,28 +78,39 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
 
   const toggleCorpAccount = (id, checked) => {
     updateRows(prev => {
-      const masterRow = prev[0];
       return prev.map(row => {
         if (row.id !== id) return row;
-        if (checked && masterRow) {
+        if (checked) {
+          const masterRow = prev[0];
+          const banking = masterRow?.bankDetails ? { ...masterRow.bankDetails, authMethod: 'Manual' } : {};
           return {
             ...row,
             useCorpAccount: true,
-            selectedPlaidAccountId: masterRow.selectedPlaidAccountId,
-            routingInput: masterRow.routingInput || corporateRouting || '',
-            accountInput: masterRow.accountInput || corporateAccount || '',
+            routingInput: masterRow?.routingInput || corporateRouting || '',
+            accountInput: masterRow?.accountInput || corporateAccount || '',
+            bankDetails: {
+              routingNumber: masterRow?.routingInput || corporateRouting || '',
+              accountNumber: masterRow?.accountInput || corporateAccount || '',
+              authMethod: 'Manual',
+              ...banking
+            }
           };
         }
-        return { ...row, useCorpAccount: false, selectedPlaidAccountId: null, routingInput: '', accountInput: '' };
+        return { ...row, useCorpAccount: false, bankDetails: {}, routingInput: '', accountInput: '' };
       });
     });
   };
 
-  const handlePlaidSelect = (id, accountId) => {
-    const acct = plaidAccounts.find(a => a.accountId === accountId);
+  const handleBankConnected = (rowId, banking) => {
     updateRows(prev => prev.map(row => {
-      if (row.id !== id) return row;
-      return { ...row, selectedPlaidAccountId: accountId, useCorpAccount: false, routingInput: acct?.routingNumber || '', accountInput: acct?.accountNumber || '' };
+      if (row.id !== rowId) return row;
+      return {
+        ...row,
+        bankDetails: banking,
+        useCorpAccount: false,
+        routingInput: banking.routingNumber,
+        accountInput: banking.accountNumber
+      };
     }));
   };
 
@@ -100,18 +118,26 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
     updateRows(prev => prev.map(row => row.id !== id ? row : { ...row, [field]: value }));
   };
 
-  // Called when edit modal saves — update this row in place
+  const handleManualSave = (rowId) => {
+    const row = rowsMapRef.current[rowId];
+    if (!row?.routingInput || !row?.accountInput) return;
+    updateRows(prev => prev.map(r => {
+      if (r.id !== rowId) return r;
+      const masked = `••••${r.accountInput.slice(-4)}`;
+      return {
+        ...r,
+        bankDetails: { routingNumber: r.routingInput, accountNumber: r.accountInput, accountNumberMasked: masked, authMethod: 'Manual' },
+        useCorpAccount: false
+      };
+    }));
+    setBankEditingId(null);
+  };
+
   const handleLocationEdited = (updatedLoc) => {
     updateRows(prev => prev.map(row => {
       if (row.id !== editingLocation.id) return row;
-      return {
-        ...row,
-        dbaName: updatedLoc.dbaName,
-        businessAddress: updatedLoc.businessAddress,
-        addressVerified: updatedLoc.addressVerified || false,
-      };
+      return { ...row, dbaName: updatedLoc.dbaName, businessAddress: updatedLoc.businessAddress, addressVerified: updatedLoc.addressVerified || false };
     }));
-    // Propagate up so parent state stays in sync
     if (onLocationUpdated) onLocationUpdated(editingLocation.id, updatedLoc);
     setEditingLocation(null);
   };
@@ -127,7 +153,7 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
         <AlertCircle className="w-3 h-3" /> Error
       </span>
     );
-    const hasBanking = (row.routingInput && row.accountInput) || row.selectedPlaidAccountId;
+    const hasBanking = row.bankDetails?.routingNumber && row.bankDetails?.accountNumber;
     if (hasBanking) return (
       <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 text-xs font-semibold px-2 py-1 rounded-full border border-amber-200 whitespace-nowrap">
         Ready to Submit
@@ -140,19 +166,16 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
     );
   };
 
-  const hasPlaid = plaidAccounts && plaidAccounts.length > 0;
   const isApproved = (row) => row.applicationStepStatus === 'Approved';
-  const masterHasBanking = rows.length > 0 && (rows[0].routingInput || rows[0].selectedPlaidAccountId);
+  const masterHasBanking = rows.length > 0 && rows[0].bankDetails?.routingNumber;
 
-  const BankingCell = ({ row, isMaster }) => {
-    if (row.useCorpAccount && !isMaster) {
+  const BankingCell = ({ row, idx }) => {
+    if (row.useCorpAccount && idx > 0) {
       return (
         <div className="w-full">
           <input
             type="text"
-            value={row.selectedPlaidAccountId
-              ? `••••${plaidAccounts.find(a => a.accountId === row.selectedPlaidAccountId)?.mask || ''}`
-              : row.accountInput ? `••••${row.accountInput.slice(-4)}` : ''}
+            value={row.accountInput ? `••••${row.accountInput.slice(-4)}` : ''}
             readOnly
             className="w-full text-xs border border-amber-200 rounded-lg px-3 py-2 bg-amber-50 text-amber-800 font-mono focus:outline-none"
             placeholder="Copied from Row 1"
@@ -161,44 +184,73 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
       );
     }
 
-    if (hasPlaid && !isApproved(row)) {
+    const hasActiveBanking = row.bankDetails?.routingNumber && row.bankDetails?.accountNumber;
+
+    if (hasActiveBanking) {
+      const isPlaid = row.bankDetails.authMethod === 'Plaid';
       return (
-        <div className="relative w-full">
-          <select
-            value={row.selectedPlaidAccountId || ''}
-            onChange={(e) => handlePlaidSelect(row.id, e.target.value)}
-            className="w-full text-xs border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none pr-7 bg-white"
+        <div className="w-full flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-gray-900 truncate flex items-center gap-1">
+              {isPlaid ? <Landmark className="w-3 h-3 text-blue-500" /> : null}
+              {row.bankDetails.accountNumberMasked || `••••${row.bankDetails.accountNumber.slice(-4)}`}
+              {isPlaid ? <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded font-semibold">Plaid</span> : null}
+            </span>
+            {!isApproved(row) && <button onClick={() => { setBankEditingId(row.id); updateField(row.id, 'routingInput', ''); updateField(row.id, 'accountInput', ''); }} className="text-[10px] text-gray-400 hover:text-gray-600 underline">Clear</button>}
+          </div>
+          <p className="text-[10px] text-gray-400 font-mono">{row.bankDetails.accountType === 'savings' ? 'Savings' : 'Checking'}</p>
+        </div>
+      );
+    }
+
+    if (isApproved(row)) {
+      return <div className="text-xs text-gray-400 italic">Approved</div>;
+    }
+
+    const isEditing = bankEditingId === row.id;
+    if (isEditing || !row.routingInput) {
+      return (
+        <div className="w-full flex flex-col gap-1">
+          <PerRowPlaidLink
+            corporateId={corporateId}
+            locationId={row.id}
+            onBankConnected={(banking) => { setBankEditingId(null); handleBankConnected(row.id, banking); }}
+          />
+          <button
+            onClick={() => { updateField(row.id, 'routingInput', ''); setBankEditingId(row.id); }}
+            className="text-[10px] text-gray-400 hover:text-blue-600 underline self-center"
           >
-            <option value="">Select account...</option>
-            {plaidAccounts.map(acct => (
-              <option key={acct.accountId} value={acct.accountId}>
-                {acct.name} ••••{acct.mask}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="w-3 h-3 text-gray-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            {isEditing ? '' : 'Enter manually...'}
+          </button>
         </div>
       );
     }
 
     return (
-      <div className="flex gap-2 w-full">
-        <input
-          type="text"
-          value={row.routingInput}
-          onChange={(e) => updateField(row.id, 'routingInput', e.target.value)}
-          disabled={isApproved(row)}
-          placeholder="Routing #"
-          className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400 font-mono"
-        />
-        <input
-          type="text"
-          value={row.accountInput}
-          onChange={(e) => updateField(row.id, 'accountInput', e.target.value)}
-          disabled={isApproved(row)}
-          placeholder="Account #"
-          className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400 font-mono"
-        />
+      <div className="w-full flex flex-col gap-1.5">
+        <div className="flex gap-1.5 w-full">
+          <input
+            type="text"
+            value={row.routingInput}
+            onChange={(e) => updateField(row.id, 'routingInput', e.target.value)}
+            placeholder="Routing #"
+            className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+          />
+          <input
+            type="text"
+            value={row.accountInput}
+            onChange={(e) => updateField(row.id, 'accountInput', e.target.value)}
+            placeholder="Account #"
+            className="flex-1 text-xs border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+          />
+        </div>
+        <button
+          onClick={() => handleManualSave(row.id)}
+          disabled={!row.routingInput || !row.accountInput}
+          className="flex items-center justify-center gap-1 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 rounded-lg py-1.5 px-3 transition-all"
+        >
+          <Check className="w-3 h-3" /> Confirm Banking
+        </button>
       </div>
     );
   };
@@ -213,7 +265,7 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
         >
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Location</div>
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Address</div>
-          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{hasPlaid ? 'Plaid Account' : 'Routing # / Account #'}</div>
+          <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Plaid Account / A/C #</div>
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider text-center">Corp Acct</div>
           <div className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</div>
         </div>
@@ -252,7 +304,7 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
                     </div>
                   </div>
                   {row.elavonMID && <p className="text-xs text-gray-400">MID: <span className="font-mono font-semibold text-gray-700">{row.elavonMID}</span></p>}
-                  <BankingCell row={row} isMaster={isMaster} />
+                  <BankingCell row={row} idx={idx} />
                   {!isMaster && (
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-medium text-gray-500">Use Corporate Account</span>
@@ -266,10 +318,10 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
                 {/* Desktop flat row */}
                 <div
                   className="hidden md:grid px-4 py-3 items-center"
-                  style={{ display: 'grid', gridTemplateColumns: GRID, gap: '16px', alignItems: 'center', width: '100%' }}
+                  style={{ display: 'grid', gridTemplateColumns: GRID, gap: '16px', alignItems: 'start', width: '100%' }}
                 >
                   {/* Col 1: Location */}
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 pt-1">
                     <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -291,7 +343,7 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
                   </div>
 
                   {/* Col 2: Address */}
-                  <div className="min-w-0">
+                  <div className="min-w-0 pt-1">
                     <p className="text-xs text-gray-600 leading-tight break-words">{row.businessAddress}</p>
                     {row.addressVerified && (
                       <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium mt-0.5">
@@ -301,10 +353,10 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
                   </div>
 
                   {/* Col 3: Banking */}
-                  <BankingCell row={row} isMaster={isMaster} />
+                  <BankingCell row={row} idx={idx} />
 
                   {/* Col 4: Corp Acct toggle */}
-                  <div className="flex justify-center">
+                  <div className="flex justify-center pt-1">
                     {isMaster ? (
                       <span className="text-xs text-gray-300">—</span>
                     ) : (
@@ -320,7 +372,7 @@ export default function LocationsGrid({ locations, corporateRouting, corporateAc
                   </div>
 
                   {/* Col 5: Status */}
-                  <div>{getStatusBadge(row)}</div>
+                  <div className="pt-1">{getStatusBadge(row)}</div>
                 </div>
               </div>
             );

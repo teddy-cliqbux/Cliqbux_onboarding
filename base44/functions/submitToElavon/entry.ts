@@ -114,7 +114,10 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      if (!location.routingNumber || !location.accountNumber) {
+      const routingNumber = location.bankDetails?.routingNumber || location.routingNumber || '';
+      const accountNumber = location.bankDetails?.accountNumber || location.accountNumber || '';
+
+      if (!routingNumber || !accountNumber) {
         await base44.asServiceRole.entities.MerchantLocations.update(location.id, {
           applicationStepStatus: 'Error'
         });
@@ -162,8 +165,8 @@ Deno.serve(async (req) => {
         businessAddress: location.businessAddress,
 
         // Banking
-        routingNumber: location.routingNumber,
-        accountNumber: location.accountNumber,
+        routingNumber,
+        accountNumber,
 
         // Pricing — dynamically set per tier
         ...pricingBlock

@@ -1,37 +1,30 @@
 import { Check } from 'lucide-react';
 
 const steps = [
-  { id: 1, label: 'Pricing / Agreement', statuses: ['Incomplete', 'Pricing Selected'] },
-  { id: 2, label: 'Verification', statuses: ['Quote Signed'] },
-  { id: 3, label: 'Locations & Submit', statuses: ['Submitted'] }
+  { id: 1, label: 'Agreement', completedStatus: ['Pricing Selected', 'Quote Signed'] },
+  { id: 2, label: 'Locations & Banking', completedStatus: ['Submitted'] },
 ];
 
-// verificationDone is passed in to distinguish step 2 vs step 3 within 'Pricing Selected'/'Quote Signed'
-function getStepState(stepId, applicationStatus, verificationDone) {
-  const isPricingDone = applicationStatus === 'Pricing Selected' || applicationStatus === 'Quote Signed';
+function getStepState(stepIdx, applicationStatus) {
   const isSubmitted = applicationStatus === 'Submitted';
+  const isPricingDone = applicationStatus === 'Pricing Selected' || applicationStatus === 'Quote Signed';
 
-  if (stepId === 1) {
+  if (stepIdx === 0) {
     return isPricingDone || isSubmitted ? 'complete' : 'active';
   }
-  if (stepId === 2) {
-    if (isSubmitted || (isPricingDone && verificationDone)) return 'complete';
-    if (isPricingDone && !verificationDone) return 'active';
-    return 'upcoming';
-  }
-  if (stepId === 3) {
+  if (stepIdx === 1) {
     if (isSubmitted) return 'complete';
-    if (isPricingDone && verificationDone) return 'active';
+    if (isPricingDone) return 'active';
     return 'upcoming';
   }
   return 'upcoming';
 }
 
-export default function ProgressTracker({ applicationStatus, verificationDone = false }) {
+export default function ProgressTracker({ applicationStatus }) {
   return (
     <div className="flex items-center gap-0">
       {steps.map((step, idx) => {
-        const state = getStepState(step.id, applicationStatus, verificationDone);
+        const state = getStepState(idx, applicationStatus);
         return (
           <div key={step.id} className="flex items-center">
             <div className="flex flex-col items-center gap-1.5">

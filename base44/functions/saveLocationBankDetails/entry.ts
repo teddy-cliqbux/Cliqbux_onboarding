@@ -13,13 +13,22 @@ Deno.serve(async (req) => {
 
     const results = [];
     for (const loc of locations) {
-      const { id, routingNumber, accountNumber } = loc;
+      const { id } = loc;
       if (!id) continue;
 
-      await base44.asServiceRole.entities.MerchantLocations.update(id, {
-        routingNumber: routingNumber || null,
-        accountNumber: accountNumber || null
-      });
+      const bankDetails = loc.bankDetails || {};
+      const update = {
+        bankDetails: {
+          routingNumber: bankDetails.routingNumber || bankDetails.accountNumber ? (bankDetails.routingNumber || null) : null,
+          accountNumber: bankDetails.accountNumber || bankDetails.routingNumber ? (bankDetails.accountNumber || null) : null,
+          accountNumberMasked: bankDetails.accountNumberMasked || null,
+          accountType: bankDetails.accountType || null,
+          authMethod: bankDetails.authMethod || null,
+        }
+      };
+      if (update.bankDetails.routingNumber || update.bankDetails.accountNumber) {
+        await base44.asServiceRole.entities.MerchantLocations.update(id, update);
+      }
       results.push({ id, saved: true });
     }
 
