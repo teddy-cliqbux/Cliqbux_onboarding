@@ -150,6 +150,10 @@ export default function AddLocationModal({
         entityId: targetEntityId,
         dbaName: dbaName.trim(),
         businessAddress: businessAddressStr,
+        businessStreet: addressToUse?.streetName || '',
+        businessCity: addressToUse?.city || '',
+        businessState: addressToUse?.state || '',
+        businessZip: addressToUse?.postcode || '',
       });
       if (locRes.data?.error) throw new Error(locRes.data.error);
 

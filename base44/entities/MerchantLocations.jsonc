@@ -18,7 +18,24 @@
       "type": "string"
     },
     "businessAddress": {
-      "type": "string"
+      "type": "string",
+      "description": "Human-readable display address — auto-composed from structured fields"
+    },
+    "businessStreet": {
+      "type": "string",
+      "description": "Street number + name e.g. 7301 Chapman Hwy — maps to Elavon businessAddress.streetName"
+    },
+    "businessCity": {
+      "type": "string",
+      "description": "City name — maps to Elavon businessAddress.city"
+    },
+    "businessState": {
+      "type": "string",
+      "description": "2-letter state code e.g. TN — converted to USA_TN at Elavon submission"
+    },
+    "businessZip": {
+      "type": "string",
+      "description": "5-digit ZIP code — maps to Elavon businessAddress.postCode"
     },
     "bankDetails": {
       "type": "object",
@@ -50,10 +67,12 @@
       }
     },
     "routingNumber": {
-      "type": "string"
+      "type": "string",
+      "description": "Legacy flat field — prefer bankDetails.routingNumber"
     },
     "accountNumber": {
-      "type": "string"
+      "type": "string",
+      "description": "Legacy flat field — prefer bankDetails.accountNumber"
     },
     "elavonMID": {
       "type": "string"

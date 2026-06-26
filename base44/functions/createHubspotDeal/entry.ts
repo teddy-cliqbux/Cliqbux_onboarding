@@ -4,7 +4,14 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
-    const { businessName, signerName, signerEmail, pricingTier } = body;
+    const {
+      businessName, signerName, signerEmail, pricingTier,
+      // Business details
+      corporatePhone, ownershipType, taxClassType, industryClass, mccCode,
+      productDescription, establishmentYear, currentOwnershipYears, currentOwnershipMonths,
+      titleType, avgSaleAmount, monthlyCardSales, annualRevenue, highestTicketAmount,
+      highestTicketFrequency, cardPresentPct, internetPct, motoPct
+    } = body;
 
     if (!businessName || !signerName || !signerEmail || !pricingTier) {
       return Response.json({ error: 'Missing required fields: businessName, signerName, signerEmail, pricingTier' }, { status: 400 });
@@ -29,6 +36,7 @@ Deno.serve(async (req) => {
           email: signerEmail,
           firstname: signerName.split(' ')[0] || signerName,
           lastname: signerName.split(' ').slice(1).join(' ') || '',
+          phone: corporatePhone || ''
         }
       })
     });
@@ -42,7 +50,9 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         properties: {
           name: businessName,
-          domain: signerEmail.split('@')[1] || ''
+          domain: signerEmail.split('@')[1] || '',
+          phone: corporatePhone || '',
+          industry: industryClass || ''
         }
       })
     });
@@ -62,7 +72,7 @@ Deno.serve(async (req) => {
           dealname: `${businessName} — Self-Serve Onboarding`,
           dealstage: 'appointmentscheduled',
           pipeline: 'default',
-          amount: '0',
+          amount: monthlyCardSales || '0',
           closedate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
         }
       })
@@ -93,7 +103,7 @@ Deno.serve(async (req) => {
     const existing = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
 
     if (!existing || existing.length === 0) {
-      await base44.asServiceRole.entities.MerchantCorporateProfile.create({
+      const profileFields: Record<string, unknown> = {
         corporateId,
         legalName: businessName,
         signerEmail,
@@ -101,7 +111,28 @@ Deno.serve(async (req) => {
         applicationStatus: 'Pricing Selected',
         firstName: signerName.split(' ')[0] || signerName,
         lastName: signerName.split(' ').slice(1).join(' ') || '',
-      });
+      };
+
+      if (corporatePhone) profileFields.corporatePhone = corporatePhone.replace(/\D/g, '');
+      if (ownershipType) profileFields.ownershipType = ownershipType;
+      if (taxClassType) profileFields.taxClassType = taxClassType;
+      if (industryClass) profileFields.industryClass = industryClass;
+      if (mccCode) profileFields.mccCode = mccCode;
+      if (productDescription) profileFields.productDescription = productDescription;
+      if (establishmentYear) profileFields.establishmentYear = String(establishmentYear);
+      if (currentOwnershipYears) profileFields.currentOwnershipYears = String(currentOwnershipYears);
+      if (currentOwnershipMonths) profileFields.currentOwnershipMonths = String(currentOwnershipMonths);
+      if (titleType) profileFields.titleType = titleType;
+      if (avgSaleAmount) profileFields.avgSaleAmount = String(avgSaleAmount);
+      if (monthlyCardSales) profileFields.monthlyCardSales = String(monthlyCardSales);
+      if (annualRevenue) profileFields.annualRevenue = String(annualRevenue);
+      if (highestTicketAmount) profileFields.highestTicketAmount = String(highestTicketAmount);
+      if (highestTicketFrequency != null) profileFields.highestTicketFrequency = Number(highestTicketFrequency);
+      if (cardPresentPct != null) profileFields.cardPresentPct = String(cardPresentPct);
+      if (internetPct != null) profileFields.internetPct = String(internetPct);
+      if (motoPct != null) profileFields.motoPct = String(motoPct);
+
+      await base44.asServiceRole.entities.MerchantCorporateProfile.create(profileFields);
     }
 
     return Response.json({

@@ -62,6 +62,73 @@
     },
     "corporatePhone": {
       "type": "string"
+    },
+    "titleType": {
+      "type": "string",
+      "description": "Signer's title — maps to Elavon principal.titleType",
+      "enum": [
+        "CHIEF_EXECUTIVE_OFFICER",
+        "PRESIDENT",
+        "OWNER",
+        "DIRECTOR",
+        "PARTNER",
+        "VICE_PRESIDENT",
+        "SECRETARY",
+        "TREASURER",
+        "MANAGER"
+      ]
+    },
+    "isBeneficialOwner": {
+      "type": "boolean",
+      "description": "Maps to Elavon principal.positions.BENEFICIAL_OWNER",
+      "default": true
+    },
+    "isSoleProp": {
+      "type": "boolean",
+      "description": "Maps to Elavon principal.positions.SOLE_PROP",
+      "default": false
+    },
+    "isAuthorizedSigner": {
+      "type": "boolean",
+      "description": "Maps to Elavon principal.positions.AUTHORIZED_SIGNER",
+      "default": false
+    },
+    "idType": {
+      "type": "string",
+      "description": "Government ID type — maps to Elavon principal.documentaryInfo.documentaryType",
+      "enum": [
+        "DRIVER_LICENSE",
+        "ID_CARD",
+        "PASSPORT"
+      ]
+    },
+    "idNumber": {
+      "type": "string",
+      "description": "Government ID number"
+    },
+    "idIssueYear": {
+      "type": "string"
+    },
+    "idIssueMonth": {
+      "type": "string",
+      "description": "Numeric month 1-12, converted to 3-letter abbreviation at Elavon submission"
+    },
+    "idIssueDay": {
+      "type": "string"
+    },
+    "idExpiryYear": {
+      "type": "string"
+    },
+    "idExpiryMonth": {
+      "type": "string",
+      "description": "Numeric month 1-12"
+    },
+    "idExpiryDay": {
+      "type": "string"
+    },
+    "idIssuingState": {
+      "type": "string",
+      "description": "2-letter state code e.g. TN — converted to USA_TN at Elavon submission"
     }
   },
   "required": [

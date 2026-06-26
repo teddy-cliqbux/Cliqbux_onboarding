@@ -4,7 +4,7 @@
   "properties": {
     "corporateId": {
       "type": "string",
-      "description": "Primary Key \u2014 matches HubSpot dealId or auto-generated for self-serve"
+      "description": "Primary Key — matches HubSpot dealId or auto-generated for self-serve"
     },
     "legalName": {
       "type": "string"
@@ -49,7 +49,8 @@
       "type": "string"
     },
     "corporatePhone": {
-      "type": "string"
+      "type": "string",
+      "description": "10-digit US phone, stored as digits only e.g. 8654037301"
     },
     "ownershipPercentage": {
       "type": "number"
@@ -84,15 +85,129 @@
       "type": "boolean",
       "default": false
     },
+    "ownershipType": {
+      "type": "string",
+      "description": "Legal structure of the business entity — maps to Elavon businessInfo.ownershipType",
+      "enum": [
+        "LIMITED_COMPANY",
+        "CORPORATION",
+        "SOLE_PROPRIETOR",
+        "GENERAL_PARTNERSHIP",
+        "LIMITED_PARTNERSHIP",
+        "NON_PROFIT"
+      ]
+    },
+    "taxClassType": {
+      "type": "string",
+      "description": "IRS tax classification — maps to Elavon businessInfo.taxClassType",
+      "enum": [
+        "CORPORATION",
+        "LLC_CORPORATION",
+        "LLC_PARTNERSHIP",
+        "SOLE_PROP",
+        "PARTNERSHIP"
+      ]
+    },
+    "industryClass": {
+      "type": "string",
+      "description": "Business industry category — maps to Elavon businessInfo.industryClass",
+      "enum": [
+        "RETAIL",
+        "RESTAURANT",
+        "ECOMMERCE",
+        "HOTEL",
+        "AUTO",
+        "HEALTH",
+        "SALON",
+        "GYM",
+        "SERVICES",
+        "GROCERY",
+        "BAR",
+        "CLOTHING",
+        "ELECTRONICS",
+        "FURNITURE"
+      ]
+    },
+    "mccCode": {
+      "type": "string",
+      "description": "Merchant Category Code — 4-digit code, auto-populated from industryClass"
+    },
+    "productDescription": {
+      "type": "string",
+      "description": "Short description of goods or services sold — maps to Elavon businessInfo.productDescription"
+    },
+    "establishmentYear": {
+      "type": "string",
+      "description": "Year the business was founded e.g. 2015"
+    },
+    "currentOwnershipYears": {
+      "type": "string",
+      "description": "Years under current ownership"
+    },
+    "currentOwnershipMonths": {
+      "type": "string",
+      "description": "Additional months under current ownership (0-11)"
+    },
+    "titleType": {
+      "type": "string",
+      "description": "Owner's title — maps to Elavon principal.titleType",
+      "enum": [
+        "CHIEF_EXECUTIVE_OFFICER",
+        "PRESIDENT",
+        "OWNER",
+        "DIRECTOR",
+        "PARTNER",
+        "VICE_PRESIDENT",
+        "SECRETARY",
+        "TREASURER",
+        "MANAGER"
+      ]
+    },
+    "avgSaleAmount": {
+      "type": "string",
+      "description": "Average single transaction amount in USD e.g. 50"
+    },
+    "monthlyCardSales": {
+      "type": "string",
+      "description": "Expected monthly card volume in USD e.g. 10000"
+    },
+    "annualRevenue": {
+      "type": "string",
+      "description": "Annual revenue in USD e.g. 120000"
+    },
+    "highestTicketAmount": {
+      "type": "string",
+      "description": "Highest expected single transaction in USD"
+    },
+    "highestTicketFrequency": {
+      "type": "number",
+      "description": "How many high-ticket transactions per year (default 24)",
+      "default": 24
+    },
+    "cardPresentPct": {
+      "type": "string",
+      "description": "Percentage of sales that are card-present (in-person). Must sum to 100 with internetPct + motoPct",
+      "default": "100"
+    },
+    "internetPct": {
+      "type": "string",
+      "description": "Percentage of sales that are online/ecommerce",
+      "default": "0"
+    },
+    "motoPct": {
+      "type": "string",
+      "description": "Percentage of sales that are phone/mail order (MOTO)",
+      "default": "0"
+    },
     "legalEntities": {
       "type": "array",
-      "description": "Multi-EIN corporate entities \u2014 each owning a subset of locations",
+      "description": "Multi-EIN corporate entities — each owning a subset of locations",
       "items": {
         "type": "object",
         "properties": {
           "entityId": {
             "type": "string",
-            "description": "UUID \u2014 unique identifier for this legal entity"
+            "description": "UUID — unique identifier for this legal entity"
           },
           "legalBusinessName": {
             "type": "string"
