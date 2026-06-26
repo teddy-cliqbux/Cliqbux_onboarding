@@ -11,15 +11,13 @@ export default function StorefrontBankingCell({
   const entityAccounts = plaidAccounts[entityId] || [];
   const hasPlaidEntity = entityAccounts.length > 0;
 
-  // Stable controlled entry: use a growing counter so that each time manual mode is
-  // (re-)entered we render a fresh uncontrolled input — React values it from defaultValue,
-  // then syncOrigin flushes it to the parent on blur / confirm.
-  const manualKeyRef = useRef(0); // increments each time manual mode is entered
+  // Uncontrolled inputs stored in refs so the DOM never remounts and the cursor
+  // never jumps. Sync to the parent only on confirm/toggle (never on blur).
+  const routingRef = useRef('');
+  const accountRef = useRef('');
   const syncOrigin = () => {
-    const inpEl = document.getElementById(`loc-${locId}-routing`);
-    const inpAc = document.getElementById(`loc-${locId}-account`);
-    const r = inpEl?.value || '';
-    const a = inpAc?.value || '';
+    const r = routingRef.current.replace(/[^0-9]/g, '').slice(0, 9);
+    const a = accountRef.current.replace(/[^0-9]/g, '').slice(0, 17);
     onUpdateManualField(locId, 'manualRouting', r);
     onUpdateManualField(locId, 'manualAccount', a);
     return { r, a };
@@ -56,7 +54,6 @@ export default function StorefrontBankingCell({
   useEffect(() => {
     if (bankDetails?.authMethod !== 'Manual') return;
     if (!initRef.current) initRef.current = true;
-    manualKeyRef.current += 1;
     setCachedInManual(true);
   }, [bankDetails?.authMethod]);
 
@@ -84,23 +81,22 @@ export default function StorefrontBankingCell({
     setCachedInManual(true);
   };
 
-  const clearSym = (v) => (v || '').replace(/\D/g, '');
 
-  // STATE C: Manual Entry Mode — uncontrolled inputs keyed on enter of manual mode so
-  // focus is never lost during typing.
+
+  // STATE C: Manual Entry Mode — uncontrolled inputs stored in refs, never remounts.
   if (cachedInManual) {
     return (
       <div className="flex flex-col items-center justify-center gap-1 w-full">
-        <div key={`manual-${manualKeyRef.current}`} className="flex items-center gap-1 w-full justify-center">
-          <input id={`loc-${locId}-routing`}
-            type="text" placeholder="Routing #" maxLength={9} defaultValue=""
+        <div className="flex items-center gap-1 w-full justify-center">
+          <input type="text" placeholder="Routing #"
+            defaultValue={routingRef.current}
+            onChange={(e) => { routingRef.current = e.target.value.replace(/[^0-9]/g, '').slice(0, 9); }}
             className="w-[6rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onBlur={syncOrigin}
           />
-          <input id={`loc-${locId}-account`}
-            type="text" placeholder="Account #" defaultValue=""
+          <input type="text" placeholder="Account #"
+            defaultValue={accountRef.current}
+            onChange={(e) => { accountRef.current = e.target.value.replace(/[^0-9]/g, '').slice(0, 17); }}
             className="w-[7rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-            onBlur={syncOrigin}
           />
           <button onClick={handleConfirmManual}
             className="text-[10px] font-semibold bg-gray-900 text-white rounded-lg px-2 py-1.5"><Check className="w-3 h-3" /></button>
