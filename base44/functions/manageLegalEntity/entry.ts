@@ -28,6 +28,22 @@ Deno.serve(async (req) => {
     let entities = profile.legalEntities || [];
     const updateId = profile.id;
 
+    if (action === 'edit') {
+      if (!entityId) {
+        return Response.json({ error: 'entityId is required' }, { status: 400 });
+      }
+      const idx = entities.findIndex(e => e.entityId === entityId);
+      if (idx === -1) {
+        return Response.json({ error: 'Entity not found' }, { status: 404 });
+      }
+      if (legalBusinessName !== undefined) entities[idx].legalBusinessName = legalBusinessName.trim();
+      if (tradeNameDBA !== undefined) entities[idx].tradeNameDBA = tradeNameDBA.trim();
+      if (federalEIN !== undefined) entities[idx].federalEIN = federalEIN.trim();
+      if (corporateMailingAddress !== undefined) entities[idx].corporateMailingAddress = (corporateMailingAddress || '').trim();
+      await base44.asServiceRole.entities.MerchantCorporateProfile.update(updateId, { legalEntities: entities });
+      return Response.json({ success: true, entities });
+    }
+
     if (action === 'list') {
       return Response.json({ entities: entities.map(e => ({ entityId: e.entityId, legalBusinessName: e.legalBusinessName, federalEIN: e.federalEIN, corporateMailingAddress: e.corporateMailingAddress || '' })) });
     }

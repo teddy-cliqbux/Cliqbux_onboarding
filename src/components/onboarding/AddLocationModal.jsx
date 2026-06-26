@@ -29,10 +29,11 @@ export default function AddLocationModal({
   const inputRef = useRef(null);
 
   // — Section B: Inherit from Step 1 (profile.legalName + profile.taxId) —
-  const [corporateLegalName, setCorporateLegalName] = useState(initialLegalName || initialDbaName || '');
-  const [federalEIN, setFederalEIN] = useState(initialTaxId || '');
+  const fallbackEIN = entities[0]?.federalEIN || initialTaxId || entities[0]?.legalBusinessName || initialLegalName || '';
+  const [corporateLegalName, setCorporateLegalName] = useState(entities[0]?.legalBusinessName || initialLegalName || initialDbaName || '');
+  const [federalEIN, setFederalEIN] = useState(isFirstLocation ? fallbackEIN.replace(/[^0-9]/g, '') : (initialTaxId || ''));
   const [einValidated, setEinValidated] = useState(null);
-  const [corporateMailingAddress, setCorporateMailingAddress] = useState(initialBusinessAddress || '');
+  const [corporateMailingAddress, setCorporateMailingAddress] = useState(entities[0]?.corporateMailingAddress || initialBusinessAddress || '');
 
   // subsequent locations: dropdown choice
   const [entityChoice, setEntityChoice] = useState('existing'); // 'existing' | 'new'
@@ -114,7 +115,23 @@ export default function AddLocationModal({
       let targetEntityId = '';
       let shouldReloadEntities = false;
 
-      if (!isFirstLocation && entityChoice === 'new') {
+      if (isFirstLocation && entities.length > 0) {
+        // First location: persist any edits to the corporate entity (entity 0)
+        const ein = rawEIN();
+        if (ein.length === 9) {
+          const editRes = await base44.functions.invoke('manageLegalEntity', {
+            corporateId, action: 'edit', entityId: entities[0].entityId,
+            legalBusinessName: corporateLegalName.trim(),
+            federalEIN: ein,
+            corporateMailingAddress: corporateMailingAddress.trim(),
+          });
+          if (editRes.data?.error) throw new Error(String(editRes.data.error));
+          targetEntityId = entities[0].entityId;
+          shouldReloadEntities = true;
+        } else {
+          targetEntityId = entities[0].entityId;
+        }
+      } else if (!isFirstLocation && entityChoice === 'new') {
         const name = (corporateLegalName || dbaName).trim();
         const ein = rawEIN();
         if (!name || ein.length !== 9) throw new Error('Legal corporate name and a valid 9-digit EIN are required.');
@@ -190,17 +207,19 @@ export default function AddLocationModal({
           <div className="space-y-3 pl-7">
             <div>
               <label className={labelCls}>Corporate Legal Name</label>
-              <input type="text" value={entities[0]?.legalBusinessName || initialLegalName || ''} readOnly className={readOnlyCls} />
+              <input type="text" value={corporateLegalName} onChange={(e) => setCorporateLegalName(e.target.value)}
+                placeholder="Legal corporate name" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className={labelCls}>Federal EIN</label>
-              <input type="text" value={entities[0]?.federalEIN ? formatEIN(entities[0].federalEIN) : (initialTaxId ? formatEIN(initialTaxId) : 'Pending')} readOnly className={readOnlyCls} />
+              <EINValidator corporateId={corporateId} value={federalEIN} onChange={setFederalEIN} onValidated={(f) => setEinValidated(f)} />
             </div>
             <div>
               <label className={labelCls}>Corporate Mailing Address</label>
-              <input type="text" value={entities[0]?.corporateMailingAddress || corporateMailingAddress || initialBusinessAddress || ''} readOnly className={readOnlyCls} />
+              <input ref={mailRef} type="text" value={corporateMailingAddress} onChange={(e) => setCorporateMailingAddress(e.target.value)} onKeyDown={handleAddressKeyDown}
+                placeholder="Start typing to search address..." autoComplete="off" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-            <p className="text-[11px] text-gray-400 mt-1">This initial storefront is bound directly to your primary corporate tax shell completed in Step 1.</p>
+            <p className="text-[11px] text-gray-400 mt-1">Corporate tax registration and billing address for this entity.</p>
           </div>
         </div>
       );
