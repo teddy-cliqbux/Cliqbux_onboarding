@@ -18,6 +18,26 @@ export default function StorefrontBankingCell({
   const [cachedInManual, setCachedInManual] = useState(false);
   const [cachedSelectedBankId, setCachedSelectedBankId] = useState('');
 
+  // Auto-persist the first Plaid account on connect, and re-sync after "Change"
+  // or toggling from manual back to Plaid, so the Continue button stays unblocked.
+  const autoInitRef = useRef(false);
+  useEffect(() => {
+    if (!hasPlaidEntity) return;
+    const hasPersistedBank = !!bankDetails?.routingNumber;
+    const wasCleared = row.bankCleared;
+    // If a bank is already persisted and hasn't been cleared, honor it (don't re-trigger).
+    if (hasPersistedBank && !wasCleared) return;
+    // Show the "Select account..." prompt after a Change/clear.
+    if (wasCleared) { setCachedSelectedBankId(''); return; }
+    // One-shot: select and persist the first account on connect or re-enter Plaid.
+    if (autoInitRef.current) return;
+    autoInitRef.current = true;
+    const first = entityAccounts[0];
+    if (!first?.accountId) return;
+    setCachedSelectedBankId(first.accountId);
+    onSelectBank(locId, first.accountId);
+  }, [hasPlaidEntity, entityAccounts.length, row.bankCleared]);
+
   // Initialize mode from parent state once, then re-hydrate local buffer when parent switches mode.
   const initRef = useRef(false);
   useEffect(() => {
