@@ -5,45 +5,101 @@ const PROFILE_CODE = "PAPI_USA_CLIQBUX1";
 const REFERRER_NAME = "PAPI_USA_CLIQBUX";
 const CLIENT_ID = "PAHCLIQBUX";
 
+function buildPricingBlock(profile) {
+  const tier = profile.pricingTier;
+
+  if (tier === 'Standard') {
+    return {
+      pricingModel: 'FLAT_RATE',
+      discountRate: 2.60,
+      transactionFee: 0.10
+    };
+  }
+  if (tier === 'Premium') {
+    return {
+      pricingModel: 'INTERCHANGE_PLUS',
+      markupPercentage: 0.20,
+      transactionFee: 0.10
+    };
+  }
+  if (tier === 'Custom') {
+    return {
+      pricingModel: 'INTERCHANGE_PLUS',
+      markupPercentage: profile.customMarkupPercentage || 0,
+      transactionFee: profile.customPerTxFee || 0
+    };
+  }
+  if (tier === 'Self_Swiped') {
+    return {
+      pricingModel: 'FLAT_RATE',
+      discountRate: 2.49,
+      transactionFee: 0.10
+    };
+  }
+  if (tier === 'Self_Keyed') {
+    return {
+      pricingModel: 'FLAT_RATE',
+      discountRate: 2.89,
+      transactionFee: 0.30
+    };
+  }
+  if (tier === 'Self_CashDiscount') {
+    return {
+      pricingModel: 'CASH_DISCOUNT',
+      discountRate: 0,
+      transactionFee: 0,
+      cashDiscountProgram: true,
+      cashDiscountRate: 3.99
+    };
+  }
+
+  // Fallback to standard
+  return {
+    pricingModel: 'FLAT_RATE',
+    discountRate: 2.60,
+    transactionFee: 0.10
+  };
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
     const body = await req.json();
-    const { corporateId, locationIds } = body; // locationIds optional — if provided, only submit those
+    const { corporateId, locationIds } = body;
 
     if (!corporateId) {
       return Response.json({ error: 'corporateId is required' }, { status: 400 });
     }
 
-    // Fetch corporate profile (with sensitive fields)
     const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
     if (!profiles || profiles.length === 0) {
       return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
     }
     const profile = profiles[0];
 
-    // Fetch all locations for this corporate
     let locations = await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId });
     if (!locations || locations.length === 0) {
       return Response.json({ error: 'No locations found for this corporate profile' }, { status: 404 });
     }
 
-    // If specific locationIds provided (retry mode), filter to those only
     if (locationIds && locationIds.length > 0) {
       locations = locations.filter(l => locationIds.includes(l.id));
     }
 
     const elavonEndpoint = Deno.env.get('ELAVON_ENDPOINT') || 'https://uat-buynow-na.elavon.net/api/v1/eboarding';
-    const elavonUsername = Deno.env.get('ELAVON_USERNAME') || 'cliqbuxapiuser@service';
-    const elavonPassword = Deno.env.get('ELAVON_PASSWORD') || 'Bal1n3s37#IT6IOgO6T54EZIEZEZ';
+    const elavonUsername = Deno.env.get('ELAVON_USERNAME');
+    const elavonPassword = Deno.env.get('ELAVON_PASSWORD');
     const basicAuth = btoa(`${elavonUsername}:${elavonPassword}`);
 
+    const pricingBlock = buildPricingBlock(profile);
     const results = [];
     let allSuccessful = true;
 
+    // Build signing group to wrap all locations in one submission batch
+    const signingGroupId = `SG-${corporateId}-${Date.now()}`;
+
     for (const location of locations) {
-      // Skip already approved locations (idempotent retry)
       if (location.applicationStepStatus === 'Approved' && !locationIds) {
         results.push({
           locationId: location.id,
@@ -68,21 +124,33 @@ Deno.serve(async (req) => {
         break;
       }
 
-      // Construct Elavon payload
       const elavonPayload = {
+        // Static integration constants
         profileCode: PROFILE_CODE,
         referrerName: REFERRER_NAME,
         clientId: CLIENT_ID,
+
+        // Signing group — wraps all locations in one batch
+        signingGroup: {
+          groupId: signingGroupId,
+          totalLocations: locations.length
+        },
+
+        // Corporate identity
         legalName: profile.legalName,
         taxId: profile.taxId || '',
         signerEmail: profile.signerEmail,
-        pricingTier: profile.pricingTier,
-        customMarkupPercentage: profile.customMarkupPercentage,
-        customPerTxFee: profile.customPerTxFee,
+
+        // Location-specific
         dbaName: location.dbaName,
         businessAddress: location.businessAddress,
+
+        // Banking
         routingNumber: location.routingNumber,
-        accountNumber: location.accountNumber
+        accountNumber: location.accountNumber,
+
+        // Pricing — dynamically set per tier
+        ...pricingBlock
       };
 
       try {
@@ -98,17 +166,13 @@ Deno.serve(async (req) => {
 
         const responseText = await response.text();
         let responseData = {};
-        try {
-          responseData = JSON.parse(responseText);
-        } catch {
-          responseData = { raw: responseText };
-        }
+        try { responseData = JSON.parse(responseText); } catch { responseData = { raw: responseText }; }
 
         if (response.ok) {
           const elavonMID = responseData?.merchantId || responseData?.mid || responseData?.MID || null;
           await base44.asServiceRole.entities.MerchantLocations.update(location.id, {
             applicationStepStatus: 'Approved',
-            elavonMID: elavonMID
+            elavonMID
           });
           results.push({
             locationId: location.id,
@@ -129,7 +193,7 @@ Deno.serve(async (req) => {
             httpStatus: response.status
           });
           allSuccessful = false;
-          break; // Halt on failure
+          break;
         }
       } catch (fetchError) {
         await base44.asServiceRole.entities.MerchantLocations.update(location.id, {
@@ -146,7 +210,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // If all locations succeeded, update master applicationStatus
     if (allSuccessful) {
       await base44.asServiceRole.entities.MerchantCorporateProfile.update(profile.id, {
         applicationStatus: 'Submitted'
@@ -157,6 +220,8 @@ Deno.serve(async (req) => {
       success: allSuccessful,
       corporateId,
       allSubmitted: allSuccessful,
+      pricingTier: profile.pricingTier,
+      pricingBlock,
       results
     });
 

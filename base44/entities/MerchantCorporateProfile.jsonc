@@ -4,7 +4,7 @@
   "properties": {
     "corporateId": {
       "type": "string",
-      "description": "Primary Key \u2014 matches HubSpot dealId"
+      "description": "Primary Key \u2014 matches HubSpot dealId or auto-generated for self-serve"
     },
     "legalName": {
       "type": "string"
@@ -23,7 +23,10 @@
       "enum": [
         "Standard",
         "Premium",
-        "Custom"
+        "Custom",
+        "Self_Swiped",
+        "Self_Keyed",
+        "Self_CashDiscount"
       ]
     },
     "customMarkupPercentage": {
@@ -36,6 +39,7 @@
       "type": "string",
       "enum": [
         "Incomplete",
+        "Pricing Selected",
         "Quote Signed",
         "Submitted"
       ],

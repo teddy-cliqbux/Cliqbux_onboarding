@@ -3,6 +3,10 @@ import { Save, Send, Loader2, Info } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import FileDropZone from './FileDropZone';
 import LocationsGrid from './LocationsGrid';
+import PlaidLinkButton from './PlaidLinkButton';
+import AddLocationForm from './AddLocationForm';
+
+const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'];
 
 export default function Step2BankDetails({ profile, locations: initialLocations, onStatusChange }) {
   const [locations, setLocations] = useState(initialLocations);
@@ -15,18 +19,33 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
   const [submitError, setSubmitError] = useState('');
   const [submissionResults, setSubmissionResults] = useState([]);
 
+  const isSelfServe = SELF_SERVE_TIERS.includes(profile.pricingTier);
+
   const handleExtracted = ({ taxId, routingNumber, accountNumber }) => {
     if (routingNumber) setCorporateRouting(routingNumber);
     if (accountNumber) setCorporateAccount(accountNumber);
+  };
+
+  const handlePlaidLinked = (account) => {
+    if (account.routingNumber) setCorporateRouting(account.routingNumber);
+    if (account.accountNumber) setCorporateAccount(account.accountNumber);
   };
 
   const handleLocationsChange = (rows) => {
     setLocationRows(rows);
   };
 
+  const handleLocationAdded = (newLocation) => {
+    const enriched = {
+      ...newLocation,
+      hasRoutingNumber: false,
+      hasAccountNumber: false
+    };
+    setLocations(prev => [...prev, enriched]);
+  };
+
   const allLocationsFilled = locationRows.length > 0 && locationRows.every(
-    row => (row.routingInput && row.accountInput) ||
-           row.applicationStepStatus === 'Approved'
+    row => (row.routingInput && row.accountInput) || row.applicationStepStatus === 'Approved'
   );
 
   const handleSave = async () => {
@@ -40,7 +59,6 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
           routingNumber: row.routingInput,
           accountNumber: row.accountInput
         }));
-
       await base44.functions.invoke('saveLocationBankDetails', { locations: toSave });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
@@ -52,9 +70,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
   };
 
   const handleSubmitToElavon = async () => {
-    // Save first
     await handleSave();
-
     setSubmitting(true);
     setSubmitError('');
     setSubmissionResults([]);
@@ -63,24 +79,16 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
       const response = await base44.functions.invoke('submitToElavon', {
         corporateId: profile.corporateId
       });
-
       const data = response.data;
       setSubmissionResults(data.results || []);
 
       if (data.allSubmitted) {
         onStatusChange('Submitted');
       } else {
-        // Partial failure — update location statuses locally for error display
         const errorResults = (data.results || []).filter(r => r.status === 'error');
-        setSubmitError(`Submission failed for ${errorResults.length} location(s). Please review the errors and retry.`);
-
-        // Refresh location data
-        const refreshed = await base44.functions.invoke('getMerchantData', {
-          corporateId: profile.corporateId
-        });
-        if (refreshed.data?.locations) {
-          setLocations(refreshed.data.locations);
-        }
+        setSubmitError(`Submission failed for ${errorResults.length} location(s). Please review and retry.`);
+        const refreshed = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
+        if (refreshed.data?.locations) setLocations(refreshed.data.locations);
       }
     } catch (err) {
       setSubmitError(err.message || 'Submission failed. Please try again.');
@@ -90,29 +98,22 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
   };
 
   const handleRetryFailed = async () => {
-    const failedIds = submissionResults
-      .filter(r => r.status === 'error')
-      .map(r => r.locationId);
-
+    const failedIds = submissionResults.filter(r => r.status === 'error').map(r => r.locationId);
     if (failedIds.length === 0) return;
-
     setSubmitting(true);
     setSubmitError('');
-
     try {
       const response = await base44.functions.invoke('submitToElavon', {
         corporateId: profile.corporateId,
         locationIds: failedIds
       });
-
       const data = response.data;
       setSubmissionResults(data.results || []);
-
       if (data.allSubmitted) {
         onStatusChange('Submitted');
       } else {
         const errorResults = (data.results || []).filter(r => r.status === 'error');
-        setSubmitError(`Still failing for ${errorResults.length} location(s). Check the errors below.`);
+        setSubmitError(`Still failing for ${errorResults.length} location(s).`);
       }
     } catch (err) {
       setSubmitError(err.message || 'Retry failed.');
@@ -129,19 +130,38 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
       <div className="px-8 pt-8 pb-6 border-b border-gray-100">
         <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
           <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-          STEP 2 OF 3 — BANK DETAILS
+          STEP 2 OF 3 — VERIFICATION &amp; BANKING
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-1.5">Set Up Banking Information</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-1.5">Verify Your Business &amp; Banking</h2>
         <p className="text-gray-500 text-sm">
-          Upload a corporate tax document or voided check — we'll extract your banking details automatically.
+          Connect your bank account via Plaid or upload a voided check — we'll extract your details automatically.
         </p>
       </div>
 
       <div className="px-8 py-6 flex flex-col gap-8">
-        {/* File Upload Section */}
+        {/* Plaid Link Section */}
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-800 text-sm">Document Upload</h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-800 text-sm">Bank Account Connection</h3>
+            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full font-medium">Recommended</span>
+          </div>
+          <PlaidLinkButton
+            corporateId={profile.corporateId}
+            onAccountsLinked={handlePlaidLinked}
+          />
+        </div>
+
+        {/* Divider */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-gray-100" />
+          <span className="text-xs text-gray-400 font-medium">OR UPLOAD DOCUMENT</span>
+          <div className="flex-1 h-px bg-gray-100" />
+        </div>
+
+        {/* Document Upload Section */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-800 text-sm">Document Upload (AI Extraction)</h3>
             <div className="flex items-center gap-1.5 text-xs text-gray-400">
               <Info className="w-3.5 h-3.5" />
               <span>EIN Letter or Voided Check</span>
@@ -153,7 +173,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
             <div className="mt-3 flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
               <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
               <p className="text-green-800 text-xs">
-                <span className="font-semibold">Corporate banking extracted.</span> Enable the toggle on any location row to use these details automatically.
+                <span className="font-semibold">Banking details captured.</span> Toggle "Corp Acct" on any location row to apply them automatically.
               </p>
             </div>
           )}
@@ -183,6 +203,16 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
             corporateAccount={corporateAccount}
             onLocationsChange={handleLocationsChange}
           />
+
+          {/* Add Location — self-serve only */}
+          {isSelfServe && (
+            <div className="mt-4">
+              <AddLocationForm
+                corporateId={profile.corporateId}
+                onLocationAdded={handleLocationAdded}
+              />
+            </div>
+          )}
         </div>
 
         {/* Error message */}
@@ -212,23 +242,22 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
           <button
             onClick={handleSubmitToElavon}
             disabled={!allLocationsFilled || submitting}
-            className="w-full flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold py-4 px-6 rounded-xl text-base transition-all shadow-lg shadow-blue-200 disabled:shadow-none"
+            className="w-full flex items-center justify-center gap-3 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold py-4 px-6 rounded-xl text-base transition-all shadow-lg shadow-gray-900/20 disabled:shadow-none"
           >
             {submitting ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                Submitting Applications...
-              </>
+              <><Loader2 className="w-5 h-5 animate-spin" /> Submitting Applications...</>
             ) : (
-              <>
-                <Send className="w-5 h-5" />
-                Submit Applications to Bank
-              </>
+              <><Send className="w-5 h-5" /> Submit Applications to Bank</>
             )}
           </button>
           {!allLocationsFilled && locationRows.length > 0 && (
             <p className="text-center text-xs text-gray-400 mt-3">
-              Please fill in routing and account numbers for all locations before submitting.
+              Fill in routing and account numbers for all locations to continue.
+            </p>
+          )}
+          {locations.length === 0 && isSelfServe && (
+            <p className="text-center text-xs text-gray-400 mt-3">
+              Add at least one location above before submitting.
             </p>
           )}
         </div>

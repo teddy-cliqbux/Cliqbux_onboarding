@@ -6,43 +6,49 @@ import Step2BankDetails from '@/components/onboarding/Step2BankDetails';
 import SuccessScreen from '@/components/onboarding/SuccessScreen';
 import ErrorScreen from '@/components/onboarding/ErrorScreen';
 import LoadingScreen from '@/components/onboarding/LoadingScreen';
+import SelfServePricing from '@/components/onboarding/SelfServePricing';
+
+const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'];
 
 export default function OnboardingPortal() {
-  const [corporateId, setCorporateId] = useState(null);
+  const [mode, setMode] = useState(null); // 'sales' | 'self_serve'
+  const [dealId, setDealId] = useState(null);
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Read corporateId from URL on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const id = params.get('corporateId');
-    if (!id) {
-      setError({ title: 'Missing Onboarding Link', message: 'No merchant ID was found in your link. Please contact your Cliqbux representative to get a valid onboarding URL.' });
-      setLoading(false);
+    const id = params.get('dealId') || params.get('corporateId');
+
+    if (id) {
+      setMode('sales');
+      setDealId(id);
     } else {
-      setCorporateId(id);
+      // Self-serve: no deal ID in URL
+      setMode('self_serve');
+      setLoading(false);
     }
   }, []);
 
-  // Fetch merchant data when corporateId is ready
   useEffect(() => {
-    if (!corporateId) return;
-    fetchMerchantData();
-  }, [corporateId]);
+    if (mode === 'sales' && dealId) {
+      fetchMerchantData(dealId);
+    }
+  }, [mode, dealId]);
 
-  const fetchMerchantData = async () => {
+  const fetchMerchantData = async (id) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await base44.functions.invoke('getMerchantData', { corporateId });
+      const response = await base44.functions.invoke('getMerchantData', { corporateId: id });
       const data = response.data;
 
       if (data?.error) {
         setError({
           title: 'Merchant Not Found',
-          message: 'We couldn\'t find your merchant profile. Please verify your link or contact your Cliqbux representative.'
+          message: "We couldn't find your merchant profile. Please verify your link or contact your Cliqbux representative."
         });
         return;
       }
@@ -52,7 +58,7 @@ export default function OnboardingPortal() {
     } catch (err) {
       setError({
         title: 'Connection Error',
-        message: 'We\'re having trouble loading your portal. Please try refreshing the page. If the issue persists, contact your Cliqbux representative.'
+        message: "We're having trouble loading your portal. Please try refreshing the page."
       });
     } finally {
       setLoading(false);
@@ -61,38 +67,35 @@ export default function OnboardingPortal() {
 
   const handleStatusChange = (newStatus) => {
     setProfile(prev => ({ ...prev, applicationStatus: newStatus }));
-
-    // If advancing to next step, re-fetch fresh location data
     if (newStatus === 'Quote Signed') {
-      fetchMerchantData();
+      fetchMerchantData(profile.corporateId);
     }
   };
 
-  if (loading) {
-    return <LoadingScreen />;
+  // Self-serve: after pricing selection + HubSpot deal created
+  const handleSelfServeComplete = (newProfile) => {
+    setProfile(newProfile);
+    setLocations([]);
+    setMode('sales'); // Now treat as a full sales flow from Step 2
+  };
+
+  // — Loading & Error states —
+  if (loading) return <LoadingScreen />;
+  if (error) return <ErrorScreen title={error.title} message={error.message} />;
+
+  // — Self-serve flow: no dealId yet, show pricing cards —
+  if (mode === 'self_serve' && !profile) {
+    return <SelfServePricing onComplete={handleSelfServeComplete} />;
   }
 
-  if (error) {
-    return <ErrorScreen title={error.title} message={error.message} />;
-  }
+  if (!profile) return <ErrorScreen />;
 
-  if (!profile) {
-    return <ErrorScreen />;
-  }
-
-  const { applicationStatus } = profile;
+  const { applicationStatus, pricingTier } = profile;
+  const isSelfServe = SELF_SERVE_TIERS.includes(pricingTier);
 
   const renderStep = () => {
-    if (applicationStatus === 'Incomplete') {
-      return (
-        <Step1Agreement
-          profile={profile}
-          onStatusChange={handleStatusChange}
-        />
-      );
-    }
-
-    if (applicationStatus === 'Quote Signed') {
+    // Self-serve and sales-assisted users with pricing confirmed → go to Step 2
+    if (applicationStatus === 'Pricing Selected' || applicationStatus === 'Quote Signed') {
       return (
         <Step2BankDetails
           profile={profile}
@@ -102,23 +105,50 @@ export default function OnboardingPortal() {
       );
     }
 
-    if (applicationStatus === 'Submitted') {
+    // Sales flow — show agreement iframe first
+    if (applicationStatus === 'Incomplete') {
       return (
-        <SuccessScreen
+        <Step1Agreement
           profile={profile}
-          locations={locations}
+          onStatusChange={handleStatusChange}
         />
       );
     }
 
-    return <ErrorScreen title="Unexpected State" message="Your application is in an unexpected state. Please contact your Cliqbux representative." />;
+    if (applicationStatus === 'Submitted') {
+      return <SuccessScreen profile={profile} locations={locations} />;
+    }
+
+    return (
+      <ErrorScreen
+        title="Unexpected State"
+        message="Your application is in an unexpected state. Please contact your Cliqbux representative."
+      />
+    );
   };
+
+  const pricingTierLabel = {
+    Standard: 'Standard',
+    Premium: 'Premium',
+    Custom: 'Custom',
+    Self_Swiped: 'Traditional Swiped',
+    Self_Keyed: 'Traditional Keyed',
+    Self_CashDiscount: 'Cash Discount'
+  }[pricingTier] || pricingTier;
+
+  const pricingTierClass = {
+    Premium: 'bg-amber-500/20 text-amber-400 border border-amber-500/30',
+    Custom: 'bg-purple-500/20 text-purple-400 border border-purple-500/30',
+    Standard: 'bg-gray-700 text-gray-300 border border-gray-600',
+    Self_Swiped: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+    Self_Keyed: 'bg-purple-500/20 text-purple-400 border border-purple-500/30',
+    Self_CashDiscount: 'bg-green-500/20 text-green-400 border border-green-500/30'
+  }[pricingTier] || 'bg-gray-700 text-gray-300 border border-gray-600';
 
   return (
     <div className="portal-bg" style={{ fontFamily: 'Inter, sans-serif' }}>
       <TopNav applicationStatus={applicationStatus} />
 
-      {/* Main content — offset for fixed nav */}
       <div className="pt-16 min-h-screen flex flex-col items-center justify-start px-4 py-10">
         {/* Merchant greeting strip */}
         <div className="w-full max-w-4xl mb-6">
@@ -129,13 +159,14 @@ export default function OnboardingPortal() {
               <p className="text-gray-400 text-sm mt-0.5">{profile.signerEmail}</p>
             </div>
             <div className="flex flex-col items-end gap-1">
-              {profile.pricingTier && (
-                <span className={`text-xs font-bold px-3 py-1 rounded-full
-                  ${profile.pricingTier === 'Premium' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : ''}
-                  ${profile.pricingTier === 'Custom' ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30' : ''}
-                  ${profile.pricingTier === 'Standard' ? 'bg-gray-700 text-gray-300 border border-gray-600' : ''}
-                `}>
-                  {profile.pricingTier} Plan
+              {pricingTier && (
+                <span className={`text-xs font-bold px-3 py-1 rounded-full ${pricingTierClass}`}>
+                  {pricingTierLabel} Plan
+                </span>
+              )}
+              {isSelfServe && (
+                <span className="text-xs text-gray-500 font-medium bg-gray-800 px-2.5 py-0.5 rounded-full border border-gray-700">
+                  Self-Serve
                 </span>
               )}
               <span className="text-xs text-gray-600 font-mono">ID: {profile.corporateId}</span>
