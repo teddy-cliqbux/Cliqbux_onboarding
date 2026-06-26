@@ -33,7 +33,8 @@ Deno.serve(async (req) => {
       legalEntities: (profile.legalEntities || []).map(e => ({
         entityId: e.entityId,
         legalBusinessName: e.legalBusinessName,
-        federalEIN: e.federalEIN
+        federalEIN: e.federalEIN,
+        corporateMailingAddress: e.corporateMailingAddress || ''
       }))
     };
 

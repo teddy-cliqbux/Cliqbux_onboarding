@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Plus, ArrowRight, Loader2, Store, Landmark, Trash2, CheckCircle2, AlertCircle, Pencil, Check, MapPin, Building2, Hash, Layers } from 'lucide-react';
+import { Plus, ArrowRight, Loader2, Store, Landmark, Trash2, CheckCircle2, AlertCircle, Pencil, Check, MapPin, Building2, Hash, Layers, ChevronDown } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import AddLocationModal from '@/components/onboarding/AddLocationModal';
-import PerRowPlaidLink from '@/components/onboarding/PerRowPlaidLink';
+import EntityPlaidButton from '@/components/onboarding/EntityPlaidButton';
 
 function formatEIN(raw) {
   const d = (raw || '').replace(/\D/g, '');
@@ -17,11 +17,22 @@ export default function OnboardingLocations({ profile, onContinue }) {
   const [editLocId, setEditLocId] = useState(null);
   const [saving, setSaving] = useState(false);
 
+  // Entity-level Plaid accounts: { [entityId]: accounts[] }
+  const [plaidAccounts, setPlaidAccounts] = useState({});
+
+  // Per-location state that must never reset when new locations are added
+  // { [locId]: { selectedBankId, isManualMode, manualRouting, manualAccount } }
+  const [locationState, setLocationState] = useState({});
+
   useEffect(() => { loadData(); }, []);
 
   const fetchEntities = async () => {
     const res = await base44.functions.invoke('manageLegalEntity', { action: 'list', corporateId: profile.corporateId });
     return res.data?.entities || [];
+  };
+
+  const ensureLocState = (locId) => {
+    setLocationState(prev => prev[locId] ? prev : { ...prev, [locId]: { selectedBankId: null, isManualMode: false, manualRouting: '', manualAccount: '' } });
   };
 
   const loadData = async () => {
@@ -31,17 +42,21 @@ export default function OnboardingLocations({ profile, onContinue }) {
       setEntities(activeEntities);
       const liveRes = await base44.functions.invoke('listLocations', { corporateId: profile.corporateId });
       const entityById = Object.fromEntries(activeEntities.map(e => [e.entityId, e]));
-      setLocs((liveRes.data?.locations || []).map(loc => ({
-        id: loc.id || loc.locationId,
-        entityId: entityById[loc.entityId] ? loc.entityId : activeEntities[0]?.entityId || '',
-        dbaName: loc.dbaName,
-        businessAddress: loc.businessAddress,
-        addressVerified: loc.addressVerified || false,
-        bankDetails: loc.bankDetails || { routingNumber: loc.routingNumber || '', accountNumber: loc.accountNumber || '', authMethod: null },
-        isManualMode: false,
-        applicationStepStatus: loc.applicationStepStatus || 'In Review',
-        elavonMID: loc.elavonMID,
-      })));
+      const loaded = (liveRes.data?.locations || []).map(loc => {
+        const id = loc.id || loc.locationId;
+        ensureLocState(id);
+        return {
+          id,
+          entityId: entityById[loc.entityId] ? loc.entityId : activeEntities[0]?.entityId || '',
+          dbaName: loc.dbaName,
+          businessAddress: loc.businessAddress,
+          addressVerified: loc.addressVerified || false,
+          bankDetails: loc.bankDetails || { routingNumber: loc.routingNumber || '', accountNumber: loc.accountNumber || '', authMethod: null },
+          applicationStepStatus: loc.applicationStepStatus || 'In Review',
+          elavonMID: loc.elavonMID,
+        };
+      });
+      setLocs(loaded);
     } catch (_) { setEntities([]); setLocs([]); }
     finally { setLoading(false); }
   };
@@ -49,11 +64,49 @@ export default function OnboardingLocations({ profile, onContinue }) {
   const updateLoc = (id, patch) => setLocs(prev => prev.map(l => l.id !== id ? l : { ...l, ...patch }));
   const removeLoc = (id) => { setLocs(prev => prev.filter(l => l.id !== id)); setEditLocId(p => p === id ? null : p); };
 
-  const handleLocationAdded = ({ reloadEntities }) => {
-    if (reloadEntities) loadData();
-    else loadData();
-  };
+  const handleLocationAdded = ({ reloadEntities }) => { loadData(); };
   const handleLocationUpdated = () => { loadData(); };
+
+  const handleAccountsConnected = (entityId, accounts) => {
+    setPlaidAccounts(prev => ({ ...prev, [entityId]: accounts }));
+    // Auto-select first account for each location under this entity
+    if (accounts.length > 0) {
+      setLocs(prev => prev.map(l => l.entityId === entityId ? { ...l } : l));
+      // Assign first account to affected locations with no existing bank
+      setLocationState(prev => Object.fromEntries(Object.entries(prev).map(([locId, ls]) => {
+        const loc = locs.find(l => l.id === locId);
+        return loc && loc.entityId === entityId && !loc.bankDetails?.routingNumber
+          ? [locId, { ...ls, selectedBankId: accounts[0].accountId, isManualMode: false }]
+          : [locId, ls];
+      })));
+    }
+  };
+
+  const getLocBankDetails = (loc) => {
+    const ls = locationState[loc.id];
+    if (!ls) return loc.bankDetails || null;
+    if (ls.isManualMode && ls.manualRouting && ls.manualAccount) {
+      return {
+        routingNumber: ls.manualRouting,
+        accountNumber: ls.manualAccount,
+        accountNumberMasked: `••••${(ls.manualAccount || '').slice(-4)}`,
+        authMethod: 'Manual',
+      };
+    }
+    if (ls.selectedBankId && plaidAccounts[loc.entityId]) {
+      const acct = plaidAccounts[loc.entityId].find(a => a.accountId === ls.selectedBankId);
+      if (acct) {
+        return {
+          routingNumber: acct.routingNumber || '',
+          accountNumber: acct.accountNumber || '',
+          accountNumberMasked: acct.mask ? `••••${acct.mask}` : '',
+          accountType: acct.subtype || 'checking',
+          authMethod: 'Plaid',
+        };
+      }
+    }
+    return loc.bankDetails || null;
+  };
 
   const entityById = Object.fromEntries(entities.map(e => [e.entityId, e]));
 
@@ -66,25 +119,126 @@ export default function OnboardingLocations({ profile, onContinue }) {
     grouped[eId].push(l);
   });
 
-  const isReady = locs.length > 0 && locs.every(
-    l => l.applicationStepStatus === 'Approved' || (l.bankDetails?.routingNumber && l.bankDetails?.accountNumber)
-  );
+  const isReady = locs.length > 0 && locs.every(l => {
+    if (l.applicationStepStatus === 'Approved') return true;
+    const bk = getLocBankDetails(l);
+    return bk && bk.routingNumber && bk.accountNumber;
+  });
 
   const handleSaveAndContinue = async () => {
     setSaving(true);
     try {
-      const toSave = locs.filter(l => l.applicationStepStatus !== 'Approved').map(l => ({ id: l.id, bankDetails: l.bankDetails }));
+      const toSave = locs.filter(l => l.applicationStepStatus !== 'Approved').map(l => ({
+        id: l.id,
+        bankDetails: getLocBankDetails(l) || l.bankDetails || null,
+      })).filter(l => l.bankDetails);
       if (toSave.length > 0) await base44.functions.invoke('saveLocationBankDetails', { locations: toSave });
       onContinue({ locations: locs, legalEntities: entities });
     } catch (err) { console.error(err); }
     finally { setSaving(false); }
   };
 
+  // --- Per-location helpers ---
+
+  const selectAccount = (locId, accountId) => {
+    setLocationState(prev => ({
+      ...prev,
+      [locId]: { ...prev[locId], selectedBankId: accountId, isManualMode: false, manualRouting: '', manualAccount: '' }
+    }));
+  };
+
+  const toggleManual = (locId) => {
+    setLocationState(prev => ({
+      ...prev,
+      [locId]: { ...prev[locId], isManualMode: true, selectedBankId: null }
+    }));
+  };
+
+  const cancelManual = (locId) => {
+    setLocationState(prev => ({
+      ...prev,
+      [locId]: { ...prev[locId], isManualMode: false, manualRouting: '', manualAccount: '' }
+    }));
+  };
+
+  const updateManualField = (locId, field, value) => {
+    setLocationState(prev => ({
+      ...prev,
+      [locId]: { ...prev[locId], [field]: value }
+    }));
+  };
+
+  const confirmManual = (locId) => {
+    setLocationState(prev => ({ ...prev }));
+  };
+
+  const BankingColumn = ({ row }) => {
+    const ls = locationState[row.id];
+    const bk = getLocBankDetails(row);
+    const entityAccounts = plaidAccounts[row.entityId] || [];
+    const hasPlaidEntity = entityAccounts.length > 0;
+
+    if (bk && bk.routingNumber && bk.accountNumber && !ls?.isManualMode) {
+      const isPlaid = bk.authMethod === 'Plaid';
+      return (
+        <div className="flex items-center gap-2">
+          <Landmark className={`w-4 h-4 flex-shrink-0 ${isPlaid ? 'text-blue-500' : 'text-gray-400'}`} />
+          <div>
+            <span className="text-xs font-mono font-semibold text-gray-900">{bk.accountNumberMasked || `••••${(bk.accountNumber || '').slice(-4)}`}</span>
+            <p className="text-[10px] text-gray-400">{(bk.accountType === 'savings' ? 'Savings' : 'Checking')} · {bk.authMethod}</p>
+          </div>
+        </div>
+      );
+    }
+
+    // Manual entry mode — persistent, never resets
+    if (ls?.isManualMode) {
+      return (
+        <div className="flex flex-wrap items-center gap-1 w-full">
+          <div className="flex items-center gap-1 w-full">
+            <input type="text" placeholder="Routing" maxLength={9} value={ls.manualRouting || ''} className="w-[6rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+              onChange={(e) => updateManualField(row.id, 'manualRouting', e.target.value.replace(/\D/g, '').slice(0, 9))} />
+            <input type="text" placeholder="Account" value={ls.manualAccount || ''} className="w-[7rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+              onChange={(e) => updateManualField(row.id, 'manualAccount', e.target.value.replace(/\D/g, '')?.slice(0, 17))} />
+            <button onClick={() => confirmManual(row.id)}
+              className="text-[10px] font-semibold bg-gray-900 text-white rounded-lg px-2 py-1.5"><Check className="w-3 h-3" /></button>
+          </div>
+          <button onClick={() => cancelManual(row.id)} className="text-[10px] text-gray-400 hover:text-blue-600 underline whitespace-nowrap">Cancel</button>
+        </div>
+      );
+    }
+
+    // Plaid dropdown when parent entity is connected
+    if (hasPlaidEntity) {
+      return (
+        <div className="flex flex-col gap-0.5 w-full">
+          <select value={ls?.selectedBankId || ''}
+            onChange={(e) => selectAccount(row.id, e.target.value)}
+            className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs font-mono bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 max-w-[14rem]">
+            <option value="">Select account...</option>
+            {entityAccounts.map(a => (
+              <option key={a.accountId} value={a.accountId}>{a.name} ••••{a.mask || (a.accountNumber || '').slice(-4)}</option>
+            ))}
+          </select>
+          <button onClick={() => toggleManual(row.id)} className="text-[10px] text-gray-400 hover:text-blue-600 underline whitespace-nowrap text-left">Set Up Manually...</button>
+        </div>
+      );
+    }
+
+    // No entity Plaid yet
+    return (
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[10px] text-gray-400 italic">Connect bank account at entity level</span>
+      </div>
+    );
+  };
+
   const LocationRow = ({ row, suppressColDef }) => {
-    const hasBanking = !!row.bankDetails?.routingNumber && !!row.bankDetails?.accountNumber;
+    const hasBanking = !!getLocBankDetails(row);
+    const ls = locationState[row.id];
     const isApproved = row.applicationStepStatus === 'Approved';
     const isError = row.applicationStepStatus === 'Error';
-    const isPlaid = row.bankDetails?.authMethod === 'Plaid';
+    const inManualMode = ls?.isManualMode;
     return (
       <div key={row.id} className={`rounded-lg border px-4 py-3 md:grid md:grid-cols-12 md:gap-3 flex flex-col gap-3 ${isApproved ? 'border-green-200 bg-green-50' : isError ? 'border-red-200 bg-red-50' : hasBanking ? 'border-amber-200 bg-amber-50/40' : isMultiEntity ? 'border-gray-200 bg-white' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
         <div className="md:col-span-4 flex items-start gap-2.5 min-w-0">
@@ -99,36 +253,7 @@ export default function OnboardingLocations({ profile, onContinue }) {
           </div>
         </div>
         <div className="md:col-span-4 flex items-center">
-          {hasBanking ? (
-            <div className="flex items-center gap-2">
-              <Landmark className={`w-4 h-4 flex-shrink-0 ${isPlaid ? 'text-blue-500' : 'text-gray-400'}`} />
-              <div>
-                <span className="text-xs font-mono font-semibold text-gray-900">{row.bankDetails.accountNumberMasked || `••••${(row.bankDetails.accountNumber || '').slice(-4)}`}</span>
-                <p className="text-[10px] text-gray-400">{row.bankDetails.accountType === 'savings' ? 'Savings' : 'Checking'} · {row.bankDetails.authMethod}</p>
-              </div>
-            </div>
-          ) : !isApproved && !isError ? (
-            <div className="flex flex-wrap items-center gap-1.5 w-full">
-              <div className="min-w-0 w-auto">
-                <PerRowPlaidLink corporateId={profile.corporateId} locationId={row.id} onBankConnected={(bk) => updateLoc(row.id, { bankDetails: bk })} />
-              </div>
-              {!row.isManualMode ? (
-                <button onClick={() => updateLoc(row.id, { isManualMode: true })} className="text-[10px] text-gray-400 hover:text-blue-600 underline whitespace-nowrap">Set Up Manually...</button>
-              ) : (
-                <div className="flex items-center gap-1 w-full">
-                  <input type="text" placeholder="Routing" maxLength={9} className="w-[6rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    onChange={(e) => updateLoc(row.id, { manualRouting: e.target.value })} />
-                  <input type="text" placeholder="Account" className="w-[7rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    onChange={(e) => updateLoc(row.id, { manualAccount: e.target.value })} />
-                  <button onClick={async () => {
-                    const bk = { routingNumber: row.manualRouting || '', accountNumber: row.manualAccount || '', accountNumberMasked: `••••${(row.manualAccount || '').slice(-4)}`, authMethod: 'Manual' };
-                    updateLoc(row.id, { bankDetails: bk, isManualMode: false });
-                  }} disabled={!row.manualRouting || !row.manualAccount}
-                    className="text-[10px] font-semibold bg-gray-900 text-white rounded-lg px-2 py-1.5 disabled:bg-gray-200 disabled:text-gray-400"><Check className="w-3 h-3" /></button>
-                </div>
-              )}
-            </div>
-          ) : null}
+          <BankingColumn row={row} />
         </div>
         <div className="md:col-span-3 flex items-center md:justify-center">
           {isApproved ? <div className="flex items-center gap-1 text-green-700 font-semibold text-xs"><CheckCircle2 className="w-4 h-4" /> Approved</div>
@@ -140,7 +265,7 @@ export default function OnboardingLocations({ profile, onContinue }) {
           {!isApproved && (
             <button onClick={() => setEditLocId(row.id)} className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1"><Pencil className="w-3 h-3" /> Edit</button>
           )}
-          {!isApproved && !hasBanking && (
+          {!isApproved && !inManualMode && !hasBanking && (
             <button onClick={() => removeLoc(row.id)} className="text-xs text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
           )}
         </div>
@@ -151,6 +276,7 @@ export default function OnboardingLocations({ profile, onContinue }) {
   const renderLocationList = () => {
     if (!isMultiEntity) {
       // Flat table — single entity
+      const firstEntityId = entities[0]?.entityId || '';
       return (
         <div className="space-y-2">
           <div className="hidden md:grid grid-cols-12 gap-3 px-4 py-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wide">
@@ -159,7 +285,24 @@ export default function OnboardingLocations({ profile, onContinue }) {
             <div className="col-span-3">Status</div>
             <div className="col-span-1"></div>
           </div>
+          {/* Entity-level Plaid */}
+          <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2.5 mb-3">
+            <Landmark className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <span className="text-xs font-semibold text-gray-700 flex-1">Corporate Bank Connection</span>
+            {plaidAccounts[firstEntityId]?.length > 0 ? (
+              <span className="text-xs text-green-700 font-semibold flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" /> {plaidAccounts[firstEntityId].length} {plaidAccounts[firstEntityId].length === 1 ? 'account' : 'accounts'} connected
+              </span>
+            ) : (
+              <EntityPlaidButton corporateId={profile.corporateId} entityId={firstEntityId} onAccountsConnected={handleAccountsConnected} />
+            )}
+          </div>
           {locs.map(row => <LocationRow key={row.id} row={row} />)}
+          {locs.length === 0 && (
+            <div className="text-center py-6 border border-dashed border-gray-200 rounded-xl">
+              <p className="text-sm text-gray-400">Add a location to assign an account.</p>
+            </div>
+          )}
         </div>
       );
     }
@@ -168,20 +311,35 @@ export default function OnboardingLocations({ profile, onContinue }) {
     return (
       <div className="space-y-6">
         {Object.entries(grouped).map(([eId, rows]) => {
-          const entity = entityById[eId] || { legalBusinessName: 'Unknown', federalEIN: '' };
+          const entity = entityById[eId] || { legalBusinessName: 'Unknown', federalEIN: '', corporateMailingAddress: '' };
+          const entityAccounts = plaidAccounts[eId] || [];
           return (
             <div key={eId} className="rounded-xl border border-gray-200 overflow-hidden bg-white shadow-sm">
-              <div className="px-5 py-3.5 bg-gray-50 border-b border-gray-200 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-                  <Building2 className="w-4 h-4 text-amber-600" />
+              <div className="px-5 py-3.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <Building2 className="w-4 h-4 text-amber-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-gray-900">Legal Entity: {entity.legalBusinessName}</p>
+                    <p className="text-[11px] text-gray-500 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                      <span className="flex items-center gap-1"><Hash className="w-3 h-3" />EIN: {formatEIN(entity.federalEIN)}</span>
+                      {entity.corporateMailingAddress && (
+                        <span className="flex items-center gap-1 text-gray-400"><MapPin className="w-3 h-3" />{entity.corporateMailingAddress}</span>
+                      )}
+                      <span className="text-gray-300">|</span>
+                      {rows.length} {rows.length === 1 ? 'location' : 'locations'}
+                    </p>
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-gray-900">Legal Entity: {entity.legalBusinessName}</p>
-                  <p className="text-[11px] text-gray-500 flex items-center gap-1.5 mt-0.5">
-                    <Hash className="w-3 h-3" /> EIN: {formatEIN(entity.federalEIN)}
-                    <span className="text-gray-300 mx-1">·</span>
-                    {rows.length} {rows.length === 1 ? 'location' : 'locations'}
-                  </p>
+                <div className="flex-shrink-0">
+                  {entityAccounts.length > 0 ? (
+                    <span className="text-xs text-green-700 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> {entityAccounts.length} {entityAccounts.length === 1 ? 'account' : 'accounts'} connected
+                    </span>
+                  ) : (
+                    <EntityPlaidButton corporateId={profile.corporateId} entityId={eId} onAccountsConnected={handleAccountsConnected} />
+                  )}
                 </div>
               </div>
               <div className="px-5 py-4 space-y-2">

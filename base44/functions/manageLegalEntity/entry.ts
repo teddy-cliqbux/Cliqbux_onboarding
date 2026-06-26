@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const { corporateId, action, entityId, legalBusinessName, tradeNameDBA, federalEIN } = body;
+    const { corporateId, action, entityId, legalBusinessName, tradeNameDBA, federalEIN, corporateMailingAddress } = body;
 
     if (!corporateId || !action) {
       return Response.json({ error: 'corporateId and action are required' }, { status: 400 });
@@ -29,14 +29,14 @@ Deno.serve(async (req) => {
     const updateId = profile.id;
 
     if (action === 'list') {
-      return Response.json({ entities });
+      return Response.json({ entities: entities.map(e => ({ entityId: e.entityId, legalBusinessName: e.legalBusinessName, federalEIN: e.federalEIN, corporateMailingAddress: e.corporateMailingAddress || '' })) });
     }
 
     if (action === 'add') {
       if (!legalBusinessName || !federalEIN) {
         return Response.json({ error: 'legalBusinessName and federalEIN are required' }, { status: 400 });
       }
-      entities = entities.concat({ entityId: randomUUID(), legalBusinessName: legalBusinessName.trim(), tradeNameDBA: (tradeNameDBA || legalBusinessName).trim(), federalEIN: federalEIN.trim() });
+      entities = entities.concat({ entityId: randomUUID(), legalBusinessName: legalBusinessName.trim(), tradeNameDBA: (tradeNameDBA || legalBusinessName).trim(), federalEIN: federalEIN.trim(), corporateMailingAddress: (corporateMailingAddress || '').trim() });
       await base44.asServiceRole.entities.MerchantCorporateProfile.update(updateId, { legalEntities: entities });
       return Response.json({ success: true, entities });
     }

@@ -116,7 +116,7 @@ export default function AddLocationModal({
         const ein = rawEIN();
         if (!name || ein.length !== 9) throw new Error('Legal corporate name and a valid 9-digit EIN are required.');
         const res = await base44.functions.invoke('manageLegalEntity', {
-          corporateId, action: 'add', legalBusinessName: name, federalEIN: ein,
+          corporateId, action: 'add', legalBusinessName: name, federalEIN: ein, corporateMailingAddress: corporateMailingAddress.trim(),
         });
         if (res.data?.error) throw new Error(res.data.error);
         targetEntityId = res.data.entities[res.data.entities.length - 1].entityId;
