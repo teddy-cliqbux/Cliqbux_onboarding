@@ -7,6 +7,7 @@ import { AuthProvider } from '@/lib/AuthContext';
 import ScrollToTop from './components/ScrollToTop';
 import OnboardingPortal from './pages/OnboardingPortal';
 import VerifyIdentity from './pages/VerifyIdentity';
+import PostSubmissionDashboard from './pages/PostSubmissionDashboard';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           <Routes>
             <Route path="/" element={<OnboardingPortal />} />
             <Route path="/verify" element={<VerifyIdentity />} />
+            <Route path="/onboarding/dashboard" element={<PostSubmissionDashboard />} />
             <Route path="*" element={<PageNotFound />} />
           </Routes>
         </Router>

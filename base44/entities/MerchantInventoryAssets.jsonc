@@ -1,0 +1,37 @@
+{
+  "name": "MerchantInventoryAssets",
+  "type": "object",
+  "properties": {
+    "corporateId": {
+      "type": "string",
+      "description": "FK to MerchantCorporateProfile"
+    },
+    "entityId": {
+      "type": "string",
+      "description": "FK to LegalEntity (optional)"
+    },
+    "fileName": {
+      "type": "string"
+    },
+    "fileType": {
+      "type": "string",
+      "enum": [
+        "menu",
+        "inventory"
+      ]
+    },
+    "fileUrl": {
+      "type": "string",
+      "description": "Uploaded file URL"
+    },
+    "fileExtension": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "corporateId",
+    "fileName",
+    "fileType",
+    "fileUrl"
+  ]
+}

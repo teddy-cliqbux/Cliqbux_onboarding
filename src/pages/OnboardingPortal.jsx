@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import TopNav from '@/components/onboarding/TopNav';
 import Step1Agreement from '@/components/onboarding/Step1Agreement';
@@ -8,7 +9,7 @@ import SelfServePricing from '@/components/onboarding/SelfServePricing';
 // Plaid verification is now handled per-location inside OnboardingLocations
 import OnboardingLocations from './OnboardingLocations';
 import OnboardingVerification from './OnboardingVerification';
-import OnboardingSuccess from './OnboardingSuccess';
+// OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
 const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'];
 
@@ -38,6 +39,8 @@ export default function OnboardingPortal() {
   const [step, setStep]               = useState(STEP_LOCATIONS); // within post-agreement flow
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
+  const [redirected, setRedirected]     = useState(false);
+  const navigate                      = useNavigate();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -62,7 +65,11 @@ export default function OnboardingPortal() {
       }
       setProfile(data.profile);
       setLocations(data.locations || []);
-      if (data.profile?.applicationStatus === 'Submitted') setStep(STEP_SUCCESS);
+      if (data.profile?.applicationStatus === 'Submitted') {
+        setRedirected(true);
+        navigate(`/onboarding/dashboard?dealId=${data.profile.corporateId}`, { replace: true });
+        return;
+      }
     } catch {
       setError({ title: 'Connection Error', message: "We're having trouble loading your portal. Please try refreshing the page." });
     } finally {
@@ -97,7 +104,7 @@ export default function OnboardingPortal() {
   };
 
   // — Loading & Error —
-  if (loading) return <LoadingScreen />;
+  if (loading || redirected) return <LoadingScreen />;
   if (error)   return <ErrorScreen title={error.title} message={error.message} />;
 
   // — Self-serve pricing —
@@ -108,11 +115,6 @@ export default function OnboardingPortal() {
   const isSelfServe = SELF_SERVE_TIERS.includes(pricingTier);
   const pricingTierLabel = TIER_LABELS[pricingTier] || pricingTier;
   const pricingTierClass = TIER_CLASSES[pricingTier] || 'bg-gray-700 text-gray-300 border border-gray-600';
-
-  // — Success screen (full-page, no nav card) —
-  if (applicationStatus === 'Submitted' || step === STEP_SUCCESS) {
-    return <OnboardingSuccess profile={profile} locations={locations} />;
-  }
 
   const renderStep = () => {
     // Pricing confirmed → locations & per-location banking
