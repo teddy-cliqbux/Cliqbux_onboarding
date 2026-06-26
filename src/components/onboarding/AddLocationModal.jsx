@@ -23,22 +23,29 @@ export default function AddLocationModal({ corporateId, onLocationAdded, onClose
   }, []);
 
   useEffect(() => {
-    const tryInit = () => {
+    const tryInit = (attempts = 0) => {
       if (window.google?.maps?.places?.Autocomplete && addressRef.current) {
-        autocompleteRef.current = new window.google.maps.places.Autocomplete(addressRef.current, {
-          types: ['address'],
-          componentRestrictions: { country: 'us' }
-        });
-        autocompleteRef.current.addListener('place_changed', () => {
-          const place = autocompleteRef.current.getPlace();
-          if (place?.formatted_address) {
-            setBusinessAddress(place.formatted_address);
-            if (addressRef.current) addressRef.current.value = place.formatted_address;
-          }
-        });
+        try {
+          autocompleteRef.current = new window.google.maps.places.Autocomplete(addressRef.current, {
+            types: ['address'],
+            componentRestrictions: { country: 'us' }
+          });
+          autocompleteRef.current.addListener('place_changed', () => {
+            const place = autocompleteRef.current.getPlace();
+            if (place?.formatted_address) {
+              setBusinessAddress(place.formatted_address);
+              if (addressRef.current) addressRef.current.value = place.formatted_address;
+            }
+          });
+        } catch (e) {
+          console.warn('Google Places init failed:', e);
+        }
+      } else if (attempts < 10) {
+        // Retry up to 10 times (5s total) waiting for Maps SDK to load
+        setTimeout(() => tryInit(attempts + 1), 500);
       }
     };
-    const timer = setTimeout(tryInit, 200);
+    const timer = setTimeout(() => tryInit(0), 200);
     return () => clearTimeout(timer);
   }, []);
 
