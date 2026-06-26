@@ -1,0 +1,73 @@
+{
+  "name": "MerchantSigners",
+  "type": "object",
+  "properties": {
+    "corporateId": {
+      "type": "string",
+      "description": "FK to MerchantCorporateProfile"
+    },
+    "firstName": {
+      "type": "string"
+    },
+    "lastName": {
+      "type": "string"
+    },
+    "signerEmail": {
+      "type": "string"
+    },
+    "ownershipPercentage": {
+      "type": "number"
+    },
+    "isPrimarySigner": {
+      "type": "boolean",
+      "default": false
+    },
+    "identityStatus": {
+      "type": "string",
+      "enum": [
+        "Pending Invitation",
+        "Sent",
+        "Verified",
+        "Action Required"
+      ],
+      "default": "Pending Invitation"
+    },
+    "verifyToken": {
+      "type": "string",
+      "description": "Secure token for the /verify URL"
+    },
+    "dobYear": {
+      "type": "string"
+    },
+    "dobMonth": {
+      "type": "string"
+    },
+    "dobDay": {
+      "type": "string"
+    },
+    "ssn": {
+      "type": "string"
+    },
+    "homeStreet": {
+      "type": "string"
+    },
+    "homeCity": {
+      "type": "string"
+    },
+    "homeState": {
+      "type": "string"
+    },
+    "homeZip": {
+      "type": "string"
+    },
+    "corporatePhone": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "corporateId",
+    "signerEmail",
+    "firstName",
+    "lastName"
+  ]
+}

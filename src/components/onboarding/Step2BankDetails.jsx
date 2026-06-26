@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import FileDropZone from './FileDropZone';
 import LocationsGrid from './LocationsGrid';
 import AddLocationModal from './AddLocationModal';
-import UnderwritingPanel, { isUnderwritingValid } from './UnderwritingPanel';
+import SignerRoster from './SignerRoster';
 
 export default function Step2BankDetails({ profile, locations: initialLocations, plaidAccounts = [], onStatusChange }) {
   const [locations, setLocations] = useState(initialLocations);
@@ -17,7 +17,8 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submissionResults, setSubmissionResults] = useState([]);
-  const [underwritingValid, setUnderwritingValid] = useState(false);
+  const [signerRosterValid, setSignerRosterValid] = useState(false);
+  const [totalOwnership, setTotalOwnership] = useState(0);
 
   const handleExtracted = ({ routingNumber, accountNumber }) => {
     if (routingNumber) setCorporateRouting(routingNumber);
@@ -32,11 +33,10 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
     setLocations(prev => [...prev, { ...newLocation, hasRoutingNumber: false, hasAccountNumber: false }]);
   };
 
-  // Submit enabled when: locations have banking + underwriting panel is valid
   const locationsBankingReady = locations.length >= 1 && locationRows.length > 0 && locationRows.every(
     row => row.applicationStepStatus === 'Approved' || (row.routingInput && row.accountInput)
   );
-  const canSubmit = locationsBankingReady && underwritingValid;
+  const canSubmit = locationsBankingReady && signerRosterValid && totalOwnership <= 100;
 
   const handleSave = async () => {
     setSaving(true);
@@ -184,10 +184,13 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
           />
         </div>
 
-        {/* Principal & Corporate Verification Panel */}
-        <UnderwritingPanel
+        {/* Signer Roster */}
+        <SignerRoster
           profile={profile}
-          onValidChange={setUnderwritingValid}
+          onValidChange={(valid, totalPct) => {
+            setSignerRosterValid(valid);
+            setTotalOwnership(totalPct);
+          }}
         />
 
         {/* Error message */}
@@ -235,9 +238,14 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
               Select a bank account for all locations to continue.
             </p>
           )}
-          {locationsBankingReady && !underwritingValid && (
+          {locationsBankingReady && !signerRosterValid && (
             <p className="text-center text-xs text-gray-400 mt-3">
-              Complete the Principal & Corporate Verification fields above to continue.
+              All beneficial owners must be verified before submitting.
+            </p>
+          )}
+          {totalOwnership > 100 && (
+            <p className="text-center text-xs text-red-500 mt-3">
+              Total ownership percentage exceeds 100%. Please correct before submitting.
             </p>
           )}
         </div>
