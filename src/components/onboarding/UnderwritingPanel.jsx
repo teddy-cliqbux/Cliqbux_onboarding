@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { CheckCircle2, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
@@ -51,19 +51,34 @@ export default function UnderwritingPanel({ profile, onValidChange }) {
   const addressInputRef = useRef(null);
   const autocompleteRef = useRef(null);
 
-  const [form, setForm] = useState({
-    dobMonth: profile.dobMonth || '',
-    dobDay: profile.dobDay || '',
-    dobYear: profile.dobYear || '',
+  const profileToForm = (p) => ({
+    dobMonth: p.dobMonth || '',
+    dobDay: p.dobDay || '',
+    dobYear: p.dobYear || '',
     ssn: '',
-    homeStreet: profile.homeStreet || '',
-    homeCity: profile.homeCity || '',
-    homeState: profile.homeState || '',
-    homeZip: profile.homeZip || '',
-    corporatePhone: profile.corporatePhone || '',
-    ownershipPercentage: profile.ownershipPercentage ?? 100,
+    homeStreet: p.homeStreet || '',
+    homeCity: p.homeCity || '',
+    homeState: p.homeState || '',
+    homeZip: p.homeZip || '',
+    corporatePhone: p.corporatePhone || '',
+    ownershipPercentage: p.ownershipPercentage ?? 100,
   });
+
+  const [form, setForm] = useState(() => profileToForm(profile));
   const [touched, setTouched] = useState({});
+
+  // Re-populate form when profile fields come in from Plaid IDV
+  const prevProfileRef = useRef(profile);
+  useEffect(() => {
+    const prev = prevProfileRef.current;
+    const identityFields = ['firstName', 'lastName', 'dobMonth', 'dobDay', 'dobYear', 'homeStreet', 'homeCity', 'homeState', 'homeZip'];
+    const changed = identityFields.some(f => profile[f] !== prev[f]);
+    if (changed) {
+      setForm(profileToForm(profile));
+      setTouched({});
+    }
+    prevProfileRef.current = profile;
+  }, [profile]);
 
   // Notify parent of validity whenever form changes
   useEffect(() => {

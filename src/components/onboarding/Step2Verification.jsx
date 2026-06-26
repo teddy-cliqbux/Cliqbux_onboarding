@@ -36,22 +36,25 @@ export default function Step2Verification({ profile, onVerified }) {
       token,
       onSuccess: async (publicToken, metadata) => {
         try {
-          const res = await base44.functions.invoke('exchangePlaidToken', {
+          // Fetch bank account details
+          const bankRes = await base44.functions.invoke('exchangePlaidToken', {
             publicToken,
             accountId: metadata.account_id
           });
-          const accounts = res.data?.accounts || [];
+          const accounts = bankRes.data?.accounts || [];
           setPlaidAccounts(accounts);
-          setPlaidState('linked');
 
-          // Pull identity fields if Plaid returned them
-          const identity = res.data?.identity;
-          const bankingInfo = {
-            plaidAccounts: accounts,
-            identity: identity || null
-          };
+          // Fetch IDV identity data if available
+          let identity = null;
+          const idvId = metadata.identity_verification_id || metadata.link_session_id;
+          if (idvId) {
+            const idvRes = await base44.functions.invoke('exchangePlaidToken', {
+              identityVerificationId: idvId
+            });
+            identity = idvRes.data?.identity || null;
+          }
 
-          // Persist identity fields if present
+          // Persist identity fields to the merchant profile
           if (identity) {
             const updatePayload = { corporateId: profile.corporateId };
             if (identity.firstName) updatePayload.firstName = identity.firstName;
@@ -67,7 +70,8 @@ export default function Step2Verification({ profile, onVerified }) {
             await base44.functions.invoke('updateMerchantProfile', updatePayload);
           }
 
-          onVerified(bankingInfo);
+          setPlaidState('linked');
+          onVerified({ plaidAccounts: accounts, identity });
         } catch (err) {
           setError('Failed to retrieve account details. Please try manual entry.');
           setPlaidState('idle');

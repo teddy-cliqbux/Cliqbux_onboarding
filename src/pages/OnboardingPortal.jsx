@@ -82,8 +82,15 @@ export default function OnboardingPortal() {
     setMode('sales');
   };
 
-  const handleVerificationComplete = (bankingInfo) => {
+  const handleVerificationComplete = async (bankingInfo) => {
     setPlaidAccounts(bankingInfo.plaidAccounts || []);
+    // Refresh profile so UnderwritingPanel gets the IDV-populated identity fields
+    if (bankingInfo.identity && profile?.corporateId) {
+      try {
+        const refreshed = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
+        if (refreshed.data?.profile) setProfile(refreshed.data.profile);
+      } catch (_) { /* non-critical — panel will still show manual fields */ }
+    }
     setVerificationDone(true);
   };
 
