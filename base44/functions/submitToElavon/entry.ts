@@ -144,6 +144,18 @@ Deno.serve(async (req) => {
         legalName: profile.legalName,
         taxId: profile.taxId || '',
         signerEmail: profile.signerEmail,
+        signerFirstName: profile.firstName || '',
+        signerLastName: profile.lastName || '',
+        signerDob: profile.dobYear && profile.dobMonth && profile.dobDay
+          ? `${profile.dobYear}-${String(profile.dobMonth).padStart(2,'0')}-${String(profile.dobDay).padStart(2,'0')}`
+          : '',
+        signerSsn: profile.ssn || '',
+        signerHomeAddress: {
+          street: profile.homeStreet || '',
+          city: profile.homeCity || '',
+          state: profile.homeState || '',
+          zip: profile.homeZip || ''
+        },
 
         // Location-specific
         dbaName: location.dbaName,

@@ -6,30 +6,48 @@ import CliqbuxLogo from './CliqbuxLogo';
 const PRICING_CARDS = [
   {
     key: 'TRADITIONAL',
-    label: 'Traditional Processing',
+    label: 'Traditional Swiped',
     icon: CreditCard,
-    description: 'One account covering both in-person and card-not-present transactions — no separate applications needed.',
+    description: 'Best for in-person card-present transactions with a physical terminal. Card-not-present transactions also covered.',
     badge: 'Most Popular',
     badgeColor: 'bg-blue-100 text-blue-700',
     accentColor: 'border-blue-200 hover:border-blue-400',
     selectedColor: 'border-blue-500 bg-blue-50',
     iconColor: 'text-blue-600',
     iconBg: 'bg-blue-100',
-    dualRate: true
+    rate: '2.49%',
+    fee: '$0.10',
+    rateLabel: 'PER TRANSACTION (SWIPED)'
+  },
+  {
+    key: 'TRADITIONAL',
+    label: 'Traditional Keyed',
+    icon: Zap,
+    description: 'Ideal for phone orders, mail orders, or card-not-present transactions. In-person swiped also covered.',
+    badge: 'Card Not Present',
+    badgeColor: 'bg-purple-100 text-purple-700',
+    accentColor: 'border-purple-200 hover:border-purple-400',
+    selectedColor: 'border-purple-500 bg-purple-50',
+    iconColor: 'text-purple-600',
+    iconBg: 'bg-purple-100',
+    rate: '2.89%',
+    fee: '$0.30',
+    rateLabel: 'PER TRANSACTION (KEYED)'
   },
   {
     key: 'CASH_DISCOUNT',
     label: 'Cash Discount Program',
     icon: Percent,
-    rate: '0%',
-    fee: 'Processing Fees',
     description: 'Pass the processing cost to card-paying customers. Cash customers pay less.',
     badge: 'Zero Cost Processing',
     badgeColor: 'bg-green-100 text-green-700',
     accentColor: 'border-green-200 hover:border-green-400',
     selectedColor: 'border-green-500 bg-green-50',
     iconColor: 'text-green-600',
-    iconBg: 'bg-green-100'
+    iconBg: 'bg-green-100',
+    rate: '0%',
+    fee: 'Processing Fees',
+    rateLabel: 'ZERO PROCESSING COST'
   }
 ];
 
@@ -112,7 +130,7 @@ export default function SelfServePricing({ onComplete }) {
         </div>
 
         {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl mb-10">
           {PRICING_CARDS.map((card, index) => {
             const Icon = card.icon;
             const isSelected = selectedCardIndex === index;
@@ -124,46 +142,25 @@ export default function SelfServePricing({ onComplete }) {
                   ${isSelected ? card.selectedColor + ' shadow-xl scale-[1.02]' : 'border-gray-200 hover:shadow-xl hover:scale-[1.01] ' + card.accentColor}
                 `}
               >
-                {/* Badge */}
                 <span className={`absolute top-5 right-5 text-xs font-bold px-2.5 py-1 rounded-full ${card.badgeColor}`}>
                   {card.badge}
                 </span>
-
-                {/* Selected indicator */}
                 {isSelected && (
                   <div className="absolute top-5 left-5">
                     <CheckCircle className={`w-5 h-5 ${card.iconColor}`} />
                   </div>
                 )}
-
                 <div className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center mb-5 ${isSelected ? 'mt-6' : ''}`}>
                   <Icon className={`w-6 h-6 ${card.iconColor}`} />
                 </div>
-
                 <h3 className="text-xl font-bold text-gray-900 mb-2">{card.label}</h3>
                 <p className="text-gray-500 text-sm mb-6 leading-relaxed">{card.description}</p>
-
                 <div className="border-t border-gray-100 pt-5">
-                  {card.dualRate ? (
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2.5">
-                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Swiped / Card-Present</span>
-                        <span className="font-black text-gray-900 text-lg">2.49% <span className="text-gray-400 text-sm font-medium">+ $0.10</span></span>
-                      </div>
-                      <div className="flex items-center justify-between bg-gray-50 rounded-lg px-3 py-2.5">
-                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Keyed / Card-Not-Present</span>
-                        <span className="font-black text-gray-900 text-lg">2.89% <span className="text-gray-400 text-sm font-medium">+ $0.30</span></span>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-baseline gap-1 mb-1">
-                        <span className="text-3xl font-black text-gray-900">{card.rate}</span>
-                        <span className="text-gray-400 text-sm font-medium">{card.fee}</span>
-                      </div>
-                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Zero processing cost</p>
-                    </>
-                  )}
+                  <div className="flex items-baseline gap-1 mb-1">
+                    <span className="text-3xl font-black text-gray-900">{card.rate}</span>
+                    <span className="text-gray-400 text-sm font-medium">+ {card.fee} / txn</span>
+                  </div>
+                  <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{card.rateLabel}</p>
                 </div>
               </button>
             );

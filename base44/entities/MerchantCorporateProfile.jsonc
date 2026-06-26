@@ -12,6 +12,36 @@
     "signerEmail": {
       "type": "string"
     },
+    "firstName": {
+      "type": "string"
+    },
+    "lastName": {
+      "type": "string"
+    },
+    "dobYear": {
+      "type": "string"
+    },
+    "dobMonth": {
+      "type": "string"
+    },
+    "dobDay": {
+      "type": "string"
+    },
+    "ssn": {
+      "type": "string"
+    },
+    "homeStreet": {
+      "type": "string"
+    },
+    "homeCity": {
+      "type": "string"
+    },
+    "homeState": {
+      "type": "string"
+    },
+    "homeZip": {
+      "type": "string"
+    },
     "hubspotQuoteUrl": {
       "type": "string"
     },
@@ -43,6 +73,10 @@
         "Submitted"
       ],
       "default": "Incomplete"
+    },
+    "isManualMode": {
+      "type": "boolean",
+      "default": false
     }
   },
   "required": [

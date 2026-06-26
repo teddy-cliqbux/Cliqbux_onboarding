@@ -28,11 +28,11 @@
     "applicationStepStatus": {
       "type": "string",
       "enum": [
-        "In Review",
+        "Ready to Submit",
         "Approved",
         "Error"
       ],
-      "default": "In Review"
+      "default": "Ready to Submit"
     }
   },
   "required": [

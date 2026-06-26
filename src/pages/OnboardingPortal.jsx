@@ -7,6 +7,7 @@ import SuccessScreen from '@/components/onboarding/SuccessScreen';
 import ErrorScreen from '@/components/onboarding/ErrorScreen';
 import LoadingScreen from '@/components/onboarding/LoadingScreen';
 import SelfServePricing from '@/components/onboarding/SelfServePricing';
+import Step2Verification from '@/components/onboarding/Step2Verification';
 
 const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'];
 
@@ -15,6 +16,8 @@ export default function OnboardingPortal() {
   const [dealId, setDealId] = useState(null);
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
+  const [plaidAccounts, setPlaidAccounts] = useState([]);
+  const [verificationDone, setVerificationDone] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -76,7 +79,12 @@ export default function OnboardingPortal() {
   const handleSelfServeComplete = (newProfile) => {
     setProfile(newProfile);
     setLocations([]);
-    setMode('sales'); // Now treat as a full sales flow from Step 2
+    setMode('sales');
+  };
+
+  const handleVerificationComplete = (bankingInfo) => {
+    setPlaidAccounts(bankingInfo.plaidAccounts || []);
+    setVerificationDone(true);
   };
 
   // — Loading & Error states —
@@ -94,12 +102,21 @@ export default function OnboardingPortal() {
   const isSelfServe = SELF_SERVE_TIERS.includes(pricingTier);
 
   const renderStep = () => {
-    // Self-serve and sales-assisted users with pricing confirmed → go to Step 2
+    // Pricing confirmed → show verification first, then banking
     if (applicationStatus === 'Pricing Selected' || applicationStatus === 'Quote Signed') {
+      if (!verificationDone) {
+        return (
+          <Step2Verification
+            profile={profile}
+            onVerified={handleVerificationComplete}
+          />
+        );
+      }
       return (
         <Step2BankDetails
           profile={profile}
           locations={locations}
+          plaidAccounts={plaidAccounts}
           onStatusChange={handleStatusChange}
         />
       );
@@ -147,7 +164,7 @@ export default function OnboardingPortal() {
 
   return (
     <div className="portal-bg" style={{ fontFamily: 'Inter, sans-serif' }}>
-      <TopNav applicationStatus={applicationStatus} />
+      <TopNav applicationStatus={applicationStatus} verificationDone={verificationDone} />
 
       <div className="pt-16 min-h-screen flex flex-col items-center justify-start px-4 py-10">
         {/* Merchant greeting strip */}

@@ -3,15 +3,13 @@ import { Save, Send, Loader2, Info, Plus } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import FileDropZone from './FileDropZone';
 import LocationsGrid from './LocationsGrid';
-import PlaidLinkButton from './PlaidLinkButton';
 import AddLocationModal from './AddLocationModal';
 
-export default function Step2BankDetails({ profile, locations: initialLocations, onStatusChange }) {
+export default function Step2BankDetails({ profile, locations: initialLocations, plaidAccounts = [], onStatusChange }) {
   const [locations, setLocations] = useState(initialLocations);
   const [locationRows, setLocationRows] = useState([]);
   const [corporateRouting, setCorporateRouting] = useState('');
   const [corporateAccount, setCorporateAccount] = useState('');
-  const [plaidAccounts, setPlaidAccounts] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -22,22 +20,6 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
   const handleExtracted = ({ routingNumber, accountNumber }) => {
     if (routingNumber) setCorporateRouting(routingNumber);
     if (accountNumber) setCorporateAccount(accountNumber);
-  };
-
-  const handlePlaidLinked = (account) => {
-    // onAccountsLinked receives a single account — but we want all accounts for dropdowns
-    // PlaidLinkButton calls this with a single account; we'll handle multi-account via the new prop
-    if (account.routingNumber) setCorporateRouting(account.routingNumber);
-    if (account.accountNumber) setCorporateAccount(account.accountNumber);
-  };
-
-  const handlePlaidAccountsLinked = (accounts) => {
-    setPlaidAccounts(accounts);
-    const primary = accounts.find(a => a.subtype === 'checking') || accounts[0];
-    if (primary) {
-      setCorporateRouting(primary.routingNumber || '');
-      setCorporateAccount(primary.accountNumber || '');
-    }
   };
 
   const handleLocationsChange = (rows) => {
@@ -129,34 +111,15 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
       <div className="px-8 pt-8 pb-6 border-b border-gray-100">
         <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
           <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-          STEP 2 OF 3 — VERIFICATION &amp; BANKING
+          STEP 3 OF 3 — LOCATIONS &amp; BANKING
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-1.5">Verify Your Business &amp; Banking</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-1.5">Add Your Business Locations</h2>
         <p className="text-gray-500 text-sm">
-          Connect your bank account via Plaid or upload a voided check — we'll extract your details automatically.
+          Add each storefront, then assign a bank account or upload a voided check for each location.
         </p>
       </div>
 
       <div className="px-8 py-6 flex flex-col gap-8">
-        {/* Plaid Link Section */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-800 text-sm">Bank Account Connection</h3>
-            <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-full font-medium">Recommended</span>
-          </div>
-          <PlaidLinkButton
-            corporateId={profile.corporateId}
-            onAccountsLinked={handlePlaidAccountsLinked}
-          />
-        </div>
-
-        {/* Divider */}
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-gray-100" />
-          <span className="text-xs text-gray-400 font-medium">OR UPLOAD DOCUMENT</span>
-          <div className="flex-1 h-px bg-gray-100" />
-        </div>
-
         {/* Document Upload */}
         <div>
           <div className="flex items-center justify-between mb-3">
