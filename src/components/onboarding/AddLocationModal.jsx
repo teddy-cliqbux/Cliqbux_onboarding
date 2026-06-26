@@ -7,6 +7,7 @@ import EINValidator from '@/components/onboarding/EINValidator';
 export default function AddLocationModal({
   corporateId,
   entities = [],
+  locationsCount = 0,
   initialLegalName = '',
   initialTaxId = '',
   onLocationAdded,
@@ -16,7 +17,8 @@ export default function AddLocationModal({
   initialEntityId = '',
 }) {
   const isEdit = !!(initialDbaName || initialBusinessAddress);
-  const isFirstLocation = !isEdit && entities.length === 0;
+  // First storefront = when zero or one location exists (add modal on empty board, or editing the only location)
+  const isFirstLocation = locationsCount <= 1;
 
   const [dbaName, setDbaName] = useState(initialDbaName);
   const [addressDisplay, setAddressDisplay] = useState(initialBusinessAddress);
@@ -112,7 +114,7 @@ export default function AddLocationModal({
       let targetEntityId = '';
       let shouldReloadEntities = false;
 
-      if (isFirstLocation || entityChoice === 'new') {
+      if (!isFirstLocation && entityChoice === 'new') {
         const name = (corporateLegalName || dbaName).trim();
         const ein = rawEIN();
         if (!name || ein.length !== 9) throw new Error('Legal corporate name and a valid 9-digit EIN are required.');
@@ -151,7 +153,7 @@ export default function AddLocationModal({
     e.preventDefault();
     setError('');
     if (!dbaName.trim() || !addressDisplay.trim()) { setError('Both fields are required.'); return; }
-    if (isFirstLocation || entityChoice === 'new') {
+    if (!isFirstLocation && entityChoice === 'new') {
       const name = (corporateLegalName || dbaName).trim();
       if (!name) { setError('Corporate Legal Name is required.'); return; }
       if (!isValidRawEIN()) { setError('A valid 9-digit Federal EIN is required.'); return; }
@@ -163,7 +165,7 @@ export default function AddLocationModal({
 
   const handleSaveUnverified = async () => {
     setError('');
-    if (isFirstLocation || entityChoice === 'new') {
+    if (!isFirstLocation && entityChoice === 'new') {
       const name = (corporateLegalName || dbaName).trim();
       if (!name) { setError('Corporate Legal Name is required.'); return; }
       if (!isValidRawEIN()) { setError('A valid 9-digit Federal EIN is required.'); return; }
@@ -174,37 +176,37 @@ export default function AddLocationModal({
   const validAddr = !!parsedAddress;
   const canSave = dbaName.trim() && addressDisplay.trim() && (validAddr || unverifiedWarning);
 
+  const readOnlyCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 bg-gray-50 text-gray-700 cursor-default';
+  const labelCls = 'text-xs font-semibold text-gray-600 mb-1';
+
   const renderEntitySection = () => {
     if (isFirstLocation) {
-      // First location: mandatory Corporate Name + EIN + Corporate Mailing Address
+      // Condition A: First storefront — read-only fields bound to Step 1 corporate profile
       return (
         <div className="border-t border-gray-100 pt-5">
           <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
             <span className="w-5 h-5 rounded-full bg-gray-800 text-white text-[9px] font-bold flex items-center justify-center">B</span> Corporate Entity (Primary Legal Name)
           </h4>
           <div className="space-y-3 pl-7">
-            <p className="text-[11px] text-gray-400 bg-blue-50 border border-blue-100 rounded-lg p-2.5">💡 Note: These fields default to your storefront identity. Only change them if your official corporate tax registration or billing address is legally different from your store name.</p>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Corporate Legal Name</label>
-              <input type="text" value={corporateLegalName} onChange={(e) => setCorporateLegalName(e.target.value)}
-                placeholder="Legal corporate name (pre-filled from storefront)" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <label className={labelCls}>Corporate Legal Name</label>
+              <input type="text" value={entities[0]?.legalBusinessName || initialLegalName || ''} readOnly className={readOnlyCls} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Federal EIN</label>
-              <EINValidator corporateId={corporateId} value={federalEIN} onChange={setFederalEIN} onValidated={(f) => setEinValidated(f)} />
+              <label className={labelCls}>Federal EIN</label>
+              <input type="text" value={entities[0]?.federalEIN ? formatEIN(entities[0].federalEIN) : (initialTaxId ? formatEIN(initialTaxId) : 'Pending')} readOnly className={readOnlyCls} />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Corporate Mailing Address</label>
-              <input ref={mailRef} type="text" value={corporateMailingAddress} onChange={(e) => setCorporateMailingAddress(e.target.value)} onKeyDown={handleAddressKeyDown}
-                placeholder="Start typing to search address..." autoComplete="off" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-              <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Pre-filled from your storefront address. Change only if different.</p>
+              <label className={labelCls}>Corporate Mailing Address</label>
+              <input type="text" value={entities[0]?.corporateMailingAddress || corporateMailingAddress || initialBusinessAddress || ''} readOnly className={readOnlyCls} />
             </div>
+            <p className="text-[11px] text-gray-400 mt-1">This initial storefront is bound directly to your primary corporate tax shell completed in Step 1.</p>
           </div>
         </div>
       );
     }
 
-    // Subsequent locations: entity picker with optional create-new hatch
+    // Condition B: Second or subsequent storefront — dropdown pre-selected to primary entity
     return (
       <div className="border-t border-gray-100 pt-5">
         <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -222,43 +224,44 @@ export default function AddLocationModal({
                 </select>
               </div>
               <p className="text-[11px] text-gray-400">This location will automatically group under your primary corporate entity above. Use the button below only if this specific store runs under a legally distinct EIN.</p>
+              <div className="flex items-center gap-2 pt-2">
+                <button type="button" onClick={() => {
+                  setSelectedEntityId(entities[0]?.entityId || '');
+                  setCorporateLegalName('');
+                  setFederalEIN('');
+                  setEinValidated(null);
+                  setEntityChoice('new');
+                }}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 border border-blue-200 hover:bg-blue-50 rounded-lg px-3 py-1.5 transition-all">
+                  + Create New Legal Entity / EIN
+                </button>
+              </div>
             </>
           ) : (
             <>
               <p className="text-[11px] text-gray-400 bg-blue-50 border border-blue-100 rounded-lg p-2.5">💡 Note: These fields default to your storefront identity. Only change them if your official corporate tax registration is legally different from your store name.</p>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Corporate Legal Name</label>
+                <label className={labelCls}>Corporate Legal Name</label>
                 <input type="text" value={corporateLegalName} onChange={(e) => setCorporateLegalName(e.target.value)}
                   placeholder="Legal corporate name" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1">Federal EIN</label>
+                <label className={labelCls}>Federal EIN</label>
                 <EINValidator corporateId={corporateId} value={federalEIN} onChange={setFederalEIN} onValidated={(f) => setEinValidated(f)} />
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button type="button" onClick={() => {
+                  setCorporateLegalName('');
+                  setFederalEIN('');
+                  setEinValidated(null);
+                  setEntityChoice('existing');
+                }}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 border border-blue-200 hover:bg-blue-50 rounded-lg px-3 py-1.5 transition-all">
+                  ← Assign to Existing Entity
+                </button>
               </div>
             </>
           )}
-
-          <div className="flex items-center gap-2 pt-1">
-            <button type="button" onClick={() => {
-              if (entityChoice === 'existing') {
-                // Switch to new-entity mode — re-select dropdown, clear manual fields
-                setSelectedEntityId(entities[0]?.entityId || '');
-                setCorporateLegalName('');
-                setFederalEIN('');
-                setEinValidated(null);
-                setEntityChoice('new');
-              } else {
-                // Switch back to existing dropdown
-                setCorporateLegalName('');
-                setFederalEIN('');
-                setEinValidated(null);
-                setEntityChoice('existing');
-              }
-            }}
-              className="text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1 border border-blue-200 hover:bg-blue-50 rounded-lg px-3 py-1.5 transition-all">
-              {entityChoice === 'existing' ? '+ Create New Legal Entity / EIN' : '← Assign to Existing Entity'}
-            </button>
-          </div>
         </div>
       </div>
     );

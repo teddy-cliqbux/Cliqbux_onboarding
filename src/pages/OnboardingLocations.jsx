@@ -485,6 +485,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         <AddLocationModal
           corporateId={profile.corporateId}
           entities={entities}
+          locationsCount={locs.length}
           initialLegalName={profile.legalName}
           initialTaxId={profile.taxId}
           initialDbaName={profile.legalName}
@@ -530,6 +531,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           <AddLocationModal
             corporateId={profile.corporateId}
             entities={entities}
+            locationsCount={locs.length}
             initialLegalName={profile.legalName}
             initialTaxId={profile.taxId}
             initialDbaName={loc.dbaName}
