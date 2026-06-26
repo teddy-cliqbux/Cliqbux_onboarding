@@ -113,7 +113,9 @@ export default function OnboardingLocations({ profile, onContinue }) {
             ? [locId, { ...ls, selectedBankId: accounts[0].accountId, isManualMode: false }]
             : [locId, ls];
         })));
-        return newLocs;
+        // Also un-clear any previously-cleared locs for this entity
+        const finalLocs = newLocs.map(l => l.entityId === entityId ? { ...l, bankCleared: false } : l);
+        return finalLocs;
       });
     }
   };
@@ -141,6 +143,7 @@ export default function OnboardingLocations({ profile, onContinue }) {
         };
       }
     }
+    if (loc.bankCleared) return null;
     return loc.bankDetails || null;
   };
 
@@ -180,6 +183,15 @@ export default function OnboardingLocations({ profile, onContinue }) {
     setLocationState(prev => ({
       ...prev,
       [locId]: { ...prev[locId], selectedBankId: accountId, isManualMode: false, manualRouting: '', manualAccount: '' }
+    }));
+  };
+
+  const changeBank = (locId) => {
+    // Clear the row-level bank so getLocBankDetails falls through to dropdown/connect view
+    setLocs(prev => prev.map(l => l.id === locId ? { ...l, bankCleared: true } : l));
+    setLocationState(prev => ({
+      ...prev,
+      [locId]: { ...prev[locId], selectedBankId: null, isManualMode: false, manualRouting: '', manualAccount: '' }
     }));
   };
 
@@ -223,6 +235,7 @@ export default function OnboardingLocations({ profile, onContinue }) {
             <span className="text-xs font-mono font-semibold text-gray-900">{bk.accountNumberMasked || `••••${(bk.accountNumber || '').slice(-4)}`}</span>
             <p className="text-[10px] text-gray-400">{(bk.accountType === 'savings' ? 'Savings' : 'Checking')} · {bk.authMethod}</p>
           </div>
+          <button onClick={() => changeBank(row.id)} className="text-[10px] text-blue-500 hover:text-blue-700 underline whitespace-nowrap flex-shrink-0">Change</button>
         </div>
       );
     }
@@ -261,10 +274,10 @@ export default function OnboardingLocations({ profile, onContinue }) {
       );
     }
 
-    // No entity Plaid yet
+    // No entity Plaid yet — render the entity-level connect button inline
     return (
       <div className="flex flex-col gap-0.5">
-        <span className="text-[10px] text-gray-400 italic">Connect bank account at entity level</span>
+        <EntityPlaidButton corporateId={profile.corporateId} entityId={row.entityId} onAccountsConnected={handleAccountsConnected} />
       </div>
     );
   };
