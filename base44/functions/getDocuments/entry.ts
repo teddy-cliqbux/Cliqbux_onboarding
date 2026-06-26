@@ -5,9 +5,9 @@ const PROFILE_CODE              = "PAPI_USA_CLIQBUX1";
 const REFERRER_NAME             = "PAPI_USA_CLIQBUX";
 const CLIENT_ID                 = "PAHCLIQBUX";
 const CLIENT_GROUP_NUMBER       = "17";
-const SALES_REP_CODE            = "45000";
-const PARENT_ENTITY             = "46408";
-const MONETARY_PRICING_PROGRAM  = "145";
+const SALES_REP_CODE            = "86764";
+const PARENT_ENTITY             = "48603"; // Schedule A – Buy Rate entity under client group 17
+const MONETARY_PRICING_PROGRAM  = "09828";
 const AUTH_PRICING_PROGRAM      = "49999";
 
 // ─── Shared Helpers ───────────────────────────────────────────────────────────
