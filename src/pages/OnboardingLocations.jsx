@@ -61,8 +61,41 @@ export default function OnboardingLocations({ profile, onContinue }) {
     finally { setLoading(false); }
   };
 
-  const updateLoc = (id, patch) => setLocs(prev => prev.map(l => l.id !== id ? l : { ...l, ...patch }));
-  const removeLoc = (id) => { setLocs(prev => prev.filter(l => l.id !== id)); setEditLocId(p => p === id ? null : p); };
+  const removeLoc = async (row) => {
+    try {
+      if (row.id) await base44.functions.invoke('removeSelfServeLocation', { locationId: row.id });
+    } catch (_) { /* best-effort backend delete */ }
+
+    // Remove from state
+    setLocs(prev => ({ ...prev })); // force snapshot for grouping check
+    const remaining = locs.filter(l => l.id !== row.id);
+    setLocs(remaining);
+
+    // Clean up local per-location state
+    setLocationState(prev => {
+      const { [row.id]: _, ...rest } = prev;
+      return rest;
+    });
+
+    // Auto clean-up: if this was the last location for its entity, remove that entity
+    const rowEntityId = row.entityId;
+    if (rowEntityId) {
+      const otherForEntity = remaining.filter(l => l.entityId === rowEntityId);
+      if (otherForEntity.length === 0) {
+        // Remove entity from backend
+        try { await base44.functions.invoke('manageLegalEntity', { action: 'delete', corporateId: profile.corporateId, entityId: rowEntityId }); } catch (_) {}
+        // Remove from local entities state
+        setEntities(prev => prev.filter(e => e.entityId !== rowEntityId));
+        // Remove any Plaid accounts for this now-orphaned entity
+        setPlaidAccounts(prev => {
+          const { [rowEntityId]: _, ...rest } = prev;
+          return rest;
+        });
+      }
+    }
+
+    setEditLocId(p => p === row.id ? null : p);
+  };
 
   const handleLocationAdded = ({ reloadEntities }) => { loadData(); };
   const handleLocationUpdated = () => { loadData(); };
@@ -265,8 +298,8 @@ export default function OnboardingLocations({ profile, onContinue }) {
           {!isApproved && (
             <button onClick={() => setEditLocId(row.id)} className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1"><Pencil className="w-3 h-3" /> Edit</button>
           )}
-          {!isApproved && !inManualMode && !hasBanking && (
-            <button onClick={() => removeLoc(row.id)} className="text-xs text-gray-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+          {!isApproved && (
+            <button onClick={() => removeLoc(row)} className="text-xs text-red-400 hover:text-red-600 font-semibold flex items-center gap-1"><Trash2 className="w-3 h-3" /> Delete</button>
           )}
         </div>
       </div>
