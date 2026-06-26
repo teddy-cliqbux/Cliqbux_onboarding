@@ -13,6 +13,7 @@ export default function AddLocationModal({
   onClose,
   initialDbaName = '',
   initialBusinessAddress = '',
+  initialEntityId = '',
 }) {
   const isEdit = !!(initialDbaName || initialBusinessAddress);
   const isFirstLocation = !isEdit && entities.length === 0;
@@ -33,7 +34,7 @@ export default function AddLocationModal({
 
   // subsequent locations: dropdown choice
   const [entityChoice, setEntityChoice] = useState('existing'); // 'existing' | 'new'
-  const [selectedEntityId, setSelectedEntityId] = useState(entities[0]?.entityId || '');
+  const [selectedEntityId, setSelectedEntityId] = useState(isEdit && initialEntityId ? initialEntityId : (entities[0]?.entityId || ''));
 
   const autocompleteRef = useRef(null);
   const mailRef = useRef(null);

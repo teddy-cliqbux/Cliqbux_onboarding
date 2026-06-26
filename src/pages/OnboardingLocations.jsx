@@ -17,6 +17,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const [editLocId, setEditLocId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [showBackConfirm, setShowBackConfirm] = useState(false);
+  const [justAutoCreated, setJustAutoCreated] = useState(true);
 
   const isSelfServe = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'].includes(profile?.pricingTier);
 
@@ -27,7 +28,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   // { [locId]: { selectedBankId, isManualMode, manualRouting, manualAccount } }
   const [locationState, setLocationState] = useState({});
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); autoCreateFirstLocation(); }, []);
 
   const fetchEntities = async () => {
     const res = await base44.functions.invoke('manageLegalEntity', { action: 'list', corporateId: profile.corporateId });
@@ -62,6 +63,49 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       setLocs(loaded);
     } catch (_) { setEntities([]); setLocs([]); }
     finally { setLoading(false); }
+  };
+
+  // Auto-create the first location on entering Step 2 (when no locations exist yet)
+  const autoCreateFirstLocation = async () => {
+    // only run once
+    if (!justAutoCreated) return;
+    setJustAutoCreated(false);
+    try {
+      const current = await base44.functions.invoke('listLocations', { corporateId: profile.corporateId });
+      if ((current.data?.locations || []).length > 0) { setJustAutoCreated(false); return; }
+
+      const legalName = profile.legalName || '';
+      const taxId = (profile.taxId || '').replace(/[^0-9]/g, '').slice(0, 9);
+      const entityRes = await base44.functions.invoke('manageLegalEntity', {
+        action: 'add', corporateId: profile.corporateId,
+        legalBusinessName: legalName, federalEIN: taxId || legalName.slice(0, 9),
+      });
+      if (entityRes.data?.error) return;
+      const entities = entityRes.data.entities || [];
+      const newEntityId = entities[entities.length - 1]?.entityId;
+      if (!newEntityId) return;
+
+      const locRes = await base44.functions.invoke('addSelfServeLocation', {
+        corporateId: profile.corporateId, entityId: newEntityId,
+        dbaName: legalName, businessAddress: '',
+      });
+      if (locRes.data?.error) return;
+
+      const freshLocs = (await base44.functions.invoke('listLocations', { corporateId: profile.corporateId })).data?.locations || [];
+      const newLocId = locRes.data?.location?.id || locRes.data?.location?.locationId || freshLocs[freshLocs.length - 1]?.id || '';
+      setLocs(freshLocs.map(loc => {
+        const id = loc.id || loc.locationId;
+        ensureLocState(id);
+        return {
+          id, entityId: newEntityId, dbaName: loc.dbaName, businessAddress: loc.businessAddress,
+          addressVerified: loc.addressVerified || false,
+          bankDetails: loc.bankDetails || { routingNumber: loc.routingNumber || '', accountNumber: loc.accountNumber || '', authMethod: null },
+          applicationStepStatus: loc.applicationStepStatus || 'In Review', elavonMID: loc.elavonMID,
+        };
+      }));
+      setEntities(entities);
+      if (newLocId) setEditLocId(newLocId);
+    } catch (_) { /* guard on self-serve where corporateId may not be ready yet */ }
   };
 
   const removeLoc = async (row) => {
@@ -541,6 +585,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             initialTaxId={profile.taxId}
             initialDbaName={loc.dbaName}
             initialBusinessAddress={loc.businessAddress}
+            initialEntityId={loc.entityId || ''}
             onLocationAdded={handleLocationUpdated}
             onClose={() => setEditLocId(null)}
           />
