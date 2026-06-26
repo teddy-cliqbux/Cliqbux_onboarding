@@ -29,21 +29,25 @@ function buildPricingBlock(profile) {
       transactionFee: profile.customPerTxFee || 0
     };
   }
-  if (tier === 'Self_Swiped') {
+  // TRADITIONAL: single account with both card-present and card-not-present fee schedules
+  if (tier === 'TRADITIONAL') {
     return {
       pricingModel: 'FLAT_RATE',
-      discountRate: 2.49,
-      transactionFee: 0.10
+      feeSchedules: [
+        {
+          type: 'CARD_PRESENT',
+          discountRate: 2.49,
+          transactionFee: 0.10
+        },
+        {
+          type: 'CARD_NOT_PRESENT',
+          discountRate: 2.89,
+          transactionFee: 0.30
+        }
+      ]
     };
   }
-  if (tier === 'Self_Keyed') {
-    return {
-      pricingModel: 'FLAT_RATE',
-      discountRate: 2.89,
-      transactionFee: 0.30
-    };
-  }
-  if (tier === 'Self_CashDiscount') {
+  if (tier === 'CASH_DISCOUNT') {
     return {
       pricingModel: 'CASH_DISCOUNT',
       discountRate: 0,
@@ -53,7 +57,7 @@ function buildPricingBlock(profile) {
     };
   }
 
-  // Fallback to standard
+  // Fallback
   return {
     pricingModel: 'FLAT_RATE',
     discountRate: 2.60,

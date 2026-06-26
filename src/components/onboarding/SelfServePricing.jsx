@@ -5,12 +5,12 @@ import CliqbuxLogo from './CliqbuxLogo';
 
 const PRICING_CARDS = [
   {
-    key: 'Self_Swiped',
+    key: 'TRADITIONAL',
     label: 'Traditional Swiped',
     icon: CreditCard,
     rate: '2.49%',
     fee: '$0.10',
-    description: 'Best for in-person card-present transactions with a physical terminal.',
+    description: 'Best for in-person card-present transactions with a physical terminal. Card-not-present (keyed) transactions are also covered at 2.89% + $0.30.',
     badge: 'Most Popular',
     badgeColor: 'bg-blue-100 text-blue-700',
     accentColor: 'border-blue-200 hover:border-blue-400',
@@ -19,12 +19,12 @@ const PRICING_CARDS = [
     iconBg: 'bg-blue-100'
   },
   {
-    key: 'Self_Keyed',
+    key: 'TRADITIONAL',
     label: 'Traditional Keyed',
     icon: Zap,
     rate: '2.89%',
     fee: '$0.30',
-    description: 'Ideal for phone orders, mail orders, or card-not-present transactions.',
+    description: 'Ideal for phone orders, mail orders, or card-not-present transactions. In-person swiped transactions are also covered at 2.49% + $0.10.',
     badge: 'Card Not Present',
     badgeColor: 'bg-purple-100 text-purple-700',
     accentColor: 'border-purple-200 hover:border-purple-400',
@@ -33,7 +33,7 @@ const PRICING_CARDS = [
     iconBg: 'bg-purple-100'
   },
   {
-    key: 'Self_CashDiscount',
+    key: 'CASH_DISCOUNT',
     label: 'Cash Discount Program',
     icon: Percent,
     rate: '0%',
@@ -50,13 +50,15 @@ const PRICING_CARDS = [
 
 export default function SelfServePricing({ onComplete }) {
   const [selectedTier, setSelectedTier] = useState(null);
+  const [selectedCardIndex, setSelectedCardIndex] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ businessName: '', signerName: '', signerEmail: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSelectTier = (key) => {
+  const handleSelectTier = (key, index) => {
     setSelectedTier(key);
+    setSelectedCardIndex(index);
     setShowForm(true);
     setError('');
   };
@@ -126,13 +128,13 @@ export default function SelfServePricing({ onComplete }) {
 
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl mb-10">
-          {PRICING_CARDS.map((card) => {
+          {PRICING_CARDS.map((card, index) => {
             const Icon = card.icon;
-            const isSelected = selectedTier === card.key;
+            const isSelected = selectedCardIndex === index;
             return (
               <button
                 key={card.key}
-                onClick={() => handleSelectTier(card.key)}
+                onClick={() => handleSelectTier(card.key, index)}
                 className={`relative text-left rounded-2xl border-2 p-7 transition-all duration-200 bg-white shadow-lg cursor-pointer
                   ${isSelected ? card.selectedColor + ' shadow-xl scale-[1.02]' : 'border-gray-200 hover:shadow-xl hover:scale-[1.01] ' + card.accentColor}
                 `}

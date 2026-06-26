@@ -24,9 +24,8 @@
         "Standard",
         "Premium",
         "Custom",
-        "Self_Swiped",
-        "Self_Keyed",
-        "Self_CashDiscount"
+        "TRADITIONAL",
+        "CASH_DISCOUNT"
       ]
     },
     "customMarkupPercentage": {
