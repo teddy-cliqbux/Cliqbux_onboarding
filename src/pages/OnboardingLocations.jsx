@@ -104,14 +104,17 @@ export default function OnboardingLocations({ profile, onContinue }) {
     setPlaidAccounts(prev => ({ ...prev, [entityId]: accounts }));
     // Auto-select first account for each location under this entity
     if (accounts.length > 0) {
-      setLocs(prev => prev.map(l => l.entityId === entityId ? { ...l } : l));
-      // Assign first account to affected locations with no existing bank
-      setLocationState(prev => Object.fromEntries(Object.entries(prev).map(([locId, ls]) => {
-        const loc = locs.find(l => l.id === locId);
-        return loc && loc.entityId === entityId && !loc.bankDetails?.routingNumber
-          ? [locId, { ...ls, selectedBankId: accounts[0].accountId, isManualMode: false }]
-          : [locId, ls];
-      })));
+      setLocs(prev => {
+        const newLocs = prev.map(l => l.entityId === entityId ? { ...l } : l);
+        // Assign first account to affected locations with no existing bank — read current locs from the same snapshot
+        setLocationState(prevLocState => Object.fromEntries(Object.entries(prevLocState).map(([locId, ls]) => {
+          const loc = newLocs.find(l => l.id === locId);
+          return loc && loc.entityId === entityId && !loc.bankDetails?.routingNumber
+            ? [locId, { ...ls, selectedBankId: accounts[0].accountId, isManualMode: false }]
+            : [locId, ls];
+        })));
+        return newLocs;
+      });
     }
   };
 
@@ -357,12 +360,12 @@ export default function OnboardingLocations({ profile, onContinue }) {
                     <p className="text-sm font-bold text-gray-900">Legal Entity: {entity.legalBusinessName}</p>
                     <p className="text-[11px] text-gray-500 flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                       <span className="flex items-center gap-1"><Hash className="w-3 h-3" />EIN: {formatEIN(entity.federalEIN)}</span>
-                      {entity.corporateMailingAddress && (
-                        <span className="flex items-center gap-1 text-gray-400"><MapPin className="w-3 h-3" />{entity.corporateMailingAddress}</span>
-                      )}
                       <span className="text-gray-300">|</span>
                       {rows.length} {rows.length === 1 ? 'location' : 'locations'}
                     </p>
+                    {entity.corporateMailingAddress && (
+                      <p className="text-[10px] text-slate-500 flex items-center gap-1 mt-1"><MapPin className="w-3 h-3 flex-shrink-0" />{entity.corporateMailingAddress}</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex-shrink-0">
