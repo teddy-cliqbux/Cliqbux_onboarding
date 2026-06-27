@@ -9,6 +9,7 @@ import SelfServePricing from '@/components/onboarding/SelfServePricing';
 // Plaid verification is now handled per-location inside OnboardingLocations
 import OnboardingLocations from './OnboardingLocations';
 import OnboardingVerification from './OnboardingVerification';
+import MobilePricing from '@/components/onboarding/MobilePricing';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
 const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'];
@@ -114,7 +115,12 @@ export default function OnboardingPortal() {
   if (error)   return <ErrorScreen title={error.title} message={error.message} />;
 
   // — Self-serve pricing —
-  if (mode === 'self_serve' && !profile) return <SelfServePricing onComplete={handleSelfServeComplete} />;
+  const isMobile = window.innerWidth < 480;
+  if (mode === 'self_serve' && !profile) {
+    return isMobile
+      ? <MobilePricing onComplete={handleSelfServeComplete} />
+      : <SelfServePricing onComplete={handleSelfServeComplete} />;
+  }
   if (!profile) return <ErrorScreen />;
 
   const { applicationStatus, pricingTier } = profile;
