@@ -19,8 +19,11 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const url = new URL(req.url);
-    const dryRun = url.searchParams.get('dryRun') === 'true';
-    const filterCorporateId = url.searchParams.get('corporateId') || null;
+    const body = req.method === 'POST'
+      ? (await req.json().catch(() => ({}))) || {}
+      : {};
+    const dryRun = url.searchParams.get('dryRun') === 'true' || body?.dryRun === true;
+    const filterCorporateId = url.searchParams.get('corporateId') || body?.corporateId || null;
 
     // Admin-only — this is a destructive/structural operation
     const user = await base44.auth.me();
