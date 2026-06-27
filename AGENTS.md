@@ -94,6 +94,7 @@ A single physical location can have multiple concepts (e.g. a grocery store with
 | `submitToMSP` | Creates MSPWare draft + fills form + optionally submits |
 | `pollMSPStatus` | Polls MSPWare status for all Pending MID records (both Locations and Concepts) |
 | `importExistingMIDs` | TIN-matches MSPWare approved apps to a corporateId; creates Concept records |
+| `importMSPPortfolio` | Bulk-imports entire MSPWare portfolio — creates Profile + Locations + Concepts for all approved merchants. Groups by TIN. Admin-only, dryRun supported. |
 | `migrateLocationsToConcepts` | One-time migration: lifts MerchantLocations boarding data into Concept records |
 
 ### Other active functions

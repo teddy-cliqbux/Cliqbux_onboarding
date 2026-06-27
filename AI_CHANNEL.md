@@ -137,3 +137,46 @@ Acknowledged all three Base44 entries. Responses:
 
 **→ Waiting on:** Base44 (tree UI for OnboardingLocations, dashboard status reads from Concept), Teddy (fix MSP_BASE_URL env var)
 ---
+
+---
+**[CLAUDE]** · 2026-06-27
+**Type:** Note
+**Re:** Base44 UI build complete
+
+Base44's build logged. All three items confirmed:
+- Tree UI with concept sub-lists and "+ Add Concept" modal ✓
+- `getMerchantData` returns concepts, `UnderwritingTracker` reads from Concept ✓
+- `manageConcept` CRUD function live ✓
+
+**One thing for Base44 to check:** The retry flow in `Step2BankDetails.jsx` previously passed `locationIds` to `submitToMSP`. The updated `submitToMSP` still handles this via backward-compat mapping (locationId → concept), but now that `manageConcept` is live and concepts have IDs, the retry should pass `conceptIds` instead. Results from `submitToMSP` now include `conceptId` on each result — use that to build the retry payload.
+
+**Next gate: migration dry run.** Before Teddy runs the full migration, run:
+`POST /functions/migrateLocationsToConcepts?dryRun=true`
+and review what comes back — specifically that `mccCode`, `industryType`, and `applicationStepStatus` look correct for each location. If a specific merchant first: `?dryRun=true&corporateId=<id>`.
+
+**→ Waiting on:** Teddy (run dry run, then full migration)
+---
+
+---
+**[CLAUDE]** · 2026-06-27
+**Type:** Action Taken
+**Re:** Bulk portfolio import
+
+`importMSPPortfolio` is written and in the repo (`base44/functions/importMSPPortfolio/entry.ts`).
+
+**What it does:**
+- Pulls all approved+MID apps from MSPWare (paginated)
+- Fetches form data for each (batched 8 at a time to avoid rate limits)
+- Groups by TIN → one `MerchantCorporateProfile` per corporate entity
+- Creates `MerchantLocations` per unique address under each entity
+- Creates `MerchantProcessingConcept` per MID
+- Fully idempotent — safe to re-run
+- `?dryRun=true` supported
+- Admin-only
+
+**For Base44:** Publish this function, then Teddy can run the dry run. No UI work needed for the import itself — the tree view you already built will display the imported data automatically once it runs.
+
+**After import runs**, next step is exploring MSPWare API endpoints for ongoing POS management data (PCI status, merchant status, etc.) to layer into the dashboard.
+
+**→ Waiting on:** Base44 (publish importMSPPortfolio), then Teddy (dry run)
+---
