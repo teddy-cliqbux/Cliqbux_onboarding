@@ -224,9 +224,9 @@ export default function MobilePricing({ onComplete }) {
                   </div>
                   {isSelected && <Check className="w-5 h-5 text-amber-400 flex-shrink-0" />}
                 </div>
-                <p className="text-xs text-gray-200 mt-3 leading-relaxed">{card.description}</p>
+                <p className="text-xs text-gray-100 mt-3 leading-relaxed">{card.description}</p>
                 <div className="border-t border-white/10 mt-4 pt-4">
-                  <p className="text-2xl font-black text-white">{card.rate} <span className="text-sm font-medium text-gray-200">+ {card.fee}/txn</span></p>
+                  <p className="text-2xl font-black text-white">{card.rate} <span className="text-sm font-medium text-gray-100">+ {card.fee}/txn</span></p>
                   <p className="text-[10px] text-gray-100 font-semibold uppercase tracking-wider mt-1">{card.rateLabel}</p>
                 </div>
               </button>
@@ -249,19 +249,19 @@ export default function MobilePricing({ onComplete }) {
           </div>
 
           <div>
-            <label className="text-xs font-semibold text-gray-200 mb-1.5 block">Business Legal Name <span className="text-red-400">*</span></label>
+            <label className="text-xs font-semibold text-gray-100 mb-1.5 block">Business Legal Name <span className="text-red-400">*</span></label>
             <input type="text" value={info.businessName} onChange={(e) => setInfo(p => ({ ...p, businessName: e.target.value }))} placeholder="e.g. Acme Retail LLC" className={fieldCls} />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-200 mb-1.5 block">Your Full Name <span className="text-red-400">*</span></label>
+            <label className="text-xs font-semibold text-gray-100 mb-1.5 block">Your Full Name <span className="text-red-400">*</span></label>
             <input type="text" value={info.signerName} onChange={(e) => setInfo(p => ({ ...p, signerName: e.target.value }))} placeholder="e.g. Jane Smith" className={fieldCls} />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-200 mb-1.5 block">Business Email <span className="text-red-400">*</span></label>
+            <label className="text-xs font-semibold text-gray-100 mb-1.5 block">Business Email <span className="text-red-400">*</span></label>
             <input type="email" value={info.signerEmail} onChange={(e) => setInfo(p => ({ ...p, signerEmail: e.target.value }))} placeholder="e.g. owner@yourbusiness.com" className={fieldCls} />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-200 mb-1.5 block">Phone</label>
+            <label className="text-xs font-semibold text-gray-100 mb-1.5 block">Phone</label>
             <input type="tel" value={info.phone} onChange={(e) => setInfo(p => ({ ...p, phone: e.target.value }))} placeholder="e.g. (865) 403-7301" className={fieldCls} />
           </div>
 
@@ -336,17 +336,17 @@ export default function MobilePricing({ onComplete }) {
             <p className="text-[10px] text-gray-100">How customers pay. Must total 100%.</p>
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="text-[10px] text-gray-200 block mb-1">In-Person %</label>
+                <label className="text-[10px] text-gray-100 block mb-1">In-Person %</label>
                 <input type="number" value={det.cardPresentPct} onChange={(e) => setDet(p => ({ ...p, cardPresentPct: e.target.value }))}
                   min="0" max="100" className={fieldCls} />
               </div>
               <div>
-                <label className="text-[10px] text-gray-200 block mb-1">Online %</label>
+                <label className="text-[10px] text-gray-100 block mb-1">Online %</label>
                 <input type="number" value={det.internetPct} onChange={(e) => setDet(p => ({ ...p, internetPct: e.target.value }))}
                   min="0" max="100" className={fieldCls} />
               </div>
               <div>
-                <label className="text-[10px] text-gray-200 block mb-1">MOTO %</label>
+                <label className="text-[10px] text-gray-100 block mb-1">MOTO %</label>
                 <input type="number" value={det.motoPct} onChange={(e) => setDet(p => ({ ...p, motoPct: e.target.value }))}
                   min="0" max="100" className={fieldCls} />
               </div>
@@ -373,7 +373,7 @@ export default function MobilePricing({ onComplete }) {
       )}
 
       {/* Footer */}
-      <p className="text-gray-400 text-[10px] text-center mt-8">
+      <p className="text-gray-100 text-[10px] text-center mt-8">
         Secured by <span className="text-amber-400 font-bold">Cliqbux</span> · onboarding.cliqbux.com · {new Date().getFullYear()}
       </p>
     </div>

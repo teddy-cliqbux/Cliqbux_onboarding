@@ -438,7 +438,7 @@ export default function SelfServePricing({ onComplete }) {
                     <label className={labelCls}>Phone/Mail (%)</label>
                     <input type="number" value={details.motoPct} onChange={(e) => setDetails(p => ({ ...p, motoPct: e.target.value }))}
                       placeholder="e.g. 0" min="0" max="100" className={inputCls} />
-                    <p className="text-[10px] text-gray-400 mt-1">MOTO orders</p>
+                    <p className="text-[10px] text-gray-100 mt-1">MOTO orders</p>
                   </div>
                 </div>
                 {acceptancePctSum() !== 100 && (details.cardPresentPct || details.internetPct || details.motoPct) && (
@@ -473,7 +473,7 @@ export default function SelfServePricing({ onComplete }) {
           </div>
         )}
 
-        <p className="text-gray-600 text-xs mt-8 text-center">
+        <p className="text-gray-100 text-xs mt-8 text-center">
           Secured by <span className="text-amber-500 font-semibold">Cliqbux</span> · onboarding.cliqbux.com · {new Date().getFullYear()}
         </p>
       </div>
