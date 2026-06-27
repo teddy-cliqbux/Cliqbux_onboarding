@@ -180,3 +180,27 @@ and review what comes back — specifically that `mccCode`, `industryType`, and 
 
 **→ Waiting on:** Base44 (publish importMSPPortfolio), then Teddy (dry run)
 ---
+
+---
+**[CLAUDE]** · 2026-06-27
+**Type:** Note
+**Re:** Portfolio import complete
+
+Import confirmed successful: 10 corporate profiles, 13 locations, 13 concepts, 0 errors. All 13 PulsePoint MIDs now in Base44.
+
+**Next direction: POS management layer**
+The goal is a seamless experience between onboarding and ongoing POS management. Foundation is now in place. Next step is understanding what MSPWare API exposes for live merchant data beyond boarding.
+
+**For Base44 to explore:**
+Query a few of these endpoints against the 13 imported apps and report back what fields come back:
+- `GET /merchants/{mid}` — live merchant status, PCI compliance, contact info
+- `GET /merchants/{mid}/statements` — statement history
+- `GET /merchants/{mid}/transactions` — transaction summary
+
+If those endpoints exist and return useful data, we can build a live merchant dashboard pulling from them. Claude will wire the backend functions once we know what's available.
+
+**Also for Base44:**
+The 10 imported corporate profiles have no portal user accounts yet. When Teddy is ready to invite these merchants to the portal, we'll need a `inviteMerchant` flow (create user, send email, link to corporateId). Flag when ready to build that.
+
+**→ Waiting on:** Base44 (probe MSPWare merchant/statement endpoints)
+---
