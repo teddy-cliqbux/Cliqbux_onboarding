@@ -86,26 +86,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       const newEntityId = entities[entities.length - 1]?.entityId;
       if (!newEntityId) return;
 
-      const locRes = await base44.functions.invoke('addSelfServeLocation', {
-        corporateId: profile.corporateId, entityId: newEntityId,
-        dbaName: legalName, businessAddress: '',
-      });
-      if (locRes.data?.error) return;
-
-      const freshLocs = (await base44.functions.invoke('listLocations', { corporateId: profile.corporateId })).data?.locations || [];
-      const newLocId = locRes.data?.location?.id || locRes.data?.location?.locationId || freshLocs[freshLocs.length - 1]?.id || '';
-      setLocs(freshLocs.map(loc => {
-        const id = loc.id || loc.locationId;
-        ensureLocState(id);
-        return {
-          id, entityId: newEntityId, dbaName: loc.dbaName, businessAddress: loc.businessAddress,
-          addressVerified: loc.addressVerified || false,
-          bankDetails: loc.bankDetails || { routingNumber: loc.routingNumber || '', accountNumber: loc.accountNumber || '', authMethod: null },
-          applicationStepStatus: loc.applicationStepStatus || 'In Review', elavonMID: loc.elavonMID,
-        };
-      }));
       setEntities(entities);
-      if (newLocId) setEditLocId(newLocId);
+      // Open the Add Location modal so the user fills in the real address/DBA themselves
+      setShowAddLoc(true);
     } catch (_) { /* guard on self-serve where corporateId may not be ready yet */ }
   };
 
@@ -296,12 +279,11 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     setLocationState(prev => ({ ...prev }));
   };
 
-  const LocationRow = ({ row, suppressColDef }) => {
+  const renderLocationRow = (row) => {
     const hasBanking = !!getLocBankDetails(row);
     const ls = locationState[row.id];
     const isApproved = row.applicationStepStatus === 'Approved';
     const isError = row.applicationStepStatus === 'Error';
-    const inManualMode = ls?.isManualMode;
     return (
       <div key={row.id} className={`rounded-lg border px-4 py-3 md:grid md:grid-cols-12 md:gap-3 flex flex-col gap-3 ${isApproved ? 'border-green-200 bg-green-50' : isError ? 'border-red-200 bg-red-50' : hasBanking ? 'border-amber-200 bg-amber-50/40' : isMultiEntity ? 'border-gray-200 bg-white' : 'border-gray-100 bg-white hover:border-gray-200'}`}>
         <div className="md:col-span-4 flex items-start gap-2.5 min-w-0">
@@ -370,7 +352,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
               <EntityPlaidButton corporateId={profile.corporateId} entityId={firstEntityId} onAccountsConnected={handleAccountsConnected} />
             )}
           </div>
-          {locs.map(row => <LocationRow key={row.id} row={row} />)}
+          {locs.map(row => renderLocationRow(row))}
           {locs.length === 0 && (
             <div className="text-center py-6 border border-dashed border-gray-200 rounded-xl">
               <p className="text-sm text-gray-400">Add a location to assign an account.</p>
@@ -422,7 +404,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                   <div className="col-span-3">Status</div>
                   <div className="col-span-1"></div>
                 </div>
-                {rows.map(row => <LocationRow key={row.id} row={row} suppressColDef />)}
+                {rows.map(row => renderLocationRow(row))}
               </div>
             </div>
           );
