@@ -78,6 +78,10 @@
       "type": "string",
       "description": "Merchant ID assigned by Elavon — populated asynchronously after board status reaches COMPLETE"
     },
+    "mspApplicationNo": {
+      "type": "string",
+      "description": "MSPWare/PulsePoint application number — assigned when draft is created via submitToMSP"
+    },
     "awb": {
       "type": "string",
       "description": "Application Work Basket ID returned by Elavon /board — used to poll /boardstatus for async MID assignment"
