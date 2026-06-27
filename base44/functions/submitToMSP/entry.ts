@@ -9,7 +9,7 @@ const DEFAULT_TEMPLATE_NO = 6;
 
 // ─── Value Mappings ───────────────────────────────────────────────────────────
 
-// Maps our internal ownershipType / taxClassType values → MSPWare ownershipTypeCodes
+// Maps our internal ownershipType / taxClassType → MSPWare ownership_type codes
 function mapOwnershipType(t: string): string {
   const map: Record<string, string> = {
     'SOLE_PROP':        'SP',
@@ -29,28 +29,54 @@ function mapOwnershipType(t: string): string {
   return map[t?.toUpperCase?.()] || map[t] || 'CO';
 }
 
-// Maps our internal titleType values → MSPWare ownerTitle codes
+// Maps LLC subtype → Elavon ClassificationCode (only used when ownership_type = 'LL')
+// Confirmed valid from live apps: "C" (C-corp election), "P" (partnership), "D" (disregarded entity)
+function mapLlcClass(t: string): string {
+  const map: Record<string, string> = {
+    'LLC':              'D',   // default: single-member disregarded entity
+    'LLC_PARTNERSHIP':  'P',   // multi-member taxed as partnership
+    'LLC_CORPORATION':  'C',   // elected to be taxed as corporation
+  };
+  return map[t?.toUpperCase?.()] || map[t] || 'D';
+}
+
+// Maps our internal titleType → MSPWare owner_title codes
 function mapOwnerTitle(t: string): string {
   const map: Record<string, string> = {
-    'OWNER':              'OP',
-    'PROPRIETOR_OR_OWNER':'OP',
-    'PARTNER':            'PP',
+    'OWNER':               'OP',
+    'PROPRIETOR_OR_OWNER': 'OP',
+    'PARTNER':             'PP',
     'PARTNER_OR_PRINCIPAL':'PP',
-    'MANAGER':            'GM',
-    'GENERAL_MANAGER':    'GM',
-    'CEO':                'CEO',
-    'CFO':                'CFO',
-    'COO':                'COO',
-    'PRESIDENT':          'P',
-    'VP':                 'VP',
-    'VICE_PRESIDENT':     'VP',
-    'MANAGING_MEMBER':    'MM',
-    'DIRECTOR':           'D',
-    'OFFICER':            'O',
-    'TREASURER':          'T',
-    'SECRETARY':          'S',
+    'MANAGER':             'GM',
+    'GENERAL_MANAGER':     'GM',
+    'CEO':                 'CEO',
+    'CFO':                 'CFO',
+    'COO':                 'COO',
+    'PRESIDENT':           'P',
+    'VP':                  'VP',
+    'VICE_PRESIDENT':      'VP',
+    'MANAGING_MEMBER':     'MM',
+    'DIRECTOR':            'D',
+    'OFFICER':             'O',
+    'TREASURER':           'T',
+    'SECRETARY':           'S',
   };
   return map[t?.toUpperCase?.()] || map[t] || 'OP';
+}
+
+// Maps pricing category number → Elavon IndustryCode
+// Confirmed from live approved apps: RE=Retail, RS=Restaurant, SP=Supermarket
+function mapIndustryType(pricingCategory: string): string {
+  const map: Record<string, string> = {
+    '1':  'RE',   // Retail (confirmed valid)
+    '2':  'HT',   // Hotel/Lodging
+    '4':  'SP',   // Supermarket (confirmed valid)
+    '5':  'ARU',  // ARU
+    '6':  'MS',   // MOTO/Internet
+    '7':  'RS',   // Restaurant (confirmed valid)
+    '13': 'RE',   // Omni Commerce → Retail
+  };
+  return map[pricingCategory] || 'RE';
 }
 
 function cleanDigits(s: string): string {
@@ -60,6 +86,14 @@ function cleanDigits(s: string): string {
 function formatDob(year: string, month: string, day: string): string {
   if (!year || !month || !day) return '';
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+// Returns first day of next calendar month as YYYY-MM-DD
+function nextMonthStart(): string {
+  const now = new Date();
+  const y = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
+  const m = now.getMonth() === 11 ? 1 : now.getMonth() + 2;
+  return `${y}-${String(m).padStart(2, '0')}-01`;
 }
 
 // ─── Form Payload Builder ─────────────────────────────────────────────────────
@@ -77,10 +111,25 @@ function buildFormPayload(
   const taxId = cleanDigits(profile.taxId || '');
   const ssn = cleanDigits(signer.ssn || profile.ssn || '');
   const phone = cleanDigits(signer.corporatePhone || profile.corporatePhone || '');
-  const cardPresentPct = String(profile.cardPresentPct || '100');
-  const cnpPct = String(100 - parseInt(cardPresentPct, 10) || 0);
 
-  // Build additional owners array (signers beyond the primary)
+  const cardPresentPct = parseInt(String(profile.cardPresentPct || '100'), 10);
+  const cnpPct = 100 - cardPresentPct;
+  const intPct = cnpPct > 0 ? String(profile.internetPct ?? cnpPct) : '0';
+
+  const ownershipRaw = profile.ownershipType || profile.taxClassType || '';
+  const ownershipType = mapOwnershipType(ownershipRaw);
+  const isLLC = ownershipType === 'LL';
+
+  // Pricing/industry — use profile fields if set, otherwise retail defaults
+  const pricingCategory = String(profile.pricingCategory || '1');
+  const pricingMethod = profile.pricingMethod || 'ICPLS';
+  const industryType = profile.industryType || mapIndustryType(pricingCategory);
+
+  const annualRevenue = String(
+    profile.annualRevenue || (parseInt(String(profile.monthlyCardSales || '6000'), 10) * 12)
+  );
+
+  // Build additional owners array
   const additionalOwners = additionalSigners.map(s => ({
     owner_responsible_party: false,
     owner_personal_guarantee: !!s.signsPersonalGuarantee,
@@ -94,6 +143,7 @@ function buildFormPayload(
     owner_phone: cleanDigits(s.corporatePhone || profile.corporatePhone || ''),
     owner_email: s.signerEmail || '',
     owner_country: 'USA',
+    owner_address_type: 'PRA',
     owner_address: s.homeStreet || '',
     owner_city: s.homeCity || '',
     owner_state_usa: s.homeState || '',
@@ -111,21 +161,30 @@ function buildFormPayload(
     year_business_established: String(profile.establishmentYear || new Date().getFullYear() - 3),
     ownership_years: String(profile.currentOwnershipYears || '1'),
     ownership_months: String(profile.currentOwnershipMonths || '0'),
-    ownership_type: mapOwnershipType(profile.ownershipType || profile.taxClassType || ''),
+    ownership_type: ownershipType,
     tin: taxId,
     // SSN only sent for sole props (when no EIN)
     ...((!taxId && ssn) ? { ssn } : {}),
+    // LLC tax classification — only required when ownership_type = 'LL'
+    ...(isLLC ? { llc_class: mapLlcClass(ownershipRaw) } : {}),
+    // Country fields
+    country_formation: 'USA',
+    country_operations: 'USA',
+    // Industry
+    industry_type: industryType,
 
     // ── Addresses ────────────────────────────────────────────────────────────
     contact_first_name: signer.firstName || '',
     contact_last_name: signer.lastName || '',
     business_phone: phone,
+    customer_service_phone: phone,
     business_email: signer.signerEmail || profile.signerEmail || '',
+    business_address_type: 'BSA',
     business_address: location.businessStreet || location.businessAddress || '',
     business_city: location.businessCity || '',
     business_state_usa: location.businessState || '',
     business_zipcode: location.businessZip || '',
-    has_legal_address: 'same',
+    has_legal_address: 'business',   // 'same' is not a valid option
 
     // ── Principals ───────────────────────────────────────────────────────────
     owners: [
@@ -138,10 +197,15 @@ function buildFormPayload(
         owner_firstname: signer.firstName || '',
         owner_middlename: signer.middleName || '',
         owner_lastname: signer.lastName || '',
-        owner_dob: formatDob(signer.dobYear || profile.dobYear, signer.dobMonth || profile.dobMonth, signer.dobDay || profile.dobDay),
+        owner_dob: formatDob(
+          signer.dobYear || profile.dobYear,
+          signer.dobMonth || profile.dobMonth,
+          signer.dobDay || profile.dobDay
+        ),
         owner_phone: phone,
         owner_email: signer.signerEmail || profile.signerEmail || '',
         owner_country: 'USA',
+        owner_address_type: 'PRA',
         owner_address: signer.homeStreet || profile.homeStreet || '',
         owner_city: signer.homeCity || profile.homeCity || '',
         owner_state_usa: signer.homeState || profile.homeState || '',
@@ -153,23 +217,50 @@ function buildFormPayload(
       ...additionalOwners,
     ],
     has_intermediary_businesses: false,
+    beneficial_ownership_exemption: 'NON',
     owner_confirmed: true,
 
     // ── Financial Information ─────────────────────────────────────────────────
+    annual_revenue: annualRevenue,
     monthly_sales: String(profile.monthlyCardSales || '6000'),
     average_sales: String(profile.avgSaleAmount || '100'),
     highest_ticket: String(profile.highestTicketAmount || profile.avgSaleAmount || '200'),
     freq_highest_average_ticket: String(profile.highestTicketFrequency || '24'),
-    cp_percent: cardPresentPct,
-    cnp_percent: cnpPct,
+    cp_percent: String(cardPresentPct),
+    cnp_percent: String(cnpPct),
+    int_percent: intPct,
+    delayed_delivery: String(profile.deliveryDelayDays || '0'),
+
+    // ── Card Acceptance ───────────────────────────────────────────────────────
+    cards_accepted: ['VISA', 'VISA_DEBIT', 'MASTERCARD', 'MASTERCARD_DEBIT', 'DISCOVER', 'AMEX'],
+    card_acceptance_split: cardPresentPct >= 100 ? 'CP' : 'OMNI',
+
+    // ── Industry / MCC ────────────────────────────────────────────────────────
+    // MSPWare MCC field uses Elavon's MCC codes (e.g. "5814", "5411A", "5999")
+    // profile.mcc should store the merchant's MCC; defaults to 5999 (misc retail)
+    mcc: profile.mcc || '5999',
+
+    // ── Pricing ───────────────────────────────────────────────────────────────
+    pricing_method: pricingMethod,
+    pricing_category: pricingCategory,
+    billing_method: 'N',
+    annual_fee_start_date: nextMonthStart(),
+    // Auth/IC+ pricing fields — account-level constants for Cliqbux
+    auth_pricing_program: '49999',
+    all_markup_discount: '0.0000',
+    all_markup_per_item: '0.000',
+    all_card_auth_per_item: '0.050',
+    intl_card_handling_fee: '0.60',
+    tokenization_service_fee: '0.0000',
+    tokenization_platform_fee: '0.0000',
 
     // ── Bank Accounts ─────────────────────────────────────────────────────────
     deposit_account_no: account,
     deposit_account_rtg: routing,
 
     // ── Statements ────────────────────────────────────────────────────────────
-    statement_delivery_method: 'E',   // Email
-    chargebacks_retrievals_format: 'E',
+    statement_delivery_method: 'E',
+    chargebacks_retrievals_format: 'WM',   // 'E' is not a valid option
     chargebacks_retrievals_email: signer.signerEmail || profile.signerEmail || '',
   };
 }
