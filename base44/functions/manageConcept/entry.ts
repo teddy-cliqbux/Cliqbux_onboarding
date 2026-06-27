@@ -44,7 +44,28 @@ Deno.serve(async (req) => {
       return Response.json({ concept });
     }
 
-    return Response.json({ error: 'Unknown action. Use list or add.' }, { status: 400 });
+    // — UPDATE —
+    if (action === 'update') {
+      if (!conceptId) {
+        return Response.json({ error: 'conceptId is required for update' }, { status: 400 });
+      }
+
+      const updateFields = {};
+      if (data?.conceptName !== undefined) updateFields.conceptName = data.conceptName;
+      if (data?.dbaName !== undefined) updateFields.dbaName = data.dbaName;
+      if (data?.mccCode !== undefined) updateFields.mccCode = data.mccCode;
+      if (data?.industryType !== undefined) updateFields.industryType = data.industryType;
+      if (data?.monthlyCardSales !== undefined) updateFields.monthlyCardSales = Number(data.monthlyCardSales);
+      if (data?.avgSaleAmount !== undefined) updateFields.avgSaleAmount = Number(data.avgSaleAmount);
+      if (data?.highestTicketAmount !== undefined) updateFields.highestTicketAmount = Number(data.highestTicketAmount);
+      if (data?.cardPresentPct !== undefined) updateFields.cardPresentPct = Number(data.cardPresentPct);
+      if (data?.productDescription !== undefined) updateFields.productDescription = data.productDescription;
+
+      const updated = await base44.asServiceRole.entities.MerchantProcessingConcept.update(conceptId, updateFields);
+      return Response.json({ concept: updated });
+    }
+
+    return Response.json({ error: 'Unknown action. Use list, add, or update.' }, { status: 400 });
 
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
