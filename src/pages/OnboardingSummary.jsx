@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, AlertCircle, CreditCard, Store, BarChart3, Percent, DollarSign, Layers, Loader2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, AlertCircle, CreditCard, Store, BarChart3, Percent, DollarSign, Loader2 } from 'lucide-react';
 import LocationStatusTable from '@/components/onboarding/LocationStatusTable';
 import { base44 } from '@/api/base44Client';
 
@@ -106,8 +106,15 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
                     editData={editData}
                     setEditData={setEditData}
                     onSave={async () => {
-                      // Currently concepts don't have an update endpoint — we show edit UI inline
-                      // for future-proofing. For now, just show the review.
+                      try {
+                        await base44.functions.invoke('manageConcept', {
+                          action: 'update',
+                          corporateId: profile.corporateId,
+                          conceptId: c.id,
+                          data: editData,
+                        });
+                        await loadConcepts();
+                      } catch (_) { /* best effort */ }
                       setEditingConcept(null);
                     }}
                     onCancel={() => setEditingConcept(null)}
@@ -209,7 +216,12 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
       {/* Status table overview */}
       <div className="px-8 py-6">
         <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-4">Onboarding Status</h3>
-        <LocationStatusTable locations={locations} concepts={concepts} />
+        <LocationStatusTable
+          locations={locations}
+          concepts={concepts}
+          corporateId={profile.corporateId}
+          onStatusChanged={loadConcepts}
+        />
       </div>
 
       {/* Location review cards */}
