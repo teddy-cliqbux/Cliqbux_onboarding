@@ -291,7 +291,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     setLocationState(prev => ({ ...prev }));
   };
 
-  const renderLocationRow = (row) => {
+  const renderLocationRow = (row, suppressColDef) => {
     const hasBanking = !!getLocBankDetails(row);
     const ls = locationState[row.id];
     const isApproved = row.applicationStepStatus === 'Approved';
@@ -473,7 +473,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                 </div>
                 {rows.map(row => (
                   <div key={row.id}>
-                    {renderLocationRow(row)}
+                    {renderLocationRow(row, true)}
                     {renderConceptRow(row.id)}
                     {!conceptsLoading && <div className="flex justify-end pr-2"><button onClick={() => handleAddConcept(row.id)} className="text-[10px] font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1"><NotebookPen className="w-3 h-3" /> + Add Concept</button></div>}
                   </div>

@@ -209,25 +209,25 @@ export default function MobilePricing({ onComplete }) {
             const isSelected = selectedTier === card.key;
             return (
               <button key={card.key} onClick={() => handleSelectTier(card.key)}
-                className={`w-full text-left rounded-2xl border p-5 transition-all duration-200 bg-[#1A1D24] ${
-                  isSelected ? 'border-amber-500/60 bg-amber-500/10' : 'border-white/10 hover:border-white/30'
+                className={`w-full text-left rounded-2xl border-2 p-5 transition-all duration-200 bg-white shadow-md ${
+                  isSelected ? 'border-amber-500 shadow-amber-900/20 scale-[1.01]' : 'border-gray-200 hover:border-gray-300'
                 }`}>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isSelected ? 'bg-amber-500/20' : 'bg-white/15'}`}>
-                      {card.key === 'TRADITIONAL' ? <CreditCard className={`w-5 h-5 ${isSelected ? 'text-amber-300' : 'text-gray-200'}`} /> : <Percent className={`w-5 h-5 ${isSelected ? 'text-amber-300' : 'text-gray-200'}`} />}
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isSelected ? 'bg-amber-100' : 'bg-gray-100'}`}>
+                      {card.key === 'TRADITIONAL' ? <CreditCard className={`w-5 h-5 ${isSelected ? 'text-amber-600' : 'text-gray-500'}`} /> : <Percent className={`w-5 h-5 ${isSelected ? 'text-amber-600' : 'text-gray-500'}`} />}
                     </div>
                     <div>
-                      <h3 className="text-base font-bold text-white">{card.label}</h3>
-                      <span className="text-[10px] text-gray-100">{card.badge}</span>
+                      <h3 className="text-base font-bold text-gray-900">{card.label}</h3>
+                      <span className="text-[10px] text-gray-500">{card.badge}</span>
                     </div>
                   </div>
-                  {isSelected && <Check className="w-5 h-5 text-amber-400 flex-shrink-0" />}
+                  {isSelected && <Check className="w-5 h-5 text-amber-500 flex-shrink-0" />}
                 </div>
-                <p className="text-xs text-gray-100 mt-3 leading-relaxed">{card.description}</p>
-                <div className="border-t border-white/10 mt-4 pt-4">
-                  <p className="text-2xl font-black text-white">{card.rate} <span className="text-sm font-medium text-gray-100">+ {card.fee}/txn</span></p>
-                  <p className="text-[10px] text-gray-100 font-semibold uppercase tracking-wider mt-1">{card.rateLabel}</p>
+                <p className="text-xs text-gray-500 mt-3 leading-relaxed">{card.description}</p>
+                <div className="border-t border-gray-100 mt-4 pt-4">
+                  <p className="text-2xl font-black text-gray-900">{card.rate} <span className="text-sm font-medium text-gray-400">+ {card.fee}/txn</span></p>
+                  <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mt-1">{card.rateLabel}</p>
                 </div>
               </button>
             );
