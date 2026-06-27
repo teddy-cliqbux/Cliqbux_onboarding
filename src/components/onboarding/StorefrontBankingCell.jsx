@@ -63,13 +63,18 @@ export default function StorefrontBankingCell({
 
   const handleToggleManual = () => {
     const enteringManual = !cachedInManual;
-    if (!enteringManual) {
-      // Exiting manual → sync typed values before switching away from Plaid.
-      syncManualDetails();
-    } else {
+    if (enteringManual) {
       // Entering manual → clear any stale Plaid state and reset manual fields.
       onUpdateManualField(locId, 'manualRouting', '');
       onUpdateManualField(locId, 'manualAccount', '');
+    } else {
+      // Exiting manual → auto-select the first available Plaid account so the
+      // parent's locationState has a valid selectedBankId and isReady unblocks.
+      const first = entityAccounts[0];
+      if (first?.accountId) {
+        setCachedSelectedBankId(first.accountId);
+        onSelectBank(locId, first.accountId);
+      }
     }
     onToggleManual(locId, enteringManual);
     setCachedInManual(enteringManual);
