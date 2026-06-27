@@ -19,7 +19,6 @@ const labelCls = 'text-xs font-semibold text-gray-600 block mb-1.5';
 export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
   const [expanded, setExpanded] = useState(false);
   const [showSsn, setShowSsn] = useState(false);
-  const [ssnFocused, setSsnFocused] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({
@@ -76,7 +75,7 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
   }
 
   return (
-    <div className="border border-blue-200 bg-blue-50/50 rounded-lg p-4 max-w-sm space-y-3">
+    <div className="border border-blue-200 bg-white rounded-lg p-4 max-w-sm space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs font-bold text-blue-700 uppercase tracking-widest">Complete Identity Verification</p>
         <button onClick={() => setExpanded(false)} className="text-xs text-gray-400 hover:text-gray-600 underline">Cancel</button>
@@ -106,12 +105,10 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
         <label className={labelCls}>Social Security Number (SSN)</label>
         <div className="relative">
           <input
-            type="text"
-            maxLength={11}
+            type={showSsn ? 'text' : 'password'}
+            maxLength={showSsn ? 11 : 9}
             className={`${inputCls} pr-9 font-mono tracking-[0.2em]`}
-            value={ssnFocused && !showSsn ? '••••••' : formatSSN(form.ssn || '')}
-            onFocus={() => setSsnFocused(true)}
-            onBlur={() => setSsnFocused(false)}
+            value={showSsn ? formatSSN(form.ssn || '') : (form.ssn || '')}
             onChange={e => set('ssn', e.target.value.replace(/\D/g, '').slice(0, 9))}
             placeholder="XXX-XX-XXXX"
           />
