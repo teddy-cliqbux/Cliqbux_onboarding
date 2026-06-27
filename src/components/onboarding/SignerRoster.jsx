@@ -6,10 +6,10 @@ import InlineVerifyForm from './InlineVerifyForm';
 
 function StatusBadge({ status }) {
   const map = {
-    'Verified':            'bg-green-50 text-green-700 border-green-200',
-    'Sent':                'bg-blue-50 text-blue-700 border-blue-200',
-    'Pending Invitation':  'bg-gray-50 text-gray-500 border-gray-200',
-    'Action Required':     'bg-red-50 text-red-600 border-red-200',
+    'Verified':            'bg-green-500/15 text-green-300 border-green-500/30',
+    'Sent':                'bg-blue-500/15 text-blue-300 border-blue-500/30',
+    'Pending Invitation':  'bg-white/[0.06] text-gray-400 border-white/10',
+    'Action Required':     'bg-red-500/15 text-red-300 border-red-500/30',
   };
   const icons = {
     'Verified':           <CheckCircle2 className="w-3 h-3" />,
@@ -163,30 +163,30 @@ export default function SignerRoster({ profile, onValidChange }) {
     requiredSigners.every(s => s.identityStatus === 'Verified' || s.identityStatus === 'Sent');
 
   return (
-    <div className="border border-gray-200 rounded-xl overflow-hidden">
+    <div className="border border-white/10 rounded-xl overflow-hidden">
       {/* Panel header */}
-      <div className="bg-gray-50 border-b border-gray-200 px-5 py-4 flex items-center justify-between">
+      <div className="bg-white/[0.05] border-b border-white/10 px-5 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-blue-100 flex items-center justify-center">
-            <Users className="w-4 h-4 text-blue-600" />
+          <div className="w-7 h-7 rounded-lg bg-blue-500/15 flex items-center justify-center">
+            <Users className="w-4 h-4 text-blue-400" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-gray-900">Beneficial Owners & Signers</p>
-            <p className="text-xs text-gray-500 mt-0.5">Owners with ≥25% stake must verify or receive an invitation</p>
+            <p className="text-sm font-semibold text-white">Beneficial Owners & Signers</p>
+            <p className="text-xs text-gray-400 mt-0.5">Owners with ≥25% stake must verify or receive an invitation</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           {signers.length > 0 && (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-gray-100 text-gray-600 border-gray-200">
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-white/10 text-gray-300 border-white/10">
               {totalPct}% ownership
             </span>
           )}
           {allRequiredCleared ? (
-            <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full flex items-center gap-1">
+            <span className="text-xs font-semibold text-green-300 bg-green-500/15 border border-green-500/30 px-2.5 py-1 rounded-full flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" /> Ready to Submit
             </span>
           ) : requiredSigners.length > 0 ? (
-            <span className="text-xs font-semibold text-orange-600 bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-full">
+            <span className="text-xs font-semibold text-orange-300 bg-orange-500/15 border border-orange-500/30 px-2.5 py-1 rounded-full">
               Verification Needed
             </span>
           ) : null}
@@ -194,13 +194,13 @@ export default function SignerRoster({ profile, onValidChange }) {
       </div>
 
       {/* Roster rows */}
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-white/10">
         {loading ? (
-          <div className="flex items-center justify-center py-10 gap-2 text-gray-400 text-sm">
+          <div className="flex items-center justify-center py-10 gap-2 text-gray-500 text-sm">
             <Loader2 className="w-4 h-4 animate-spin" /> Loading signers...
           </div>
         ) : signers.length === 0 ? (
-          <div className="py-10 text-center text-gray-400 text-sm">
+          <div className="py-10 text-center text-gray-500 text-sm">
             No signers added yet — add the primary beneficial owner below.
           </div>
         ) : (
@@ -210,14 +210,14 @@ export default function SignerRoster({ profile, onValidChange }) {
             const inviteBtnLabel = signer.identityStatus === 'Sent' ? 'Resend' : 'Send Invite';
             const isEditing = editingRowId === signer.id;
             const draft = drafts[signer.id] || {};
-            const inputCls = 'w-full text-xs border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500';
+            const inputCls = 'w-full text-xs border border-white/15 rounded px-2 py-1 text-white placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white/5';
 
             return (
               <div key={signer.id} className="px-5 py-3.5">
                 {/* Row main */}
                 <div className="flex items-center gap-4">
                   {/* Avatar */}
-                  <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 text-sm font-bold text-gray-500">
+                  <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 text-sm font-bold text-gray-400">
                     {(draft.firstName || signer.firstName)?.[0]}{(draft.lastName || signer.lastName)?.[0]}
                   </div>
                   {/* Info */}
@@ -240,12 +240,12 @@ export default function SignerRoster({ profile, onValidChange }) {
                     ) : (
                       <>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-gray-900">{signer.firstName} {signer.lastName}</p>
+                          <p className="text-sm font-semibold text-white">{signer.firstName} {signer.lastName}</p>
                           {isPrimary && (
-                            <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">Primary</span>
+                            <span className="text-xs bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-semibold">Primary</span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-400 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
+                        <p className="text-xs text-gray-500 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
                       </>
                     )}
                   </div>
@@ -259,7 +259,7 @@ export default function SignerRoster({ profile, onValidChange }) {
                       <button
                         onClick={() => handleResendInvite(signer)}
                         disabled={resendingId === signer.id}
-                        className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
+                        className="text-xs text-blue-300 hover:text-blue-200 border border-blue-500/30 bg-blue-500/15 hover:bg-blue-500/25 px-2.5 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
                         title="Send verification invite"
                       >
                         {resendingId === signer.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
@@ -269,12 +269,12 @@ export default function SignerRoster({ profile, onValidChange }) {
                     {/* Inline Edit/Save lifecycle toggle */}
                     {isEditing ? (
                       <button onClick={() => handleSaveRow(signer.id)}
-                        className="text-xs text-green-700 font-semibold hover:text-green-900 border border-green-200 bg-green-50 hover:bg-green-100 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap">
+                        className="text-xs text-green-300 hover:text-green-200 border border-green-500/30 bg-green-500/15 hover:bg-green-500/25 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap">
                         <Save className="w-3.5 h-3.5" /> Save
                       </button>
                     ) : (
                       <button onClick={() => editDraft(signer)}
-                        className="text-xs text-blue-600 hover:text-blue-800 font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                        className="text-xs text-gray-300 hover:text-white font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap"
                         title="Edit">
                         <Pencil className="w-3.5 h-3.5" /> Edit
                       </button>
@@ -303,10 +303,10 @@ export default function SignerRoster({ profile, onValidChange }) {
       </div>
 
       {/* Add button */}
-      <div className="px-5 py-4 border-t border-gray-100">
+      <div className="px-5 py-4 border-t border-white/10">
         <button
           onClick={() => setShowModal(true)}
-          className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-gray-700 border border-dashed border-gray-300 hover:border-gray-400 hover:bg-gray-50 rounded-xl py-2.5 transition-all"
+          className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-gray-400 border border-dashed border-white/10 hover:border-white/30 hover:bg-white/[0.04] rounded-xl py-2.5 transition-all"
         >
           <UserPlus className="w-4 h-4" />
           + Add Beneficial Owner / Signer
