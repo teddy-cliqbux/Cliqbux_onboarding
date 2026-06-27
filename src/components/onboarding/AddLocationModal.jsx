@@ -18,7 +18,7 @@ export default function AddLocationModal({
 }) {
   const isEdit = !!(initialDbaName || initialBusinessAddress);
   // First storefront = when zero or one location exists (add modal on empty board, or editing the only location)
-  const isFirstLocation = locationsCount <= 1;
+  const isFirstLocation = locationsCount === 0;
 
   const [dbaName, setDbaName] = useState(initialDbaName);
   const [addressDisplay, setAddressDisplay] = useState(initialBusinessAddress);
