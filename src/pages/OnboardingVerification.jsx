@@ -91,7 +91,7 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
     setSubmitting(true);
     setSubmitError('');
     try {
-      const res = await base44.functions.invoke('submitToElavon', { corporateId: profile.corporateId });
+      const res = await base44.functions.invoke('submitToMSP', { corporateId: profile.corporateId });
       const data = res.data;
       if (data?.allSubmitted || data?.success) {
         onComplete();

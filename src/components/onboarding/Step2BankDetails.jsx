@@ -62,7 +62,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
     setSubmissionResults([]);
 
     try {
-      const response = await base44.functions.invoke('submitToElavon', { corporateId: profile.corporateId });
+      const response = await base44.functions.invoke('submitToMSP', { corporateId: profile.corporateId });
       const data = response.data;
       setSubmissionResults(data.results || []);
 
@@ -87,7 +87,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
     setSubmitting(true);
     setSubmitError('');
     try {
-      const response = await base44.functions.invoke('submitToElavon', {
+      const response = await base44.functions.invoke('submitToMSP', {
         corporateId: profile.corporateId,
         locationIds: failedIds
       });

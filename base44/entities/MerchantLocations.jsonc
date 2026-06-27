@@ -23,19 +23,19 @@
     },
     "businessStreet": {
       "type": "string",
-      "description": "Street number + name e.g. 7301 Chapman Hwy — maps to Elavon businessAddress.streetName"
+      "description": "Street number + name e.g. 7301 Chapman Hwy"
     },
     "businessCity": {
       "type": "string",
-      "description": "City name — maps to Elavon businessAddress.city"
+      "description": "City name"
     },
     "businessState": {
       "type": "string",
-      "description": "2-letter state code e.g. TN — converted to USA_TN at Elavon submission"
+      "description": "2-letter state code e.g. TN"
     },
     "businessZip": {
       "type": "string",
-      "description": "5-digit ZIP code — maps to Elavon businessAddress.postCode"
+      "description": "5-digit ZIP code"
     },
     "bankDetails": {
       "type": "object",
@@ -84,11 +84,11 @@
     },
     "awb": {
       "type": "string",
-      "description": "Application Work Basket ID returned by Elavon /board — used to poll /boardstatus for async MID assignment"
+      "description": "DEPRECATED — Application Work Basket ID from the old Elavon direct boarding API. No longer written by any active function. Retained for historical records only. Use mspApplicationNo instead."
     },
     "boardingId": {
       "type": "string",
-      "description": "Alias for awb — chain reference returned by Elavon at boarding time"
+      "description": "DEPRECATED — Alias for awb from the old Elavon direct boarding API. No longer written by any active function. Retained for historical records only. Use mspApplicationNo instead."
     },
     "applicationStepStatus": {
       "type": "string",
