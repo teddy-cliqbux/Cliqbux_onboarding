@@ -83,9 +83,9 @@ const INDUSTRIES = [
   { value: 'SERVICES', label: 'Professional Services (Other)', mcc: '7299' },
 ];
 
-const inputCls = 'w-full border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white/5';
-const labelCls = 'text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5 block';
-const selectCls = 'w-full border border-white/15 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-gray-800';
+const inputCls = 'w-full border border-white/25 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white/5';
+const labelCls = 'text-xs font-semibold text-gray-100 uppercase tracking-wider mb-1.5 block';
+const selectCls = 'w-full border border-white/25 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-gray-800';
 
 export default function SelfServePricing({ onComplete }) {
   const [selectedTier, setSelectedTier] = useState(null);
@@ -211,7 +211,7 @@ export default function SelfServePricing({ onComplete }) {
       {/* Top bar */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-[#111318]/95 backdrop-blur border-b border-white/8 px-6 py-4 flex items-center justify-between">
         <CliqbuxLogo size="sm" />
-        <span className="text-xs text-gray-500 font-mono">Secure Merchant Onboarding</span>
+        <span className="text-xs text-gray-100 font-mono">Secure Merchant Onboarding</span>
       </div>
 
       <div className="pt-24 pb-16 px-4 flex flex-col items-center">
@@ -237,7 +237,7 @@ export default function SelfServePricing({ onComplete }) {
                 STEP 1 OF 2 — SELECT YOUR PRICING PLAN
               </div>
               <h1 className="text-4xl font-bold text-white mb-4 leading-tight">Choose Your Processing Model</h1>
-              <p className="text-gray-400 text-lg leading-relaxed">Select the pricing plan that fits your business. Rates are locked — no hidden fees, no surprises.</p>
+              <p className="text-gray-100 text-lg leading-relaxed">Select the pricing plan that fits your business. Rates are locked — no hidden fees, no surprises.</p>
             </div>
 
             {/* Pricing Cards */}
@@ -247,18 +247,18 @@ export default function SelfServePricing({ onComplete }) {
                 const isSelected = selectedCardIndex === index;
                 return (
                   <button key={index} onClick={() => handleSelectTier(card.key, index)}
-                  className={`relative text-left rounded-2xl border-2 p-7 transition-all duration-200 bg-white/5 backdrop-blur cursor-pointer
-                    ${isSelected ? 'border-amber-400/70 bg-white/10 shadow-lg shadow-amber-900/20 scale-[1.02]' : 'border-white/10 hover:border-white/30 hover:bg-white/[0.08] hover:scale-[1.01]'}`}>
+                    className={`relative text-left rounded-2xl border-2 p-7 transition-all duration-200 bg-white shadow-lg cursor-pointer
+                      ${isSelected ? card.selectedColor + ' shadow-xl scale-[1.02]' : 'border-gray-200 hover:shadow-xl hover:scale-[1.01] ' + card.accentColor}`}>
                   <span className={`absolute top-5 right-5 text-xs font-bold px-2.5 py-1 rounded-full ${card.badgeColor}`}>{card.badge}</span>
-                  {isSelected && <div className="absolute top-5 left-5"><CheckCircle className="w-5 h-5 text-amber-400" /></div>}
+                  {isSelected && <div className="absolute top-5 left-5"><CheckCircle className={`w-5 h-5 ${card.iconColor}`} /></div>}
                   <div className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center mb-5 ${isSelected ? 'mt-6' : ''}`}>
                     <Icon className={`w-6 h-6 ${card.iconColor}`} />
                   </div>
-                  <h3 className="text-xl font-bold text-white mb-2">{card.label}</h3>
-                  <p className="text-gray-400 text-sm mb-6 leading-relaxed">{card.description}</p>
-                  <div className="border-t border-white/10 pt-5">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">{card.label}</h3>
+                  <p className="text-gray-500 text-sm mb-6 leading-relaxed">{card.description}</p>
+                  <div className="border-t border-gray-100 pt-5">
                     <div className="flex items-baseline gap-1 mb-1">
-                      <span className="text-3xl font-black text-white">{card.rate}</span>
+                      <span className="text-3xl font-black text-gray-900">{card.rate}</span>
                       <span className="text-gray-400 text-sm font-medium">+ {card.fee} / txn</span>
                     </div>
                     <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{card.rateLabel}</p>
@@ -273,7 +273,7 @@ export default function SelfServePricing({ onComplete }) {
               <FormCard className="w-full max-w-lg">
                 <div className="mb-7">
                   <h2 className="text-xl font-bold text-white mb-1">Tell Us About Your Business</h2>
-                  <p className="text-gray-400 text-sm">Selected: <span className="font-semibold text-amber-400">{PRICING_CARDS[selectedCardIndex]?.label}</span></p>
+                  <p className="text-gray-100 text-sm">Selected: <span className="font-semibold text-amber-400">{PRICING_CARDS[selectedCardIndex]?.label}</span></p>
                 </div>
 
                 <form onSubmit={handlePage1Next} className="flex flex-col gap-4">
@@ -318,7 +318,7 @@ export default function SelfServePricing({ onComplete }) {
                 STEP 2 OF 2 — BUSINESS DETAILS
               </div>
               <h1 className="text-3xl font-bold text-white mb-3">Business & Processing Details</h1>
-              <p className="text-gray-400 text-sm">Required by our payment processor for account setup. Takes about 2 minutes.</p>
+              <p className="text-gray-100 text-sm">Required by our payment processor for account setup. Takes about 2 minutes.</p>
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-6">
@@ -326,7 +326,7 @@ export default function SelfServePricing({ onComplete }) {
               <FormCard>
                 <div className="flex items-center gap-3 mb-5">
                   <div className="w-9 h-9 rounded-lg bg-blue-500/15 flex items-center justify-center"><Building2 className="w-4 h-4 text-blue-400" /></div>
-                  <h3 className="font-bold text-gray-900 text-base">Business Structure</h3>
+                  <h3 className="font-bold text-white text-base">Business Structure</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -361,7 +361,7 @@ export default function SelfServePricing({ onComplete }) {
                     <label className={labelCls}>What do you sell? <span className="text-red-400">*</span></label>
                     <textarea value={details.productDescription} onChange={(e) => setDetails(p => ({ ...p, productDescription: e.target.value }))}
                       placeholder="e.g. Retail clothing, accessories, and gift items" rows={2}
-                      className="w-full border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white/5 resize-none" required />
+                      className="w-full border border-white/25 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white/5 resize-none" required />
                   </div>
                   <div>
                     <label className={labelCls}>Year Established</label>
@@ -409,7 +409,7 @@ export default function SelfServePricing({ onComplete }) {
                     <label className={labelCls}>Highest Single Ticket ($)</label>
                     <input type="number" value={details.highestTicketAmount} onChange={(e) => setDetails(p => ({ ...p, highestTicketAmount: e.target.value }))}
                       placeholder="e.g. 500" min="1" className={inputCls} />
-                    <p className="text-xs text-gray-400 mt-1">Largest expected single transaction</p>
+                    <p className="text-xs text-gray-100 mt-1">Largest expected single transaction</p>
                   </div>
                 </div>
               </FormCard>
@@ -420,25 +420,25 @@ export default function SelfServePricing({ onComplete }) {
                   <div className="w-9 h-9 rounded-lg bg-purple-500/15 flex items-center justify-center"><BarChart3 className="w-4 h-4 text-purple-400" /></div>
                   <h3 className="font-bold text-white text-base">Card Acceptance Mix</h3>
                 </div>
-                <p className="text-xs text-gray-500 mb-5">How do customers typically pay? Must add up to 100%.</p>
+                <p className="text-xs text-gray-100 mb-5">How do customers typically pay? Must add up to 100%.</p>
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className={labelCls}>In-Person (%)</label>
                     <input type="number" value={details.cardPresentPct} onChange={(e) => setDetails(p => ({ ...p, cardPresentPct: e.target.value }))}
                       placeholder="e.g. 100" min="0" max="100" className={inputCls} />
-                    <p className="text-[10px] text-gray-400 mt-1">Card present / swiped</p>
+                    <p className="text-[10px] text-gray-100 mt-1">Card present / swiped</p>
                   </div>
                   <div>
                     <label className={labelCls}>Online (%)</label>
                     <input type="number" value={details.internetPct} onChange={(e) => setDetails(p => ({ ...p, internetPct: e.target.value }))}
                       placeholder="e.g. 0" min="0" max="100" className={inputCls} />
-                    <p className="text-[10px] text-gray-400 mt-1">E-commerce / website</p>
+                    <p className="text-[10px] text-gray-100 mt-1">E-commerce / website</p>
                   </div>
                   <div>
                     <label className={labelCls}>Phone/Mail (%)</label>
                     <input type="number" value={details.motoPct} onChange={(e) => setDetails(p => ({ ...p, motoPct: e.target.value }))}
                       placeholder="e.g. 0" min="0" max="100" className={inputCls} />
-                    <p className="text-[10px] text-gray-400 mt-1">MOTO orders</p>
+                    <p className="text-[10px] text-gray-100 mt-1">MOTO orders</p>
                   </div>
                 </div>
                 {acceptancePctSum() !== 100 && (details.cardPresentPct || details.internetPct || details.motoPct) && (
@@ -473,7 +473,7 @@ export default function SelfServePricing({ onComplete }) {
           </div>
         )}
 
-        <p className="text-gray-600 text-xs mt-8 text-center">
+        <p className="text-gray-100 text-xs mt-8 text-center">
           Secured by <span className="text-amber-500 font-semibold">Cliqbux</span> · onboarding.cliqbux.com · {new Date().getFullYear()}
         </p>
       </div>
