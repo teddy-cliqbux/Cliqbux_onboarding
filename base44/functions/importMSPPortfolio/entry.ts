@@ -74,6 +74,13 @@ function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
+function generateCorporateId(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
 // Run async tasks in parallel with a max concurrency cap
 async function batchedParallel<T>(
   items: T[],
@@ -160,6 +167,12 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[importMSPPortfolio] ${groups.size} distinct corporate entities identified`);
+    // Log groups for review
+    for (const [gk, items] of groups) {
+      const form = items[0].form;
+      const apps = items.map(i => `${i.app.merchantapplicationno}="${i.app.dba}" MID:${i.app.mid}`).join(', ');
+      console.log(`[importMSPPortfolio] GROUP: ${gk} | legal: ${form.legal_dba_name || items[0].app.dba} | owners: ${(form.owners?.[0]?.owner_firstname||'')} ${(form.owners?.[0]?.owner_lastname||'')} | apps: ${apps}`);
+    }
 
     // ── 4. Load existing Base44 data for idempotency ─────────────────────────
     // Load all profiles so we can match by taxId globally
@@ -207,11 +220,14 @@ Deno.serve(async (req) => {
       } else {
         summary.corporateEntities.found++;
 
+        const corporateIdNew = generateCorporateId();
+
         const profilePayload = {
+          corporateId:      corporateIdNew,
           legalName,
-          signerEmail:           email || `import+${groupKey.slice(0, 8).toLowerCase().replace(/\s/g, '')}@cliqbux.com`,
-          taxId:                 tin || null,
-          ownershipType:         mspOwnershipToInternal(ownershipCode),
+          signerEmail:      email || `import+${groupKey.slice(0, 8).toLowerCase().replace(/\s/g, '')}@cliqbux.com`,
+          taxId:            tin || null,
+          ownershipType:    mspOwnershipToInternal(ownershipCode),
           ...(taxClassType ? { taxClassType } : {}),
           firstName:             primaryOwner.owner_firstname || '',
           lastName:              primaryOwner.owner_lastname  || '',
@@ -238,7 +254,7 @@ Deno.serve(async (req) => {
           profileByName.set(legalName.toUpperCase(), profile);
           profileCreated = true;
         } else {
-          profile = { id: `[dry-run:${legalName}]`, corporateId: `[dry-run]`, ...profilePayload };
+          profile = { id: `[dry-run:${legalName}]`, corporateId: corporateIdNew, ...profilePayload };
           profileCreated = true;
         }
         summary.corporateEntities.created++;
@@ -326,12 +342,9 @@ Deno.serve(async (req) => {
           }
           summary.concepts.created++;
           appResults.push({
-            appNo,
-            dba:             app.dba,
-            mid:             app.mid,
-            locationCreated,
-            result:          dryRun ? 'would_create' : 'created',
-            conceptPayload:  dryRun ? conceptPayload : undefined,
+          appNo,
+          dba:             app.dba,
+          result:          dryRun ? 'would_create' : 'created',
           });
           console.log(`[importMSPPortfolio] ${dryRun ? '[DRY] ' : ''}Concept "${app.dba}" MID ${app.mid} → corporateId ${corporateId}`);
         } catch (err: any) {

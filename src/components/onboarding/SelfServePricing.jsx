@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Loader2, ArrowRight, ArrowLeft, CheckCircle, CreditCard, Percent, Building2, DollarSign, BarChart3 } from 'lucide-react';
+import { Loader2, ArrowRight, ArrowLeft, CheckCircle, CreditCard, Percent, Building2, DollarSign, BarChart3, MapPin } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import CliqbuxLogo from './CliqbuxLogo';
+import FormCard from './FormCard';
 import { normalizeBusinessName } from '@/lib/textUtils';
 
 const PRICING_CARDS = [
@@ -82,9 +83,9 @@ const INDUSTRIES = [
   { value: 'SERVICES', label: 'Professional Services (Other)', mcc: '7299' },
 ];
 
-const inputCls = 'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white';
-const labelCls = 'text-sm font-semibold text-gray-700 mb-1.5 block';
-const selectCls = 'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white';
+const inputCls = 'w-full border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white/5';
+const labelCls = 'text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5 block';
+const selectCls = 'w-full border border-white/15 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-gray-800';
 
 export default function SelfServePricing({ onComplete }) {
   const [selectedTier, setSelectedTier] = useState(null);
@@ -208,7 +209,7 @@ export default function SelfServePricing({ onComplete }) {
   return (
     <div className="portal-bg min-h-screen" style={{ fontFamily: 'Inter, sans-serif' }}>
       {/* Top bar */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-gray-900/80 backdrop-blur border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+      <div className="fixed top-0 left-0 right-0 z-50 bg-[#111318]/95 backdrop-blur border-b border-white/8 px-6 py-4 flex items-center justify-between">
         <CliqbuxLogo size="sm" />
         <span className="text-xs text-gray-500 font-mono">Secure Merchant Onboarding</span>
       </div>
@@ -246,22 +247,22 @@ export default function SelfServePricing({ onComplete }) {
                 const isSelected = selectedCardIndex === index;
                 return (
                   <button key={index} onClick={() => handleSelectTier(card.key, index)}
-                    className={`relative text-left rounded-2xl border-2 p-7 transition-all duration-200 bg-white shadow-lg cursor-pointer
-                      ${isSelected ? card.selectedColor + ' shadow-xl scale-[1.02]' : 'border-gray-200 hover:shadow-xl hover:scale-[1.01] ' + card.accentColor}`}>
-                    <span className={`absolute top-5 right-5 text-xs font-bold px-2.5 py-1 rounded-full ${card.badgeColor}`}>{card.badge}</span>
-                    {isSelected && <div className="absolute top-5 left-5"><CheckCircle className={`w-5 h-5 ${card.iconColor}`} /></div>}
-                    <div className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center mb-5 ${isSelected ? 'mt-6' : ''}`}>
-                      <Icon className={`w-6 h-6 ${card.iconColor}`} />
+                  className={`relative text-left rounded-2xl border-2 p-7 transition-all duration-200 bg-white/5 backdrop-blur cursor-pointer
+                    ${isSelected ? 'border-amber-400/70 bg-white/10 shadow-lg shadow-amber-900/20 scale-[1.02]' : 'border-white/10 hover:border-white/30 hover:bg-white/[0.08] hover:scale-[1.01]'}`}>
+                  <span className={`absolute top-5 right-5 text-xs font-bold px-2.5 py-1 rounded-full ${card.badgeColor}`}>{card.badge}</span>
+                  {isSelected && <div className="absolute top-5 left-5"><CheckCircle className="w-5 h-5 text-amber-400" /></div>}
+                  <div className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center mb-5 ${isSelected ? 'mt-6' : ''}`}>
+                    <Icon className={`w-6 h-6 ${card.iconColor}`} />
+                  </div>
+                  <h3 className="text-xl font-bold text-white mb-2">{card.label}</h3>
+                  <p className="text-gray-400 text-sm mb-6 leading-relaxed">{card.description}</p>
+                  <div className="border-t border-white/10 pt-5">
+                    <div className="flex items-baseline gap-1 mb-1">
+                      <span className="text-3xl font-black text-white">{card.rate}</span>
+                      <span className="text-gray-400 text-sm font-medium">+ {card.fee} / txn</span>
                     </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">{card.label}</h3>
-                    <p className="text-gray-500 text-sm mb-6 leading-relaxed">{card.description}</p>
-                    <div className="border-t border-gray-100 pt-5">
-                      <div className="flex items-baseline gap-1 mb-1">
-                        <span className="text-3xl font-black text-gray-900">{card.rate}</span>
-                        <span className="text-gray-400 text-sm font-medium">+ {card.fee} / txn</span>
-                      </div>
-                      <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{card.rateLabel}</p>
-                    </div>
+                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{card.rateLabel}</p>
+                  </div>
                   </button>
                 );
               })}
@@ -269,10 +270,10 @@ export default function SelfServePricing({ onComplete }) {
 
             {/* Basic Info Form */}
             {selectedTier && (
-              <div className="w-full max-w-lg portal-card p-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                <div className="mb-6">
-                  <h2 className="text-xl font-bold text-gray-900 mb-1">Tell Us About Your Business</h2>
-                  <p className="text-gray-500 text-sm">Selected: <span className="font-semibold text-gray-700">{PRICING_CARDS[selectedCardIndex]?.label}</span></p>
+              <FormCard className="w-full max-w-lg">
+                <div className="mb-7">
+                  <h2 className="text-xl font-bold text-white mb-1">Tell Us About Your Business</h2>
+                  <p className="text-gray-400 text-sm">Selected: <span className="font-semibold text-amber-400">{PRICING_CARDS[selectedCardIndex]?.label}</span></p>
                 </div>
 
                 <form onSubmit={handlePage1Next} className="flex flex-col gap-4">
@@ -297,13 +298,13 @@ export default function SelfServePricing({ onComplete }) {
                       placeholder="e.g. (865) 403-7301" className={inputCls} />
                   </div>
 
-                  {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm">{error}</div>}
+                  {error && <div className="bg-red-500/15 border border-red-500/30 rounded-xl px-4 py-3 text-red-300 text-sm">{error}</div>}
 
-                  <button type="submit" className="w-full flex items-center justify-center gap-3 bg-gray-900 hover:bg-gray-800 text-white font-bold py-4 px-6 rounded-xl text-sm transition-all mt-2">
+                  <button type="submit" className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white font-bold py-3.5 px-6 rounded-xl text-sm transition-all mt-2 shadow-lg shadow-amber-900/30">
                     Next: Business Details <ArrowRight className="w-4 h-4" />
                   </button>
                 </form>
-              </div>
+              </FormCard>
             )}
           </>
         )}
@@ -322,9 +323,9 @@ export default function SelfServePricing({ onComplete }) {
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-6">
               {/* Business Structure */}
-              <div className="portal-card p-6">
-                <div className="flex items-center gap-2 mb-5">
-                  <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center"><Building2 className="w-4 h-4 text-blue-600" /></div>
+              <FormCard>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-9 h-9 rounded-lg bg-blue-500/15 flex items-center justify-center"><Building2 className="w-4 h-4 text-blue-400" /></div>
                   <h3 className="font-bold text-gray-900 text-base">Business Structure</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -360,7 +361,7 @@ export default function SelfServePricing({ onComplete }) {
                     <label className={labelCls}>What do you sell? <span className="text-red-400">*</span></label>
                     <textarea value={details.productDescription} onChange={(e) => setDetails(p => ({ ...p, productDescription: e.target.value }))}
                       placeholder="e.g. Retail clothing, accessories, and gift items" rows={2}
-                      className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" required />
+                      className="w-full border border-white/15 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white/5 resize-none" required />
                   </div>
                   <div>
                     <label className={labelCls}>Year Established</label>
@@ -380,13 +381,13 @@ export default function SelfServePricing({ onComplete }) {
                     </div>
                   </div>
                 </div>
-              </div>
+              </FormCard>
 
               {/* Processing Volume */}
-              <div className="portal-card p-6">
-                <div className="flex items-center gap-2 mb-5">
-                  <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center"><DollarSign className="w-4 h-4 text-green-600" /></div>
-                  <h3 className="font-bold text-gray-900 text-base">Processing Volume</h3>
+              <FormCard>
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="w-9 h-9 rounded-lg bg-green-500/15 flex items-center justify-center"><DollarSign className="w-4 h-4 text-green-400" /></div>
+                  <h3 className="font-bold text-white text-base">Processing Volume</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -411,13 +412,13 @@ export default function SelfServePricing({ onComplete }) {
                     <p className="text-xs text-gray-400 mt-1">Largest expected single transaction</p>
                   </div>
                 </div>
-              </div>
+              </FormCard>
 
               {/* Card Acceptance Mix */}
-              <div className="portal-card p-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center"><BarChart3 className="w-4 h-4 text-purple-600" /></div>
-                  <h3 className="font-bold text-gray-900 text-base">Card Acceptance Mix</h3>
+              <FormCard>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-9 h-9 rounded-lg bg-purple-500/15 flex items-center justify-center"><BarChart3 className="w-4 h-4 text-purple-400" /></div>
+                  <h3 className="font-bold text-white text-base">Card Acceptance Mix</h3>
                 </div>
                 <p className="text-xs text-gray-500 mb-5">How do customers typically pay? Must add up to 100%.</p>
                 <div className="grid grid-cols-3 gap-4">
@@ -441,26 +442,26 @@ export default function SelfServePricing({ onComplete }) {
                   </div>
                 </div>
                 {acceptancePctSum() !== 100 && (details.cardPresentPct || details.internetPct || details.motoPct) && (
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
+                  <p className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 mt-3">
                     Total is {acceptancePctSum()}% — must equal 100%.
                   </p>
                 )}
                 {acceptancePctSum() === 100 && (
-                  <p className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2 mt-3 flex items-center gap-1.5">
+                  <p className="text-xs text-green-300 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2 mt-3 flex items-center gap-1.5">
                     <CheckCircle className="w-3.5 h-3.5" /> Total is 100%
                   </p>
                 )}
-              </div>
+              </FormCard>
 
-              {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-red-700 text-sm">{error}</div>}
+              {error && <div className="bg-red-500/15 border border-red-500/30 rounded-xl px-4 py-3 text-red-300 text-sm">{error}</div>}
 
               <div className="flex gap-3">
                 <button type="button" onClick={() => { setPage(1); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                  className="flex items-center gap-2 border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-4 px-5 rounded-xl text-sm transition-all flex-shrink-0">
+                  className="flex items-center gap-2 border border-white/15 hover:border-white/30 hover:bg-white/5 text-gray-300 font-semibold py-3.5 px-5 rounded-xl text-sm transition-all flex-shrink-0">
                   <ArrowLeft className="w-4 h-4" /> Back
                 </button>
                 <button type="submit" disabled={submitting}
-                  className="flex-1 flex items-center justify-center gap-3 bg-gray-900 hover:bg-gray-800 disabled:bg-gray-300 text-white font-bold py-4 px-6 rounded-xl text-sm transition-all">
+                  className="flex-1 flex items-center justify-center gap-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-600 disabled:to-gray-600 disabled:text-gray-400 text-white font-bold py-3.5 px-6 rounded-xl text-sm transition-all shadow-lg shadow-amber-900/30">
                   {submitting ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /> Creating your account...</>
                   ) : (

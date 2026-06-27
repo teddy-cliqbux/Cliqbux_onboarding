@@ -2,21 +2,14 @@ import { Check } from 'lucide-react';
 
 const steps = [
   { id: 1, label: 'Agreement', completedStatus: ['Pricing Selected', 'Quote Signed'] },
-  { id: 2, label: 'Locations & Banking', completedStatus: ['Submitted'] },
+  { id: 2, label: 'Locations',  completedStatus: ['Submitted'] },
 ];
 
 function getStepState(stepIdx, applicationStatus) {
   const isSubmitted = applicationStatus === 'Submitted';
   const isPricingDone = applicationStatus === 'Pricing Selected' || applicationStatus === 'Quote Signed';
-
-  if (stepIdx === 0) {
-    return isPricingDone || isSubmitted ? 'complete' : 'active';
-  }
-  if (stepIdx === 1) {
-    if (isSubmitted) return 'complete';
-    if (isPricingDone) return 'active';
-    return 'upcoming';
-  }
+  if (stepIdx === 0) return isPricingDone || isSubmitted ? 'complete' : 'active';
+  if (stepIdx === 1) return isSubmitted ? 'complete' : isPricingDone ? 'active' : 'upcoming';
   return 'upcoming';
 }
 
@@ -31,8 +24,8 @@ export default function ProgressTracker({ applicationStatus }) {
               <div className={`
                 w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all duration-500
                 ${state === 'complete' ? 'bg-amber-500 text-white' : ''}
-                ${state === 'active' ? 'bg-blue-500 text-white ring-2 ring-blue-400/30' : ''}
-                ${state === 'upcoming' ? 'border-2 border-gray-600 text-gray-500' : ''}
+                ${state === 'active' ? 'bg-blue-500 text-white ring-2 ring-blue-400/40 shadow-lg shadow-blue-500/20' : ''}
+                ${state === 'upcoming' ? 'border-2 border-white/15 text-gray-500' : ''}
               `}>
                 {state === 'complete' ? <Check className="w-4 h-4" strokeWidth={2.5} /> : <span>{step.id}</span>}
               </div>
@@ -46,7 +39,7 @@ export default function ProgressTracker({ applicationStatus }) {
             </div>
             {idx < steps.length - 1 && (
               <div className="w-12 sm:w-16 h-px mx-2 mb-5 transition-all duration-500"
-                style={{ background: state === 'complete' ? '#F59E0B' : '#374151' }}
+                style={{ background: state === 'complete' ? '#F59E0B' : 'rgba(255,255,255,0.1)' }}
               />
             )}
           </div>
