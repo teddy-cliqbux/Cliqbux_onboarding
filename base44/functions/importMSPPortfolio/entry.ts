@@ -160,6 +160,12 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[importMSPPortfolio] ${groups.size} distinct corporate entities identified`);
+    // Log groups for review
+    for (const [gk, items] of groups) {
+      const form = items[0].form;
+      const apps = items.map(i => `${i.app.merchantapplicationno}="${i.app.dba}" MID:${i.app.mid}`).join(', ');
+      console.log(`[importMSPPortfolio] GROUP: ${gk} | legal: ${form.legal_dba_name || items[0].app.dba} | owners: ${(form.owners?.[0]?.owner_firstname||'')} ${(form.owners?.[0]?.owner_lastname||'')} | apps: ${apps}`);
+    }
 
     // ── 4. Load existing Base44 data for idempotency ─────────────────────────
     // Load all profiles so we can match by taxId globally
@@ -326,12 +332,9 @@ Deno.serve(async (req) => {
           }
           summary.concepts.created++;
           appResults.push({
-            appNo,
-            dba:             app.dba,
-            mid:             app.mid,
-            locationCreated,
-            result:          dryRun ? 'would_create' : 'created',
-            conceptPayload:  dryRun ? conceptPayload : undefined,
+          appNo,
+          dba:             app.dba,
+          result:          dryRun ? 'would_create' : 'created',
           });
           console.log(`[importMSPPortfolio] ${dryRun ? '[DRY] ' : ''}Concept "${app.dba}" MID ${app.mid} → corporateId ${corporateId}`);
         } catch (err: any) {
