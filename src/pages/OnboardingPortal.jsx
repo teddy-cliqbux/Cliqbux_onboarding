@@ -9,6 +9,7 @@ import SelfServePricing from '@/components/onboarding/SelfServePricing';
 // Plaid verification is now handled per-location inside OnboardingLocations
 import OnboardingLocations from './OnboardingLocations';
 import OnboardingVerification from './OnboardingVerification';
+import OnboardingSummary from './OnboardingSummary';
 import MobilePricing from '@/components/onboarding/MobilePricing';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
@@ -16,6 +17,7 @@ const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'];
 
 // Steps within the post-agreement flow
 const STEP_LOCATIONS    = 'locations';
+const STEP_SUMMARY      = 'summary';
 const STEP_VERIFICATION = 'verification';
 const STEP_SUCCESS      = 'success';
 
@@ -91,6 +93,10 @@ export default function OnboardingPortal() {
 
   const handleLocationsContinue = ({ locations: updatedLocations }) => {
     setLocations(updatedLocations);
+    setStep(STEP_SUMMARY);
+  };
+
+  const handleSummaryContinue = ({ locations: updatedLocations, concepts: summaryConcepts }) => {
     setStep(STEP_VERIFICATION);
   };
 
@@ -141,12 +147,22 @@ export default function OnboardingPortal() {
           />
         );
       }
+      if (step === STEP_SUMMARY) {
+        return (
+          <OnboardingSummary
+            profile={profile}
+            locations={locations}
+            onContinue={handleSummaryContinue}
+            onBack={() => setStep(STEP_LOCATIONS)}
+          />
+        );
+      }
       if (step === STEP_VERIFICATION) {
         return (
           <OnboardingVerification
             profile={profile}
             locations={locations}
-            onBack={() => setStep(STEP_LOCATIONS)}
+            onBack={() => setStep(STEP_SUMMARY)}
             onComplete={handleSigningComplete}
           />
         );
