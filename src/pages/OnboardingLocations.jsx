@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Plus, ArrowRight, Loader2, Store, Landmark, Trash2, CheckCircle2, AlertCircle, Pencil, MapPin, Building2, Hash, Layers, AlertTriangle } from 'lucide-react';
+import { Plus, ArrowRight, Loader2, Store, Landmark, Trash2, CheckCircle2, AlertCircle, Pencil, MapPin, Building2, Hash, Layers, AlertTriangle, CreditCard, NotebookPen } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import AddLocationModal from '@/components/onboarding/AddLocationModal';
 import EntityPlaidButton from '@/components/onboarding/EntityPlaidButton';
 import StorefrontBankingCell from '@/components/onboarding/StorefrontBankingCell';
+import AddConceptModal from '@/components/onboarding/AddConceptModal';
 
 function formatEIN(raw) {
   const d = (raw || '').replace(/\D/g, '');
@@ -24,6 +25,11 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
   // Entity-level Plaid accounts: { [entityId]: accounts[] }
   const [plaidAccounts, setPlaidAccounts] = useState({});
+
+  // Concepts (ProcessingConcept) tree — { [locId]: concept[] }
+  const [concepts, setConcepts] = useState([]);
+  const [addConceptForLoc, setAddConceptForLoc] = useState(null);
+  const [conceptsLoading, setConceptsLoading] = useState(true);
 
   // Per-location state that must never reset when new locations are added
   // { [locId]: { selectedBankId, isManualMode, manualRouting, manualAccount } }
@@ -62,6 +68,12 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         };
       });
       setLocs(loaded);
+      // Load concepts tree for tree view
+      try {
+        const concRes = await base44.functions.invoke('manageConcept', { action: 'list', corporateId: profile.corporateId });
+        setConcepts(concRes.data?.concepts || []);
+      } catch (_) { /* concepts not critical */ }
+      setConceptsLoading(false);
     } catch (_) { setEntities([]); setLocs([]); }
     finally { setLoading(false); }
   };
@@ -328,6 +340,55 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     );
   };
 
+  // ─── Concept sub-list helpers ───────────────────────────────────────────────
+  const renderConceptRow = (locId) => {
+    const locConcepts = concepts.filter(c => c.locationId === locId);
+    if (!locConcepts.length) return null;
+
+    return (
+      <div className="flex flex-col gap-1.5">
+        {locConcepts.map(c => {
+          const stat = c.applicationStepStatus || '';
+          const isActive = stat === 'Active' || stat === 'Active (Existing)';
+          const isMidPending = stat === 'Pending MID';
+          const isError = stat === 'Error';
+          return (
+            <div key={c.id} className="pl-8 py-1.5 pr-3 border-l-2 border-amber-300 ml-8 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0 flex-1">
+                <CreditCard className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                <span className="text-xs font-medium text-gray-800 truncate">{c.conceptName || c.dbaName || 'Processing Concept'}</span>
+                {c.mccCode && <span className="text-[10px] font-mono text-gray-400">{c.mccCode}</span>}
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {c.elavonMID && <span className="text-[10px] font-mono text-green-700 font-medium">MID: {c.elavonMID}</span>}
+                {isActive ? <span className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded flex items-center gap-0.5"><CheckCircle2 className="w-2.5 h-2.5" /> Active</span>
+                : isMidPending ? <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">Pending MID</span>
+                : isError ? <span className="text-[10px] font-semibold text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded flex items-center gap-0.5"><AlertCircle className="w-2.5 h-2.5" /> Error</span>
+                : <span className="text-[10px] text-gray-400">In Review</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const handleAddConcept = (locId) => {
+    setAddConceptForLoc(locId);
+  };
+
+  const doAddConcept = async (locId, data) => {
+    try {
+      const res = await base44.functions.invoke('manageConcept', {
+        action: 'add', locationId: locId, corporateId: profile.corporateId, data,
+      });
+      if (res.data?.concept) {
+        setConcepts(prev => [...prev, res.data.concept]);
+      }
+    } catch (_) { /* best effort */ }
+    setAddConceptForLoc(null);
+  };
+
   const renderLocationList = () => {
     if (!isMultiEntity) {
       // Flat table — single entity
@@ -352,7 +413,13 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
               <EntityPlaidButton corporateId={profile.corporateId} entityId={firstEntityId} onAccountsConnected={handleAccountsConnected} />
             )}
           </div>
-          {locs.map(row => renderLocationRow(row))}
+          {locs.map(row => (
+            <div key={row.id}>
+              {renderLocationRow(row)}
+              {renderConceptRow(row.id)}
+              {!conceptsLoading && <div className="flex justify-end pr-4 pb-1"><button onClick={() => handleAddConcept(row.id)} className="text-[10px] font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1"><NotebookPen className="w-3 h-3" /> + Add Concept</button></div>}
+            </div>
+          ))}
           {locs.length === 0 && (
             <div className="text-center py-6 border border-dashed border-gray-200 rounded-xl">
               <p className="text-sm text-gray-400">Add a location to assign an account.</p>
@@ -404,7 +471,13 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                   <div className="col-span-3">Status</div>
                   <div className="col-span-1"></div>
                 </div>
-                {rows.map(row => renderLocationRow(row))}
+                {rows.map(row => (
+                  <div key={row.id}>
+                    {renderLocationRow(row)}
+                    {renderConceptRow(row.id)}
+                    {!conceptsLoading && <div className="flex justify-end pr-2"><button onClick={() => handleAddConcept(row.id)} className="text-[10px] font-semibold text-amber-600 hover:text-amber-700 flex items-center gap-1"><NotebookPen className="w-3 h-3" /> + Add Concept</button></div>}
+                  </div>
+                ))}
               </div>
             </div>
           );
@@ -486,6 +559,12 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           onClose={() => setShowAddLoc(false)}
         />
       )}
+
+      {/* Add Concept Modal */}
+      {addConceptForLoc && (() => {
+        const loc = locs.find(l => l.id === addConceptForLoc);
+        return loc ? <AddConceptModal locationName={loc.dbaName || loc.businessAddress} onSave={(data) => doAddConcept(addConceptForLoc, data)} onClose={() => setAddConceptForLoc(null)} /> : null;
+      })()}
 
       {/* Back confirmation dialog */}
       {showBackConfirm && (

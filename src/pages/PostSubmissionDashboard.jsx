@@ -12,6 +12,7 @@ export default function PostSubmissionDashboard() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
+  const [concepts, setConcepts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showShipping, setShowShipping] = useState(false);
 
@@ -34,6 +35,7 @@ export default function PostSubmissionDashboard() {
         }
         setProfile(data.profile);
         setLocations(data.locations || []);
+        setConcepts(data.concepts || []);
         if (data.profile?.applicationStatus !== 'Submitted') {
           navigate(`/?dealId=${corporateId}`, { replace: true });
           return;
@@ -91,12 +93,12 @@ export default function PostSubmissionDashboard() {
           <div className="text-center mb-2">
             <h1 className="text-2xl font-bold text-white">Storefront Configuration Setup</h1>
             <p className="text-gray-400 text-sm mt-1">
-              Finish setting up your locations while Elavon processes your application.
+              Finish setting up while Elavon processes your application.
             </p>
           </div>
 
           {/* Tracker */}
-          {locations.length > 0 && <UnderwritingTracker locations={locations} />}
+          {concepts.length > 0 && <UnderwritingTracker locations={locations} concepts={concepts} />}
 
           {/* Checklist */}
           <div>
