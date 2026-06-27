@@ -83,7 +83,7 @@ const INDUSTRIES = [
   { value: 'SERVICES', label: 'Professional Services (Other)', mcc: '7299' },
 ];
 
-const inputCls = 'w-full border border-white/25 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white/5';
+const inputCls = 'w-full border border-white/25 rounded-xl px-4 py-3 text-sm text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-white/5';
 const labelCls = 'text-xs font-semibold text-gray-100 uppercase tracking-wider mb-1.5 block';
 const selectCls = 'w-full border border-white/25 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent bg-gray-800';
 
@@ -247,21 +247,21 @@ export default function SelfServePricing({ onComplete }) {
                 const isSelected = selectedCardIndex === index;
                 return (
                   <button key={index} onClick={() => handleSelectTier(card.key, index)}
-                  className={`relative text-left rounded-2xl border-2 p-7 transition-all duration-200 bg-white/5 backdrop-blur cursor-pointer
-                    ${isSelected ? 'border-amber-400/70 bg-white/10 shadow-lg shadow-amber-900/20 scale-[1.02]' : 'border-white/10 hover:border-white/30 hover:bg-white/[0.08] hover:scale-[1.01]'}`}>
+                    className={`relative text-left rounded-2xl border-2 p-7 transition-all duration-200 bg-white shadow-lg cursor-pointer
+                      ${isSelected ? card.selectedColor + ' shadow-xl scale-[1.02]' : 'border-gray-200 hover:shadow-xl hover:scale-[1.01] ' + card.accentColor}`}>
                   <span className={`absolute top-5 right-5 text-xs font-bold px-2.5 py-1 rounded-full ${card.badgeColor}`}>{card.badge}</span>
-                  {isSelected && <div className="absolute top-5 left-5"><CheckCircle className="w-5 h-5 text-amber-400" /></div>}
+                  {isSelected && <div className="absolute top-5 left-5"><CheckCircle className={`w-5 h-5 ${card.iconColor}`} /></div>}
                   <div className={`w-12 h-12 rounded-xl ${card.iconBg} flex items-center justify-center mb-5 ${isSelected ? 'mt-6' : ''}`}>
                     <Icon className={`w-6 h-6 ${card.iconColor}`} />
                   </div>
-                  <h3 className="text-xl font-bold text-white mb-2">{card.label}</h3>
-                  <p className="text-gray-100 text-sm mb-6 leading-relaxed">{card.description}</p>
-                  <div className="border-t border-white/10 pt-5">
+                  <h3 className="text-xl font-bold text-gray-900 mb-2">{card.label}</h3>
+                  <p className="text-gray-500 text-sm mb-6 leading-relaxed">{card.description}</p>
+                  <div className="border-t border-gray-100 pt-5">
                     <div className="flex items-baseline gap-1 mb-1">
-                      <span className="text-3xl font-black text-white">{card.rate}</span>
-                      <span className="text-gray-100 text-sm font-medium">+ {card.fee} / txn</span>
+                      <span className="text-3xl font-black text-gray-900">{card.rate}</span>
+                      <span className="text-gray-400 text-sm font-medium">+ {card.fee} / txn</span>
                     </div>
-                    <p className="text-xs text-gray-100 font-medium uppercase tracking-wider">{card.rateLabel}</p>
+                    <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">{card.rateLabel}</p>
                   </div>
                   </button>
                 );
