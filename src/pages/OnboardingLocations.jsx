@@ -493,7 +493,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       {/* Header */}
       <div className="px-8 pt-8 pb-6 border-b border-gray-100">
         <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> STEP 2 OF 3 — BUSINESS LOCATIONS
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" /> STEP 2 OF 4 — BUSINESS LOCATIONS
         </div>
         <div>
           <h2 className="text-2xl font-bold text-gray-900 mb-1.5">Add Your Storefront Locations</h2>

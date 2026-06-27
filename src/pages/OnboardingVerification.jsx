@@ -124,7 +124,7 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
       <div className="px-8 pt-8 pb-6 border-b border-white/10">
         <div className="inline-flex items-center gap-2 bg-purple-500/15 text-purple-300 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
           <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-          STEP 3 OF 3 — IDENTITY &amp; SIGNING
+          STEP 4 OF 4 — IDENTITY &amp; SIGNING
         </div>
         <div className="flex items-center justify-between gap-4">
           <div>

@@ -3,13 +3,19 @@ import { Check } from 'lucide-react';
 const steps = [
   { id: 1, label: 'Agreement', completedStatus: ['Pricing Selected', 'Quote Signed'] },
   { id: 2, label: 'Locations',  completedStatus: ['Submitted'] },
+  { id: 3, label: 'Review',     completedStatus: ['Submitted'] },
+  { id: 4, label: 'Verify',     completedStatus: ['Submitted'] },
 ];
 
 function getStepState(stepIdx, applicationStatus) {
   const isSubmitted = applicationStatus === 'Submitted';
   const isPricingDone = applicationStatus === 'Pricing Selected' || applicationStatus === 'Quote Signed';
   if (stepIdx === 0) return isPricingDone || isSubmitted ? 'complete' : 'active';
-  if (stepIdx === 1) return isSubmitted ? 'complete' : isPricingDone ? 'active' : 'upcoming';
+  if (stepIdx <= 3) {
+    if (isSubmitted) return 'complete';
+    if (isPricingDone) return stepIdx === 1 ? 'active' : 'upcoming';
+    return 'upcoming';
+  }
   return 'upcoming';
 }
 

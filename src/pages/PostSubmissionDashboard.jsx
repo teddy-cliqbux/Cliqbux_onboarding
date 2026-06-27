@@ -7,6 +7,7 @@ import UnderwritingTracker from '@/components/onboarding/UnderwritingTracker';
 import EquipmentShippingModal from '@/components/onboarding/EquipmentShippingModal';
 import InventoryUpload from '@/components/onboarding/InventoryUpload';
 import LegacyPOSBridge from '@/components/onboarding/LegacyPOSBridge';
+import LocationStatusTable from '@/components/onboarding/LocationStatusTable';
 
 export default function PostSubmissionDashboard() {
   const navigate = useNavigate();
@@ -99,6 +100,9 @@ export default function PostSubmissionDashboard() {
 
           {/* Tracker */}
           {concepts.length > 0 && <UnderwritingTracker locations={locations} concepts={concepts} />}
+
+          {/* Location Status Table */}
+          <LocationStatusTable locations={locations} concepts={concepts} />
 
           {/* Checklist */}
           <div>
