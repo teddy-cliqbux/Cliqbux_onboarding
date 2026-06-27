@@ -36,7 +36,6 @@ Deno.serve(async (req) => {
 
       try {
         // Elavon boardstatus endpoint — GET with AWB as query param
-        // Per Elavon docs: GET /api/v4/boardstatus?awb={awb}&profileCode={profileCode}
         const statusUrl = `${elavonBase}/api/v4/boardstatus?awb=${encodeURIComponent(awb)}&profileCode=${encodeURIComponent(PROFILE_CODE)}`;
         const res = await fetch(statusUrl, {
           method: 'GET',
@@ -47,7 +46,7 @@ Deno.serve(async (req) => {
         });
 
         const resText = await res.text();
-        let resData: Record<string, unknown> = {};
+        let resData = {};
         try { resData = JSON.parse(resText); } catch { resData = { raw: resText.slice(0, 500) }; }
 
         console.log(`[pollBoardingStatus] AWB ${awb} status ${res.status}:`, JSON.stringify(resData));
@@ -60,39 +59,31 @@ Deno.serve(async (req) => {
         // Elavon boardstatus response fields:
         // status: "PENDING" | "IN_PROGRESS" | "COMPLETE" | "DECLINED" | "ERROR"
         // merchantId / mid: assigned once COMPLETE
-        const boardStatus = (resData?.status || resData?.payloadStatus || resData?.applicationStatus || '') as string;
-        const upperStatus = boardStatus.toUpperCase();
+        const boardStatus = (resData?.status || resData?.payloadStatus || resData?.applicationStatus || '').toUpperCase();
+        const elavonMID = resData?.merchantId || resData?.mid || resData?.MID || resData?.merchantNumber || null;
 
-        if (upperStatus === 'COMPLETE') {
-          const elavonMID = resData?.merchantId || resData?.mid || resData?.MID || resData?.merchantNumber || null;
+        if (boardStatus === 'COMPLETE') {
           await base44.asServiceRole.entities.MerchantLocations.update(location.id, {
             applicationStepStatus: 'Active',
             elavonMID,
           });
+          console.log(`[pollBoardingStatus] Location ${location.id} (${location.dbaName}) activated — MID: ${elavonMID}`);
           results.push({ locationId: location.id, dbaName: location.dbaName, awb, result: 'activated', elavonMID, boardStatus });
-
-        } else if (upperStatus === 'DECLINED' || upperStatus === 'ERROR') {
+        } else if (boardStatus === 'DECLINED' || boardStatus === 'ERROR') {
           await base44.asServiceRole.entities.MerchantLocations.update(location.id, {
             applicationStepStatus: 'Error',
           });
-          results.push({ locationId: location.id, dbaName: location.dbaName, awb, result: 'declined', boardStatus, details: resData });
-
+          results.push({ locationId: location.id, dbaName: location.dbaName, awb, result: 'declined', boardStatus });
         } else {
-          // Still pending — leave as-is
           results.push({ locationId: location.id, dbaName: location.dbaName, awb, result: 'still_pending', boardStatus });
         }
-
-      } catch (err) {
-        results.push({ locationId: location.id, dbaName: location.dbaName, awb, result: 'error', error: err.message });
+      } catch (locErr) {
+        results.push({ locationId: location.id, dbaName: location.dbaName, awb, result: 'exception', error: locErr.message });
       }
     }
 
-    const activated = results.filter(r => r.result === 'activated').length;
-    const stillPending = results.filter(r => r.result === 'still_pending').length;
-
-    return Response.json({ success: true, checked: pendingLocations.length, activated, stillPending, results });
-
+    return Response.json({ success: true, checked: pendingLocations.length, results });
   } catch (error) {
-    return Response.json({ error: error.message, stack: error.stack?.split('\n').slice(0, 3).join(' | ') }, { status: 500 });
+    return Response.json({ error: error.message }, { status: 500 });
   }
 });

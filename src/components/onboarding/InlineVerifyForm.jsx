@@ -20,6 +20,7 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
   const [expanded, setExpanded] = useState(false);
   const [showSsn, setShowSsn] = useState(false);
   const [saving, setSaving] = useState(false);
+
   const [error, setError] = useState('');
   const [form, setForm] = useState({
     dobMonth: signer.dobMonth || '',
