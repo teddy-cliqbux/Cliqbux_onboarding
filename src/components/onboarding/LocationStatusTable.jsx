@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Clock, Store, CreditCard, ArrowRight, Loader2, CheckSquare, Square, Layers, Check, X } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Clock, Store, CreditCard, ArrowRight, Loader2, CheckSquare, Square, Layers, Check, X, Copy } from 'lucide-react';
 import DragOrgMenu from './DragOrgMenu';
 import { base44 } from '@/api/base44Client';
 
@@ -26,6 +26,7 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
   const [batchBusy, setBatchBusy] = useState(false);
   const [batchError, setBatchError] = useState('');
   const [batchDone, setBatchDone] = useState(false);
+  const [duplicatingIds, setDuplicatingIds] = useState([]);
 
   useEffect(() => {
     if (corporateId) {
@@ -64,6 +65,22 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
   const toggleSelectAll = () => {
     if (allSelected) setSelectedIds([]);
     else setSelectedIds(locations.map(l => l.id));
+  };
+
+  const handleDuplicate = async (locId) => {
+    setDuplicatingIds(prev => [...prev, locId]);
+    try {
+      await base44.functions.invoke('batchUpdateStatus', {
+        corporateId,
+        action: 'duplicateLocation',
+        locationIds: [locId],
+      });
+      if (onStatusChanged) onStatusChanged();
+    } catch (_) {
+      // best effort
+    } finally {
+      setDuplicatingIds(prev => prev.filter(x => x !== locId));
+    }
   };
 
   const clearSelection = () => {
@@ -215,6 +232,7 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
               <th className="text-right px-4 py-3">Monthly Volume</th>
               <th className="text-right px-4 py-3">Avg Sale</th>
               <th className="text-center pr-6 py-3">Status</th>
+              <th className="w-10 pr-3 py-3 text-center text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Dup</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-white/5">
@@ -312,6 +330,19 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
                       <StatIcon className="w-3 h-3" />
                       {statDef.label}
                     </span>
+                  </td>
+                  <td className="pr-3 py-4 text-center">
+                    <button
+                      onClick={() => handleDuplicate(loc.id)}
+                      disabled={duplicatingIds.includes(loc.id)}
+                      className="text-gray-500 hover:text-amber-400 disabled:text-gray-600 transition-colors p-1"
+                      title="Duplicate this location and its concepts"
+                    >
+                      {duplicatingIds.includes(loc.id)
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <Copy className="w-3.5 h-3.5" />
+                      }
+                    </button>
                   </td>
                 </tr>
               );

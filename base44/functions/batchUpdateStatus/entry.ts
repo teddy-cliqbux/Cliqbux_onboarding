@@ -134,7 +134,65 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, copiedLocations: copied, targetEntityId });
     }
 
-    return Response.json({ error: 'Unknown action. Use updateStatus, moveToEntity, or copyToEntity.' }, { status: 400 });
+    // ── Duplicate location (clone in-place) ──────────
+    if (action === 'duplicateLocation') {
+      if (!locationIds?.length) {
+        return Response.json({ error: 'locationIds is required' }, { status: 400 });
+      }
+
+      const locations = await base44.asServiceRole.entities.MerchantLocations.filter({
+        corporateId, id: { $in: locationIds }
+      });
+
+      if (!locations?.length) {
+        return Response.json({ error: 'No locations found' }, { status: 404 });
+      }
+
+      let duplicated = 0;
+      for (const loc of locations) {
+        const newLoc = await base44.asServiceRole.entities.MerchantLocations.create({
+          corporateId,
+          entityId: loc.entityId || '',
+          dbaName: `${loc.dbaName || 'Location'} (Copy)`,
+          businessAddress: loc.businessAddress || '',
+          businessStreet: loc.businessStreet || '',
+          businessCity: loc.businessCity || '',
+          businessState: loc.businessState || '',
+          businessZip: loc.businessZip || '',
+          applicationStepStatus: 'In Review',
+        });
+
+        // Clone its concepts
+        const concepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({
+          corporateId, locationId: loc.id
+        });
+
+        if (concepts?.length) {
+          await base44.asServiceRole.entities.MerchantProcessingConcept.bulkCreate(
+            concepts.map(c => ({
+              locationId: newLoc.id,
+              corporateId,
+              conceptName: c.conceptName || '',
+              dbaName: c.dbaName || '',
+              mccCode: c.mccCode || '',
+              industryType: c.industryType || '',
+              monthlyCardSales: c.monthlyCardSales ?? 0,
+              avgSaleAmount: c.avgSaleAmount ?? 0,
+              highestTicketAmount: c.highestTicketAmount ?? 0,
+              cardPresentPct: c.cardPresentPct ?? 100,
+              productDescription: c.productDescription || '',
+              applicationStepStatus: 'In Review',
+            }))
+          );
+        }
+
+        duplicated++;
+      }
+
+      return Response.json({ success: true, duplicatedLocations: duplicated });
+    }
+
+    return Response.json({ error: 'Unknown action. Use updateStatus, moveToEntity, copyToEntity, or duplicateLocation.' }, { status: 400 });
 
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
