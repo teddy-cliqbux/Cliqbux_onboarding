@@ -87,17 +87,25 @@ export default function StorefrontBankingCell({
   if (cachedInManual) {
     return (
       <div className="flex flex-col items-center justify-center gap-1 w-full">
-        <div className="flex items-center gap-1 w-full justify-center">
-          <input type="text" placeholder="Routing #"
-            defaultValue={routingRef.current}
-            onChange={(e) => { routingRef.current = e.target.value.replace(/[^0-9]/g, '').slice(0, 9); }}
-            className="w-[6rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-          <input type="text" placeholder="Account #"
-            defaultValue={accountRef.current}
-            onChange={(e) => { accountRef.current = e.target.value.replace(/[^0-9]/g, '').slice(0, 17); }}
-            className="w-[7rem] text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
+        <div className="flex flex-col gap-1 w-full">
+        <div className="flex gap-1 w-full">
+          <div className="flex flex-col gap-0.5 flex-1">
+            <span className="text-[10px] font-semibold text-gray-500 px-0.5">Routing #</span>
+            <input type="text" placeholder="e.g. 021000021"
+              defaultValue={routingRef.current}
+              onChange={(e) => { routingRef.current = e.target.value.replace(/[^0-9]/g, '').slice(0, 9); }}
+              className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex flex-col gap-0.5 flex-1">
+            <span className="text-[10px] font-semibold text-gray-500 px-0.5">Account #</span>
+            <input type="text" placeholder="e.g. 000123456789"
+              defaultValue={accountRef.current}
+              onChange={(e) => { accountRef.current = e.target.value.replace(/[^0-9]/g, '').slice(0, 17); }}
+              className="w-full text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+            />
+          </div>
+        </div>
           <button onClick={handleConfirmManual}
             className="text-[10px] font-semibold bg-gray-900 text-white rounded-lg px-2 py-1.5"><Check className="w-3 h-3" /></button>
         </div>

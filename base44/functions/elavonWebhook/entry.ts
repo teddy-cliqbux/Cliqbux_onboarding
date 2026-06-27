@@ -1,13 +1,12 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-// ─── Elavon Webhook Receiver ───────────────────────────────────────────────────
+// ─── Elavon Webhook Receiver ──────────────────────────────────────────────────
 // Structured to receive POST notifications from Elavon once Cliqbux's endpoint
 // is whitelisted in the Elavon partner portal.
 //
 // Elavon will POST a payload containing the AWB and updated boarding status.
 // When status = COMPLETE, we extract the MID and transition the location to 'Active'.
 //
-// Register this function's public URL with Elavon as your webhook endpoint.
 // Expected payload shape (Elavon standard):
 // {
 //   awb: string,
@@ -30,7 +29,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Method not allowed' }, { status: 405 });
     }
 
-    let payload: Record<string, unknown> = {};
+    let payload = {};
     try {
       payload = await req.json();
     } catch {
@@ -40,9 +39,9 @@ Deno.serve(async (req) => {
     console.log('[elavonWebhook] Received payload:', JSON.stringify(payload));
 
     // Extract AWB and status — Elavon may use different field names
-    const awb = (payload?.awb || payload?.applicationId || payload?.boardingId) as string;
-    const boardStatus = ((payload?.payloadStatus || payload?.status || payload?.applicationStatus || '') as string).toUpperCase();
-    const elavonMID = (payload?.merchantId || payload?.mid || payload?.MID || payload?.merchantNumber) as string | null || null;
+    const awb = payload?.awb || payload?.applicationId || payload?.boardingId;
+    const boardStatus = ((payload?.payloadStatus || payload?.status || payload?.applicationStatus || '')).toUpperCase();
+    const elavonMID = payload?.merchantId || payload?.mid || payload?.MID || payload?.merchantNumber || null;
 
     if (!awb) {
       console.warn('[elavonWebhook] No AWB in payload — cannot match location');
@@ -65,22 +64,18 @@ Deno.serve(async (req) => {
       });
       console.log(`[elavonWebhook] Location ${location.id} (${location.dbaName}) activated — MID: ${elavonMID}`);
       return Response.json({ received: true, result: 'activated', locationId: location.id, elavonMID });
-    }
-
-    if (boardStatus === 'DECLINED' || boardStatus === 'ERROR') {
+    } else if (boardStatus === 'DECLINED' || boardStatus === 'ERROR') {
       await base44.asServiceRole.entities.MerchantLocations.update(location.id, {
         applicationStepStatus: 'Error',
       });
       console.log(`[elavonWebhook] Location ${location.id} (${location.dbaName}) declined — status: ${boardStatus}`);
       return Response.json({ received: true, result: 'declined', locationId: location.id, boardStatus });
+    } else {
+      console.log(`[elavonWebhook] Location ${location.id} still pending — status: ${boardStatus}`);
+      return Response.json({ received: true, result: 'no_change', locationId: location.id, boardStatus });
     }
-
-    // Intermediate status (PENDING, IN_PROGRESS) — acknowledge but don't change state
-    return Response.json({ received: true, result: 'acknowledged', awb, boardStatus });
-
   } catch (error) {
     console.error('[elavonWebhook] Error:', error.message);
-    // Always return 200 to Elavon so they don't retry on our processing errors
-    return Response.json({ received: true, error: error.message }, { status: 200 });
+    return Response.json({ error: error.message }, { status: 500 });
   }
 });

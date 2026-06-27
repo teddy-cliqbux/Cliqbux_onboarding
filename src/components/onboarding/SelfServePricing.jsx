@@ -84,7 +84,7 @@ const INDUSTRIES = [
 
 const inputCls = 'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white';
 const labelCls = 'text-sm font-semibold text-gray-700 mb-1.5 block';
-const selectCls = 'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white';
+const selectCls = 'w-full border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white';
 
 export default function SelfServePricing({ onComplete }) {
   const [selectedTier, setSelectedTier] = useState(null);
@@ -330,28 +330,28 @@ export default function SelfServePricing({ onComplete }) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className={labelCls}>Business Type <span className="text-red-400">*</span></label>
-                    <select value={details.ownershipType} onChange={(e) => setDetails(p => ({ ...p, ownershipType: e.target.value }))} className={selectCls} required>
+                    <select value={details.ownershipType} onChange={(e) => setDetails(p => ({ ...p, ownershipType: e.target.value }))} className={selectCls} style={{ colorScheme: 'light' }} required>
                       <option value="">Select business type...</option>
                       {OWNERSHIP_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className={labelCls}>Tax Classification <span className="text-red-400">*</span></label>
-                    <select value={details.taxClassType} onChange={(e) => setDetails(p => ({ ...p, taxClassType: e.target.value }))} className={selectCls} required>
+                    <select value={details.taxClassType} onChange={(e) => setDetails(p => ({ ...p, taxClassType: e.target.value }))} className={selectCls} style={{ colorScheme: 'light' }} required>
                       <option value="">Select tax class...</option>
                       {TAX_CLASS_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className={labelCls}>Industry <span className="text-red-400">*</span></label>
-                    <select value={details.industryClass} onChange={(e) => handleIndustryChange(e.target.value)} className={selectCls} required>
+                    <select value={details.industryClass} onChange={(e) => handleIndustryChange(e.target.value)} className={selectCls} style={{ colorScheme: 'light' }} required>
                       <option value="">Select industry...</option>
                       {INDUSTRIES.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
                     </select>
                   </div>
                   <div>
                     <label className={labelCls}>Your Title <span className="text-red-400">*</span></label>
-                    <select value={details.titleType} onChange={(e) => setDetails(p => ({ ...p, titleType: e.target.value }))} className={selectCls} required>
+                    <select value={details.titleType} onChange={(e) => setDetails(p => ({ ...p, titleType: e.target.value }))} className={selectCls} style={{ colorScheme: 'light' }} required>
                       <option value="">Select your title...</option>
                       {TITLE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
