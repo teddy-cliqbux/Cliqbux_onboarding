@@ -255,22 +255,16 @@ export default function SignerRoster({ profile, onValidChange }) {
                   )}
                   {/* Actions */}
                   <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {isPrimary ? (
-                      <InlineVerifyForm signer={signer} corporateId={profile.corporateId} onVerified={(updated) => {
-                        setSigners(prev => prev.map(s => s.id === updated.id ? updated : s));
-                      }} />
-                    ) : (
-                      needsInvite && (
-                        <button
-                          onClick={() => handleResendInvite(signer)}
-                          disabled={resendingId === signer.id}
-                          className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
-                          title="Send verification invite"
-                        >
-                          {resendingId === signer.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                          {inviteBtnLabel}
-                        </button>
-                      )
+                    {!isPrimary && needsInvite && (
+                      <button
+                        onClick={() => handleResendInvite(signer)}
+                        disabled={resendingId === signer.id}
+                        className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
+                        title="Send verification invite"
+                      >
+                        {resendingId === signer.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                        {inviteBtnLabel}
+                      </button>
                     )}
                     {/* Inline Edit/Save lifecycle toggle */}
                     {isEditing ? (
@@ -294,7 +288,14 @@ export default function SignerRoster({ profile, onValidChange }) {
                     </button>
                   </div>
                 </div>
-                {/* Inline verify form expands inside actions area when primary clicks Verify Now */}
+                {/* Inline verify form renders below the row for primary signers */}
+                {isPrimary && (
+                  <div className="mt-3">
+                    <InlineVerifyForm signer={signer} corporateId={profile.corporateId} onVerified={(updated) => {
+                      setSigners(prev => prev.map(s => s.id === updated.id ? updated : s));
+                    }} />
+                  </div>
+                )}
               </div>
             );
           })

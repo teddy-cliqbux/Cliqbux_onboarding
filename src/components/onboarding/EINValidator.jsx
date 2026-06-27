@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, CheckCheck } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 export default function EINValidator({ corporateId, value, onChange, onValidated }) {
@@ -50,14 +50,20 @@ export default function EINValidator({ corporateId, value, onChange, onValidated
         {status === 'valid' && <CheckCircle2 className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-green-500" />}
         {status === 'invalid' && <AlertCircle className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-red-500" />}
       </div>
-      <button
-        type="button"
-        onClick={validate}
-        disabled={!(value || '').replace(/\D/g, '').length === 9 || status === 'loading'}
-        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 transition-all"
-      >
-        {status === 'loading' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Verify'}
-      </button>
+      {status === 'valid' ? (
+        <span className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap border border-green-200 bg-green-50 text-green-700">
+          <CheckCheck className="w-3.5 h-3.5" /> Verified
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={validate}
+          disabled={(value || '').replace(/\D/g, '').length !== 9 || status === 'loading'}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap border border-gray-200 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700 transition-all"
+        >
+          {status === 'loading' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Verify'}
+        </button>
+      )}
     </div>
   );
 }
