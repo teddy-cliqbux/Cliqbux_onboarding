@@ -62,9 +62,27 @@ Deno.serve(async (req) => {
       applicationStepStatus: loc.applicationStepStatus
     }));
 
+    const concepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({ corporateId });
+
+    const safeConcepts = (concepts || []).map(c => ({
+      id: c.id,
+      locationId: c.locationId,
+      corporateId: c.corporateId,
+      conceptName: c.conceptName || c.dbaName || '',
+      dbaName: c.dbaName || '',
+      mccCode: c.mccCode || '',
+      industryType: c.industryType || '',
+      pricingCategory: c.pricingCategory || '',
+      elavonMID: c.elavonMID || '',
+      applicationStepStatus: c.applicationStepStatus || 'In Review',
+      isExistingAccount: !!c.isExistingAccount,
+      pricingMethod: c.pricingMethod || 'ICPLS',
+    }));
+
     return Response.json({
       profile: safeProfile,
-      locations: safeLocations
+      locations: safeLocations,
+      concepts: safeConcepts,
     });
 
   } catch (error) {
