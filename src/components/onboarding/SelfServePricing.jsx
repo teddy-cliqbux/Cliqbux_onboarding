@@ -209,7 +209,7 @@ export default function SelfServePricing({ onComplete }) {
   return (
     <div className="portal-bg min-h-screen" style={{ fontFamily: 'Inter, sans-serif' }}>
       {/* Top bar */}
-      <div className="fixed top-0 left-0 right-0 z-50 bg-gray-900/80 backdrop-blur border-b border-gray-800 px-6 py-4 flex items-center justify-between">
+      <div className="fixed top-0 left-0 right-0 z-50 bg-[#111318]/95 backdrop-blur border-b border-white/8 px-6 py-4 flex items-center justify-between">
         <CliqbuxLogo size="sm" />
         <span className="text-xs text-gray-500 font-mono">Secure Merchant Onboarding</span>
       </div>
