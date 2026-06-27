@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Lock, Loader2, CheckCircle2, AlertCircle, ShieldCheck, PenLine } from 'lucide-react';
+import { ArrowLeft, Lock, Loader2, CheckCircle2, AlertCircle, ShieldCheck, PenLine, ChevronRight } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import SignerRoster from '@/components/onboarding/SignerRoster';
 
@@ -9,84 +9,78 @@ const POLL_INTERVAL_MS = 5000;
 export default function OnboardingVerification({ profile, locations, onBack, onComplete }) {
   const [allVerified, setAllVerified] = useState(false);
 
-  // Signing state
-  const [loadingSigning, setLoadingSigning]   = useState(false);
-  const [signingUrl, setSigningUrl]           = useState(null);   // iframe src
-  const [signingError, setSigningError]       = useState('');
-  const [allSigned, setAllSigned]             = useState(false);
-  const [signers, setSigners]                 = useState([]);
-  const [mspApplicationNo, setMspApplicationNo] = useState(null);
+  // Signing state — array of applications returned by signApplication
+  const [loadingSigning, setLoadingSigning] = useState(false);
+  const [signingError, setSigningError]     = useState('');
+  const [applications, setApplications]     = useState([]); // [{ mspApplicationNo, conceptName, signingUrl, signers, allSigned, error }]
+  const [activeIndex, setActiveIndex]       = useState(0);  // which app is currently in the iframe
   const pollRef = useRef(null);
 
   // Submit state
   const [submitting, setSubmitting]   = useState(false);
   const [submitError, setSubmitError] = useState('');
 
+  // Derived
+  const totalCount  = applications.length;
+  const totalSigned = applications.filter(a => a.allSigned).length;
+  const allSigned   = totalCount > 0 && totalSigned === totalCount;
+  const activeApp   = applications[activeIndex] || null;
+
   // Kick off signing fetch once signers are verified
   useEffect(() => {
-    if (allVerified && !signingUrl && !loadingSigning) {
-      fetchSigningUrl();
+    if (allVerified && applications.length === 0 && !loadingSigning) {
+      fetchSigningState();
     }
   }, [allVerified]);
 
-  // Poll for signing completion while iframe is showing
+  // Poll active application for signing completion
   useEffect(() => {
-    if (signingUrl && !allSigned) {
+    if (activeApp && !activeApp.allSigned && !allSigned) {
       pollRef.current = setInterval(pollSigningStatus, POLL_INTERVAL_MS);
     }
     return () => clearInterval(pollRef.current);
-  }, [signingUrl, allSigned]);
+  }, [activeIndex, allSigned]);
 
-  const fetchSigningUrl = async () => {
+  const fetchSigningState = async () => {
     setLoadingSigning(true);
     setSigningError('');
     try {
-      const res = await base44.functions.invoke('signApplication', {
-        corporateId: profile.corporateId,
-      });
+      const res  = await base44.functions.invoke('signApplication', { corporateId: profile.corporateId });
       const data = res.data;
 
       if (!data?.success) {
-        // Form may not be complete yet — give a clear message
-        const hint = data?.hint || data?.error || 'Unable to prepare signing document.';
-        setSigningError(hint);
+        setSigningError(data?.hint || data?.error || 'Unable to prepare signing documents.');
         return;
       }
 
-      setMspApplicationNo(data.mspApplicationNo);
-      setSigners(data.signers || []);
-      setAllSigned(data.allSigned || false);
+      setApplications(data.applications || []);
 
-      if (data.allSigned) {
-        // Already signed — skip iframe, go straight to submit
-        return;
-      }
-
-      if (data.primarySigningUrl) {
-        setSigningUrl(data.primarySigningUrl);
-      } else {
-        // Package created but no URL yet — shouldn't happen, but handle gracefully
-        setSigningError('Signing document prepared but URL could not be retrieved. Please refresh.');
-      }
+      // Start at first unsigned application
+      const firstUnsigned = (data.applications || []).findIndex(a => !a.allSigned);
+      setActiveIndex(firstUnsigned >= 0 ? firstUnsigned : 0);
     } catch (err) {
-      setSigningError(err.message || 'Failed to prepare signing document.');
+      setSigningError(err.message || 'Failed to prepare signing documents.');
     } finally {
       setLoadingSigning(false);
     }
   };
 
   const pollSigningStatus = async () => {
-    if (!mspApplicationNo) return;
     try {
-      const res = await base44.functions.invoke('signApplication', {
-        corporateId: profile.corporateId,
-        mspApplicationNo,
-      });
+      const res  = await base44.functions.invoke('signApplication', { corporateId: profile.corporateId });
       const data = res.data;
-      if (data?.signers) setSigners(data.signers);
-      if (data?.allSigned) {
-        setAllSigned(true);
+      if (!data?.applications) return;
+
+      setApplications(data.applications);
+
+      // If the active app just got signed, auto-advance to next unsigned
+      const current = data.applications[activeIndex];
+      if (current?.allSigned) {
         clearInterval(pollRef.current);
+        const nextUnsigned = data.applications.findIndex((a, i) => i > activeIndex && !a.allSigned);
+        if (nextUnsigned >= 0) {
+          setActiveIndex(nextUnsigned);
+        }
       }
     } catch (_) {
       // silent — polling failure shouldn't block the UI
@@ -98,9 +92,7 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
     setSubmitting(true);
     setSubmitError('');
     try {
-      const res = await base44.functions.invoke('submitToMSP', {
-        corporateId: profile.corporateId,
-      });
+      const res  = await base44.functions.invoke('submitToMSP', { corporateId: profile.corporateId });
       const data = res.data;
       if (data?.allSubmitted || data?.success) {
         onComplete();
@@ -112,10 +104,6 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const handleRosterChange = (valid) => {
-    setAllVerified(valid);
   };
 
   return (
@@ -143,10 +131,7 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
 
       <div className="px-8 py-6 flex flex-col gap-8">
         {/* Signer Roster */}
-        <SignerRoster
-          profile={profile}
-          onValidChange={handleRosterChange}
-        />
+        <SignerRoster profile={profile} onValidChange={setAllVerified} />
 
         {/* E-Sign Section */}
         <div className="flex flex-col gap-4">
@@ -173,79 +158,131 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
             </div>
           )}
 
-          {/* Loading signing document */}
+          {/* Loading */}
           {allVerified && loadingSigning && (
             <div className="border border-white/10 rounded-xl flex flex-col items-center justify-center py-14 gap-3 bg-white/5">
               <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
-              <p className="text-sm font-semibold text-gray-500">Preparing your signing document…</p>
+              <p className="text-sm font-semibold text-gray-500">Preparing your signing documents…</p>
               <p className="text-xs text-gray-400">This may take a few seconds</p>
             </div>
           )}
 
-          {/* Error */}
+          {/* Error fetching signing state */}
           {allVerified && !loadingSigning && signingError && (
             <div className="border border-red-500/30 bg-red-500/10 rounded-xl flex items-start gap-3 px-5 py-4">
               <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-red-300">Unable to Load Signing Document</p>
+                <p className="text-sm font-semibold text-red-300">Unable to Load Signing Documents</p>
                 <p className="text-xs text-red-400 mt-1">{signingError}</p>
-                <button
-                  onClick={fetchSigningUrl}
-                  className="mt-2 text-xs font-semibold text-red-400 underline hover:text-red-300"
-                >
+                <button onClick={fetchSigningState} className="mt-2 text-xs font-semibold text-red-400 underline hover:text-red-300">
                   Try again
                 </button>
               </div>
             </div>
           )}
 
-          {/* Already signed — skip iframe */}
+          {/* Progress pills — shown once we have apps loaded */}
+          {allVerified && !loadingSigning && totalCount > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                {applications.map((app, i) => (
+                  <button
+                    key={app.mspApplicationNo}
+                    onClick={() => !app.error && setActiveIndex(i)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                      app.allSigned
+                        ? 'border-green-500/40 bg-green-500/10 text-green-300'
+                        : i === activeIndex
+                        ? 'border-purple-500/50 bg-purple-500/15 text-purple-200'
+                        : app.error
+                        ? 'border-red-500/30 bg-red-500/10 text-red-400 cursor-default'
+                        : 'border-white/10 bg-white/5 text-gray-400 hover:border-white/25'
+                    }`}
+                  >
+                    {app.allSigned
+                      ? <CheckCircle2 className="w-3.5 h-3.5" />
+                      : app.error
+                      ? <AlertCircle className="w-3.5 h-3.5" />
+                      : <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px] leading-none">{i + 1}</span>
+                    }
+                    {app.conceptName}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500">
+                {totalSigned} of {totalCount} agreement{totalCount !== 1 ? 's' : ''} signed
+              </p>
+            </div>
+          )}
+
+          {/* All signed banner */}
           {allVerified && allSigned && !loadingSigning && (
             <div className="border border-green-500/30 bg-green-500/10 rounded-xl flex items-start gap-3 px-5 py-4">
               <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-green-300">Agreement Signed</p>
+                <p className="text-sm font-semibold text-green-300">All Agreements Signed</p>
                 <p className="text-xs text-green-400 mt-1">
-                  All required signatures are complete. Click below to submit your application for processing.
+                  {totalCount} agreement{totalCount !== 1 ? 's' : ''} complete. Click below to submit your application for processing.
                 </p>
               </div>
             </div>
           )}
 
-          {/* Signing iframe */}
-          {allVerified && signingUrl && !allSigned && !loadingSigning && (
+          {/* Active signing iframe */}
+          {allVerified && activeApp && !activeApp.allSigned && !activeApp.error && activeApp.signingUrl && !loadingSigning && (
             <div className="border border-white/10 rounded-xl overflow-hidden shadow-lg">
               <div className="bg-white/[0.05] border-b border-white/10 px-5 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
-                  <span className="text-xs font-semibold text-gray-200">Merchant Processing Agreement — Ready to Sign</span>
+                  <span className="text-xs font-semibold text-gray-200">
+                    {activeApp.conceptName}
+                    {totalCount > 1 && (
+                      <span className="text-gray-500 font-normal"> — Agreement {activeIndex + 1} of {totalCount}</span>
+                    )}
+                  </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  {signers.length > 0 && (
-                    <span className="text-xs text-gray-500">
-                      {signers.filter(s => s.signed).length}/{signers.length} signed
-                    </span>
-                  )}
-                  <span className="text-xs text-gray-500">{locations?.length ?? 0} location{(locations?.length ?? 0) !== 1 ? 's' : ''}</span>
-                </div>
+                {activeApp.signers?.length > 0 && (
+                  <span className="text-xs text-gray-500">
+                    {activeApp.signers.filter(s => s.signed).length}/{activeApp.signers.length} signed
+                  </span>
+                )}
               </div>
               <iframe
-                src={signingUrl}
-                title="Merchant Processing Agreement"
+                src={activeApp.signingUrl}
+                title={`Merchant Processing Agreement — ${activeApp.conceptName}`}
                 className="w-full"
                 style={{ height: 680, border: 'none', display: 'block' }}
                 allow="same-origin"
               />
-              <div className="bg-white/[0.03] border-t border-white/10 px-5 py-3">
-                <p className="text-xs text-gray-500 text-center">
+              <div className="bg-white/[0.03] border-t border-white/10 px-5 py-3 flex items-center justify-between">
+                <p className="text-xs text-gray-500">
                   Scroll through the full agreement, then click the signature fields to sign.
-                  This page will update automatically when signing is complete.
+                  This page updates automatically when signing is complete.
                 </p>
+                {totalCount > 1 && activeIndex < totalCount - 1 && (
+                  <button
+                    onClick={() => setActiveIndex(i => i + 1)}
+                    className="flex-shrink-0 flex items-center gap-1 text-xs font-semibold text-gray-400 hover:text-white transition-colors ml-4"
+                  >
+                    Next <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           )}
 
-          {/* Submit button — only after signing */}
+          {/* Error on a specific concept */}
+          {allVerified && activeApp?.error && !loadingSigning && (
+            <div className="border border-red-500/30 bg-red-500/10 rounded-xl flex items-start gap-3 px-5 py-4">
+              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-red-300">{activeApp.conceptName} — Form Incomplete</p>
+                <p className="text-xs text-red-400 mt-1">{activeApp.error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Submit button — only after all signed */}
           {allVerified && allSigned && (
             <div className="flex flex-col gap-2">
               {submitError && (
@@ -266,7 +303,7 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
                 )}
               </button>
               <p className="text-center text-xs text-gray-500">
-                Your signed application will be submitted to Elavon for underwriting review
+                Your signed application{totalCount > 1 ? 's' : ''} will be submitted to Elavon for underwriting review
               </p>
             </div>
           )}

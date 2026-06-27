@@ -1,28 +1,20 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ─── signApplication ──────────────────────────────────────────────────────────
-// Packages a completed MSPWare application for e-signature and returns signing
-// URLs for each principal. Designed to be called from OnboardingVerification
-// after the merchant has filled all required fields.
+// Packages ALL pending MSPWare applications for a corporateId for e-signature
+// and returns signing URLs per concept, in order.
 //
 // Flow:
-//   1. Resolve mspApplicationNo from MerchantProcessingConcept (or accept directly)
-//   2. GET /signatures — check if a signing package already exists
-//   3. POST /signatures — create package if not yet done (requires 100% complete form)
-//   4. GET /signatures/link?emailAddress=... — get per-signer iframe-embeddable URL
-//   5. Return signingUrl (primary signer), all signer statuses, and overall state
+//   1. Load all MerchantProcessingConcept records for corporateId
+//   2. Filter to those with an mspApplicationNo that aren't already Active
+//   3. For each: GET /signatures → create package if needed → GET /signatures/link
+//   4. Return ordered array of applications with signing URLs + overall state
 //
-// The signing URL returned can be:
-//   - Embedded directly in an <iframe> in the portal
-//   - Opened in a new tab
-//   - Re-fetched on each page load (links don't expire until 72h after last email send)
-//
-// After all signers complete, the caller should invoke submitToMSP with
-// MSP_SUBMIT_ENABLED=true (or a dedicated submitApplication call) to push
-// the signed application to Elavon.
+// The UI uses this to show iframes sequentially — one agreement per concept.
+// Poll by calling again with the same corporateId; allSigned flips true when done.
 //
 // POST /functions/signApplication
-// Body: { corporateId, conceptId?, mspApplicationNo? }
+// Body: { corporateId }
 
 Deno.serve(async (req) => {
   try {
@@ -33,7 +25,7 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json();
-    const { corporateId, conceptId, mspApplicationNo: appNoOverride } = body;
+    const { corporateId } = body;
 
     if (!corporateId) {
       return Response.json({ error: 'corporateId is required' }, { status: 400 });
@@ -52,43 +44,11 @@ Deno.serve(async (req) => {
       'Content-Type': 'application/json',
     };
 
-    // ── 1. Resolve mspApplicationNo ───────────────────────────────────────────
-    let mspApplicationNo = appNoOverride;
-
-    if (!mspApplicationNo) {
-      // Find the concept to sign. If conceptId provided, use that; otherwise
-      // find the first concept for this corporateId that has an application number
-      // and is not yet Active.
-      const concepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({ corporateId });
-
-      const target = conceptId
-        ? concepts?.find((c: any) => c.id === conceptId)
-        : concepts?.find((c: any) =>
-            c.mspApplicationNo &&
-            !['Active', 'Active (Existing)', 'Pending MID'].includes(c.applicationStepStatus)
-          );
-
-      if (!target) {
-        return Response.json({
-          error: 'No signable concept found. Make sure submitToMSP has been called first to create the MSPWare draft.',
-          hint: 'Call submitToMSP to create the application draft before requesting signatures.',
-        }, { status: 404 });
-      }
-
-      mspApplicationNo = target.mspApplicationNo;
-      if (!mspApplicationNo) {
-        return Response.json({
-          error: 'Concept has no mspApplicationNo — submitToMSP must be called first.',
-        }, { status: 400 });
-      }
-    }
-
-    console.log(`[signApplication] corporateId=${corporateId} mspApplicationNo=${mspApplicationNo}`);
-
-    // ── 2. Load profile to get primary signer email ───────────────────────────
-    const [profiles, signers] = await Promise.all([
+    // ── 1. Load profile, signers, and all concepts ────────────────────────────
+    const [profiles, signers, allConcepts] = await Promise.all([
       base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }),
+      base44.asServiceRole.entities.MerchantProcessingConcept.filter({ corporateId }),
     ]);
 
     const profile = profiles?.[0];
@@ -101,111 +61,141 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No signer email found on profile or signers' }, { status: 400 });
     }
 
-    // ── 3. Check existing signature package ───────────────────────────────────
-    const statusRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/signatures`, {
-      headers: mspHeaders,
-    });
-    const statusData = await statusRes.json();
-    console.log(`[signApplication] GET /signatures status ${statusRes.status}:`, JSON.stringify(statusData));
-
-    let packageExists = statusRes.ok && statusData?.success && statusData?.signers?.length > 0;
-
-    // ── 4. Create signing package if needed ───────────────────────────────────
-    if (!packageExists) {
-      console.log(`[signApplication] No package found — creating signature package for app ${mspApplicationNo}`);
-      const packageRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/signatures`, {
-        method: 'POST',
-        headers: mspHeaders,
-        body: JSON.stringify({ sendEmail: false }), // don't auto-email — we'll show the iframe
-      });
-      const packageData = await packageRes.json();
-      console.log(`[signApplication] POST /signatures status ${packageRes.status}:`, JSON.stringify(packageData));
-
-      if (!packageRes.ok || !packageData?.success) {
-        const errMsg = packageData?.error || packageData?.message || `HTTP ${packageRes.status}`;
-        // Common failure: form not 100% complete
-        if (String(packageRes.status) === '400' || errMsg.toLowerCase().includes('complete')) {
-          return Response.json({
-            error: 'Application form is not yet complete enough to package for signing.',
-            hint: 'Ensure all required fields are filled (bank account, SSN, DOB, addresses). Check submitToMSP form validation errors.',
-            mspError: errMsg,
-            mspApplicationNo,
-          }, { status: 422 });
-        }
-        return Response.json({
-          error: 'Failed to create signature package',
-          mspError: errMsg,
-          mspApplicationNo,
-        }, { status: 500 });
-      }
-
-      packageExists = true;
-    }
-
-    // ── 5. Fetch per-signer signing links ─────────────────────────────────────
-    // Re-fetch status to get current signer list with statuses
-    const freshStatusRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/signatures`, {
-      headers: mspHeaders,
-    });
-    const freshStatus = await freshStatusRes.json();
-
-    const signerList: any[] = freshStatus?.signers || [];
-    const overallSigned = freshStatus?.signed === true || freshStatus?.status === 'complete';
-
-    // Get signing link for primary signer (used in iframe)
-    let primarySigningUrl: string | null = null;
-    const signerLinks: any[] = [];
-
-    for (const s of signerList) {
-      const email = s.emailAddress || s.email || '';
-      if (!email) continue;
-
-      const linkRes = await fetch(
-        `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(email)}`,
-        { headers: mspHeaders }
-      );
-      const linkData = await linkRes.json();
-      const link = linkData?.link || null;
-
-      signerLinks.push({
-        email,
-        name: s.name || '',
-        status: s.localstatus || s.status || 'unknown',
-        signed: ['signed', 'complete', 'completed'].includes((s.localstatus || s.status || '').toLowerCase()),
-        signingUrl: link,
-      });
-
-      if (email.toLowerCase() === primaryEmail.toLowerCase() && link) {
-        primarySigningUrl = link;
-      }
-    }
-
-    // Fallback: if primaryEmail not in signer list (MSPWare uses form email, not portal email),
-    // try fetching the link directly with the profile email
-    if (!primarySigningUrl) {
-      const fallbackRes = await fetch(
-        `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(primaryEmail)}`,
-        { headers: mspHeaders }
-      );
-      const fallbackData = await fallbackRes.json();
-      primarySigningUrl = fallbackData?.link || null;
-      console.log(`[signApplication] Fallback link fetch for ${primaryEmail}: ${primarySigningUrl ? 'found' : 'not found'}`);
-    }
-
-    const allSigned = signerList.length > 0 && signerList.every(s =>
-      ['signed', 'complete', 'completed'].includes((s.localstatus || s.status || '').toLowerCase())
+    // ── 2. Filter to signable concepts ────────────────────────────────────────
+    // Signable = has mspApplicationNo and is not already fully boarded
+    const DONE_STATUSES = ['Active', 'Active (Existing)', 'Pending MID'];
+    const signable = (allConcepts || []).filter((c: any) =>
+      c.mspApplicationNo && !DONE_STATUSES.includes(c.applicationStepStatus)
     );
 
-    console.log(`[signApplication] Done. primarySigningUrl=${primarySigningUrl} allSigned=${allSigned}`);
+    if (signable.length === 0) {
+      return Response.json({
+        error: 'No signable concepts found. Make sure submitToMSP has been called first.',
+        hint: 'Call submitToMSP to create MSPWare draft applications before requesting signatures.',
+      }, { status: 404 });
+    }
+
+    console.log(`[signApplication] corporateId=${corporateId} signable concepts: ${signable.length}`);
+
+    // ── 3. Process each concept ───────────────────────────────────────────────
+    const applications: any[] = [];
+
+    for (const concept of signable) {
+      const mspApplicationNo = concept.mspApplicationNo;
+      const conceptName = concept.dbaName || concept.conceptName || `Concept ${mspApplicationNo}`;
+
+      console.log(`[signApplication] Processing app ${mspApplicationNo} (${conceptName})`);
+
+      // Check existing signing package
+      const statusRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/signatures`, {
+        headers: mspHeaders,
+      });
+      const statusData = await statusRes.json();
+
+      let packageExists = statusRes.ok && statusData?.success && statusData?.signers?.length > 0;
+
+      // Create package if not yet done
+      if (!packageExists) {
+        console.log(`[signApplication] Creating signature package for app ${mspApplicationNo}`);
+        const packageRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/signatures`, {
+          method: 'POST',
+          headers: mspHeaders,
+          body: JSON.stringify({ sendEmail: false }),
+        });
+        const packageData = await packageRes.json();
+        console.log(`[signApplication] POST /signatures ${packageRes.status}:`, JSON.stringify(packageData));
+
+        if (!packageRes.ok || !packageData?.success) {
+          const errMsg = packageData?.error || packageData?.message || `HTTP ${packageRes.status}`;
+          // Form not 100% complete — record the error but continue processing other concepts
+          applications.push({
+            mspApplicationNo,
+            conceptName,
+            signingUrl: null,
+            signers: [],
+            allSigned: false,
+            error: `Application form incomplete: ${errMsg}`,
+            hint: 'Ensure all required fields are filled (bank account, SSN, DOB, addresses).',
+          });
+          continue;
+        }
+
+        packageExists = true;
+      }
+
+      // Re-fetch to get current signer list with statuses
+      const freshRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/signatures`, {
+        headers: mspHeaders,
+      });
+      const freshData = await freshRes.json();
+      const signerList: any[] = freshData?.signers || [];
+      const overallSigned = freshData?.signed === true || freshData?.status === 'complete';
+
+      // Get signing link for each signer; track primary
+      let primarySigningUrl: string | null = null;
+      const signerLinks: any[] = [];
+
+      for (const s of signerList) {
+        const email = s.emailAddress || s.email || '';
+        if (!email) continue;
+
+        const linkRes = await fetch(
+          `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(email)}`,
+          { headers: mspHeaders }
+        );
+        const linkData = await linkRes.json();
+        const link = linkData?.link || null;
+
+        signerLinks.push({
+          email,
+          name: s.name || '',
+          status: s.localstatus || s.status || 'unknown',
+          signed: ['signed', 'complete', 'completed'].includes((s.localstatus || s.status || '').toLowerCase()),
+          signingUrl: link,
+        });
+
+        if (email.toLowerCase() === primaryEmail.toLowerCase() && link) {
+          primarySigningUrl = link;
+        }
+      }
+
+      // Fallback: try primaryEmail directly if not found in signer list
+      if (!primarySigningUrl) {
+        const fallbackRes = await fetch(
+          `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(primaryEmail)}`,
+          { headers: mspHeaders }
+        );
+        const fallbackData = await fallbackRes.json();
+        primarySigningUrl = fallbackData?.link || null;
+      }
+
+      const appAllSigned = signerList.length > 0 && signerList.every((s: any) =>
+        ['signed', 'complete', 'completed'].includes((s.localstatus || s.status || '').toLowerCase())
+      );
+
+      applications.push({
+        mspApplicationNo,
+        conceptName,
+        signingUrl: primarySigningUrl,
+        signers: signerLinks,
+        allSigned: appAllSigned || overallSigned,
+        error: null,
+      });
+    }
+
+    const totalCount  = applications.length;
+    const totalSigned = applications.filter((a: any) => a.allSigned).length;
+    const allSigned   = totalCount > 0 && totalSigned === totalCount;
+
+    console.log(`[signApplication] Done. ${totalSigned}/${totalCount} signed.`);
 
     return Response.json({
       success: true,
-      mspApplicationNo,
       primaryEmail,
-      primarySigningUrl,  // embed this in <iframe> in OnboardingVerification
-      signers: signerLinks,
-      allSigned: allSigned || overallSigned,
-      packageExists,
+      applications,   // ordered array — UI works through these in sequence
+      totalCount,
+      totalSigned,
+      allSigned,
     });
 
   } catch (error: any) {
