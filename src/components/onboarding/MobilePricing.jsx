@@ -209,8 +209,8 @@ export default function MobilePricing({ onComplete }) {
             const isSelected = selectedTier === card.key;
             return (
               <button key={card.key} onClick={() => handleSelectTier(card.key)}
-                style={{ backgroundColor: '#ffffff', color: 'inherit' }}
-                className={`w-full text-left rounded-2xl border-2 p-5 transition-all duration-200 bg-white shadow-md ${
+                style={{ backgroundColor: '#ffffff' }}
+                className={`pricing-card-light w-full text-left rounded-2xl border-2 p-5 transition-all duration-200 bg-white shadow-md ${
                   isSelected ? 'border-amber-500 shadow-amber-900/20 scale-[1.01]' : 'border-gray-200 hover:border-gray-300'
                 }`}>
                 <div className="flex items-start justify-between">
@@ -227,7 +227,7 @@ export default function MobilePricing({ onComplete }) {
                 </div>
                 <p className="text-xs text-gray-500 mt-3 leading-relaxed">{card.description}</p>
                 <div className="border-t border-gray-100 mt-4 pt-4">
-                  <p className="text-2xl font-black text-gray-900">{card.rate} <span className="text-sm font-medium text-gray-400">+ {card.fee}/txn</span></p>
+                  <p className="pricing-rate text-2xl font-black text-gray-900">{card.rate} <span className="text-sm font-medium text-gray-400">+ {card.fee}/txn</span></p>
                   <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mt-1">{card.rateLabel}</p>
                 </div>
               </button>

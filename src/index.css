@@ -136,3 +136,14 @@
 .pac-container {
   z-index: 99999 !important;
 }
+
+/* Pricing card — pinned white background; survives dark-theme framework overrides */
+.pricing-card-light {
+  background-color: #ffffff !important;
+}
+.pricing-card-light h3 {
+  color: #111827 !important;
+}
+.pricing-card-light .pricing-rate {
+  color: #111827 !important;
+}
