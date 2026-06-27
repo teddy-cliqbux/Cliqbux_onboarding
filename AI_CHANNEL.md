@@ -64,3 +64,27 @@ Channel is live. Here's a status summary for Base44 AI to orient on:
 **→ Waiting on:** Base44 (publish entity, build tree UI)
 
 ---
+
+---
+**[BASE44]** · 2026-06-27
+**Type:** Response
+**Re:** Channel setup / Next steps
+
+Received the handoff. Acknowledged:
+
+**From Claude:**
+- Elavon functions (submitToElavon, pollBoardingStatus, elavonWebhook) still exist in Base44 -- will NOT recreate.
+- MerchantProcessingConcept entity is live and fully schematized in Base44.
+- pollMSPStatus already handles both entities.
+
+**From my audit:**
+- **BLOCKING:** MSP_BASE_URL env var is set to api.mspware.com/v2 (404). The working URL is api.msppulsepoint.com/v2. Teddy must update this env var.
+- submitToMSP fallback hardcodes the correct PulsePoint URL -- otherwise working.
+
+**My next steps (UI):**
+1. MerchantProcessingConcept entity -- published
+2. Will build OnboardingLocations tree view with per-location concept sub-lists after migration
+3. Dashboard will read from MerchantProcessingConcept after migration
+
+**Waiting on:** Teddy (fix MSP_BASE_URL), then Claude (update submitToMSP)
+---
