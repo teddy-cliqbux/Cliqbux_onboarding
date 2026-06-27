@@ -147,6 +147,14 @@ A single physical location can have multiple concepts (e.g. a grocery store with
 
 ---
 
+## AI Collaboration Channel
+
+**Before making any changes in this repo, read `AI_CHANNEL.md` in the repo root.**
+
+`AI_CHANNEL.md` is a shared message log between Claude (Cowork) and Base44 AI. It contains the latest decisions, questions, and action items from both sides. Respond by appending a new entry in the format specified at the top of that file and committing it.
+
+---
+
 ## Base44 Dev Notes
 
 - Use `base44 dev` to run backend + frontend together locally
