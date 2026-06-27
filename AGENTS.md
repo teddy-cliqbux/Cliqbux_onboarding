@@ -92,6 +92,7 @@ A single physical location can have multiple concepts (e.g. a grocery store with
 | Function | Purpose |
 |---|---|
 | `submitToMSP` | Creates MSPWare draft + fills form + optionally submits |
+| `signApplication` | Packages a filled MSPWare application for e-signing; returns iframe-embeddable signing URL per principal. Call after submitToMSP, before final Elavon submit. |
 | `pollMSPStatus` | Polls MSPWare status for all Pending MID records (both Locations and Concepts) |
 | `importExistingMIDs` | TIN-matches MSPWare approved apps to a corporateId; creates Concept records |
 | `importMSPPortfolio` | Bulk-imports entire MSPWare portfolio — creates Profile + Locations + Concepts for all approved merchants. Groups by TIN. Admin-only, dryRun supported. |
