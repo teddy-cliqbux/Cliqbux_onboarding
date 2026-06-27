@@ -81,6 +81,27 @@ function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
+// Maps our internal industryClass enum → MSPWare industry_type code
+function industryClassToMSP(cls: string): string {
+  const map: Record<string, string> = {
+    'RESTAURANT': 'RS',
+    'GROCERY':    'SP',
+    'HOTEL':      'HT',
+    'ECOMMERCE':  'MS',
+    'SERVICES':   'RE',
+    'RETAIL':     'RE',
+    'AUTO':       'RE',
+    'HEALTH':     'RE',
+    'SALON':      'RE',
+    'GYM':        'RE',
+    'BAR':        'RS',
+    'CLOTHING':   'RE',
+    'ELECTRONICS':'RE',
+    'FURNITURE':  'RE',
+  };
+  return map[cls] || 'RE';
+}
+
 function formatDob(year: string, month: string, day: string): string {
   if (!year || !month || !day) return '';
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -120,7 +141,7 @@ function buildFormPayload(
   const pricingCategory = String(concept.pricingCategory || profile.pricingCategory || '1');
   const pricingMethod = concept.pricingMethod || profile.pricingMethod || 'ICPLS';
   const industryType = concept.industryType || profile.industryType || mapIndustryType(pricingCategory);
-  const mcc = concept.mccCode || profile.mcc || '5999';
+  const mcc = concept.mccCode || profile.mccCode || '5999';
   const dbaName = concept.dbaName || location.dbaName || profile.legalName || '';
   const monthlyCardSales = String(concept.monthlyCardSales || profile.monthlyCardSales || '6000');
   const avgSaleAmount = String(concept.avgSaleAmount || profile.avgSaleAmount || '100');
@@ -129,7 +150,11 @@ function buildFormPayload(
 
   const cardPresentPct = parseInt(String(concept.cardPresentPct ?? profile.cardPresentPct ?? '100'), 10);
   const cnpPct = 100 - cardPresentPct;
-  const intPct = cnpPct > 0 ? String(profile.internetPct ?? cnpPct) : '0';
+  // internetPct and motoPct are collected separately on Step 2.
+  // int_percent = internet only; MSPWare derives MOTO as cnp - int.
+  // Default: if no internet breakdown is set, assume all CNP is internet (covers MOTO-only merchants too).
+  const intPct  = cnpPct > 0 ? String(profile.internetPct ?? 0) : '0';
+  const motoPct = cnpPct > 0 ? String(profile.motoPct ?? Math.max(0, cnpPct - parseInt(intPct, 10))) : '0';
 
   const ownershipRaw = profile.ownershipType || profile.taxClassType || '';
   const ownershipType = mapOwnershipType(ownershipRaw);
@@ -234,6 +259,7 @@ function buildFormPayload(
     cp_percent: String(cardPresentPct),
     cnp_percent: String(cnpPct),
     int_percent: intPct,
+    moto_percent: motoPct,
     delayed_delivery: deliveryDelayDays,
 
     // ── Card Acceptance ───────────────────────────────────────────────────────
@@ -301,7 +327,41 @@ Deno.serve(async (req) => {
 
     const profile = profiles?.[0];
     if (!profile) return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
-    if (!allConcepts?.length) return Response.json({ error: 'No processing concepts found — run migrateLocationsToConcepts or add a concept first' }, { status: 404 });
+
+    // ── Auto-create concepts for new merchants who have locations but no concepts yet ──
+    // This covers the standard onboarding flow: merchant adds location(s) via the UI,
+    // then clicks Submit on the verification page before the tree UI / migration creates concepts.
+    let concepts_created_auto = 0;
+    if (!allConcepts?.length && allLocs?.length) {
+      console.log(`[submitToMSP] No concepts found — auto-creating from ${allLocs.length} location(s)`);
+      for (const loc of allLocs) {
+        try {
+          await base44.asServiceRole.entities.MerchantProcessingConcept.create({
+            locationId:      loc.id,
+            corporateId,
+            conceptName:     loc.dbaName || profile.legalName,
+            dbaName:         loc.dbaName || profile.legalName,
+            mccCode:         profile.mccCode || profile.mcc || '5999',
+            industryType:    profile.industryClass ? industryClassToMSP(profile.industryClass) : 'RE',
+            pricingCategory: '1',
+            pricingMethod:   'ICPLS',
+            monthlyCardSales:    parseFloat(String(profile.monthlyCardSales || '0')) || null,
+            avgSaleAmount:       parseFloat(String(profile.avgSaleAmount || '0')) || null,
+            highestTicketAmount: parseFloat(String(profile.highestTicketAmount || '0')) || null,
+            cardPresentPct:      parseFloat(String(profile.cardPresentPct || '100')) || 100,
+            applicationStepStatus: 'In Review',
+          });
+          concepts_created_auto++;
+        } catch (err: any) {
+          console.warn(`[submitToMSP] Could not auto-create concept for location ${loc.id}: ${err.message}`);
+        }
+      }
+      // Re-fetch concepts now that we've created them
+      const freshConcepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({ corporateId });
+      allConcepts.push(...(freshConcepts || []));
+    }
+
+    if (!allConcepts?.length) return Response.json({ error: 'No processing concepts found and no locations to derive them from' }, { status: 404 });
 
     // Build a locationId → location lookup for fast joins
     const locationMap: Record<string, any> = {};
@@ -508,6 +568,7 @@ Deno.serve(async (req) => {
       allSubmitted: allSuccessful && results.every(r => ['submitted', 'skipped', 'draft_created'].includes(r.status)),
       submitEnabled,
       corporateId,
+      conceptsAutoCreated: concepts_created_auto,
       results,
     });
 
