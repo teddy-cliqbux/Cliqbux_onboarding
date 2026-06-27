@@ -9,7 +9,6 @@ const DEFAULT_TEMPLATE_NO = 6;
 
 // ─── Value Mappings ───────────────────────────────────────────────────────────
 
-// Maps our internal ownershipType / taxClassType → MSPWare ownership_type codes
 function mapOwnershipType(t: string): string {
   const map: Record<string, string> = {
     'SOLE_PROP':        'SP',
@@ -33,14 +32,13 @@ function mapOwnershipType(t: string): string {
 // Confirmed valid from live apps: "C" (C-corp election), "P" (partnership), "D" (disregarded entity)
 function mapLlcClass(t: string): string {
   const map: Record<string, string> = {
-    'LLC':              'D',   // default: single-member disregarded entity
-    'LLC_PARTNERSHIP':  'P',   // multi-member taxed as partnership
-    'LLC_CORPORATION':  'C',   // elected to be taxed as corporation
+    'LLC':              'D',
+    'LLC_PARTNERSHIP':  'P',
+    'LLC_CORPORATION':  'C',
   };
   return map[t?.toUpperCase?.()] || map[t] || 'D';
 }
 
-// Maps our internal titleType → MSPWare owner_title codes
 function mapOwnerTitle(t: string): string {
   const map: Record<string, string> = {
     'OWNER':               'OP',
@@ -68,13 +66,13 @@ function mapOwnerTitle(t: string): string {
 // Confirmed from live approved apps: RE=Retail, RS=Restaurant, SP=Supermarket
 function mapIndustryType(pricingCategory: string): string {
   const map: Record<string, string> = {
-    '1':  'RE',   // Retail (confirmed valid)
-    '2':  'HT',   // Hotel/Lodging
-    '4':  'SP',   // Supermarket (confirmed valid)
-    '5':  'ARU',  // ARU
-    '6':  'MS',   // MOTO/Internet
-    '7':  'RS',   // Restaurant (confirmed valid)
-    '13': 'RE',   // Omni Commerce → Retail
+    '1':  'RE',
+    '2':  'HT',
+    '4':  'SP',
+    '5':  'ARU',
+    '6':  'MS',
+    '7':  'RS',
+    '13': 'RE',
   };
   return map[pricingCategory] || 'RE';
 }
@@ -88,7 +86,6 @@ function formatDob(year: string, month: string, day: string): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-// Returns first day of next calendar month as YYYY-MM-DD
 function nextMonthStart(): string {
   const now = new Date();
   const y = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
@@ -97,22 +94,40 @@ function nextMonthStart(): string {
 }
 
 // ─── Form Payload Builder ─────────────────────────────────────────────────────
+// concept fields take precedence over profile-level defaults for per-MID pricing,
+// DBA, MCC, and bank details. location provides the physical address.
 
 function buildFormPayload(
   profile: Record<string, any>,
   location: Record<string, any>,
+  concept: Record<string, any>,
   primarySigner: Record<string, any>,
   additionalSigners: Record<string, any>[]
 ): Record<string, unknown> {
 
   const signer = primarySigner || {};
-  const routing = location.bankDetails?.routingNumber || location.routingNumber || '';
-  const account = location.bankDetails?.accountNumber || location.accountNumber || '';
+
+  // Bank: concept-level account overrides location (e.g. bakery settles to different account)
+  const bank = concept.bankDetails || location.bankDetails || {};
+  const routing = bank.routingNumber || location.routingNumber || '';
+  const account = bank.accountNumber || location.accountNumber || '';
+
   const taxId = cleanDigits(profile.taxId || '');
   const ssn = cleanDigits(signer.ssn || profile.ssn || '');
   const phone = cleanDigits(signer.corporatePhone || profile.corporatePhone || '');
 
-  const cardPresentPct = parseInt(String(profile.cardPresentPct || '100'), 10);
+  // Concept-level fields override profile-level for per-MID differentiation
+  const pricingCategory = String(concept.pricingCategory || profile.pricingCategory || '1');
+  const pricingMethod = concept.pricingMethod || profile.pricingMethod || 'ICPLS';
+  const industryType = concept.industryType || profile.industryType || mapIndustryType(pricingCategory);
+  const mcc = concept.mccCode || profile.mcc || '5999';
+  const dbaName = concept.dbaName || location.dbaName || profile.legalName || '';
+  const monthlyCardSales = String(concept.monthlyCardSales || profile.monthlyCardSales || '6000');
+  const avgSaleAmount = String(concept.avgSaleAmount || profile.avgSaleAmount || '100');
+  const highestTicketAmount = String(concept.highestTicketAmount || profile.highestTicketAmount || profile.avgSaleAmount || '200');
+  const deliveryDelayDays = String(concept.deliveryDelayDays ?? profile.deliveryDelayDays ?? '0');
+
+  const cardPresentPct = parseInt(String(concept.cardPresentPct ?? profile.cardPresentPct ?? '100'), 10);
   const cnpPct = 100 - cardPresentPct;
   const intPct = cnpPct > 0 ? String(profile.internetPct ?? cnpPct) : '0';
 
@@ -120,16 +135,10 @@ function buildFormPayload(
   const ownershipType = mapOwnershipType(ownershipRaw);
   const isLLC = ownershipType === 'LL';
 
-  // Pricing/industry — use profile fields if set, otherwise retail defaults
-  const pricingCategory = String(profile.pricingCategory || '1');
-  const pricingMethod = profile.pricingMethod || 'ICPLS';
-  const industryType = profile.industryType || mapIndustryType(pricingCategory);
-
   const annualRevenue = String(
-    profile.annualRevenue || (parseInt(String(profile.monthlyCardSales || '6000'), 10) * 12)
+    profile.annualRevenue || (parseInt(monthlyCardSales, 10) * 12)
   );
 
-  // Build additional owners array
   const additionalOwners = additionalSigners.map(s => ({
     owner_responsible_party: false,
     owner_personal_guarantee: !!s.signsPersonalGuarantee,
@@ -155,7 +164,7 @@ function buildFormPayload(
 
   return {
     // ── Merchant Information ──────────────────────────────────────────────────
-    full_dba_name: location.dbaName || profile.legalName || '',
+    full_dba_name: dbaName,
     legal_dba_name: profile.legalName || '',
     products_or_services: profile.productDescription || 'Retail goods and services',
     year_business_established: String(profile.establishmentYear || new Date().getFullYear() - 3),
@@ -163,14 +172,10 @@ function buildFormPayload(
     ownership_months: String(profile.currentOwnershipMonths || '0'),
     ownership_type: ownershipType,
     tin: taxId,
-    // SSN only sent for sole props (when no EIN)
     ...((!taxId && ssn) ? { ssn } : {}),
-    // LLC tax classification — only required when ownership_type = 'LL'
     ...(isLLC ? { llc_class: mapLlcClass(ownershipRaw) } : {}),
-    // Country fields
     country_formation: 'USA',
     country_operations: 'USA',
-    // Industry
     industry_type: industryType,
 
     // ── Addresses ────────────────────────────────────────────────────────────
@@ -184,7 +189,7 @@ function buildFormPayload(
     business_city: location.businessCity || '',
     business_state_usa: location.businessState || '',
     business_zipcode: location.businessZip || '',
-    has_legal_address: 'business',   // 'same' is not a valid option
+    has_legal_address: 'business',
 
     // ── Principals ───────────────────────────────────────────────────────────
     owners: [
@@ -222,30 +227,27 @@ function buildFormPayload(
 
     // ── Financial Information ─────────────────────────────────────────────────
     annual_revenue: annualRevenue,
-    monthly_sales: String(profile.monthlyCardSales || '6000'),
-    average_sales: String(profile.avgSaleAmount || '100'),
-    highest_ticket: String(profile.highestTicketAmount || profile.avgSaleAmount || '200'),
+    monthly_sales: monthlyCardSales,
+    average_sales: avgSaleAmount,
+    highest_ticket: highestTicketAmount,
     freq_highest_average_ticket: String(profile.highestTicketFrequency || '24'),
     cp_percent: String(cardPresentPct),
     cnp_percent: String(cnpPct),
     int_percent: intPct,
-    delayed_delivery: String(profile.deliveryDelayDays || '0'),
+    delayed_delivery: deliveryDelayDays,
 
     // ── Card Acceptance ───────────────────────────────────────────────────────
     cards_accepted: ['VISA', 'VISA_DEBIT', 'MASTERCARD', 'MASTERCARD_DEBIT', 'DISCOVER', 'AMEX'],
     card_acceptance_split: cardPresentPct >= 100 ? 'CP' : 'OMNI',
 
     // ── Industry / MCC ────────────────────────────────────────────────────────
-    // MSPWare MCC field uses Elavon's MCC codes (e.g. "5814", "5411A", "5999")
-    // profile.mcc should store the merchant's MCC; defaults to 5999 (misc retail)
-    mcc: profile.mcc || '5999',
+    mcc,
 
     // ── Pricing ───────────────────────────────────────────────────────────────
     pricing_method: pricingMethod,
     pricing_category: pricingCategory,
     billing_method: 'N',
     annual_fee_start_date: nextMonthStart(),
-    // Auth/IC+ pricing fields — account-level constants for Cliqbux
     auth_pricing_program: '49999',
     all_markup_discount: '0.0000',
     all_markup_per_item: '0.000',
@@ -260,7 +262,7 @@ function buildFormPayload(
 
     // ── Statements ────────────────────────────────────────────────────────────
     statement_delivery_method: 'E',
-    chargebacks_retrievals_format: 'WM',   // 'E' is not a valid option
+    chargebacks_retrievals_format: 'WM',
     chargebacks_retrievals_email: signer.signerEmail || profile.signerEmail || '',
   };
 }
@@ -269,7 +271,8 @@ function buildFormPayload(
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const { corporateId } = await req.json();
+    const body = await req.json();
+    const { corporateId, conceptIds, locationIds } = body;
 
     if (!corporateId) return Response.json({ error: 'corporateId is required' }, { status: 400 });
 
@@ -288,15 +291,32 @@ Deno.serve(async (req) => {
       'Accept': 'application/json',
     };
 
-    const [profiles, allLocs, signers] = await Promise.all([
+    // ── Fetch merchant data ────────────────────────────────────────────────────
+    const [profiles, allConcepts, allLocs, signers] = await Promise.all([
       base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId }),
+      base44.asServiceRole.entities.MerchantProcessingConcept.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }),
     ]);
 
     const profile = profiles?.[0];
     if (!profile) return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
-    if (!allLocs?.length) return Response.json({ error: 'No locations found' }, { status: 404 });
+    if (!allConcepts?.length) return Response.json({ error: 'No processing concepts found — run migrateLocationsToConcepts or add a concept first' }, { status: 404 });
+
+    // Build a locationId → location lookup for fast joins
+    const locationMap: Record<string, any> = {};
+    for (const loc of (allLocs || [])) {
+      locationMap[loc.id] = loc;
+    }
+
+    // Filter concepts if caller specified specific IDs
+    let concepts = allConcepts;
+    if (conceptIds?.length) {
+      concepts = concepts.filter((c: any) => conceptIds.includes(c.id));
+    } else if (locationIds?.length) {
+      // Backward-compat: callers that pass locationIds get concepts for those locations
+      concepts = concepts.filter((c: any) => locationIds.includes(c.locationId));
+    }
 
     const primarySigner = signers?.find((s: any) => s.isPrimarySigner) || signers?.[0] || {};
     const additionalSigners = signers?.filter((s: any) => !s.isPrimarySigner) || [];
@@ -304,26 +324,53 @@ Deno.serve(async (req) => {
     const results = [];
     let allSuccessful = true;
 
-    for (const location of allLocs) {
-      // Skip locations already boarded
-      if (['Pending MID', 'Active'].includes(location.applicationStepStatus)) {
-        results.push({ locationId: location.id, dbaName: location.dbaName, status: 'skipped', reason: `Already ${location.applicationStepStatus}` });
+    for (const concept of concepts) {
+      // ── Skip already-boarded concepts ────────────────────────────────────────
+      if (['Pending MID', 'Active', 'Active (Existing)'].includes(concept.applicationStepStatus)) {
+        results.push({
+          conceptId: concept.id,
+          locationId: concept.locationId,
+          dbaName: concept.dbaName,
+          status: 'skipped',
+          reason: `Already ${concept.applicationStepStatus}`,
+        });
         continue;
       }
 
-      const routing = location.bankDetails?.routingNumber || location.routingNumber || '';
-      const account = location.bankDetails?.accountNumber || location.accountNumber || '';
+      // ── Join to location for address + fallback bank ──────────────────────
+      const location = locationMap[concept.locationId];
+      if (!location) {
+        results.push({
+          conceptId: concept.id,
+          dbaName: concept.dbaName,
+          status: 'error',
+          error: `Location ${concept.locationId} not found`,
+        });
+        allSuccessful = false;
+        continue;
+      }
+
+      // Resolve bank: concept-level first, then location-level
+      const bank = concept.bankDetails || location.bankDetails || {};
+      const routing = bank.routingNumber || location.routingNumber || '';
+      const account = bank.accountNumber || location.accountNumber || '';
 
       if (!routing || !account) {
-        results.push({ locationId: location.id, dbaName: location.dbaName, status: 'skipped', reason: 'Missing bank account details' });
+        results.push({
+          conceptId: concept.id,
+          locationId: concept.locationId,
+          dbaName: concept.dbaName,
+          status: 'skipped',
+          reason: 'Missing bank account details',
+        });
         continue;
       }
 
       try {
-        // ── Step 1: Create draft application ──────────────────────────────────
-        const templateNo = profile.mspTemplateNo || DEFAULT_TEMPLATE_NO;
+        // ── Step 1: Create draft application ─────────────────────────────────
+        const templateNo = concept.mspTemplateNo || profile.mspTemplateNo || DEFAULT_TEMPLATE_NO;
         const createBody = {
-          dba: location.dbaName || profile.legalName,
+          dba: concept.dbaName || location.dbaName || profile.legalName,
           merchantapplicationtypeno: MSP_APP_TYPE,
           salespersonid: salespersonId,
           templatemerchantapplicationno: templateNo,
@@ -337,24 +384,30 @@ Deno.serve(async (req) => {
         const createData = await createRes.json();
 
         if (!createRes.ok || !createData.success) {
-          console.error(`[submitToMSP] Failed to create application for "${location.dbaName}":`, JSON.stringify(createData));
-          await base44.asServiceRole.entities.MerchantLocations.update(location.id, { applicationStepStatus: 'Error' });
-          results.push({ locationId: location.id, dbaName: location.dbaName, status: 'error', error: createData.error || createData.message || `HTTP ${createRes.status}` });
+          console.error(`[submitToMSP] Failed to create application for "${concept.dbaName}":`, JSON.stringify(createData));
+          await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { applicationStepStatus: 'Error' });
+          results.push({
+            conceptId: concept.id,
+            locationId: concept.locationId,
+            dbaName: concept.dbaName,
+            status: 'error',
+            error: createData.error || createData.message || `HTTP ${createRes.status}`,
+          });
           allSuccessful = false;
           continue;
         }
 
         const mspApplicationNo = createData.merchantapplicationno;
-        console.log(`[submitToMSP] Created application ${mspApplicationNo} for "${location.dbaName}"`);
+        console.log(`[submitToMSP] Created application ${mspApplicationNo} for "${concept.dbaName}"`);
 
-        // Store application number immediately so we can track it even if form fill fails
-        await base44.asServiceRole.entities.MerchantLocations.update(location.id, {
+        // Persist application number immediately so it's trackable even if form fill fails
+        await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, {
           mspApplicationNo: String(mspApplicationNo),
           applicationStepStatus: 'In Review',
         });
 
         // ── Step 2: Fill form ─────────────────────────────────────────────────
-        const formPayload = buildFormPayload(profile, location, primarySigner, additionalSigners);
+        const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners);
         console.log(`[submitToMSP] Filling form for application ${mspApplicationNo}:`, JSON.stringify(formPayload, null, 2));
 
         const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
@@ -363,7 +416,6 @@ Deno.serve(async (req) => {
           body: JSON.stringify(formPayload),
         });
         const formData = await formRes.json();
-
         console.log(`[submitToMSP] Form fill response ${formRes.status}:`, JSON.stringify(formData, null, 2));
 
         const percentComplete = formData?.percent_complete ?? null;
@@ -375,8 +427,9 @@ Deno.serve(async (req) => {
 
         if (!formRes.ok || !formData?.canSave) {
           results.push({
-            locationId: location.id,
-            dbaName: location.dbaName,
+            conceptId: concept.id,
+            locationId: concept.locationId,
+            dbaName: concept.dbaName,
             status: 'form_error',
             mspApplicationNo,
             percentComplete,
@@ -390,8 +443,9 @@ Deno.serve(async (req) => {
         // ── Step 3: Submit (only if MSP_SUBMIT_ENABLED=true) ──────────────────
         if (!submitEnabled) {
           results.push({
-            locationId: location.id,
-            dbaName: location.dbaName,
+            conceptId: concept.id,
+            locationId: concept.locationId,
+            dbaName: concept.dbaName,
             status: 'draft_created',
             mspApplicationNo,
             percentComplete,
@@ -410,21 +464,23 @@ Deno.serve(async (req) => {
         console.log(`[submitToMSP] Submit response ${submitRes.status}:`, JSON.stringify(submitData, null, 2));
 
         if (submitRes.ok && submitData?.success) {
-          await base44.asServiceRole.entities.MerchantLocations.update(location.id, {
+          await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, {
             applicationStepStatus: 'Pending MID',
           });
           results.push({
-            locationId: location.id,
-            dbaName: location.dbaName,
+            conceptId: concept.id,
+            locationId: concept.locationId,
+            dbaName: concept.dbaName,
             status: 'submitted',
             mspApplicationNo,
             percentComplete,
           });
         } else {
-          await base44.asServiceRole.entities.MerchantLocations.update(location.id, { applicationStepStatus: 'Error' });
+          await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { applicationStepStatus: 'Error' });
           results.push({
-            locationId: location.id,
-            dbaName: location.dbaName,
+            conceptId: concept.id,
+            locationId: concept.locationId,
+            dbaName: concept.dbaName,
             status: 'submit_error',
             mspApplicationNo,
             error: submitData?.error || submitData?.message || `HTTP ${submitRes.status}`,
@@ -433,22 +489,29 @@ Deno.serve(async (req) => {
           allSuccessful = false;
         }
 
-      } catch (err) {
-        console.error(`[submitToMSP] Exception for "${location.dbaName}":`, err.message);
-        await base44.asServiceRole.entities.MerchantLocations.update(location.id, { applicationStepStatus: 'Error' });
-        results.push({ locationId: location.id, dbaName: location.dbaName, status: 'error', error: err.message });
+      } catch (err: any) {
+        console.error(`[submitToMSP] Exception for "${concept.dbaName}":`, err.message);
+        await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { applicationStepStatus: 'Error' });
+        results.push({
+          conceptId: concept.id,
+          locationId: concept.locationId,
+          dbaName: concept.dbaName,
+          status: 'error',
+          error: err.message,
+        });
         allSuccessful = false;
       }
     }
 
     return Response.json({
       success: allSuccessful,
+      allSubmitted: allSuccessful && results.every(r => ['submitted', 'skipped', 'draft_created'].includes(r.status)),
       submitEnabled,
       corporateId,
       results,
     });
 
-  } catch (error) {
+  } catch (error: any) {
     return Response.json({ error: error.message, stack: error.stack?.split('\n').slice(0, 3).join(' | ') }, { status: 500 });
   }
 });

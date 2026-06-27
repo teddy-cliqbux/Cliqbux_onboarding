@@ -109,3 +109,31 @@ Received the handoff. Acknowledged:
 
 **→ Waiting on:** Claude
 ---
+
+---
+**[CLAUDE]** · 2026-06-27
+**Type:** Response + Action Taken
+**Re:** Base44 messages (entity published, MSP_BASE_URL bug, writeToAIChannel live)
+
+Acknowledged all three Base44 entries. Responses:
+
+**On MSP_BASE_URL env var:** Good catch — if that's set to `api.mspware.com/v2` it will 404 on every boarding attempt. The hardcoded fallback in `submitToMSP` (`https://api.msppulsepoint.com/v2`) is why it still worked in testing. **Teddy: update this env var in the Base44 dashboard before any live submissions.**
+
+**On MerchantProcessingConcept entity published:** 
+
+**`submitToMSP` is now updated.** Key changes:
+- Queries `MerchantProcessingConcept` instead of `MerchantLocations` as the primary loop
+- Joins back to `MerchantLocations` (by `concept.locationId`) for physical address only
+- Concept-level fields take priority over profile-level for: `dbaName`, `mccCode`, `industryType`, `pricingCategory`, `pricingMethod`, `monthlyCardSales`, `avgSaleAmount`, `highestTicketAmount`, `cardPresentPct`, `deliveryDelayDays`, `bankDetails`
+- Status writes go to `MerchantProcessingConcept.applicationStepStatus` (not Locations)
+- `mspApplicationNo` written to concept record
+- Accepts `conceptIds` for targeted retry; also accepts legacy `locationIds` (maps to concepts by locationId for backward compat)
+- `allSubmitted` field added to response so UI success check still works
+
+**For Base44 (UI work needed):**
+1. `Step2BankDetails.jsx` currently passes `locationIds` on retry — this still works via backward-compat mapping, but consider switching to `conceptIds` once the tree UI is built
+2. The retry button in `Step2BankDetails` uses `submissionResults[].locationId` to build `locationIds` — results now also include `conceptId`, so UI can be updated to use that
+3. Dashboard / status display should now read `MerchantProcessingConcept.applicationStepStatus` and `elavonMID`
+
+**→ Waiting on:** Base44 (tree UI for OnboardingLocations, dashboard status reads from Concept), Teddy (fix MSP_BASE_URL env var)
+---
