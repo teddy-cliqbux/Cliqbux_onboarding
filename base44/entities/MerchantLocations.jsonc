@@ -19,7 +19,7 @@
     },
     "businessAddress": {
       "type": "string",
-      "description": "Human-readable display address — auto-composed from structured fields"
+      "description": "Human-readable display address \u2014 auto-composed from structured fields"
     },
     "businessStreet": {
       "type": "string",
@@ -68,27 +68,27 @@
     },
     "routingNumber": {
       "type": "string",
-      "description": "Legacy flat field — prefer bankDetails.routingNumber"
+      "description": "Legacy flat field \u2014 prefer bankDetails.routingNumber"
     },
     "accountNumber": {
       "type": "string",
-      "description": "Legacy flat field — prefer bankDetails.accountNumber"
+      "description": "Legacy flat field \u2014 prefer bankDetails.accountNumber"
     },
     "elavonMID": {
       "type": "string",
-      "description": "Merchant ID assigned by Elavon — populated asynchronously after board status reaches COMPLETE"
+      "description": "Merchant ID assigned by Elavon \u2014 populated asynchronously after board status reaches COMPLETE"
     },
     "mspApplicationNo": {
       "type": "string",
-      "description": "MSPWare/PulsePoint application number — assigned when draft is created via submitToMSP"
+      "description": "MSPWare/PulsePoint application number \u2014 assigned when draft is created via submitToMSP"
     },
     "awb": {
       "type": "string",
-      "description": "DEPRECATED — Application Work Basket ID from the old Elavon direct boarding API. No longer written by any active function. Retained for historical records only. Use mspApplicationNo instead."
+      "description": "DEPRECATED \u2014 Application Work Basket ID from the old Elavon direct boarding API. No longer written by any active function. Retained for historical records only. Use mspApplicationNo instead."
     },
     "boardingId": {
       "type": "string",
-      "description": "DEPRECATED — Alias for awb from the old Elavon direct boarding API. No longer written by any active function. Retained for historical records only. Use mspApplicationNo instead."
+      "description": "DEPRECATED \u2014 Alias for awb from the old Elavon direct boarding API. No longer written by any active function. Retained for historical records only. Use mspApplicationNo instead."
     },
     "applicationStepStatus": {
       "type": "string",
@@ -101,6 +101,61 @@
       ],
       "default": "In Review",
       "description": "Pending MID = board accepted by Elavon, awaiting async MID assignment. Active = MID received."
+    },
+    "industryClass": {
+      "type": "string",
+      "description": "Elavon IndustryCode: RE=Retail, RS=Restaurant, SP=Supermarket, HT=Hotel, MS=MOTO, ARU=ARU"
+    },
+    "mccCode": {
+      "type": "string",
+      "description": "Merchant Category Code e.g. 5812, 5411"
+    },
+    "productDescription": {
+      "type": "string",
+      "description": "Short description of goods or services sold"
+    },
+    "establishmentYear": {
+      "type": "string",
+      "description": "Year this location was established"
+    },
+    "currentOwnershipYears": {
+      "type": "string",
+      "description": "Years under current ownership for this location"
+    },
+    "currentOwnershipMonths": {
+      "type": "string",
+      "description": "Additional months under current ownership (0-11)"
+    },
+    "avgSaleAmount": {
+      "type": "string",
+      "description": "Average transaction amount in USD for this location"
+    },
+    "monthlyCardSales": {
+      "type": "string",
+      "description": "Expected monthly card volume in USD for this location"
+    },
+    "annualRevenue": {
+      "type": "string",
+      "description": "Annual revenue in USD for this location"
+    },
+    "highestTicketAmount": {
+      "type": "string",
+      "description": "Highest expected single transaction in USD for this location"
+    },
+    "cardPresentPct": {
+      "type": "string",
+      "description": "Percentage of sales that are card-present (in-person)",
+      "default": "100"
+    },
+    "internetPct": {
+      "type": "string",
+      "description": "Percentage of sales that are online/ecommerce",
+      "default": "0"
+    },
+    "motoPct": {
+      "type": "string",
+      "description": "Percentage of sales that are phone/mail order (MOTO)",
+      "default": "0"
     }
   },
   "required": [

@@ -6,10 +6,7 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       businessName, signerName, signerEmail, pricingTier,
-      corporatePhone, ownershipType, taxClassType, industryClass, mccCode,
-      productDescription, establishmentYear, currentOwnershipYears, currentOwnershipMonths,
-      titleType, avgSaleAmount, monthlyCardSales, annualRevenue, highestTicketAmount,
-      highestTicketFrequency, cardPresentPct, internetPct, motoPct
+      corporatePhone
     } = body;
 
     if (!businessName || !signerName || !signerEmail || !pricingTier) {
@@ -98,7 +95,7 @@ Deno.serve(async (req) => {
           dealname: `${businessName} — Self-Serve Onboarding`,
           dealstage: 'appointmentscheduled',
           pipeline: 'default',
-          amount: monthlyCardSales || '0',
+          amount: '0',
           closedate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
         }
       })
@@ -136,23 +133,6 @@ Deno.serve(async (req) => {
       };
 
       if (corporatePhone) profileFields.corporatePhone = corporatePhone.replace(/\D/g, '');
-      if (ownershipType) profileFields.ownershipType = ownershipType;
-      if (taxClassType) profileFields.taxClassType = taxClassType;
-      if (industryClass) profileFields.industryClass = industryClass;
-      if (mccCode) profileFields.mccCode = mccCode;
-      if (productDescription) profileFields.productDescription = productDescription;
-      if (establishmentYear) profileFields.establishmentYear = String(establishmentYear);
-      if (currentOwnershipYears) profileFields.currentOwnershipYears = String(currentOwnershipYears);
-      if (currentOwnershipMonths) profileFields.currentOwnershipMonths = String(currentOwnershipMonths);
-      if (titleType) profileFields.titleType = titleType;
-      if (avgSaleAmount) profileFields.avgSaleAmount = String(avgSaleAmount);
-      if (monthlyCardSales) profileFields.monthlyCardSales = String(monthlyCardSales);
-      if (annualRevenue) profileFields.annualRevenue = String(annualRevenue);
-      if (highestTicketAmount) profileFields.highestTicketAmount = String(highestTicketAmount);
-      if (highestTicketFrequency != null) profileFields.highestTicketFrequency = Number(highestTicketFrequency);
-      if (cardPresentPct != null) profileFields.cardPresentPct = String(cardPresentPct);
-      if (internetPct != null) profileFields.internetPct = String(internetPct);
-      if (motoPct != null) profileFields.motoPct = String(motoPct);
 
       await base44.asServiceRole.entities.MerchantCorporateProfile.create(profileFields);
     }
