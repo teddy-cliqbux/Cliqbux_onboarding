@@ -1,9 +1,10 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ─── MSPWare Boarding Status Poller ──────────────────────────────────────────
-// Polls GET /applications/{mspApplicationNo}/status for all locations in
-// 'Pending MID' state. When MSPWare reports 'Approved', extracts the MID and
-// transitions the location to 'Active'.
+// Polls GET /applications/{mspApplicationNo}/status for all pending records in
+// both MerchantLocations (legacy) and MerchantProcessingConcept (new).
+// When MSPWare reports Approved/Complete, extracts the MID and transitions
+// the record to Active.
 //
 // Call this on a schedule (e.g. every 10 minutes) or invoke manually.
 // MSPWare submit is async — can take up to 4 minutes per their docs.
@@ -24,74 +25,87 @@ Deno.serve(async (req) => {
       'Accept': 'application/json',
     };
 
-    // Find all locations awaiting MID assignment
-    const pendingLocations = await base44.asServiceRole.entities.MerchantLocations.filter({
-      applicationStepStatus: 'Pending MID',
-    });
+    // ── Collect pending records from both entities ────────────────────────────
+    // Legacy: MerchantLocations with Pending MID
+    // New: MerchantProcessingConcept with Pending MID
+    const [pendingLocations, pendingConcepts] = await Promise.all([
+      base44.asServiceRole.entities.MerchantLocations.filter({ applicationStepStatus: 'Pending MID' }),
+      base44.asServiceRole.entities.MerchantProcessingConcept
+        ? base44.asServiceRole.entities.MerchantProcessingConcept.filter({ applicationStepStatus: 'Pending MID' })
+        : Promise.resolve([]),
+    ]);
 
-    if (!pendingLocations?.length) {
-      return Response.json({ success: true, message: 'No pending locations', checked: 0 });
+    // Normalise into a single work queue: { id, dbaName, mspApplicationNo, entityType }
+    const queue = [
+      ...(pendingLocations || []).map((l: any) => ({
+        id: l.id, dbaName: l.dbaName, mspApplicationNo: l.mspApplicationNo, entityType: 'location',
+      })),
+      ...(pendingConcepts || []).map((c: any) => ({
+        id: c.id, dbaName: c.dbaName, mspApplicationNo: c.mspApplicationNo, entityType: 'concept',
+      })),
+    ];
+
+    if (!queue.length) {
+      return Response.json({ success: true, message: 'No pending records', checked: 0 });
     }
 
-    console.log(`[pollMSPStatus] Checking ${pendingLocations.length} pending location(s)`);
+    console.log(`[pollMSPStatus] Checking ${queue.length} pending record(s) (${pendingLocations?.length ?? 0} locations, ${pendingConcepts?.length ?? 0} concepts)`);
 
-    const results = [];
+    const results: any[] = [];
 
-    for (const location of pendingLocations) {
-      const mspApplicationNo = location.mspApplicationNo;
+    for (const record of queue) {
+      const { id, dbaName, mspApplicationNo, entityType } = record;
 
       if (!mspApplicationNo) {
-        results.push({ locationId: location.id, dbaName: location.dbaName, result: 'skipped', reason: 'No mspApplicationNo stored' });
+        results.push({ id, dbaName, entityType, result: 'skipped', reason: 'No mspApplicationNo stored' });
         continue;
       }
 
       try {
-        const statusRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/status`, {
-          headers: mspHeaders,
-        });
+        const statusRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/status`, { headers: mspHeaders });
         const statusData = await statusRes.json();
 
-        console.log(`[pollMSPStatus] App ${mspApplicationNo} status ${statusRes.status}:`, JSON.stringify(statusData));
+        console.log(`[pollMSPStatus] App ${mspApplicationNo} (${entityType}) status ${statusRes.status}:`, JSON.stringify(statusData));
 
         if (!statusRes.ok) {
-          results.push({ locationId: location.id, dbaName: location.dbaName, mspApplicationNo, result: 'error', httpStatus: statusRes.status, details: statusData });
+          results.push({ id, dbaName, entityType, mspApplicationNo, result: 'error', httpStatus: statusRes.status, details: statusData });
           continue;
         }
 
-        // MSPWare status response: { currentState, promoteState, demoteState, ... }
         const currentState = (statusData?.currentState || '').toUpperCase();
+        const entity = entityType === 'concept'
+          ? base44.asServiceRole.entities.MerchantProcessingConcept
+          : base44.asServiceRole.entities.MerchantLocations;
 
         if (currentState === 'APPROVED' || currentState === 'COMPLETE') {
-          // Fetch full application to get the assigned MID
+          // Fetch full application to extract the assigned MID
           const appRes = await fetch(`${mspBase}/applications/${mspApplicationNo}`, { headers: mspHeaders });
           const appData = await appRes.json();
           const elavonMID = appData?.application?.merchant_id
             || appData?.application?.elavon_mid
             || appData?.application?.mid
-            || appData?.merchant_id
+            || appData?.mid
+            || String(appData?.applications?.[0]?.mid || '')
             || null;
 
-          await base44.asServiceRole.entities.MerchantLocations.update(location.id, {
+          await entity.update(id, {
             applicationStepStatus: 'Active',
             elavonMID,
           });
-          console.log(`[pollMSPStatus] Location ${location.id} (${location.dbaName}) activated — MID: ${elavonMID}`);
-          results.push({ locationId: location.id, dbaName: location.dbaName, mspApplicationNo, result: 'activated', elavonMID, currentState });
+          console.log(`[pollMSPStatus] ${entityType} ${id} (${dbaName}) activated — MID: ${elavonMID}`);
+          results.push({ id, dbaName, entityType, mspApplicationNo, result: 'activated', elavonMID, currentState });
 
         } else if (['DECLINED', 'RETURNED', 'PROCESSORRETURNED', 'PROCESSORRETURN', 'ERROR'].includes(currentState)) {
-          await base44.asServiceRole.entities.MerchantLocations.update(location.id, {
-            applicationStepStatus: 'Error',
-          });
-          console.log(`[pollMSPStatus] Location ${location.id} (${location.dbaName}) declined — state: ${currentState}`);
-          results.push({ locationId: location.id, dbaName: location.dbaName, mspApplicationNo, result: 'declined', currentState, details: statusData });
+          await entity.update(id, { applicationStepStatus: 'Error' });
+          console.log(`[pollMSPStatus] ${entityType} ${id} (${dbaName}) declined — state: ${currentState}`);
+          results.push({ id, dbaName, entityType, mspApplicationNo, result: 'declined', currentState, details: statusData });
 
         } else {
-          // Still in progress (PENDING, IN_PROGRESS, SUBMITTED, etc.)
-          results.push({ locationId: location.id, dbaName: location.dbaName, mspApplicationNo, result: 'still_pending', currentState });
+          results.push({ id, dbaName, entityType, mspApplicationNo, result: 'still_pending', currentState });
         }
 
-      } catch (err) {
-        results.push({ locationId: location.id, dbaName: location.dbaName, mspApplicationNo, result: 'error', error: err.message });
+      } catch (err: any) {
+        results.push({ id, dbaName, entityType, mspApplicationNo, result: 'error', error: err.message });
       }
     }
 
@@ -99,9 +113,16 @@ Deno.serve(async (req) => {
     const declined     = results.filter(r => r.result === 'declined').length;
     const stillPending = results.filter(r => r.result === 'still_pending').length;
 
-    return Response.json({ success: true, checked: pendingLocations.length, activated, declined, stillPending, results });
+    return Response.json({
+      success: true,
+      checked: queue.length,
+      activated,
+      declined,
+      stillPending,
+      results,
+    });
 
-  } catch (error) {
+  } catch (error: any) {
     return Response.json({ error: error.message, stack: error.stack?.split('\n').slice(0, 3).join(' | ') }, { status: 500 });
   }
 });

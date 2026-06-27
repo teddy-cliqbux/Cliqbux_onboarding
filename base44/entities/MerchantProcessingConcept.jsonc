@@ -1,0 +1,123 @@
+{
+  "name": "MerchantProcessingConcept",
+  "type": "object",
+  "properties": {
+    // ── Relationships ──────────────────────────────────────────────────────────
+    "locationId": {
+      "type": "string",
+      "description": "FK → MerchantLocations.id — the physical storefront this concept processes under"
+    },
+    "corporateId": {
+      "type": "string",
+      "description": "FK → MerchantCorporateProfile.corporateId — denormalized for direct queries without joining through location"
+    },
+
+    // ── Identity ───────────────────────────────────────────────────────────────
+    "conceptName": {
+      "type": "string",
+      "description": "Human label shown in the UI e.g. Cafe, Bakery, Floral. Merchant can rename."
+    },
+    "dbaName": {
+      "type": "string",
+      "description": "Full DBA sent to Elavon e.g. Store 101 – Cafe. May differ from conceptName."
+    },
+
+    // ── Industry / MCC ─────────────────────────────────────────────────────────
+    "mccCode": {
+      "type": "string",
+      "description": "Elavon MCC code e.g. 5812, 5411A, 5999. Determines interchange rates and industry rules."
+    },
+    "industryType": {
+      "type": "string",
+      "description": "Elavon IndustryCode: RE=Retail, RS=Restaurant, SP=Supermarket, HT=Hotel, MS=MOTO, ARU=ARU"
+    },
+    "pricingCategory": {
+      "type": "string",
+      "description": "MSPWare pricing category: 1=Retail, 2=Lodging, 4=Supermarket, 5=ARU, 6=MOTO, 7=Restaurant, 13=Omni"
+    },
+    "pricingMethod": {
+      "type": "string",
+      "description": "MSPWare pricing method e.g. ICPLS (Interchange Plus), TIERD, FLAT. Defaults to ICPLS.",
+      "default": "ICPLS"
+    },
+
+    // ── Processing Volume ──────────────────────────────────────────────────────
+    "monthlyCardSales": {
+      "type": "number",
+      "description": "Expected monthly card volume for this concept in dollars"
+    },
+    "avgSaleAmount": {
+      "type": "number",
+      "description": "Average transaction amount in dollars"
+    },
+    "highestTicketAmount": {
+      "type": "number",
+      "description": "Highest expected single transaction in dollars"
+    },
+    "cardPresentPct": {
+      "type": "number",
+      "description": "Percentage of transactions that are card-present (swipe/tap). 0-100. Default 100.",
+      "default": 100
+    },
+    "deliveryDelayDays": {
+      "type": "number",
+      "description": "Days between sale and delivery/fulfillment. 0 for immediate. Used for delayed delivery risk.",
+      "default": 0
+    },
+
+    // ── Bank Account Override ──────────────────────────────────────────────────
+    "bankDetails": {
+      "type": "object",
+      "description": "Per-concept bank account. null = inherit from parent MerchantLocations. Only set when this concept funds to a different account than the location default.",
+      "properties": {
+        "routingNumber":  { "type": "string" },
+        "accountNumber":  { "type": "string" },
+        "accountType":    { "type": "string", "enum": ["checking", "savings"] }
+      }
+    },
+
+    // ── MSPWare / Boarding ─────────────────────────────────────────────────────
+    "mspTemplateNo": {
+      "type": "number",
+      "description": "MSPWare template number to use when creating the application. null = account default (6 = Cliqbux Template Swipe Keyed)"
+    },
+    "mspApplicationNo": {
+      "type": "string",
+      "description": "MSPWare/PulsePoint application number — assigned when draft is created via submitToMSP"
+    },
+    "elavonMID": {
+      "type": "string",
+      "description": "Merchant ID assigned by Elavon after approval — populated asynchronously by pollMSPStatus"
+    },
+    "applicationStepStatus": {
+      "type": "string",
+      "enum": [
+        "In Review",
+        "Ready to Submit",
+        "Pending MID",
+        "Active",
+        "Active (Existing)",
+        "Error"
+      ],
+      "default": "In Review",
+      "description": "Pending MID = submitted to Elavon, awaiting MID. Active = MID received. Active (Existing) = pre-existing account imported from MSPWare."
+    },
+
+    // ── Existing Account Tracking ──────────────────────────────────────────────
+    "isExistingAccount": {
+      "type": "boolean",
+      "default": false,
+      "description": "true = this MID was active before Cliqbux onboarding. Skips the boarding flow — record is for visibility only."
+    },
+    "existingAccountSource": {
+      "type": "string",
+      "enum": ["mspware_import", "manual_claim", "migration"],
+      "description": "How this existing account was linked. mspware_import = auto-matched by TIN via importExistingMIDs. manual_claim = merchant entered MID manually. migration = created by migrateLocationsToConcepts."
+    },
+    "processingStartDate": {
+      "type": "string",
+      "description": "ISO date when this MID started processing. For existing accounts, pulled from MSPWare created_on."
+    }
+  },
+  "required": ["locationId", "corporateId", "dbaName", "mccCode"]
+}
