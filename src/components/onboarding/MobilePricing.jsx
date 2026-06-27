@@ -68,8 +68,8 @@ const INDUSTRIES = [
   { value: 'SERVICES', label: 'Services', mcc: '7299' },
 ];
 
-const fieldCls = 'w-full bg-[#1A1D24] border border-white/15 rounded-xl px-4 py-3.5 text-sm text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
-const selCls = 'w-full bg-[#1A1D24] border border-white/15 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none';
+const fieldCls = 'w-full bg-[#1A1D24] border border-white/25 rounded-xl px-4 py-3.5 text-sm text-white placeholder:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
+const selCls = 'w-full bg-[#1A1D24] border border-white/25 rounded-xl px-4 py-3.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent appearance-none';
 
 export default function MobilePricing({ onComplete }) {
   const [selectedTier, setSelectedTier] = useState(null);
@@ -172,7 +172,7 @@ export default function MobilePricing({ onComplete }) {
       <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
         step === label ? 'bg-amber-500 text-black' : 'bg-white/20 text-gray-200'
       }`}>{n}</span>
-      <span className={`text-xs font-semibold ${step === label ? 'text-amber-300' : 'text-gray-300'}`}>{label}</span>
+      <span className={`text-xs font-semibold ${step === label ? 'text-amber-300' : 'text-gray-100'}`}>{label}</span>
     </div>
   );
 
@@ -183,7 +183,7 @@ export default function MobilePricing({ onComplete }) {
         <svg viewBox="0 0 28 32" className="w-6 h-7 flex-shrink-0" fill="none"><path d="M14 0L0 8v16l14 8 14-8V8L14 0z" fill="#F59E0B"/><path d="M14 5l-9 5v12l9 5 9-5V10l-9-5z" fill="#111"/><path d="M14 8l-6 3.5v7L14 22l6-3.5v-7L14 8z" fill="#F59E0B"/><path d="M10 13.5h8M14 13.5V18" stroke="#111" strokeWidth="1.5" strokeLinecap="round"/></svg>
         <div className="flex-1">
           <p className="text-xs font-bold text-white tracking-tight">cliqbux</p>
-          <p className="text-[10px] text-gray-300">Secure Merchant Onboarding</p>
+          <p className="text-[10px] text-gray-100">Secure Merchant Onboarding</p>
         </div>
         <div className="flex items-center gap-2">
           <StepDot n={1} label={step === 'details' ? 'info' : 'plan'} />
@@ -201,7 +201,7 @@ export default function MobilePricing({ onComplete }) {
       {step === 'plan' && (
         <div className="mt-6 space-y-4">
           <div className="text-center mb-2">
-            <p className="text-[10px] text-gray-300 font-semibold uppercase tracking-widest mb-1">Step 1 of 3</p>
+            <p className="text-[10px] text-gray-100 font-semibold uppercase tracking-widest mb-1">Step 1 of 3</p>
             <h1 className="text-xl font-bold text-white">Choose Your Plan</h1>
           </div>
 
@@ -219,7 +219,7 @@ export default function MobilePricing({ onComplete }) {
                     </div>
                     <div>
                       <h3 className="text-base font-bold text-white">{card.label}</h3>
-                      <span className="text-[10px] text-gray-300">{card.badge}</span>
+                      <span className="text-[10px] text-gray-100">{card.badge}</span>
                     </div>
                   </div>
                   {isSelected && <Check className="w-5 h-5 text-amber-400 flex-shrink-0" />}
@@ -227,7 +227,7 @@ export default function MobilePricing({ onComplete }) {
                 <p className="text-xs text-gray-200 mt-3 leading-relaxed">{card.description}</p>
                 <div className="border-t border-white/10 mt-4 pt-4">
                   <p className="text-2xl font-black text-white">{card.rate} <span className="text-sm font-medium text-gray-200">+ {card.fee}/txn</span></p>
-                  <p className="text-[10px] text-gray-300 font-semibold uppercase tracking-wider mt-1">{card.rateLabel}</p>
+                  <p className="text-[10px] text-gray-100 font-semibold uppercase tracking-wider mt-1">{card.rateLabel}</p>
                 </div>
               </button>
             );
@@ -244,7 +244,7 @@ export default function MobilePricing({ onComplete }) {
       {step === 'info' && (
         <form onSubmit={goDetails} className="mt-6 space-y-4">
           <div className="mb-2">
-            <p className="text-[10px] text-gray-300 font-semibold uppercase tracking-widest mb-1">Step 2 of 3</p>
+            <p className="text-[10px] text-gray-100 font-semibold uppercase tracking-widest mb-1">Step 2 of 3</p>
             <h1 className="text-xl font-bold text-white">Your Business</h1>
           </div>
 
@@ -267,7 +267,7 @@ export default function MobilePricing({ onComplete }) {
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => { setStep('plan'); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              className="border border-white/15 text-gray-300 font-semibold py-3.5 px-5 rounded-xl text-sm flex-shrink-0">Back</button>
+              className="border border-white/25 text-gray-100 font-semibold py-3.5 px-5 rounded-xl text-sm flex-shrink-0">Back</button>
             <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-bold py-3.5 rounded-xl text-sm transition-all">Next: Details</button>
           </div>
         </form>
@@ -277,9 +277,9 @@ export default function MobilePricing({ onComplete }) {
       {step === 'details' && (
         <form onSubmit={handleSubmit} className="mt-6 space-y-5">
           <div className="mb-1">
-            <p className="text-[10px] text-gray-300 font-semibold uppercase tracking-widest mb-1">Step 3 of 3</p>
+            <p className="text-[10px] text-gray-100 font-semibold uppercase tracking-widest mb-1">Step 3 of 3</p>
             <h1 className="text-xl font-bold text-white">Processing Details</h1>
-            <p className="text-xs text-gray-300 mt-1">Required by our processor for account setup.</p>
+            <p className="text-xs text-gray-100 mt-1">Required by our processor for account setup.</p>
           </div>
 
           {/* Business Structure */}
@@ -333,7 +333,7 @@ export default function MobilePricing({ onComplete }) {
           {/* Acceptance Mix */}
           <div className="bg-[#1A1D24] rounded-2xl border border-white/10 p-5 space-y-3.5">
             <h3 className="text-sm font-bold text-white">Card Acceptance</h3>
-            <p className="text-[10px] text-gray-300">How customers pay. Must total 100%.</p>
+            <p className="text-[10px] text-gray-100">How customers pay. Must total 100%.</p>
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <label className="text-[10px] text-gray-200 block mb-1">In-Person %</label>
@@ -363,7 +363,7 @@ export default function MobilePricing({ onComplete }) {
 
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={() => { setStep('info'); setError(''); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-              className="border border-white/15 text-gray-300 font-semibold py-3.5 px-5 rounded-xl text-sm flex-shrink-0">Back</button>
+              className="border border-white/25 text-gray-100 font-semibold py-3.5 px-5 rounded-xl text-sm flex-shrink-0">Back</button>
             <button type="submit" disabled={submitting}
               className="flex-1 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-600 disabled:to-gray-600 text-white font-bold py-3.5 rounded-xl text-sm transition-all shadow-lg shadow-amber-900/30">
               {submitting ? <><Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Creating...</> : 'Create Account'}
