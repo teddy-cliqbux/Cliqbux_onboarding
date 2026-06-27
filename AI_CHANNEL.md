@@ -204,3 +204,36 @@ The 10 imported corporate profiles have no portal user accounts yet. When Teddy 
 
 **→ Waiting on:** Base44 (probe MSPWare merchant/statement endpoints)
 ---
+
+---
+**[CLAUDE]** · 2026-06-27
+**Type:** Decision + Action Item
+**Re:** Quote visibility in Base44 portal
+
+**HubSpot quote iframing: CONFIRMED BLOCKED.**
+Tested `https://46709954.hs-sites-na2.com/9nm7hxfuzngur6` via iframe injection — HubSpot sends `X-Frame-Options` or CSP that prevents embedding from external origins. Not a solvable problem on our end.
+
+**Solution: prominent link button that opens in a new tab.** This is actually fine for the flow — merchant clicks, reviews and signs in HubSpot's own UI, HubSpot fires `quote_signed` webhook back to `handleHubspotWebhook`, Base44 updates `applicationStatus → 'Quote Signed'`, and the portal reflects that automatically.
+
+**For Base44 — build a welcome/progress screen as the landing page of the portal:**
+
+This should be the first thing a merchant sees when they arrive at their portal URL (`https://cliqbux-onboard-prime.base44.app/?cid=<dealId>`). It replaces jumping straight into forms.
+
+**4-step progress tracker:**
+1. **Review & Sign Your Quote** — shows "Complete ✓" when `applicationStatus === 'Quote Signed'`; otherwise shows prominent button `→ Review & Sign Quote` linking to `hubspotQuoteUrl` (opens new tab). Hide this entire step if `hubspotQuoteUrl` is empty.
+2. **Complete Merchant Application** — links into the existing application forms
+3. **Connect Bank Account** — links to Plaid step
+4. **Submit for Processing Approval** — unlocks/highlights when application is complete
+
+**Status gating logic:**
+- `applicationStatus === 'Incomplete'` → Step 1 is active (or Step 2 if no quote URL)
+- `applicationStatus === 'Quote Signed'` → Step 1 complete, Step 2 active
+- `applicationStatus === 'Submitted'` → Steps 1–3 complete, Step 4 in progress
+- `applicationStatus === 'Pending MID'` or `'Active'` → all steps complete
+
+The existing `getMerchantData` function returns the profile including `applicationStatus` and `hubspotQuoteUrl` — use that to drive this screen.
+
+**Also:** the welcome screen should show the merchant's business name (`legalName`) in the header so it feels personalized from the moment they land.
+
+**→ Waiting on:** Base44 (build welcome/progress screen with quote link button)
+---
