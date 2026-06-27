@@ -247,6 +247,7 @@ export default function SelfServePricing({ onComplete }) {
                 const isSelected = selectedCardIndex === index;
                 return (
                   <button key={index} onClick={() => handleSelectTier(card.key, index)}
+                    style={{ backgroundColor: '#ffffff', color: 'inherit' }}
                     className={`relative text-left rounded-2xl border-2 p-7 transition-all duration-200 bg-white shadow-lg cursor-pointer
                       ${isSelected ? card.selectedColor + ' shadow-xl scale-[1.02]' : 'border-gray-200 hover:shadow-xl hover:scale-[1.01] ' + card.accentColor}`}>
                   <span className={`absolute top-5 right-5 text-xs font-bold px-2.5 py-1 rounded-full ${card.badgeColor}`}>{card.badge}</span>

@@ -209,6 +209,7 @@ export default function MobilePricing({ onComplete }) {
             const isSelected = selectedTier === card.key;
             return (
               <button key={card.key} onClick={() => handleSelectTier(card.key)}
+                style={{ backgroundColor: '#ffffff', color: 'inherit' }}
                 className={`w-full text-left rounded-2xl border-2 p-5 transition-all duration-200 bg-white shadow-md ${
                   isSelected ? 'border-amber-500 shadow-amber-900/20 scale-[1.01]' : 'border-gray-200 hover:border-gray-300'
                 }`}>
