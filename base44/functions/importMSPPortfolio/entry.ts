@@ -74,6 +74,13 @@ function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
+function generateCorporateId(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
 // Run async tasks in parallel with a max concurrency cap
 async function batchedParallel<T>(
   items: T[],
@@ -213,11 +220,14 @@ Deno.serve(async (req) => {
       } else {
         summary.corporateEntities.found++;
 
+        const corporateIdNew = generateCorporateId();
+
         const profilePayload = {
+          corporateId:      corporateIdNew,
           legalName,
-          signerEmail:           email || `import+${groupKey.slice(0, 8).toLowerCase().replace(/\s/g, '')}@cliqbux.com`,
-          taxId:                 tin || null,
-          ownershipType:         mspOwnershipToInternal(ownershipCode),
+          signerEmail:      email || `import+${groupKey.slice(0, 8).toLowerCase().replace(/\s/g, '')}@cliqbux.com`,
+          taxId:            tin || null,
+          ownershipType:    mspOwnershipToInternal(ownershipCode),
           ...(taxClassType ? { taxClassType } : {}),
           firstName:             primaryOwner.owner_firstname || '',
           lastName:              primaryOwner.owner_lastname  || '',
@@ -244,7 +254,7 @@ Deno.serve(async (req) => {
           profileByName.set(legalName.toUpperCase(), profile);
           profileCreated = true;
         } else {
-          profile = { id: `[dry-run:${legalName}]`, corporateId: `[dry-run]`, ...profilePayload };
+          profile = { id: `[dry-run:${legalName}]`, corporateId: corporateIdNew, ...profilePayload };
           profileCreated = true;
         }
         summary.corporateEntities.created++;
