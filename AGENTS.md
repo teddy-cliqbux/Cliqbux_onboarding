@@ -61,25 +61,25 @@ Published function base URL: `https://cliqbux-onboard-prime.base44.app/functions
 - **MerchantCorporateProfile** — legal entity, TIN, ownership type, signers
 - **MerchantSigners** — individual owners/signers with SSN, DOB, address
 - **MerchantLocations** — physical storefronts (address + bank details)
-- **MerchantProcessingConcept** — one per Elavon MID; links to a location (NEW — in migration)
+- **MerchantID** — one per Elavon MID; links to a location (NEW — in migration)
 - **MerchantInventoryAssets** — equipment/inventory tracking
 - **User** — portal users
 
-### Architecture direction: MerchantProcessingConcept
+### Architecture direction: MerchantID
 We are migrating from a flat `MerchantLocations`-centric model to a two-layer model:
 
 ```
 MerchantCorporateProfile
   └── MerchantLocations (physical address + bank account)
-        └── MerchantProcessingConcept (one per MID — mcc, dba, status, elavonMID)
+        └── MerchantID (one per MID — mcc, dba, status, elavonMID)
 ```
 
-A single physical location can have multiple concepts (e.g. a grocery store with a Bakery MID and a Cafe MID). Each concept maps to exactly one MSPWare application and one Elavon MID.
+A single physical location can have multiple Merchant IDs (e.g. a grocery store with a Bakery MID and a Cafe MID). Each Merchant ID maps to exactly one MSPWare application and one Elavon MID.
 
-**Do NOT build new features against the flat `MerchantLocations` boarding fields.** Use `MerchantProcessingConcept` for anything MID-related going forward.
+**Do NOT build new features against the flat `MerchantLocations` boarding fields.** Use `MerchantID` for anything MID-related going forward.
 
-### Fields moving OFF MerchantLocations → ONTO MerchantProcessingConcept
-- `mspApplicationNo` (still on Locations for legacy; primary home is now Concept)
+### Fields moving OFF MerchantLocations → ONTO MerchantID
+- `mspApplicationNo` (still on Locations for legacy; primary home is now MerchantID)
 - `elavonMID`
 - `applicationStepStatus`
 - `awb` / `boardingId` — DEPRECATED, no longer written
@@ -93,10 +93,10 @@ A single physical location can have multiple concepts (e.g. a grocery store with
 |---|---|
 | `submitToMSP` | Creates MSPWare draft + fills form + optionally submits |
 | `signApplication` | Packages a filled MSPWare application for e-signing; returns iframe-embeddable signing URL per principal. Call after submitToMSP, before final Elavon submit. |
-| `pollMSPStatus` | Polls MSPWare status for all Pending MID records (both Locations and Concepts) |
-| `importExistingMIDs` | TIN-matches MSPWare approved apps to a corporateId; creates Concept records |
-| `importMSPPortfolio` | Bulk-imports entire MSPWare portfolio — creates Profile + Locations + Concepts for all approved merchants. Groups by TIN. Admin-only, dryRun supported. |
-| `migrateLocationsToConcepts` | One-time migration: lifts MerchantLocations boarding data into Concept records |
+| `pollMSPStatus` | Polls MSPWare status for all Pending MID records (both Locations and MerchantIDs) |
+| `importExistingMIDs` | TIN-matches MSPWare approved apps to a corporateId; creates MerchantID records |
+| `importMSPPortfolio` | Bulk-imports entire MSPWare portfolio — creates Profile + Locations + MerchantIDs for all approved merchants. Groups by TIN. Admin-only, dryRun supported. |
+| `migrateLocationsToMerchantIDs` | One-time migration: lifts MerchantLocations boarding data into MerchantID records |
 
 ### Other active functions
 `createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `verifyEIN`, `verifySignerToken`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `handleHubspotWebhook`, `debugEnv`
@@ -143,7 +143,7 @@ A single physical location can have multiple concepts (e.g. a grocery store with
 - Do not call Elavon eBanking API directly (no `uat-buynow-na.elavon.net`, no `PAPI_USA_CLIQBUX1`, no AWB-based polling)
 - Do not use `submitToElavon` — it is deleted
 - Do not set `MSP_SUBMIT_ENABLED=true` in any automated test or dry-run context
-- Do not add new boarding fields to `MerchantLocations` — use `MerchantProcessingConcept`
+- Do not add new boarding fields to `MerchantLocations` — use `MerchantID` entity
 - Do not hardcode `86764` as salesperson ID — that is the old Elavon rep code; MSPWare ID is `76764`
 - Do not use `appkey`/`appid` as MSPWare header names — use `X-API-KEY` and `X-App-ID`
 
