@@ -95,9 +95,12 @@ function SectionHeader({ icon: Icon, title, color = 'amber' }) {
 }
 
 // Banking panel — handles Plaid + manual per-location
-function BankingPanel({ location, corporateId, plaidAccounts, onAccountsConnected, bankDetails, onBankSaved }) {
+function BankingPanel({ location, corporateId, plaidAccounts, onAccountsConnected, bankDetails, savedEntityBankDetails, onBankSaved }) {
   const entityId = location.entityId || '';
   const entityAccounts = plaidAccounts[entityId] || [];
+  // A sibling in the same entity already has manual bank details we can reuse
+  const reuseManual = !bankDetails?.routingNumber && savedEntityBankDetails?.authMethod === 'Manual' ? savedEntityBankDetails : null;
+
   const [mode, setMode] = useState(() => {
     if (bankDetails?.authMethod === 'Manual') return 'manual';
     if (entityAccounts.length > 0) return 'plaid';
@@ -151,7 +154,7 @@ function BankingPanel({ location, corporateId, plaidAccounts, onAccountsConnecte
     try {
       await base44.functions.invoke('saveLocationBankDetails', { locations: [{ id: location.id, bankDetails: details }] });
       setSaved(true);
-      onBankSaved(location.id, details);
+      onBankSaved(location.id, details, entityId);
     } catch (_) {}
     finally { setSaving(false); }
   };
@@ -187,6 +190,25 @@ function BankingPanel({ location, corporateId, plaidAccounts, onAccountsConnecte
 
   return (
     <div className="space-y-3">
+      {/* Reuse banner for Plaid-mode — show at the top when a sibling already linked Plaid */}
+      {reuseManual && mode !== 'manual' && (
+        <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 rounded-xl px-3.5 py-2.5">
+          <div className="flex items-center gap-2">
+            <Banknote className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+            <div>
+              <p className="text-xs font-semibold text-blue-300">Another location uses this account</p>
+              <p className="text-[11px] text-blue-400/70 font-mono">{reuseManual.accountNumberMasked} · Routing ••••{reuseManual.routingNumber?.slice(-4)}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => saveBank(reuseManual)}
+            disabled={saving}
+            className="text-xs font-bold text-blue-300 border border-blue-500/30 rounded-lg px-2.5 py-1.5 hover:bg-blue-500/15 transition-colors disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Use Same'}
+          </button>
+        </div>
+      )}
       {/* Mode toggle */}
       <div className="flex gap-2">
         <button
@@ -235,6 +257,25 @@ function BankingPanel({ location, corporateId, plaidAccounts, onAccountsConnecte
 
       {mode === 'manual' && (
         <div className="space-y-2">
+          {/* Reuse banner — shown when a sibling location in the same entity already has manual details */}
+          {reuseManual && !routing && (
+            <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 rounded-xl px-3.5 py-2.5">
+              <div className="flex items-center gap-2">
+                <Banknote className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                <div>
+                  <p className="text-xs font-semibold text-blue-300">Another location uses this account</p>
+                  <p className="text-[11px] text-blue-400/70 font-mono">{reuseManual.accountNumberMasked} · Routing ••••{reuseManual.routingNumber?.slice(-4)}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => saveBank(reuseManual)}
+                disabled={saving}
+                className="text-xs font-bold text-blue-300 border border-blue-500/30 rounded-lg px-2.5 py-1.5 hover:bg-blue-500/15 transition-colors disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Use Same'}
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={labelCls}>Routing # (9 digits)</label>
@@ -465,7 +506,7 @@ function MidsSection({ location, concepts, corporateId, onConceptAdded, onConcep
 }
 
 // A single location card — expandable with banking + MIDs
-function LocationCard({ location, corporateId, entities, plaidAccounts, bankDetails, concepts, onDelete, onBankSaved, onConceptAdded, onConceptUpdated, onAccountsConnected, isExpanded, onToggleExpand }) {
+function LocationCard({ location, corporateId, entities, plaidAccounts, bankDetails, savedEntityBankDetails, concepts, onDelete, onBankSaved, onConceptAdded, onConceptUpdated, onAccountsConnected, isExpanded, onToggleExpand }) {
   const entity = entities.find(e => e.entityId === location.entityId);
   const hasBanking = !!(bankDetails?.routingNumber && bankDetails?.accountNumber);
   const locConcepts = concepts.filter(c => c.locationId === location.id);
@@ -513,6 +554,7 @@ function LocationCard({ location, corporateId, entities, plaidAccounts, bankDeta
               plaidAccounts={plaidAccounts}
               onAccountsConnected={onAccountsConnected}
               bankDetails={bankDetails}
+              savedEntityBankDetails={savedEntityBankDetails}
               onBankSaved={onBankSaved}
             />
           </div>
@@ -744,6 +786,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const [concepts, setConcepts] = useState([]);
   const [bankDetailsByLoc, setBankDetailsByLoc] = useState({}); // { [locId]: bankDetails }
   const [plaidAccounts, setPlaidAccounts] = useState({}); // { [entityId]: accounts[] }
+  const [manualBankByEntity, setManualBankByEntity] = useState({}); // { [entityId]: bankDetails } — reusable manual entries
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [expandedLocId, setExpandedLocId] = useState(null);
@@ -781,10 +824,20 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         else if (l.routingNumber) bdMap[id] = { routingNumber: l.routingNumber, accountNumber: l.accountNumber, authMethod: 'Manual' };
       });
 
+      // Build manual-bank-by-entity map for reuse across sibling locations
+      const manualByEntity = {};
+      (locRes.data?.locations || []).forEach(l => {
+        const bd = l.bankDetails?.routingNumber ? l.bankDetails : (l.routingNumber ? { routingNumber: l.routingNumber, accountNumber: l.accountNumber, authMethod: 'Manual', accountNumberMasked: `••••${(l.accountNumber || '').slice(-4)}` } : null);
+        if (bd?.authMethod === 'Manual' && l.entityId) {
+          manualByEntity[l.entityId] = bd;
+        }
+      });
+
       setEntities(loadedEntities);
       setLocations(loadedLocations);
       setConcepts(loadedConcepts);
       setBankDetailsByLoc(bdMap);
+      setManualBankByEntity(manualByEntity);
 
       // Auto-expand location that still needs a MID or banking
       const incomplete = loadedLocations.find(l => {
@@ -822,8 +875,12 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     } catch (_) {}
   };
 
-  const handleBankSaved = (locId, details) => {
+  const handleBankSaved = (locId, details, entityId) => {
     setBankDetailsByLoc(prev => ({ ...prev, [locId]: details }));
+    // Cache manual entries at the entity level so sibling locations can reuse them
+    if (details?.authMethod === 'Manual' && entityId) {
+      setManualBankByEntity(prev => ({ ...prev, [entityId]: details }));
+    }
   };
 
   const handleConceptAdded = (concept) => {
@@ -950,6 +1007,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                       entities={entities}
                       plaidAccounts={plaidAccounts}
                       bankDetails={bankDetailsByLoc[loc.id] || null}
+                      savedEntityBankDetails={manualBankByEntity[loc.entityId] || null}
                       concepts={concepts}
                       onDelete={(l) => setDeleteConfirm(l)}
                       onBankSaved={handleBankSaved}
@@ -973,6 +1031,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
               entities={entities}
               plaidAccounts={plaidAccounts}
               bankDetails={bankDetailsByLoc[loc.id] || null}
+              savedEntityBankDetails={manualBankByEntity[loc.entityId] || null}
               concepts={concepts}
               onDelete={(l) => setDeleteConfirm(l)}
               onBankSaved={handleBankSaved}
