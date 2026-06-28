@@ -319,10 +319,14 @@ Deno.serve(async (req) => {
 
       console.log(`[signApplication] No signable concepts — auto-creating drafts for ${needsDraft.length} concept(s)`);
 
+      const autoCreateErrors: string[] = [];
+
       for (const concept of needsDraft) {
         const location = locationMap[concept.locationId];
         if (!location) {
-          console.warn(`[signApplication] Skipping concept ${concept.id} — location ${concept.locationId} not found`);
+          const msg = `Concept "${concept.dbaName || concept.id}" has no matching location (locationId=${concept.locationId})`;
+          console.warn(`[signApplication] ${msg}`);
+          autoCreateErrors.push(msg);
           continue;
         }
 
@@ -335,15 +339,20 @@ Deno.serve(async (req) => {
             templatemerchantapplicationno: templateNo,
           };
 
+          console.log(`[signApplication] POST /applications for "${concept.dbaName}":`, JSON.stringify(createBody));
+
           const createRes = await fetch(`${mspBase}/applications`, {
             method: 'POST',
             headers: mspHeaders,
             body: JSON.stringify(createBody),
           });
           const createData = await createRes.json();
+          console.log(`[signApplication] POST /applications response ${createRes.status}:`, JSON.stringify(createData));
 
           if (!createRes.ok || !createData.success) {
-            console.error(`[signApplication] Failed to create draft for "${concept.dbaName}":`, JSON.stringify(createData));
+            const errMsg = createData?.error || createData?.message || `HTTP ${createRes.status}: ${JSON.stringify(createData)}`;
+            console.error(`[signApplication] Failed to create draft for "${concept.dbaName}":`, errMsg);
+            autoCreateErrors.push(`"${concept.dbaName}": ${errMsg}`);
             continue;
           }
 
@@ -381,7 +390,10 @@ Deno.serve(async (req) => {
         return Response.json({
           success: false,
           error: 'Unable to prepare signing documents.',
-          hint: 'Could not create MSPWare draft applications. Please ensure bank account details are entered and try again.',
+          hint: autoCreateErrors.length > 0
+            ? `MSPWare errors: ${autoCreateErrors.join(' | ')}`
+            : 'Could not create MSPWare draft applications. Check MSPWare API status and try again.',
+          autoCreateErrors,
         });
       }
     }
