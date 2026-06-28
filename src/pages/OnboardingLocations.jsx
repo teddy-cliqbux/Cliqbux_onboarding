@@ -530,15 +530,26 @@ function LocationCard({ location, corporateId, entities, plaidAccounts, bankDeta
 }
 
 // Add location inline form — slides in at the bottom
-function AddLocationForm({ corporateId, entities, onSaved, onCancel }) {
+function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel }) {
+  const hasEntities = entities.length > 0;
+
   const [dbaName, setDbaName] = useState('');
   const [addressDisplay, setAddressDisplay] = useState('');
   const [parsedAddress, setParsedAddress] = useState(null);
   const [unverifiedWarning, setUnverifiedWarning] = useState(false);
-  const [entityChoice, setEntityChoice] = useState(entities.length > 0 ? 'existing' : 'none');
+
+  // Entity assignment
+  const [entityChoice, setEntityChoice] = useState(hasEntities ? 'existing' : 'new');
   const [selectedEntityId, setSelectedEntityId] = useState(entities[0]?.entityId || '');
-  const [newEntityName, setNewEntityName] = useState('');
-  const [newEntityEIN, setNewEntityEIN] = useState('');
+
+  // New entity fields — pre-fill from profile if first entity
+  const [newEntityName, setNewEntityName] = useState(!hasEntities ? (profile?.legalName || '') : '');
+  const [newEntityEIN, setNewEntityEIN] = useState(() => {
+    if (hasEntities) return '';
+    const ein = (profile?.taxId || '').replace(/\D/g, '').slice(0, 9);
+    return ein; // may be empty or partial — user must complete it
+  });
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -549,11 +560,17 @@ function AddLocationForm({ corporateId, entities, onSaved, onCancel }) {
     setUnverifiedWarning(false);
   });
 
+  // Derived validation for new entity fields
+  const newEINDigits = newEntityEIN.replace(/\D/g, '');
+  const newEntityValid = entityChoice !== 'new' || (newEntityName.trim().length > 0 && newEINDigits.length === 9);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     if (!dbaName.trim()) { setError('Store name is required.'); return; }
     if (!addressDisplay.trim()) { setError('Address is required.'); return; }
+    if (entityChoice === 'new' && !newEntityName.trim()) { setError('Legal business name is required.'); return; }
+    if (entityChoice === 'new' && newEINDigits.length !== 9) { setError('A valid 9-digit EIN is required before saving.'); return; }
     if (!parsedAddress) { setUnverifiedWarning(true); return; }
     await doSave(parsedAddress);
   };
@@ -565,11 +582,10 @@ function AddLocationForm({ corporateId, entities, onSaved, onCancel }) {
       let targetEntityId = entityChoice === 'existing' ? selectedEntityId : undefined;
 
       if (entityChoice === 'new') {
-        if (!newEntityName.trim()) { setError('Legal name is required for new entity.'); setSaving(false); return; }
-        const ein = newEntityEIN.replace(/\D/g, '');
-        if (ein.length !== 9) { setError('A valid 9-digit EIN is required.'); setSaving(false); return; }
         const res = await base44.functions.invoke('manageLegalEntity', {
-          action: 'add', corporateId, legalBusinessName: newEntityName.trim(), federalEIN: ein,
+          action: 'add', corporateId,
+          legalBusinessName: newEntityName.trim(),
+          federalEIN: newEINDigits,
         });
         if (res.data?.error) throw new Error(res.data.error);
         targetEntityId = res.data.entities[res.data.entities.length - 1]?.entityId;
@@ -647,49 +663,60 @@ function AddLocationForm({ corporateId, entities, onSaved, onCancel }) {
           </div>
         </div>
 
-        {/* Entity assignment */}
+        {/* Legal Entity */}
         <div>
-          <label className={labelCls}>Legal Entity</label>
-          {entities.length === 0 ? (
-            <p className="text-xs text-gray-500">Will be created automatically from your business profile.</p>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setEntityChoice('existing')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold border transition-all ${entityChoice === 'existing' ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
-                  <Building2 className="w-3.5 h-3.5" /> Use Existing Entity
-                </button>
-                <button type="button" onClick={() => setEntityChoice('new')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold border transition-all ${entityChoice === 'new' ? 'bg-purple-500/15 border-purple-500/40 text-purple-300' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
-                  <Plus className="w-3.5 h-3.5" /> New EIN / Entity
-                </button>
-              </div>
+          <label className={labelCls}>Legal Entity *</label>
+          {hasEntities && (
+            <div className="flex gap-2 mb-3">
+              <button type="button" onClick={() => setEntityChoice('existing')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold border transition-all ${entityChoice === 'existing' ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
+                <Building2 className="w-3.5 h-3.5" /> Use Existing Entity
+              </button>
+              <button type="button" onClick={() => setEntityChoice('new')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold border transition-all ${entityChoice === 'new' ? 'bg-purple-500/15 border-purple-500/40 text-purple-300' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
+                <Plus className="w-3.5 h-3.5" /> New EIN / Entity
+              </button>
+            </div>
+          )}
 
-              {entityChoice === 'existing' && (
-                <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)}
-                  className={inputCls} style={{ colorScheme: 'dark' }}>
-                  {entities.map(e => (
-                    <option key={e.entityId} value={e.entityId}>
-                      {e.legalBusinessName} {e.federalEIN ? `— ${formatEIN(e.federalEIN)}` : ''}
-                    </option>
-                  ))}
-                </select>
+          {entityChoice === 'existing' && hasEntities && (
+            <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)}
+              className={inputCls} style={{ colorScheme: 'dark' }}>
+              {entities.map(e => (
+                <option key={e.entityId} value={e.entityId}>
+                  {e.legalBusinessName} {e.federalEIN ? `— ${formatEIN(e.federalEIN)}` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {entityChoice === 'new' && (
+            <div className="bg-white/[0.02] border border-purple-500/20 rounded-xl p-4 space-y-3">
+              {!hasEntities && (
+                <p className="text-[11px] text-gray-400">Enter the legal entity that will own this location's merchant accounts. All MIDs at this location will file under this EIN.</p>
               )}
-
-              {entityChoice === 'new' && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Legal Business Name</label>
-                    <input value={newEntityName} onChange={e => setNewEntityName(e.target.value)}
-                      placeholder="e.g. Main St LLC" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Federal EIN (9 digits)</label>
-                    <input value={newEntityEIN} onChange={e => setNewEntityEIN(e.target.value.replace(/\D/g, '').slice(0, 9))}
-                      placeholder="e.g. 123456789" className={inputCls} />
-                  </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Legal Business Name *</label>
+                  <input value={newEntityName} onChange={e => setNewEntityName(e.target.value)}
+                    placeholder="e.g. Main St LLC" className={inputCls} />
                 </div>
-              )}
+                <div>
+                  <label className={labelCls}>Federal EIN *</label>
+                  <input
+                    value={newEntityEIN}
+                    onChange={e => setNewEntityEIN(e.target.value.replace(/\D/g, '').slice(0, 9))}
+                    placeholder="9 digits, e.g. 123456789"
+                    className={`${inputCls} ${newEntityEIN.length > 0 && newEINDigits.length !== 9 ? 'border-amber-500/50 focus:ring-amber-500' : ''}`}
+                  />
+                  {newEntityEIN.length > 0 && newEINDigits.length !== 9 && (
+                    <p className="text-[10px] text-amber-400 mt-1">{newEINDigits.length}/9 digits entered</p>
+                  )}
+                  {newEINDigits.length === 9 && (
+                    <p className="text-[10px] text-green-400 mt-1 flex items-center gap-1"><Check className="w-3 h-3" /> Valid EIN</p>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -697,7 +724,7 @@ function AddLocationForm({ corporateId, entities, onSaved, onCancel }) {
         {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300">{error}</div>}
 
         <div className="flex gap-3 pt-1">
-          <button type="submit" disabled={saving}
+          <button type="submit" disabled={saving || !newEntityValid}
             className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-600 disabled:to-gray-600 disabled:text-gray-400 text-black font-bold text-sm px-5 py-3 rounded-xl transition-all shadow-lg shadow-amber-900/20">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             {saving ? 'Adding…' : 'Add Location'}
@@ -768,19 +795,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       if (incomplete) setExpandedLocId(incomplete.id);
 
       // On first load with no locations, show the add form
-      // Only auto-create entity if we have a real 9-digit EIN
       if (loadedLocations.length === 0) {
-        if (loadedEntities.length === 0) {
-          const ein = (profile.taxId || '').replace(/\D/g, '').slice(0, 9);
-          if (ein.length === 9) {
-            const res = await base44.functions.invoke('manageLegalEntity', {
-              action: 'add', corporateId: profile.corporateId,
-              legalBusinessName: profile.legalName || '',
-              federalEIN: ein,
-            });
-            if (!res.data?.error) setEntities(res.data?.entities || []);
-          }
-        }
         setShowAddForm(true);
       }
     } catch (_) {}
@@ -974,6 +989,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         {showAddForm && (
           <AddLocationForm
             corporateId={profile.corporateId}
+            profile={profile}
             entities={entities}
             onSaved={handleLocationSaved}
             onCancel={() => setShowAddForm(false)}
