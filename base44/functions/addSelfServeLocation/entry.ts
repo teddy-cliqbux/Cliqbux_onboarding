@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
     }
 
-    const locationFields: Record<string, unknown> = {
+    const locationFields = {
       corporateId,
       dbaName,
       businessAddress,
@@ -30,7 +30,22 @@ Deno.serve(async (req) => {
 
     const location = await base44.asServiceRole.entities.MerchantLocations.create(locationFields);
 
-    return Response.json({ success: true, location });
+    // Auto-create a stub primary MID for this location
+    const concept = await base44.asServiceRole.entities.MerchantProcessingConcept.create({
+      locationId: location.id,
+      corporateId,
+      conceptName: dbaName,
+      dbaName,
+      mccCode: '',
+      industryType: '',
+      monthlyCardSales: 0,
+      avgSaleAmount: 0,
+      highestTicketAmount: 0,
+      cardPresentPct: 100,
+      applicationStepStatus: 'In Review',
+    });
+
+    return Response.json({ success: true, location, concept });
 
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

@@ -8,6 +8,7 @@ import LoadingScreen from '@/components/onboarding/LoadingScreen';
 import SelfServePricing from '@/components/onboarding/SelfServePricing';
 // Plaid verification is now handled per-location inside OnboardingLocations
 import OnboardingLocations from './OnboardingLocations';
+import OnboardingBanking from './OnboardingBanking';
 import OnboardingVerification from './OnboardingVerification';
 import OnboardingSummary from './OnboardingSummary';
 import MobilePricing from '@/components/onboarding/MobilePricing';
@@ -17,7 +18,7 @@ const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'];
 
 // Steps within the post-agreement flow
 const STEP_LOCATIONS    = 'locations';
-const STEP_SUMMARY      = 'summary';
+const STEP_BANKING      = 'banking';
 const STEP_VERIFICATION = 'verification';
 const STEP_SUCCESS      = 'success';
 
@@ -42,7 +43,16 @@ export default function OnboardingPortal() {
   const [step, setStep]               = useState(STEP_LOCATIONS); // within post-agreement flow
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
-  const [redirected, setRedirected]     = useState(false);
+  const [redirected, setRedirected]   = useState(false);
+  // Track which steps have been completed for the progress tracker
+  const [completedSteps, setCompletedSteps] = useState({});
+  // Track whether verification step had all signers verified (survives back navigation)
+  const [signersVerified, setSignersVerified] = useState(false);
+
+  const handleSignersVerified = (v) => {
+    setSignersVerified(v);
+    if (v) setCompletedSteps(prev => ({ ...prev, verify: true }));
+  };
   const navigate                      = useNavigate();
 
   useEffect(() => {
@@ -91,23 +101,25 @@ export default function OnboardingPortal() {
     setMode('sales');
   };
 
-  const handleLocationsContinue = ({ locations: updatedLocations }) => {
+  const handleLocationsContinue = ({ locations: updatedLocations, legalEntities }) => {
     setLocations(updatedLocations);
-    setStep(STEP_SUMMARY);
+    setCompletedSteps(prev => ({ ...prev, locations: true }));
+    setStep(STEP_BANKING);
   };
 
-  const handleSummaryContinue = ({ locations: updatedLocations, concepts: summaryConcepts }) => {
+  const handleBankingContinue = ({ locations: updatedLocations }) => {
+    setLocations(updatedLocations);
+    setCompletedSteps(prev => ({ ...prev, banking: true }));
     setStep(STEP_VERIFICATION);
   };
 
-  const onBackStep = () => {
-    // Returns to Step 1 (pricing). This step clears the profile so SelfServePricing
-    // re-renders — when pricing is confirmed again, the portal re-enters Locations
-    // with the *same saved locations* from state (sent via onContinue). Note:
-    // picking a *different* pricing tier creates a new deal with a new corporateId,
-    // so locations belonging to the old deal are naturally lost — that's expected.
-    // Step 1 Agreement shows the signed quote as-is.
-    setStep(STEP_LOCATIONS);
+  const onBackStep = () => setStep(STEP_LOCATIONS);
+
+  // Step key → internal step constant
+  const handleNavigate = (stepKey) => {
+    const map = { agreement: null, locations: STEP_LOCATIONS, banking: STEP_BANKING, verify: STEP_VERIFICATION };
+    const target = map[stepKey];
+    if (target) setStep(target);
   };
 
   const handleSigningComplete = async () => {
@@ -147,12 +159,11 @@ export default function OnboardingPortal() {
           />
         );
       }
-      if (step === STEP_SUMMARY) {
+      if (step === STEP_BANKING) {
         return (
-          <OnboardingSummary
+          <OnboardingBanking
             profile={profile}
-            locations={locations}
-            onContinue={handleSummaryContinue}
+            onContinue={handleBankingContinue}
             onBack={() => setStep(STEP_LOCATIONS)}
           />
         );
@@ -162,7 +173,9 @@ export default function OnboardingPortal() {
           <OnboardingVerification
             profile={profile}
             locations={locations}
-            onBack={() => setStep(STEP_SUMMARY)}
+            initialSignersVerified={signersVerified}
+            onSignersVerified={handleSignersVerified}
+            onBack={() => setStep(STEP_BANKING)}
             onComplete={handleSigningComplete}
           />
         );
@@ -182,9 +195,22 @@ export default function OnboardingPortal() {
     );
   };
 
+  // Map internal step → tracker key
+  const stepToKey = { [STEP_LOCATIONS]: 'locations', [STEP_BANKING]: 'banking', [STEP_VERIFICATION]: 'verify' };
+  const currentTrackerStep = applicationStatus === 'Incomplete' ? 'agreement' : (stepToKey[step] || 'locations');
+
+  // Agreement is complete once pricing is selected/signed
+  const agreementDone = applicationStatus === 'Pricing Selected' || applicationStatus === 'Quote Signed' || applicationStatus === 'Submitted';
+  const allCompletedSteps = { ...completedSteps, ...(agreementDone ? { agreement: true } : {}) };
+
   return (
     <div className="portal-bg" style={{ fontFamily: 'Inter, sans-serif' }}>
-      <TopNav applicationStatus={applicationStatus} />
+      <TopNav
+        applicationStatus={applicationStatus}
+        currentStep={currentTrackerStep}
+        completedSteps={allCompletedSteps}
+        onNavigate={agreementDone ? handleNavigate : undefined}
+      />
 
       <div className="pt-16 min-h-screen flex flex-col items-center justify-start px-4 py-10">
         {/* Merchant greeting */}
