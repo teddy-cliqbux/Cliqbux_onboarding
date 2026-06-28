@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { ShieldCheck, CheckCircle2, Loader2, Eye, EyeOff, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { formatSSN, rawSSN, formatPhone, rawPhone } from '@/lib/textUtils';
@@ -16,10 +16,12 @@ const YEARS = Array.from({ length: 80 }, (_, i) => String(currentYear - 18 - i))
 const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
 const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
 
-function usePlacesAutocomplete(ref, onParsed) {
-  useEffect(() => {
-    if (!ref.current || !window.google?.maps?.places) return;
-    const ac = new window.google.maps.places.Autocomplete(ref.current, {
+function useAddressAutocomplete(onParsed) {
+  const acRef = useRef(null);
+  const callbackRef = (el) => {
+    if (!el || acRef.current) return;
+    if (!window.google?.maps?.places) return;
+    const ac = new window.google.maps.places.Autocomplete(el, {
       types: ['address'], componentRestrictions: { country: 'us' },
       fields: ['address_components'],
     });
@@ -34,8 +36,9 @@ function usePlacesAutocomplete(ref, onParsed) {
       const zip = get(['postal_code']);
       onParsed({ street, city, state, zip });
     });
-    return () => window.google?.maps?.event?.clearInstanceListeners(ac);
-  }, []);
+    acRef.current = ac;
+  };
+  return callbackRef;
 }
 
 export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
@@ -62,10 +65,9 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
     corporatePhone: signer.corporatePhone || '',
   });
 
-  const addrRef = useRef(null);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  usePlacesAutocomplete(addrRef, ({ street, city, state, zip }) => {
+  const addrRef = useAddressAutocomplete(({ street, city, state, zip }) => {
     setForm(p => ({ ...p, homeStreet: street, homeCity: city, homeState: state, homeZip: zip }));
     setAddressDisplay(`${street}, ${city}, ${state} ${zip}`);
     setAddressVerified(true);
@@ -170,8 +172,9 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
           </div>
         ) : (
           <input
-            ref={addrRef}
-            type="text"
+          ref={addrRef}
+          type="text"
+          key="addr-input"
             value={addressDisplay}
             onChange={e => { setAddressDisplay(e.target.value); setAddressVerified(false); }}
             onKeyDown={e => e.key === 'Enter' && e.preventDefault()}

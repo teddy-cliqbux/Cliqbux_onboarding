@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, UserPlus, Send, Loader2, ShieldCheck, Mail, CheckCircle2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -17,12 +17,14 @@ const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 p
 const selectCls = `${inputCls}`;
 const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
 
-function usePlacesAutocomplete(ref, onParsed) {
-  useEffect(() => {
-    if (!ref.current || !window.google?.maps?.places) return;
-    const ac = new window.google.maps.places.Autocomplete(ref.current, {
+function useAddressAutocomplete(onParsed) {
+  const acRef = useRef(null);
+  const callbackRef = (el) => {
+    if (!el || acRef.current) return;
+    if (!window.google?.maps?.places) return;
+    const ac = new window.google.maps.places.Autocomplete(el, {
       types: ['address'], componentRestrictions: { country: 'us' },
-      fields: ['address_components', 'formatted_address'],
+      fields: ['address_components'],
     });
     ac.addListener('place_changed', () => {
       const place = ac.getPlace();
@@ -35,8 +37,9 @@ function usePlacesAutocomplete(ref, onParsed) {
       const zip = get(['postal_code']);
       onParsed({ street, city, state, zip });
     });
-    return () => window.google?.maps?.event?.clearInstanceListeners(ac);
-  }, []);
+    acRef.current = ac;
+  };
+  return callbackRef;
 }
 
 export default function SignerModal({ corporateId, legalName, isPrimary = false, onSaved, onClose }) {
@@ -52,11 +55,10 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
   const [addressVerified, setAddressVerified] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const addrRef = useRef(null);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  usePlacesAutocomplete(addrRef, ({ street, city, state, zip }) => {
+  const addrRef = useAddressAutocomplete(({ street, city, state, zip }) => {
     setForm(p => ({ ...p, homeStreet: street, homeCity: city, homeState: state, homeZip: zip }));
     setAddressDisplay(`${street}, ${city}, ${state} ${zip}`);
     setAddressVerified(true);
@@ -194,6 +196,7 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
                   ) : (
                     <input
                       ref={addrRef}
+                      key="addr-input"
                       type="text"
                       value={addressDisplay}
                       onChange={e => { setAddressDisplay(e.target.value); setAddressVerified(false); }}
