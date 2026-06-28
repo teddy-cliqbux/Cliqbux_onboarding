@@ -6,8 +6,13 @@ import SignerRoster from '@/components/onboarding/SignerRoster';
 // How often to poll MSPWare for signing completion (ms)
 const POLL_INTERVAL_MS = 5000;
 
-export default function OnboardingVerification({ profile, locations, onBack, onComplete }) {
-  const [allVerified, setAllVerified] = useState(false);
+export default function OnboardingVerification({ profile, locations, initialSignersVerified, onSignersVerified, onBack, onComplete }) {
+  const [allVerified, setAllVerified] = useState(initialSignersVerified || false);
+
+  const handleVerifiedChange = (v) => {
+    setAllVerified(v);
+    if (onSignersVerified) onSignersVerified(v);
+  };
 
   // Signing state — array of applications returned by signApplication
   const [loadingSigning, setLoadingSigning] = useState(false);
@@ -131,7 +136,7 @@ export default function OnboardingVerification({ profile, locations, onBack, onC
 
       <div className="px-8 py-6 flex flex-col gap-8">
         {/* Signer Roster */}
-        <SignerRoster profile={profile} onValidChange={setAllVerified} />
+        <SignerRoster profile={profile} onValidChange={handleVerifiedChange} />
 
         {/* E-Sign Section */}
         <div className="flex flex-col gap-4">

@@ -43,7 +43,16 @@ export default function OnboardingPortal() {
   const [step, setStep]               = useState(STEP_LOCATIONS); // within post-agreement flow
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
-  const [redirected, setRedirected]     = useState(false);
+  const [redirected, setRedirected]   = useState(false);
+  // Track which steps have been completed for the progress tracker
+  const [completedSteps, setCompletedSteps] = useState({});
+  // Track whether verification step had all signers verified (survives back navigation)
+  const [signersVerified, setSignersVerified] = useState(false);
+
+  const handleSignersVerified = (v) => {
+    setSignersVerified(v);
+    if (v) setCompletedSteps(prev => ({ ...prev, verify: true }));
+  };
   const navigate                      = useNavigate();
 
   useEffect(() => {
@@ -94,15 +103,24 @@ export default function OnboardingPortal() {
 
   const handleLocationsContinue = ({ locations: updatedLocations, legalEntities }) => {
     setLocations(updatedLocations);
+    setCompletedSteps(prev => ({ ...prev, locations: true }));
     setStep(STEP_BANKING);
   };
 
   const handleBankingContinue = ({ locations: updatedLocations }) => {
     setLocations(updatedLocations);
+    setCompletedSteps(prev => ({ ...prev, banking: true }));
     setStep(STEP_VERIFICATION);
   };
 
   const onBackStep = () => setStep(STEP_LOCATIONS);
+
+  // Step key → internal step constant
+  const handleNavigate = (stepKey) => {
+    const map = { agreement: null, locations: STEP_LOCATIONS, banking: STEP_BANKING, verify: STEP_VERIFICATION };
+    const target = map[stepKey];
+    if (target) setStep(target);
+  };
 
   const handleSigningComplete = async () => {
     // Mark submitted and redirect to dashboard
@@ -155,6 +173,8 @@ export default function OnboardingPortal() {
           <OnboardingVerification
             profile={profile}
             locations={locations}
+            initialSignersVerified={signersVerified}
+            onSignersVerified={handleSignersVerified}
             onBack={() => setStep(STEP_BANKING)}
             onComplete={handleSigningComplete}
           />
@@ -175,9 +195,22 @@ export default function OnboardingPortal() {
     );
   };
 
+  // Map internal step → tracker key
+  const stepToKey = { [STEP_LOCATIONS]: 'locations', [STEP_BANKING]: 'banking', [STEP_VERIFICATION]: 'verify' };
+  const currentTrackerStep = applicationStatus === 'Incomplete' ? 'agreement' : (stepToKey[step] || 'locations');
+
+  // Agreement is complete once pricing is selected/signed
+  const agreementDone = applicationStatus === 'Pricing Selected' || applicationStatus === 'Quote Signed' || applicationStatus === 'Submitted';
+  const allCompletedSteps = { ...completedSteps, ...(agreementDone ? { agreement: true } : {}) };
+
   return (
     <div className="portal-bg" style={{ fontFamily: 'Inter, sans-serif' }}>
-      <TopNav applicationStatus={applicationStatus} />
+      <TopNav
+        applicationStatus={applicationStatus}
+        currentStep={currentTrackerStep}
+        completedSteps={allCompletedSteps}
+        onNavigate={agreementDone ? handleNavigate : undefined}
+      />
 
       <div className="pt-16 min-h-screen flex flex-col items-center justify-start px-4 py-10">
         {/* Merchant greeting */}
