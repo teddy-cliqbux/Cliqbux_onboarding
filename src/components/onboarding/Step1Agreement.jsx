@@ -7,13 +7,13 @@ export default function Step1Agreement({ profile, onStatusChange }) {
 
   // Poll every 5 seconds to detect Quote Signed status
   useEffect(() => {
-    if (!pollingActive) return;
+    if (!pollingActive || !profile?.corporateId) return;
 
     const interval = setInterval(async () => {
       try {
         const { base44 } = await import('@/api/base44Client');
         const response = await base44.functions.invoke('getMerchantData', {
-          corporateId: profile.corporateId
+          corporateId: profile?.corporateId
         });
         const data = response.data;
         if (data?.profile?.applicationStatus === 'Quote Signed') {
@@ -26,7 +26,7 @@ export default function Step1Agreement({ profile, onStatusChange }) {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [pollingActive, profile.corporateId, onStatusChange]);
+  }, [pollingActive, profile?.corporateId, onStatusChange]);
 
   return (
     <div className="flex flex-col h-full">
@@ -40,7 +40,7 @@ export default function Step1Agreement({ profile, onStatusChange }) {
             </div>
             <h2 className="text-2xl font-bold text-white mb-1.5">Review & Sign Your Agreement</h2>
             <p className="text-gray-400 text-sm">
-              Hello, <span className="font-semibold text-white">{profile.legalName}</span>. Please review the merchant agreement below and sign to proceed.
+              Hello, <span className="font-semibold text-white">{profile?.legalName}</span>. Please review the merchant agreement below and sign to proceed.
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs text-gray-400 bg-white/5 border border-white/10 px-3 py-2 rounded-lg ml-4">
@@ -52,7 +52,7 @@ export default function Step1Agreement({ profile, onStatusChange }) {
 
       {/* iFrame Area */}
       <div className="flex-1 px-8 py-6">
-        {profile.hubspotQuoteUrl ? (
+        {profile?.hubspotQuoteUrl ? (
           <div className="relative rounded-xl overflow-hidden border border-white/10 bg-white/5" style={{ minHeight: '800px' }}>
             {iframeError ? (
               <div className="flex flex-col items-center justify-center h-full min-h-96 gap-4 p-8 text-center">
@@ -63,7 +63,7 @@ export default function Step1Agreement({ profile, onStatusChange }) {
                   <p className="font-semibold text-white mb-1">Unable to display agreement inline</p>
                   <p className="text-gray-400 text-sm mb-4">Your browser may be blocking the embedded view. Click below to open your agreement.</p>
                   <a
-                    href={profile.hubspotQuoteUrl}
+                    href={profile?.hubspotQuoteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg text-sm transition-colors"
@@ -76,7 +76,7 @@ export default function Step1Agreement({ profile, onStatusChange }) {
             ) : (
               <>
                 <iframe
-                  src={profile.hubspotQuoteUrl}
+                  src={profile?.hubspotQuoteUrl}
                   className="w-full"
                   style={{ minHeight: '800px', border: 'none' }}
                   title="Merchant Agreement"
@@ -86,7 +86,7 @@ export default function Step1Agreement({ profile, onStatusChange }) {
                 {/* Fallback link always available */}
                 <div className="absolute bottom-4 right-4">
                   <a
-                    href={profile.hubspotQuoteUrl}
+                    href={profile?.hubspotQuoteUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-500 transition-colors bg-white/80 backdrop-blur px-3 py-1.5 rounded-full shadow-sm border border-gray-200"

@@ -35,6 +35,7 @@ export default function SignerRoster({ profile, onValidChange }) {
   }, []);
 
   const loadSigners = async () => {
+    if (!profile?.corporateId) { setLoading(false); return; }
     setLoading(true);
     try {
       const res = await base44.functions.invoke('manageSigner', { action: 'list', corporateId: profile.corporateId });

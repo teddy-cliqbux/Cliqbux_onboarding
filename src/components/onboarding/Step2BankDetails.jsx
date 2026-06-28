@@ -62,7 +62,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
     setSubmissionResults([]);
 
     try {
-      const response = await base44.functions.invoke('submitToMSP', { corporateId: profile.corporateId });
+      const response = await base44.functions.invoke('submitToMSP', { corporateId: profile?.corporateId });
       const data = response.data;
       setSubmissionResults(data.results || []);
 
@@ -71,7 +71,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
       } else {
         const errorResults = (data.results || []).filter(r => r.status === 'error');
         setSubmitError(`Submission failed for ${errorResults.length} location(s). Please review and retry.`);
-        const refreshed = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
+        const refreshed = await base44.functions.invoke('getMerchantData', { corporateId: profile?.corporateId });
         if (refreshed.data?.locations) setLocations(refreshed.data.locations);
       }
     } catch (err) {
@@ -88,7 +88,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
     setSubmitError('');
     try {
       const response = await base44.functions.invoke('submitToMSP', {
-        corporateId: profile.corporateId,
+        corporateId: profile?.corporateId,
         locationIds: failedIds
       });
       const data = response.data;
@@ -144,7 +144,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
                 <span>EIN Letter or Voided Check</span>
               </div>
             </div>
-            <FileDropZone onExtracted={handleExtracted} corporateId={profile.corporateId} />
+            <FileDropZone onExtracted={handleExtracted} corporateId={profile?.corporateId} />
             {(corporateRouting || corporateAccount) && (
               <div className="mt-3 flex items-center gap-3 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
                 <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
@@ -254,7 +254,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
       {/* Add Location Modal */}
       {showAddModal && (
         <AddLocationModal
-          corporateId={profile.corporateId}
+          corporateId={profile?.corporateId}
           onLocationAdded={handleLocationAdded}
           onClose={() => setShowAddModal(false)}
         />

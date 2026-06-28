@@ -4,7 +4,7 @@ import { base44 } from '@/api/base44Client';
 import ManualEntryForm from './ManualEntryForm';
 
 export default function Step2Verification({ profile, onVerified }) {
-  const [mode, setMode] = useState(profile.isManualMode ? 'manual' : 'plaid'); // 'plaid' | 'manual'
+  const [mode, setMode] = useState(profile?.isManualMode ? 'manual' : 'plaid'); // 'plaid' | 'manual'
   const [plaidState, setPlaidState] = useState('idle'); // 'idle' | 'loading' | 'linked'
   const [plaidAccounts, setPlaidAccounts] = useState([]);
   const [linkToken, setLinkToken] = useState(null);
@@ -15,7 +15,7 @@ export default function Step2Verification({ profile, onVerified }) {
     setPlaidState('loading');
     setError('');
     try {
-      const res = await base44.functions.invoke('createPlaidLinkToken', { corporateId: profile.corporateId });
+      const res = await base44.functions.invoke('createPlaidLinkToken', { corporateId: profile?.corporateId });
       const token = res.data?.link_token;
       if (!token) throw new Error('Could not initialize Plaid. Please try again.');
       setLinkToken(token);
@@ -61,7 +61,7 @@ export default function Step2Verification({ profile, onVerified }) {
 
           // Persist identity fields if present
           if (identity) {
-            const updatePayload = { corporateId: profile.corporateId };
+            const updatePayload = { corporateId: profile?.corporateId };
             const fields = ['firstName','lastName','dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip'];
             fields.forEach(f => { if (identity[f]) updatePayload[f] = identity[f]; });
             try {
@@ -87,7 +87,7 @@ export default function Step2Verification({ profile, onVerified }) {
   const switchToManual = async () => {
     setMode('manual');
     await base44.functions.invoke('updateMerchantProfile', {
-      corporateId: profile.corporateId,
+      corporateId: profile?.corporateId,
       isManualMode: true
     });
   };
@@ -188,7 +188,7 @@ export default function Step2Verification({ profile, onVerified }) {
                 ← Use Plaid instead
               </button>
             </div>
-            <ManualEntryForm corporateId={profile.corporateId} onSaved={handleManualSaved} />
+            <ManualEntryForm corporateId={profile?.corporateId} onSaved={handleManualSaved} />
           </div>
         )}
       </div>
