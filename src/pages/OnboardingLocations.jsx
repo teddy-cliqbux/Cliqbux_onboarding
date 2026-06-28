@@ -263,126 +263,209 @@ function BankingPanel({ location, corporateId, plaidAccounts, onAccountsConnecte
   );
 }
 
-// Concept row — inline add/display per location
-function ConceptsSection({ location, concepts, corporateId, onConceptAdded }) {
-  const locConcepts = concepts.filter(c => c.locationId === location.id);
-  const [adding, setAdding] = useState(false);
+// MID form — used for both editing the primary MID and adding additional ones
+function MidForm({ locationId, corporateId, dbaName, mid, onSaved, onCancel, isFirst }) {
+  const blankForm = { conceptName: dbaName || '', mccCode: '', industryType: '', monthlyCardSales: '', avgSaleAmount: '', highestTicketAmount: '', cardPresentPct: '100', internetPct: '0', motoPct: '0', productDescription: '' };
+  const [form, setForm] = useState(mid ? {
+    conceptName: mid.conceptName || mid.dbaName || dbaName || '',
+    mccCode: mid.mccCode || '',
+    industryType: mid.industryType || '',
+    monthlyCardSales: mid.monthlyCardSales || '',
+    avgSaleAmount: mid.avgSaleAmount || '',
+    highestTicketAmount: mid.highestTicketAmount || '',
+    cardPresentPct: mid.cardPresentPct || '100',
+    internetPct: mid.internetPct || '0',
+    motoPct: mid.motoPct || '0',
+    productDescription: mid.productDescription || '',
+  } : blankForm);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ conceptName: '', mccCode: '', industryType: '', monthlyCardSales: '', avgSaleAmount: '', highestTicketAmount: '', cardPresentPct: '100', internetPct: '0', motoPct: '0', productDescription: '' });
 
   const pctSum = (parseInt(form.cardPresentPct) || 0) + (parseInt(form.internetPct) || 0) + (parseInt(form.motoPct) || 0);
+  const canSave = form.mccCode && pctSum === 100;
 
   const handleSave = async () => {
-    if (!form.conceptName || !form.mccCode) return;
+    if (!canSave) return;
     setSaving(true);
     try {
+      const action = mid?.id ? 'update' : 'add';
       const res = await base44.functions.invoke('manageConcept', {
-        action: 'add', locationId: location.id, corporateId,
-        data: { ...form, conceptName: form.conceptName || location.dbaName },
+        action, locationId, corporateId,
+        ...(mid?.id ? { conceptId: mid.id } : {}),
+        data: { ...form, conceptName: form.conceptName || dbaName },
       });
-      if (res.data?.concept) onConceptAdded(res.data.concept);
-      setAdding(false);
-      setForm({ conceptName: '', mccCode: '', industryType: '', monthlyCardSales: '', avgSaleAmount: '', highestTicketAmount: '', cardPresentPct: '100', internetPct: '0', motoPct: '0', productDescription: '' });
+      const saved = res.data?.concept || res.data?.updatedConcept;
+      if (saved) onSaved(saved);
     } catch (_) {}
     finally { setSaving(false); }
   };
 
   return (
-    <div>
-      {locConcepts.length > 0 && (
-        <div className="space-y-2 mb-3">
-          {locConcepts.map(c => (
-            <div key={c.id} className="flex items-center gap-3 bg-white/[0.03] rounded-xl px-4 py-3 border border-white/5">
-              <CreditCard className="w-4 h-4 text-amber-400/70 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white">{c.conceptName || c.dbaName}</p>
-                <p className="text-[11px] text-gray-400 font-mono">{c.mccCode} · {c.industryType || '—'}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs font-semibold text-white">${Number(c.monthlyCardSales || 0).toLocaleString()}/mo</p>
-                <StatusBadge status={c.applicationStepStatus || 'In Review'} />
-              </div>
+    <div className="space-y-3">
+      {!isFirst && (
+        <div>
+          <label className={labelCls}>MID Label</label>
+          <input value={form.conceptName} onChange={e => setForm(p => ({ ...p, conceptName: e.target.value }))}
+            placeholder={`e.g. ${dbaName} – Bar`} className={inputCls} autoFocus />
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>MCC Code *</label>
+          <select value={form.mccCode} onChange={e => setForm(p => ({ ...p, mccCode: e.target.value }))}
+            className={inputCls} style={{ colorScheme: 'dark' }}>
+            <option value="">Select…</option>
+            {MCC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Industry Type</label>
+          <select value={form.industryType} onChange={e => setForm(p => ({ ...p, industryType: e.target.value }))}
+            className={inputCls} style={{ colorScheme: 'dark' }}>
+            <option value="">Select…</option>
+            {INDUSTRY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className={labelCls}>Monthly Volume ($)</label>
+          <input type="number" value={form.monthlyCardSales} onChange={e => setForm(p => ({ ...p, monthlyCardSales: e.target.value }))}
+            placeholder="e.g. 8000" className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Avg Sale ($)</label>
+          <input type="number" value={form.avgSaleAmount} onChange={e => setForm(p => ({ ...p, avgSaleAmount: e.target.value }))}
+            placeholder="e.g. 45" className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Highest Ticket ($)</label>
+          <input type="number" value={form.highestTicketAmount} onChange={e => setForm(p => ({ ...p, highestTicketAmount: e.target.value }))}
+            placeholder="e.g. 200" className={inputCls} />
+        </div>
+      </div>
+      <div>
+        <label className={labelCls}>Card Split (must total 100%)</label>
+        <div className="grid grid-cols-3 gap-2">
+          {[['cardPresentPct','In-Person'], ['internetPct','Online'], ['motoPct','MOTO']].map(([k, lbl]) => (
+            <div key={k}>
+              <span className="text-[10px] text-gray-500 mb-1 block">{lbl}</span>
+              <input type="number" min="0" max="100" value={form[k]} onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))} className={inputCls} />
             </div>
           ))}
         </div>
-      )}
+        {pctSum !== 100 && <p className="text-[11px] text-amber-400 mt-1">Total: {pctSum}% (must be 100%)</p>}
+      </div>
+      <div className="flex gap-2 pt-1">
+        <button onClick={handleSave} disabled={saving || !canSave}
+          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-600 disabled:text-gray-400 text-black font-bold text-sm px-4 py-2.5 rounded-xl transition-all">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        {onCancel && <button onClick={onCancel} className="text-sm text-gray-400 hover:text-white border border-white/10 px-4 py-2.5 rounded-xl transition-colors">Cancel</button>}
+      </div>
+    </div>
+  );
+}
 
-      {adding ? (
-        <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Concept Name *</label>
-              <input value={form.conceptName} onChange={e => setForm(p => ({ ...p, conceptName: e.target.value }))}
-                placeholder="e.g. Cafe, Bakery" className={inputCls} autoFocus />
-            </div>
-            <div>
-              <label className={labelCls}>MCC Code *</label>
-              <select value={form.mccCode} onChange={e => setForm(p => ({ ...p, mccCode: e.target.value }))}
-                className={inputCls} style={{ colorScheme: 'dark' }}>
-                <option value="">Select…</option>
-                {MCC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+// MIDs section — first MID is always shown inline; additional ones can be added
+function MidsSection({ location, concepts, corporateId, onConceptAdded, onConceptUpdated }) {
+  const locMids = concepts.filter(c => c.locationId === location.id);
+  const primaryMid = locMids[0] || null;
+  const additionalMids = locMids.slice(1);
+  const [addingExtra, setAddingExtra] = useState(false);
+  const [editingPrimary, setEditingPrimary] = useState(!primaryMid); // auto-open if no MID yet
+
+  const handlePrimarySaved = (saved) => {
+    if (primaryMid) onConceptUpdated(saved);
+    else onConceptAdded(saved);
+    setEditingPrimary(false);
+  };
+
+  const handleExtraSaved = (saved) => {
+    onConceptAdded(saved);
+    setAddingExtra(false);
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Primary MID */}
+      <div className="bg-white/[0.03] border border-white/10 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <CreditCard className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">Primary MID</span>
+            {primaryMid && <StatusBadge status={primaryMid.applicationStepStatus || 'In Review'} />}
+          </div>
+          {primaryMid && !editingPrimary && (
+            <button onClick={() => setEditingPrimary(true)} className="text-[10px] text-gray-500 hover:text-amber-400 border border-white/10 rounded-lg px-2 py-1 transition-colors">Edit</button>
+          )}
+        </div>
+
+        {editingPrimary ? (
+          <MidForm
+            locationId={location.id}
+            corporateId={corporateId}
+            dbaName={location.dbaName}
+            mid={primaryMid}
+            onSaved={handlePrimarySaved}
+            onCancel={primaryMid ? () => setEditingPrimary(false) : null}
+            isFirst={true}
+          />
+        ) : primaryMid ? (
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+            <div><span className="text-gray-500">MCC:</span> <span className="text-white font-mono">{primaryMid.mccCode}</span></div>
+            <div><span className="text-gray-500">Industry:</span> <span className="text-white">{primaryMid.industryType || '—'}</span></div>
+            <div><span className="text-gray-500">Monthly Volume:</span> <span className="text-white font-semibold">${Number(primaryMid.monthlyCardSales || 0).toLocaleString()}</span></div>
+            <div><span className="text-gray-500">Avg Sale:</span> <span className="text-white">${Number(primaryMid.avgSaleAmount || 0).toLocaleString()}</span></div>
+            <div><span className="text-gray-500">Card Present:</span> <span className="text-white">{primaryMid.cardPresentPct || 100}%</span></div>
+            {primaryMid.elavonMID && <div><span className="text-gray-500">MID:</span> <span className="text-green-400 font-mono">{primaryMid.elavonMID}</span></div>}
+          </div>
+        ) : (
+          <p className="text-xs text-amber-400/80">Fill in processing details to complete this merchant application.</p>
+        )}
+      </div>
+
+      {/* Additional MIDs (shared address) */}
+      {additionalMids.map((mid, idx) => (
+        <div key={mid.id} className="bg-white/[0.02] border border-white/10 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">{mid.conceptName || `MID ${idx + 2}`}</span>
+              <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Industry Type</label>
-              <select value={form.industryType} onChange={e => setForm(p => ({ ...p, industryType: e.target.value }))}
-                className={inputCls} style={{ colorScheme: 'dark' }}>
-                <option value="">Select…</option>
-                {INDUSTRY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Monthly Volume ($)</label>
-              <input type="number" value={form.monthlyCardSales} onChange={e => setForm(p => ({ ...p, monthlyCardSales: e.target.value }))}
-                placeholder="e.g. 8000" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Avg Sale ($)</label>
-              <input type="number" value={form.avgSaleAmount} onChange={e => setForm(p => ({ ...p, avgSaleAmount: e.target.value }))}
-                placeholder="e.g. 45" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Highest Ticket ($)</label>
-              <input type="number" value={form.highestTicketAmount} onChange={e => setForm(p => ({ ...p, highestTicketAmount: e.target.value }))}
-                placeholder="e.g. 200" className={inputCls} />
-            </div>
-          </div>
-          <div>
-            <label className={labelCls}>Card Split (must total 100%)</label>
-            <div className="grid grid-cols-3 gap-2">
-              {[['cardPresentPct','In-Person'], ['internetPct','Online'], ['motoPct','MOTO']].map(([k, lbl]) => (
-                <div key={k}>
-                  <span className="text-[10px] text-gray-500 mb-1 block">{lbl}</span>
-                  <input type="number" min="0" max="100" value={form[k]} onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))} className={inputCls} />
-                </div>
-              ))}
-            </div>
-            {pctSum !== 100 && (form.cardPresentPct || form.internetPct || form.motoPct) && (
-              <p className="text-[11px] text-amber-400 mt-1">Total: {pctSum}% (must be 100%)</p>
-            )}
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button onClick={handleSave} disabled={saving || !form.conceptName || !form.mccCode || pctSum !== 100}
-              className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-600 disabled:text-gray-400 text-black font-bold text-sm px-4 py-2.5 rounded-xl transition-all">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Save Concept
-            </button>
-            <button onClick={() => setAdding(false)} className="text-sm text-gray-400 hover:text-white border border-white/10 px-4 py-2.5 rounded-xl transition-colors">Cancel</button>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs">
+            <div><span className="text-gray-500">MCC:</span> <span className="text-white font-mono">{mid.mccCode}</span></div>
+            <div><span className="text-gray-500">Monthly Volume:</span> <span className="text-white font-semibold">${Number(mid.monthlyCardSales || 0).toLocaleString()}</span></div>
           </div>
         </div>
-      ) : (
-        <button onClick={() => setAdding(true)}
-          className="w-full flex items-center justify-center gap-2 border border-dashed border-white/10 hover:border-amber-500/40 hover:bg-amber-500/5 rounded-xl py-2.5 text-xs font-semibold text-gray-500 hover:text-amber-400 transition-all">
-          <Plus className="w-3.5 h-3.5" /> Add Processing Concept
+      ))}
+
+      {/* Add additional MID */}
+      {addingExtra ? (
+        <div className="bg-white/[0.02] border border-white/10 rounded-xl p-4">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Additional MID (same address, different business)</p>
+          <MidForm
+            locationId={location.id}
+            corporateId={corporateId}
+            dbaName={location.dbaName}
+            mid={null}
+            onSaved={handleExtraSaved}
+            onCancel={() => setAddingExtra(false)}
+            isFirst={false}
+          />
+        </div>
+      ) : primaryMid && (
+        <button onClick={() => setAddingExtra(true)}
+          className="w-full flex items-center justify-center gap-2 border border-dashed border-white/10 hover:border-blue-500/30 hover:bg-blue-500/5 rounded-xl py-2.5 text-xs font-semibold text-gray-500 hover:text-blue-400 transition-all">
+          <Plus className="w-3.5 h-3.5" /> Add Another MID (same address)
         </button>
       )}
     </div>
   );
 }
 
-// A single location card — expandable with banking + concepts
-function LocationCard({ location, corporateId, entities, plaidAccounts, bankDetails, concepts, onDelete, onBankSaved, onConceptAdded, onAccountsConnected, isExpanded, onToggleExpand }) {
+// A single location card — expandable with banking + MIDs
+function LocationCard({ location, corporateId, entities, plaidAccounts, bankDetails, concepts, onDelete, onBankSaved, onConceptAdded, onConceptUpdated, onAccountsConnected, isExpanded, onToggleExpand }) {
   const entity = entities.find(e => e.entityId === location.entityId);
   const hasBanking = !!(bankDetails?.routingNumber && bankDetails?.accountNumber);
   const locConcepts = concepts.filter(c => c.locationId === location.id);
@@ -404,7 +487,7 @@ function LocationCard({ location, corporateId, entities, plaidAccounts, bankDeta
           {hasBanking && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
           {locConcepts.length > 0 && (
             <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">
-              {locConcepts.length} concept{locConcepts.length > 1 ? 's' : ''}
+              {locConcepts.length} MID{locConcepts.length > 1 ? 's' : ''}
             </span>
           )}
           {entity && entities.length > 1 && (
@@ -434,11 +517,11 @@ function LocationCard({ location, corporateId, entities, plaidAccounts, bankDeta
             />
           </div>
 
-          {/* Concepts */}
+          {/* MIDs */}
           <div>
-            <SectionHeader icon={CreditCard} title="Processing Concepts" color="blue" />
-            <p className="text-[11px] text-gray-500 mb-3">Each concept maps to a separate MID (e.g. Cafe + Retail under one location).</p>
-            <ConceptsSection location={location} concepts={concepts} corporateId={corporateId} onConceptAdded={onConceptAdded} />
+            <SectionHeader icon={CreditCard} title="Merchant Application (MID)" color="blue" />
+            <p className="text-[11px] text-gray-500 mb-3">Each MID is a separate merchant application. Most locations need one — add more only if different businesses share this address.</p>
+            <MidsSection location={location} concepts={concepts} corporateId={corporateId} onConceptAdded={onConceptAdded} onConceptUpdated={onConceptUpdated} />
           </div>
         </div>
       )}
@@ -676,6 +759,14 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       setConcepts(loadedConcepts);
       setBankDetailsByLoc(bdMap);
 
+      // Auto-expand location that still needs a MID or banking
+      const incomplete = loadedLocations.find(l => {
+        const hasMid = loadedConcepts.some(c => c.locationId === l.id && c.mccCode);
+        const hasBanking = !!(bdMap[l.id]?.routingNumber);
+        return !hasMid || !hasBanking;
+      });
+      if (incomplete) setExpandedLocId(incomplete.id);
+
       // On first load with no locations, show the add form
       // Only auto-create entity if we have a real 9-digit EIN
       if (loadedLocations.length === 0) {
@@ -699,10 +790,6 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const handleLocationSaved = async ({ reloadEntities }) => {
     setShowAddForm(false);
     await loadAll();
-    // Auto-expand the newest location
-    setTimeout(() => {
-      setExpandedLocId(prev => prev); // trigger re-render
-    }, 300);
   };
 
   const handleDelete = async (loc) => {
@@ -727,13 +814,19 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     setConcepts(prev => [...prev, concept]);
   };
 
+  const handleConceptUpdated = (updated) => {
+    setConcepts(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c));
+  };
+
   const handleAccountsConnected = (entityId, accounts) => {
     setPlaidAccounts(prev => ({ ...prev, [entityId]: accounts }));
   };
 
   const isReady = locations.length > 0 && locations.every(l => {
     const bd = bankDetailsByLoc[l.id];
-    return bd?.routingNumber && bd?.accountNumber;
+    const hasBanking = bd?.routingNumber && bd?.accountNumber;
+    const hasMid = concepts.some(c => c.locationId === l.id && c.mccCode);
+    return hasBanking && hasMid;
   });
 
   const handleContinue = async () => {
@@ -773,7 +866,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           <div>
             <h2 className="text-2xl font-bold text-white mb-1.5">Set Up Your Locations</h2>
             <p className="text-gray-400 text-sm">
-              Add each storefront, link a bank account, and define processing concepts per location. Each concept becomes its own Merchant ID.
+              Add each storefront, link a bank account, and complete the merchant application for each location.
             </p>
           </div>
           <button onClick={() => setShowBackConfirm(true)}
@@ -791,7 +884,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             <p className="text-lg font-bold text-white">{locations.length}</p>
           </div>
           <div>
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Concepts</p>
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">MIDs</p>
             <p className="text-lg font-bold text-white">{concepts.length}</p>
           </div>
           <div>
@@ -845,6 +938,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                       onDelete={(l) => setDeleteConfirm(l)}
                       onBankSaved={handleBankSaved}
                       onConceptAdded={handleConceptAdded}
+                      onConceptUpdated={handleConceptUpdated}
                       onAccountsConnected={handleAccountsConnected}
                       isExpanded={expandedLocId === loc.id}
                       onToggleExpand={() => setExpandedLocId(prev => prev === loc.id ? null : loc.id)}
@@ -867,6 +961,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
               onDelete={(l) => setDeleteConfirm(l)}
               onBankSaved={handleBankSaved}
               onConceptAdded={handleConceptAdded}
+              onConceptUpdated={handleConceptUpdated}
               onAccountsConnected={handleAccountsConnected}
               isExpanded={expandedLocId === loc.id}
               onToggleExpand={() => setExpandedLocId(prev => prev === loc.id ? null : loc.id)}
@@ -907,7 +1002,13 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         {locations.length === 0 && <p className="text-center text-xs text-gray-600">Add at least one location to continue.</p>}
         {locations.length > 0 && !isReady && (
           <p className="text-center text-xs text-amber-600/80">
-            {locations.filter(l => !bankDetailsByLoc[l.id]?.routingNumber).length} location{locations.filter(l => !bankDetailsByLoc[l.id]?.routingNumber).length > 1 ? 's' : ''} still need{locations.filter(l => !bankDetailsByLoc[l.id]?.routingNumber).length === 1 ? 's' : ''} a bank account — click to expand and link.
+            {(() => {
+              const needsBank = locations.filter(l => !bankDetailsByLoc[l.id]?.routingNumber).length;
+              const needsMid = locations.filter(l => !concepts.some(c => c.locationId === l.id && c.mccCode)).length;
+              if (needsBank > 0 && needsMid > 0) return `${needsBank} location${needsBank > 1 ? 's' : ''} need a bank account and ${needsMid} need merchant application details.`;
+              if (needsBank > 0) return `${needsBank} location${needsBank > 1 ? 's' : ''} still need${needsBank === 1 ? 's' : ''} a bank account — click to expand and link.`;
+              return `${needsMid} location${needsMid > 1 ? 's' : ''} still need${needsMid === 1 ? 's' : ''} merchant application details (MCC, volume).`;
+            })()}
           </p>
         )}
       </div>
@@ -922,7 +1023,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
               </div>
               <div>
                 <h3 className="font-bold text-white">Remove Location?</h3>
-                <p className="text-xs text-gray-400 mt-0.5">"{deleteConfirm.dbaName}" and its concepts will be deleted.</p>
+                <p className="text-xs text-gray-400 mt-0.5">"{deleteConfirm.dbaName}" and its MIDs will be deleted.</p>
               </div>
             </div>
             <div className="flex gap-3">
