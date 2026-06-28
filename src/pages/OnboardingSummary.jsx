@@ -17,68 +17,68 @@ function formatPct(val) {
 }
 
 export default function OnboardingSummary({ profile, locations, onContinue, onBack }) {
-  const [concepts, setConcepts] = useState([]);
+  const [merchantIDs, setMerchantIDs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [proceeding, setProceeding] = useState(false);
-  const [editingConcept, setEditingConcept] = useState(null);
+  const [editingMerchantID, setEditingMerchantID] = useState(null);
   const [editData, setEditData] = useState({});
 
   useEffect(() => {
-    loadConcepts();
+    loadMerchantIDs();
   }, []);
 
-  const loadConcepts = async () => {
+  const loadMerchantIDs = async () => {
     setLoading(true);
     try {
-      const res = await base44.functions.invoke('manageConcept', { action: 'list', corporateId: profile.corporateId });
-      setConcepts(res.data?.concepts || []);
-    } catch (_) { setConcepts([]); }
+      const res = await base44.functions.invoke('manageMerchantID', { action: 'list', corporateId: profile.corporateId });
+      setMerchantIDs(res.data?.merchantIDs || []);
+    } catch (_) { setMerchantIDs([]); }
     finally { setLoading(false); }
   };
 
   const locById = {};
   locations.forEach(l => { locById[l.id] = l; });
 
-  // Group concepts by location
-  const conceptsByLoc = {};
-  concepts.forEach(c => {
+  // Group Merchant IDs by location
+  const merchantIDsByLoc = {};
+  merchantIDs.forEach(c => {
     const locId = c.locationId;
-    if (!conceptsByLoc[locId]) conceptsByLoc[locId] = [];
-    conceptsByLoc[locId].push(c);
+    if (!merchantIDsByLoc[locId]) merchantIDsByLoc[locId] = [];
+    merchantIDsByLoc[locId].push(c);
   });
 
   const allLocations = locations.filter(l => {
-    const cs = conceptsByLoc[l.id];
+    const cs = merchantIDsByLoc[l.id];
     return cs && cs.length > 0;
   });
 
   // Editing
-  const startEdit = (concept) => {
-    setEditingConcept(concept.id);
+  const startEdit = (merchantID) => {
+    setEditingMerchantID(merchantID.id);
     setEditData({
-      conceptName: concept.conceptName || concept.dbaName || '',
-      mccCode: concept.mccCode || '',
-      industryType: concept.industryType || '',
-      monthlyCardSales: concept.monthlyCardSales || '',
-      avgSaleAmount: concept.avgSaleAmount || '',
-      highestTicketAmount: concept.highestTicketAmount || '',
-      cardPresentPct: concept.cardPresentPct ?? 100,
-      productDescription: concept.productDescription || '',
+      merchantName: merchantID.merchantName || merchantID.dbaName || '',
+      mccCode: merchantID.mccCode || '',
+      industryType: merchantID.industryType || '',
+      monthlyCardSales: merchantID.monthlyCardSales || '',
+      avgSaleAmount: merchantID.avgSaleAmount || '',
+      highestTicketAmount: merchantID.highestTicketAmount || '',
+      cardPresentPct: merchantID.cardPresentPct ?? 100,
+      productDescription: merchantID.productDescription || '',
     });
   };
 
-  // Allow proceeding even without concepts — some merchants may not have added any yet.
+  // Allow proceeding even without Merchant IDs — some merchants may not have added any yet.
   // But warn them.
-  const hasNoConcepts = concepts.length === 0;
+  const hasNoMerchantIDs = merchantIDs.length === 0;
 
   const handleProceed = () => {
     setProceeding(true);
-    onContinue({ locations, concepts });
+    onContinue({ locations, merchantIDs });
   };
 
-  // — Location summary cards with concept details —
-  const renderLocationConceptGroup = (loc) => {
-    const cs = conceptsByLoc[loc.id] || [];
+  // — Location summary cards with Merchant ID details —
+  const renderLocationMerchantIDGroup = (loc) => {
+    const cs = merchantIDsByLoc[loc.id] || [];
 
     return (
       <div key={loc.id} className="portal-card overflow-hidden">
@@ -100,24 +100,24 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
           <div className="divide-y divide-white/5">
             {cs.map(c => (
               <div key={c.id} className="px-6 py-4">
-                {editingConcept === c.id ? (
-                  <InlineConceptEdit
-                    concept={c}
+                {editingMerchantID === c.id ? (
+                  <InlineMerchantIDEdit
+                    merchantID={c}
                     editData={editData}
                     setEditData={setEditData}
                     onSave={async () => {
                       try {
-                        await base44.functions.invoke('manageConcept', {
+                        await base44.functions.invoke('manageMerchantID', {
                           action: 'update',
                           corporateId: profile.corporateId,
-                          conceptId: c.id,
+                          merchantIDId: c.id,
                           data: editData,
                         });
-                        await loadConcepts();
+                        await loadMerchantIDs();
                       } catch (_) { /* best effort */ }
-                      setEditingConcept(null);
+                      setEditingMerchantID(null);
                     }}
-                    onCancel={() => setEditingConcept(null)}
+                    onCancel={() => setEditingMerchantID(null)}
                   />
                 ) : (
                   <div>
