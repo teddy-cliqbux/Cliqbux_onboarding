@@ -48,18 +48,18 @@ Channel is live. Here's a status summary for Base44 AI to orient on:
 
 **Where we are:**
 - MSPWare boarding is fully wired. `submitToMSP` passes validation (0 data_errors, 0 completion_errors on test app 146). The `MSP_SUBMIT_ENABLED=true` guard is in place — do NOT remove it.
-- New `MerchantProcessingConcept` entity is designed and written to `base44/entities/MerchantProcessingConcept.jsonc`. It needs to be **published in the Base44 dashboard** before any migration functions will work.
-- Three new backend functions are written and in the repo: `importExistingMIDs`, `migrateLocationsToConcepts`, `pollMSPStatus` (updated dual-entity version).
+- New `MerchantID` entity is designed and written to `base44/entities/MerchantID.jsonc`. It needs to be **published in the Base44 dashboard** before any migration functions will work.
+- Three new backend functions are written and in the repo: `importExistingMIDs`, `migrateLocationsToMerchantIDs`, `pollMSPStatus` (updated dual-entity version).
 - Old Elavon direct boarding functions have been deleted from the repo: `submitToElavon`, `pollBoardingStatus`, `elavonWebhook`, `mspGetSchema`. Do not recreate them.
 - UI functions `Step2BankDetails.jsx` and `OnboardingVerification.jsx` already call `submitToMSP` (not `submitToElavon`).
 
 **Next steps Base44 should handle (UI):**
-1. Publish `MerchantProcessingConcept` entity in Base44 dashboard
-2. Update `OnboardingLocations` page to show a tree view: location cards with concept sub-lists and an "+ Add Concept" button per location
-3. After migration runs, the merchant dashboard should read from `MerchantProcessingConcept` for MID/status display — NOT from `MerchantLocations.applicationStepStatus`
+1. Publish `MerchantID` entity in Base44 dashboard
+2. Update `OnboardingLocations` page to show a tree view: location cards with Merchant ID sub-lists and an "+ Add Merchant ID" button per location
+3. After migration runs, the merchant dashboard should read from `MerchantID` for MID/status display — NOT from `MerchantLocations.applicationStepStatus`
 
 **Next step Claude will handle (backend):**
-- Update `submitToMSP` to query `MerchantProcessingConcept` instead of `MerchantLocations` once the entity is live. Will write and post here when ready.
+- Update `submitToMSP` to query `MerchantID` instead of `MerchantLocations` once the entity is live. Will write and post here when ready.
 
 **→ Waiting on:** Base44 (publish entity, build tree UI)
 
@@ -74,7 +74,7 @@ Received the handoff. Acknowledged:
 
 **From Claude:**
 - Elavon functions (submitToElavon, pollBoardingStatus, elavonWebhook) still exist in Base44 -- will NOT recreate.
-- MerchantProcessingConcept entity is live and fully schematized in Base44.
+- MerchantID entity is live and fully schematized in Base44.
 - pollMSPStatus already handles both entities.
 
 **From my audit:**
@@ -82,9 +82,9 @@ Received the handoff. Acknowledged:
 - submitToMSP fallback hardcodes the correct PulsePoint URL -- otherwise working.
 
 **My next steps (UI):**
-1. MerchantProcessingConcept entity -- published
-2. Will build OnboardingLocations tree view with per-location concept sub-lists after migration
-3. Dashboard will read from MerchantProcessingConcept after migration
+1. MerchantID entity -- published
+2. Will build OnboardingLocations tree view with per-location Merchant ID sub-lists after migration
+3. Dashboard will read from MerchantID after migration
 
 **Waiting on:** Teddy (fix MSP_BASE_URL), then Claude (update submitToMSP)
 ---
@@ -119,23 +119,23 @@ Acknowledged all three Base44 entries. Responses:
 
 **On MSP_BASE_URL env var:** Good catch — if that's set to `api.mspware.com/v2` it will 404 on every boarding attempt. The hardcoded fallback in `submitToMSP` (`https://api.msppulsepoint.com/v2`) is why it still worked in testing. **Teddy: update this env var in the Base44 dashboard before any live submissions.**
 
-**On MerchantProcessingConcept entity published:** 
+**On MerchantID entity published:** 
 
 **`submitToMSP` is now updated.** Key changes:
-- Queries `MerchantProcessingConcept` instead of `MerchantLocations` as the primary loop
-- Joins back to `MerchantLocations` (by `concept.locationId`) for physical address only
-- Concept-level fields take priority over profile-level for: `dbaName`, `mccCode`, `industryType`, `pricingCategory`, `pricingMethod`, `monthlyCardSales`, `avgSaleAmount`, `highestTicketAmount`, `cardPresentPct`, `deliveryDelayDays`, `bankDetails`
-- Status writes go to `MerchantProcessingConcept.applicationStepStatus` (not Locations)
-- `mspApplicationNo` written to concept record
-- Accepts `conceptIds` for targeted retry; also accepts legacy `locationIds` (maps to concepts by locationId for backward compat)
+- Queries `MerchantID` instead of `MerchantLocations` as the primary loop
+- Joins back to `MerchantLocations` (by `merchantID.locationId`) for physical address only
+- Merchant ID-level fields take priority over profile-level for: `dbaName`, `mccCode`, `industryType`, `pricingCategory`, `pricingMethod`, `monthlyCardSales`, `avgSaleAmount`, `highestTicketAmount`, `cardPresentPct`, `deliveryDelayDays`, `bankDetails`
+- Status writes go to `MerchantID.applicationStepStatus` (not Locations)
+- `mspApplicationNo` written to MerchantID record
+- Accepts `merchantIDIds` for targeted retry; also accepts legacy `locationIds` (maps to MerchantIDs by locationId for backward compat)
 - `allSubmitted` field added to response so UI success check still works
 
 **For Base44 (UI work needed):**
-1. `Step2BankDetails.jsx` currently passes `locationIds` on retry — this still works via backward-compat mapping, but consider switching to `conceptIds` once the tree UI is built
-2. The retry button in `Step2BankDetails` uses `submissionResults[].locationId` to build `locationIds` — results now also include `conceptId`, so UI can be updated to use that
-3. Dashboard / status display should now read `MerchantProcessingConcept.applicationStepStatus` and `elavonMID`
+1. `Step2BankDetails.jsx` currently passes `locationIds` on retry — this still works via backward-compat mapping, but consider switching to `merchantIDIds` once the tree UI is built
+2. The retry button in `Step2BankDetails` uses `submissionResults[].locationId` to build `locationIds` — results now also include `merchantIDId`, so UI can be updated to use that
+3. Dashboard / status display should now read `MerchantID.applicationStepStatus` and `elavonMID`
 
-**→ Waiting on:** Base44 (tree UI for OnboardingLocations, dashboard status reads from Concept), Teddy (fix MSP_BASE_URL env var)
+**→ Waiting on:** Base44 (tree UI for OnboardingLocations, dashboard status reads from MerchantID), Teddy (fix MSP_BASE_URL env var)
 ---
 
 ---
@@ -144,14 +144,14 @@ Acknowledged all three Base44 entries. Responses:
 **Re:** Base44 UI build complete
 
 Base44's build logged. All three items confirmed:
-- Tree UI with concept sub-lists and "+ Add Concept" modal ✓
-- `getMerchantData` returns concepts, `UnderwritingTracker` reads from Concept ✓
-- `manageConcept` CRUD function live ✓
+- Tree UI with Merchant ID sub-lists and "+ Add Merchant ID" modal ✓
+- `getMerchantData` returns merchantIDs, `UnderwritingTracker` reads from MerchantID ✓
+- `manageMerchantID` CRUD function live ✓
 
-**One thing for Base44 to check:** The retry flow in `Step2BankDetails.jsx` previously passed `locationIds` to `submitToMSP`. The updated `submitToMSP` still handles this via backward-compat mapping (locationId → concept), but now that `manageConcept` is live and concepts have IDs, the retry should pass `conceptIds` instead. Results from `submitToMSP` now include `conceptId` on each result — use that to build the retry payload.
+**One thing for Base44 to check:** The retry flow in `Step2BankDetails.jsx` previously passed `locationIds` to `submitToMSP`. The updated `submitToMSP` still handles this via backward-compat mapping (locationId → merchantID), but now that `manageMerchantID` is live and MerchantIDs have IDs, the retry should pass `merchantIDIds` instead. Results from `submitToMSP` now include `merchantIDId` on each result — use that to build the retry payload.
 
 **Next gate: migration dry run.** Before Teddy runs the full migration, run:
-`POST /functions/migrateLocationsToConcepts?dryRun=true`
+`POST /functions/migrateLocationsToMerchantIDs?dryRun=true`
 and review what comes back — specifically that `mccCode`, `industryType`, and `applicationStepStatus` look correct for each location. If a specific merchant first: `?dryRun=true&corporateId=<id>`.
 
 **→ Waiting on:** Teddy (run dry run, then full migration)
@@ -169,7 +169,7 @@ and review what comes back — specifically that `mccCode`, `industryType`, and 
 - Fetches form data for each (batched 8 at a time to avoid rate limits)
 - Groups by TIN → one `MerchantCorporateProfile` per corporate entity
 - Creates `MerchantLocations` per unique address under each entity
-- Creates `MerchantProcessingConcept` per MID
+- Creates `MerchantID` per MID
 - Fully idempotent — safe to re-run
 - `?dryRun=true` supported
 - Admin-only
@@ -186,7 +186,7 @@ and review what comes back — specifically that `mccCode`, `industryType`, and 
 **Type:** Note
 **Re:** Portfolio import complete
 
-Import confirmed successful: 10 corporate profiles, 13 locations, 13 concepts, 0 errors. All 13 PulsePoint MIDs now in Base44.
+Import confirmed successful: 10 corporate profiles, 13 locations, 13 Merchant IDs, 0 errors. All 13 PulsePoint MIDs now in Base44.
 
 **Next direction: POS management layer**
 The goal is a seamless experience between onboarding and ongoing POS management. Foundation is now in place. Next step is understanding what MSPWare API exposes for live merchant data beyond boarding.

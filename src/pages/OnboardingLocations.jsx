@@ -88,7 +88,7 @@ function StatusBadge({ status }) {
 function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDelete }) {
   const [editing, setEditing] = useState(!mid.mccCode); // auto-open if stub
   const [form, setForm] = useState({
-    conceptName: mid.conceptName || mid.dbaName || dbaName || '',
+    merchantName: mid.merchantName || mid.dbaName || dbaName || '',
     mccCode: mid.mccCode || '',
     industryType: mid.industryType || '',
     monthlyCardSales: mid.monthlyCardSales || '',
@@ -108,11 +108,11 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
     if (!canSave) return;
     setSaving(true);
     try {
-      const res = await base44.functions.invoke('manageConcept', {
-        action: 'update', locationId, corporateId, conceptId: mid.id,
-        data: { ...form, conceptName: form.conceptName || dbaName },
+      const res = await base44.functions.invoke('manageMerchantID', {
+        action: 'update', locationId, corporateId, merchantIDId: mid.id,
+        data: { ...form, merchantName: form.merchantName || dbaName },
       });
-      const saved = res.data?.updatedConcept || res.data?.concept;
+      const saved = res.data?.updatedMerchantID || res.data?.merchantID;
       if (saved) { onUpdated(saved); setEditing(false); }
     } catch (_) {}
     finally { setSaving(false); }
@@ -133,7 +133,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
             </span>
             <CreditCard className={`w-3.5 h-3.5 flex-shrink-0 ${isComplete ? 'text-blue-400' : 'text-gray-500'}`} />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{form.conceptName || dbaName}</p>
+              <p className="text-xs font-semibold text-white truncate">{form.merchantName || dbaName}</p>
               {isComplete
                 ? <p className="text-[10px] text-blue-400/70 font-mono">{mid.mccCode} · ${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo</p>
                 : <p className="text-[10px] text-amber-400/80">Needs MCC &amp; volume →</p>
@@ -152,7 +152,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
             <div className="border-t border-white/5 px-3 pb-3 pt-2 space-y-2">
               <div>
                 <label className={labelCls}>MID Label</label>
-                <input value={form.conceptName} onChange={e => setForm(p => ({ ...p, conceptName: e.target.value }))}
+                <input value={form.merchantName} onChange={e => setForm(p => ({ ...p, merchantName: e.target.value }))}
                   placeholder={`e.g. ${dbaName} – Bar`} className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-2">
@@ -219,8 +219,8 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
 
 // ─── Location Card (org chart node) ──────────────────────────────────────────
 
-function LocationOrgCard({ location, corporateId, concepts, onDelete, onConceptAdded, onConceptUpdated, onConceptDeleted, index }) {
-  const locMids = concepts.filter(c => c.locationId === location.id);
+function LocationOrgCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, index }) {
+  const locMids = merchantIDs.filter(c => c.locationId === location.id);
   const [expanded, setExpanded] = useState(locMids.length === 0 || locMids.some(m => !m.mccCode));
   const [addingMid, setAddingMid] = useState(false);
   const [addMidName, setAddMidName] = useState('');
@@ -230,12 +230,12 @@ function LocationOrgCard({ location, corporateId, concepts, onDelete, onConceptA
   const handleAddMid = async () => {
     setAddMidSaving(true);
     try {
-      const res = await base44.functions.invoke('manageConcept', {
+      const res = await base44.functions.invoke('manageMerchantID', {
         action: 'add', locationId: location.id, corporateId,
-        data: { conceptName: addMidName || location.dbaName, mccCode: '' },
+        data: { merchantName: addMidName || location.dbaName, mccCode: '' },
       });
-      const saved = res.data?.concept;
-      if (saved) { onConceptAdded(saved); setAddingMid(false); setAddMidName(''); }
+      const saved = res.data?.merchantID;
+      if (saved) { onMerchantIDAdded(saved); setAddingMid(false); setAddMidName(''); }
     } catch (_) {}
     finally { setAddMidSaving(false); }
   };
@@ -299,8 +299,8 @@ function LocationOrgCard({ location, corporateId, concepts, onDelete, onConceptA
                         locationId={location.id}
                         corporateId={corporateId}
                         dbaName={location.dbaName}
-                        onUpdated={onConceptUpdated}
-                        onDelete={onConceptDeleted}
+                        onUpdated={onMerchantIDUpdated}
+                        onDelete={onMerchantIDDeleted}
                       />
                     ))}
                     {dropProvided.placeholder}
@@ -328,7 +328,7 @@ function LocationOrgCard({ location, corporateId, concepts, onDelete, onConceptA
               ) : (
                 <button onClick={() => setAddingMid(true)}
                   className="mt-2 w-full flex items-center justify-center gap-1.5 border border-dashed border-white/10 hover:border-blue-500/30 hover:text-blue-400 rounded-lg py-2 text-xs font-semibold text-gray-600 transition-all">
-                  <Plus className="w-3 h-3" /> Add MID (same address, different concept)
+                  <Plus className="w-3 h-3" /> Add MID (same address, different Merchant ID)
                 </button>
               )}
             </div>
@@ -378,7 +378,7 @@ function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel }) 
         businessState: addr?.state || '', businessZip: addr?.zip || '',
       });
       if (locRes.data?.error) throw new Error(locRes.data.error);
-      onSaved({ location: locRes.data.location, concept: locRes.data.concept, reloadEntities: entityChoice === 'new' });
+      onSaved({ location: locRes.data.location, merchantID: locRes.data.merchantID, reloadEntities: entityChoice === 'new' });
     } catch (err) { setError(err.message || 'Failed to save.'); }
     finally { setSaving(false); }
   };
@@ -496,7 +496,7 @@ function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel }) 
 export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const [entities, setEntities] = useState([]);
   const [locations, setLocations] = useState([]);
-  const [concepts, setConcepts] = useState([]);
+  const [merchantIDs, setMerchantIDs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -512,7 +512,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       const [entRes, locRes, conRes] = await Promise.all([
         base44.functions.invoke('manageLegalEntity', { action: 'list', corporateId: profile.corporateId }),
         base44.functions.invoke('listLocations', { corporateId: profile.corporateId }),
-        base44.functions.invoke('manageConcept', { action: 'list', corporateId: profile.corporateId }),
+        base44.functions.invoke('manageMerchantID', { action: 'list', corporateId: profile.corporateId }),
       ]);
       const loadedEntities = entRes.data?.entities || [];
       const loadedLocations = (locRes.data?.locations || []).map(l => ({
@@ -522,15 +522,15 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       }));
       setEntities(loadedEntities);
       setLocations(loadedLocations);
-      setConcepts(conRes.data?.concepts || []);
+      setMerchantIDs(conRes.data?.merchantIDs || []);
       if (loadedLocations.length === 0) setShowAddForm(true);
     } catch (_) {}
     finally { setLoading(false); }
   };
 
-  const handleLocationSaved = async ({ concept }) => {
+  const handleLocationSaved = async ({ merchantID }) => {
     setShowAddForm(false);
-    if (concept) setConcepts(prev => [...prev, concept]);
+    if (merchantID) setMerchantIDs(prev => [...prev, merchantID]);
     await loadAll();
   };
 
@@ -540,7 +540,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       await base44.functions.invoke('removeSelfServeLocation', { locationId: loc.id });
       const remaining = locations.filter(l => l.id !== loc.id && l.entityId === loc.entityId);
       setLocations(prev => prev.filter(l => l.id !== loc.id));
-      setConcepts(prev => prev.filter(c => c.locationId !== loc.id));
+      setMerchantIDs(prev => prev.filter(c => c.locationId !== loc.id));
       if (remaining.length === 0 && loc.entityId) {
         try { await base44.functions.invoke('manageLegalEntity', { action: 'delete', corporateId: profile.corporateId, entityId: loc.entityId }); } catch (_) {}
         setEntities(prev => prev.filter(e => e.entityId !== loc.entityId));
@@ -551,13 +551,13 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const handleDeleteMid = async (mid) => {
     setDeleteMidConfirm(null);
     try {
-      await base44.functions.invoke('manageConcept', { action: 'delete', corporateId: profile.corporateId, conceptId: mid.id });
-      setConcepts(prev => prev.filter(c => c.id !== mid.id));
+      await base44.functions.invoke('manageMerchantID', { action: 'delete', corporateId: profile.corporateId, merchantIDId: mid.id });
+      setMerchantIDs(prev => prev.filter(c => c.id !== mid.id));
     } catch (_) {}
   };
 
-  const handleConceptUpdated = (updated) => {
-    setConcepts(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c));
+  const handleMerchantIDUpdated = (updated) => {
+    setMerchantIDs(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c));
   };
 
   // Drag and drop handler
@@ -587,10 +587,10 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       if (!targetLoc) return;
 
       // Optimistic update
-      setConcepts(prev => prev.map(c => c.id === midId ? { ...c, locationId: targetLocId } : c));
+      setMerchantIDs(prev => prev.map(c => c.id === midId ? { ...c, locationId: targetLocId } : c));
       setMovingItem(true);
       try {
-        await base44.functions.invoke('manageConcept', { action: 'update', corporateId: profile.corporateId, conceptId: midId, locationId: targetLocId, data: { locationId: targetLocId } });
+        await base44.functions.invoke('manageMerchantID', { action: 'update', corporateId: profile.corporateId, merchantIDId: midId, locationId: targetLocId, data: { locationId: targetLocId } });
       } catch (_) {
         await loadAll(); // revert on error
       } finally { setMovingItem(false); }
@@ -606,11 +606,11 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   });
 
   const allMidsComplete = locations.length > 0 && locations.every(l =>
-    concepts.some(c => c.locationId === l.id && c.mccCode && c.monthlyCardSales)
+    merchantIDs.some(c => c.locationId === l.id && c.mccCode && c.monthlyCardSales)
   );
 
-  const totalMids = concepts.length;
-  const completeMids = concepts.filter(c => c.mccCode && c.monthlyCardSales).length;
+  const totalMids = merchantIDs.length;
+  const completeMids = merchantIDs.filter(c => c.mccCode && c.monthlyCardSales).length;
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-24 gap-3">
@@ -693,11 +693,11 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                             location={loc}
                             index={idx}
                             corporateId={profile.corporateId}
-                            concepts={concepts}
+                            merchantIDs={merchantIDs}
                             onDelete={l => setDeleteConfirm(l)}
-                            onConceptAdded={c => setConcepts(prev => [...prev, c])}
-                            onConceptUpdated={handleConceptUpdated}
-                            onConceptDeleted={m => setDeleteMidConfirm(m)}
+                            onMerchantIDAdded={c => setMerchantIDs(prev => [...prev, c])}
+                            onMerchantIDUpdated={handleMerchantIDUpdated}
+                            onMerchantIDDeleted={m => setDeleteMidConfirm(m)}
                           />
                         ))}
                         {provided.placeholder}
@@ -721,9 +721,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                   {(provided) => (
                     <div ref={provided.innerRef} {...provided.droppableProps} className="p-3 space-y-2 min-h-[56px]">
                       {(grouped['unassigned'] || []).map((loc, idx) => (
-                        <LocationOrgCard key={loc.id} location={loc} index={idx} corporateId={profile.corporateId} concepts={concepts}
-                          onDelete={l => setDeleteConfirm(l)} onConceptAdded={c => setConcepts(prev => [...prev, c])}
-                          onConceptUpdated={handleConceptUpdated} onConceptDeleted={m => setDeleteMidConfirm(m)} />
+                        <LocationOrgCard key={loc.id} location={loc} index={idx} corporateId={profile.corporateId} merchantIDs={merchantIDs}
+                          onDelete={l => setDeleteConfirm(l)} onMerchantIDAdded={c => setMerchantIDs(prev => [...prev, c])}
+                          onMerchantIDUpdated={handleMerchantIDUpdated} onMerchantIDDeleted={m => setDeleteMidConfirm(m)} />
                       ))}
                       {provided.placeholder}
                     </div>
@@ -805,7 +805,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
               <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-red-400" /></div>
               <div>
                 <h3 className="font-bold text-white">Remove MID?</h3>
-                <p className="text-xs text-gray-400 mt-0.5">"{deleteMidConfirm.conceptName || deleteMidConfirm.dbaName}" will be permanently deleted.</p>
+                <p className="text-xs text-gray-400 mt-0.5">"{deleteMidConfirm.merchantName || deleteMidConfirm.dbaName}" will be permanently deleted.</p>
               </div>
             </div>
             <div className="flex gap-3">
