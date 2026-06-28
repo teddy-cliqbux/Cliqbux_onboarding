@@ -586,7 +586,7 @@ function AddLocationForm({ corporateId, entities, onSaved, onCancel }) {
         businessZip: addr?.zip || '',
       });
       if (locRes.data?.error) throw new Error(locRes.data.error);
-      onSaved({ location: locRes.data.location, reloadEntities: entityChoice === 'new' });
+      onSaved({ location: locRes.data.location, concept: locRes.data.concept, reloadEntities: entityChoice === 'new' });
     } catch (err) {
       setError(err.message || 'Failed to save.');
     } finally {
@@ -787,8 +787,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     finally { setLoading(false); }
   };
 
-  const handleLocationSaved = async ({ reloadEntities }) => {
+  const handleLocationSaved = async ({ reloadEntities, concept }) => {
     setShowAddForm(false);
+    if (concept) setConcepts(prev => [...prev, concept]);
     await loadAll();
   };
 

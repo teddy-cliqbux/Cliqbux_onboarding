@@ -18,8 +18,8 @@ Deno.serve(async (req) => {
 
     // — ADD —
     if (action === 'add') {
-      if (!locationId || !data?.mccCode) {
-        return Response.json({ error: 'locationId and mccCode are required' }, { status: 400 });
+      if (!locationId) {
+        return Response.json({ error: 'locationId is required' }, { status: 400 });
       }
 
       const conceptData = {
