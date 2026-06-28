@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Upload, FileImage, CheckCircle2, Loader2, X, ExternalLink } from 'lucide-react';
+import { Upload, FileImage, CheckCircle2, Loader2, X, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 const ACCEPTED = 'image/jpeg,image/png,image/webp,application/pdf';
@@ -58,23 +58,41 @@ export default function SignerIdUpload({ signer, corporateId, onUploaded }) {
     }
   };
 
+  const [previewOpen, setPreviewOpen] = useState(false);
+
   if (docUrl) {
-    const isImage = /\.(jpe?g|png|webp)(\?|$)/i.test(docUrl);
+    const isImage = /\.(jpe?g|png|webp)(\?|$)/i.test(docUrl) || /image\//i.test(docUrl);
     return (
-      <div className="flex items-center gap-3 bg-green-500/10 border border-green-500/25 rounded-xl px-3.5 py-2.5">
-        <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-green-300">ID Document Uploaded</p>
-          <p className="text-[10px] text-green-500/80 truncate">{isImage ? 'Image' : 'PDF'} on file</p>
+      <div className="space-y-2">
+        <div className="flex items-center gap-3 bg-green-500/10 border border-green-500/25 rounded-xl px-3.5 py-2.5">
+          <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-semibold text-green-300">ID Document Uploaded</p>
+            <p className="text-[10px] text-green-500/80">{isImage ? 'Image' : 'PDF'} on file</p>
+          </div>
+          <button onClick={() => setPreviewOpen(p => !p)}
+            className="p-1.5 text-green-400/70 hover:text-green-300 transition-colors" title={previewOpen ? 'Hide preview' : 'Preview document'}>
+            {previewOpen ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          </button>
+          <a href={docUrl} target="_blank" rel="noopener noreferrer"
+            className="p-1.5 text-green-400/70 hover:text-green-300 transition-colors" title="Open in new tab">
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+          <button onClick={handleRemove} disabled={uploading}
+            className="p-1.5 text-gray-500 hover:text-red-400 transition-colors" title="Remove">
+            {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+          </button>
         </div>
-        <a href={docUrl} target="_blank" rel="noopener noreferrer"
-          className="p-1.5 text-green-400/70 hover:text-green-300 transition-colors" title="View document">
-          <ExternalLink className="w-3.5 h-3.5" />
-        </a>
-        <button onClick={handleRemove} disabled={uploading}
-          className="p-1.5 text-gray-500 hover:text-red-400 transition-colors" title="Remove">
-          {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-        </button>
+
+        {previewOpen && (
+          <div className="rounded-xl overflow-hidden border border-white/10 bg-black/30">
+            {isImage ? (
+              <img src={docUrl} alt="ID Document" className="w-full max-h-72 object-contain" />
+            ) : (
+              <iframe src={docUrl} title="ID Document" className="w-full h-72 border-0" />
+            )}
+          </div>
+        )}
       </div>
     );
   }
