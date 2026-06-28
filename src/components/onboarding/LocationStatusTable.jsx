@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { CheckCircle2, AlertCircle, Clock, Store, CreditCard, ArrowRight, Loader2, CheckSquare, Square, Check, X, Copy, GripVertical, Building2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Clock, Store, CreditCard, ArrowRight, Loader2, CheckSquare, Square, Check, X, Copy, GripVertical, Building2, ChevronDown, ChevronRight } from 'lucide-react';
 import DragOrgMenu from './DragOrgMenu';
 import { base44 } from '@/api/base44Client';
 
@@ -30,6 +30,13 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
   const [duplicatingIds, setDuplicatingIds] = useState([]);
   const [movingLocId, setMovingLocId] = useState(null);
   const [dragError, setDragError] = useState('');
+  const [collapsedGroups, setCollapsedGroups] = useState(new Set());
+
+  const toggleGroup = (entityId) => setCollapsedGroups(prev => {
+    const next = new Set(prev);
+    next.has(entityId) ? next.delete(entityId) : next.add(entityId);
+    return next;
+  });
 
   useEffect(() => {
     if (corporateId) {
@@ -75,7 +82,7 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
   // Add "unassigned" group if any locations don't match a known entity
   const assignedIds = new Set(entities.map(e => e.entityId));
   const unassigned = locations.filter(l => !l.entityId || !assignedIds.has(l.entityId));
-  const showGroups = entities.length > 1;
+  const showGroups = entities.length >= 1;
 
   // ── Drag and drop ──────────────────────────────────────
   const onDragEnd = async ({ source, destination, draggableId }) => {
@@ -365,64 +372,87 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
           <DragDropContext onDragEnd={onDragEnd}>
             <table className="w-full text-sm">
               {tableHead}
-              {entityGroups.map((group) => (
-                <Droppable droppableId={group.entityId} key={group.entityId}>
-                  {(provided, snapshot) => (
-                    <>
-                      {/* Entity group header — outside tbody so it stays fixed */}
-                      <tbody>
-                        <tr>
-                          <td colSpan={9} className={`px-4 py-2 transition-colors ${snapshot.isDraggingOver ? 'bg-amber-500/10' : 'bg-white/[0.02]'}`}>
-                            <div className="flex items-center gap-2">
-                              <Building2 className="w-3.5 h-3.5 text-amber-400/70" />
-                              <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">{group.label}</span>
-                              {group.ein && <span className="text-[10px] text-gray-500">{group.ein}</span>}
-                              <span className="text-[10px] text-gray-500 ml-1">· {group.locations.length} location{group.locations.length !== 1 ? 's' : ''}</span>
-                              {snapshot.isDraggingOver && (
-                                <span className="ml-2 text-[10px] text-amber-400 font-semibold animate-pulse">Drop to move here →</span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      </tbody>
-                      {/* Droppable tbody for this entity's rows */}
-                      <tbody ref={provided.innerRef} {...provided.droppableProps} className="divide-y divide-white/5">
-                        {group.locations.map((loc, idx) => (
-                          <Draggable draggableId={loc.id} index={idx} key={loc.id}>
-                            {(dragProvided, dragSnapshot) => (
-                              <tr
-                                ref={dragProvided.innerRef}
-                                {...dragProvided.draggableProps}
-                                className={`transition-colors ${dragSnapshot.isDragging ? 'opacity-70 bg-amber-500/10' : 'hover:bg-white/[0.02]'} ${selectedIds.includes(loc.id) ? 'bg-amber-500/5 border-l-2 border-l-amber-400' : ''}`}
-                              >
-                                <td className="w-6 pl-2 py-4 text-center">
-                                  <span {...dragProvided.dragHandleProps} className="text-gray-600 hover:text-gray-300 cursor-grab active:cursor-grabbing block">
-                                    <GripVertical className="w-3.5 h-3.5" />
-                                  </span>
-                                </td>
-                                <td className="px-2 py-4 text-center">
-                                  <button onClick={() => toggleSelect(loc.id)} className="hover:text-white transition-colors">
-                                    {selectedIds.includes(loc.id) ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4 text-gray-500" />}
-                                  </button>
-                                </td>
-                                {renderRowCells(loc, conceptsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds)}
-                              </tr>
-                            )}
-                          </Draggable>
-                        ))}
-                        {provided.placeholder}
-                        {group.locations.length === 0 && !snapshot.isDraggingOver && (
+              {entityGroups.map((group) => {
+                const isCollapsed = collapsedGroups.has(group.entityId);
+                // Compute group-level stats for the summary pill
+                const groupVolume = group.locations.reduce((sum, l) => {
+                  return sum + (conceptsByLoc[l.id] || []).reduce((s, c) => s + (Number(c.monthlyCardSales) || 0), 0);
+                }, 0);
+                const activeCount = group.locations.filter(l => {
+                  const s = getLocationStatus(l);
+                  return s === 'Active' || s === 'Active (Existing)';
+                }).length;
+
+                return (
+                  <Droppable droppableId={group.entityId} key={group.entityId}>
+                    {(provided, snapshot) => (
+                      <>
+                        {/* Entity group header — collapsible */}
+                        <tbody>
                           <tr>
-                            <td colSpan={9} className="px-6 py-4 text-center text-xs text-gray-600">
-                              No locations assigned — drag one here
+                            <td colSpan={9} className={`transition-colors ${snapshot.isDraggingOver ? 'bg-amber-500/10' : 'bg-[#111318]'}`}>
+                              <button
+                                type="button"
+                                onClick={() => toggleGroup(group.entityId)}
+                                className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-white/[0.03] transition-colors text-left"
+                              >
+                                <Building2 className="w-3.5 h-3.5 text-amber-400/70 flex-shrink-0" />
+                                <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex-1 truncate">{group.label}</span>
+                                {group.ein && <span className="text-[10px] text-gray-500 font-mono">{group.ein}</span>}
+                                <span className="text-[10px] text-gray-500">
+                                  {group.locations.length} loc{group.locations.length !== 1 ? 's' : ''}
+                                  {groupVolume > 0 && <> · {formatCurrency(groupVolume)}/mo</>}
+                                  {activeCount > 0 && <span className="text-green-500 ml-1">· {activeCount} active</span>}
+                                </span>
+                                {snapshot.isDraggingOver
+                                  ? <span className="text-[10px] text-amber-400 font-semibold animate-pulse ml-1">Drop here →</span>
+                                  : isCollapsed
+                                    ? <ChevronRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                    : <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                }
+                              </button>
                             </td>
                           </tr>
-                        )}
-                      </tbody>
-                    </>
-                  )}
-                </Droppable>
-              ))}
+                        </tbody>
+                        {/* Droppable tbody — hidden when collapsed */}
+                        <tbody ref={provided.innerRef} {...provided.droppableProps} className={`divide-y divide-white/5 ${isCollapsed ? 'hidden' : ''}`}>
+                          {group.locations.map((loc, idx) => (
+                            <Draggable draggableId={loc.id} index={idx} key={loc.id}>
+                              {(dragProvided, dragSnapshot) => (
+                                <tr
+                                  ref={dragProvided.innerRef}
+                                  {...dragProvided.draggableProps}
+                                  className={`transition-colors ${dragSnapshot.isDragging ? 'opacity-70 bg-amber-500/10' : 'hover:bg-white/[0.02]'} ${selectedIds.includes(loc.id) ? 'bg-amber-500/5 border-l-2 border-l-amber-400' : ''}`}
+                                >
+                                  <td className="w-6 pl-2 py-4 text-center">
+                                    <span {...dragProvided.dragHandleProps} className="text-gray-600 hover:text-gray-300 cursor-grab active:cursor-grabbing block">
+                                      <GripVertical className="w-3.5 h-3.5" />
+                                    </span>
+                                  </td>
+                                  <td className="px-2 py-4 text-center">
+                                    <button onClick={() => toggleSelect(loc.id)} className="hover:text-white transition-colors">
+                                      {selectedIds.includes(loc.id) ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4 text-gray-500" />}
+                                    </button>
+                                  </td>
+                                  {renderRowCells(loc, conceptsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds)}
+                                </tr>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                          {group.locations.length === 0 && !snapshot.isDraggingOver && (
+                            <tr>
+                              <td colSpan={9} className="px-6 py-4 text-center text-xs text-gray-600">
+                                No locations assigned — drag one here
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </>
+                    )}
+                  </Droppable>
+                );
+              })}
               {/* Unassigned locations (no droppable — not a valid drop target) */}
               {unassigned.length > 0 && (
                 <>
