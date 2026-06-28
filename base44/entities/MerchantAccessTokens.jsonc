@@ -1,0 +1,30 @@
+{
+  "name": "MerchantAccessTokens",
+  "type": "object",
+  "properties": {
+    "token": {
+      "type": "string",
+      "description": "Cryptographically random hex token — included in magic link URL"
+    },
+    "corporateId": {
+      "type": "string",
+      "description": "FK → MerchantCorporateProfile.corporateId"
+    },
+    "email": {
+      "type": "string",
+      "description": "Email the link was sent to"
+    },
+    "expiresAt": {
+      "type": "string",
+      "description": "ISO 8601 expiry — tokens are valid for 7 days"
+    },
+    "used": {
+      "type": "boolean",
+      "description": "Marked true after first use so link is single-entry"
+    },
+    "createdAt": {
+      "type": "string",
+      "description": "ISO 8601 creation timestamp"
+    }
+  }
+}

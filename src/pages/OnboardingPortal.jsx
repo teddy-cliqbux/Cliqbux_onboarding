@@ -12,6 +12,7 @@ import OnboardingBanking from './OnboardingBanking';
 import OnboardingVerification from './OnboardingVerification';
 import OnboardingSummary from './OnboardingSummary';
 import MobilePricing from '@/components/onboarding/MobilePricing';
+import PortalEntry from '@/components/onboarding/PortalEntry';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
 const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'];
@@ -57,10 +58,33 @@ export default function OnboardingPortal() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const id = params.get('dealId') || params.get('corporateId');
-    if (id) { setMode('sales'); setDealId(id); }
-    else    { setMode('self_serve'); setLoading(false); }
+    const id    = params.get('dealId') || params.get('corporateId');
+    const token = params.get('token');
+    if (id)         { setMode('sales'); setDealId(id); }
+    else if (token) { validateResumeToken(token); }
+    else            { setMode('entry'); setLoading(false); }
   }, []);
+
+  const validateResumeToken = async (token) => {
+    setLoading(true);
+    try {
+      const res  = await base44.functions.invoke('validateResumeToken', { token });
+      const data = res.data;
+      if (!data?.success || !data?.corporateId) {
+        setError({
+          title: data?.expired ? 'Link Expired' : 'Invalid Link',
+          message: data?.error || 'This link is no longer valid. Please request a new one from the portal.',
+        });
+        return;
+      }
+      // Token valid — treat like a sales/dealId flow but with the resolved corporateId
+      setMode('sales');
+      setDealId(data.corporateId);
+    } catch {
+      setError({ title: 'Connection Error', message: "We couldn't validate your link. Please try again or request a new one." });
+    }
+    // loading will be set false by fetchMerchantData once dealId is set
+  };
 
   useEffect(() => {
     if (mode === 'sales' && dealId) fetchMerchantData(dealId);
@@ -132,8 +156,17 @@ export default function OnboardingPortal() {
   if (loading || redirected) return <LoadingScreen />;
   if (error)   return <ErrorScreen title={error.title} message={error.message} />;
 
-  // — Self-serve pricing —
+  // — No dealId/token: show email-entry gate —
   const isMobile = window.innerWidth < 480;
+  if (mode === 'entry') {
+    return (
+      <PortalEntry
+        onSelfServe={() => setMode('self_serve')}
+      />
+    );
+  }
+
+  // — Self-serve pricing —
   if (mode === 'self_serve' && !profile) {
     return isMobile
       ? <MobilePricing onComplete={handleSelfServeComplete} />
