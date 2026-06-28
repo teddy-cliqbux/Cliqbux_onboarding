@@ -226,13 +226,13 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
 
       {/* Location review cards */}
       <div className="px-8 py-6 space-y-4">
-        {hasNoConcepts && (
+        {hasNoMerchantIDs && (
           <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-5 py-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-amber-300">No processing concepts added</p>
+              <p className="text-sm font-semibold text-amber-300">No Merchant IDs added</p>
               <p className="text-xs text-amber-200 mt-1">
-                No concepts (MCC/volume configurations) have been added for any location. You can continue and add them later, or go back to the Locations step to define them now.
+                No Merchant IDs (MCC/volume configurations) have been added for any location. You can continue and add them later, or go back to the Locations step to define them now.
               </p>
             </div>
           </div>
@@ -245,7 +245,7 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
             <p className="text-xs text-gray-400 mt-1">Add processing concepts in the Locations step.</p>
           </div>
         ) : (
-          allLocations.map(loc => renderLocationConceptGroup(loc))
+          allLocations.map(loc => renderLocationMerchantIDGroup(loc))
         )}
 
         {/* Locations without concepts — show as minimal cards */}
