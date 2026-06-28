@@ -59,7 +59,10 @@ module.exports = {
   				'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
   				border: 'hsl(var(--sidebar-border))',
   				ring: 'hsl(var(--sidebar-ring))'
-  			}
+  			},
+  			'pane': 'hsl(var(--pane))',
+  			'pane-amber': 'hsl(var(--pane-amber))',
+  			'amber-dash': 'hsl(var(--amber-dashboard))',
   		},
   		fontFamily: {
   			heading: ['var(--font-heading)'],
@@ -90,11 +93,5 @@ module.exports = {
   			'accordion-up': 'accordion-up 0.2s ease-out'
   		}
   	},
-  	colors: {
-  		'pane': 'hsl(var(--pane))',
-  		'pane-amber': 'hsl(var(--pane-amber))',
-  		'amber-dash': 'hsl(var(--amber-dashboard))',
-  	}
-  },
   plugins: [require("tailwindcss-animate")],
 }
