@@ -121,11 +121,11 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
                   />
                 ) : (
                   <div>
-                    {/* Concept header row */}
+                    {/* Merchant ID header row */}
                     <div className="flex items-center justify-between gap-3 mb-3">
                       <div className="flex items-center gap-2 min-w-0">
                         <CreditCard className="w-4 h-4 text-amber-400 flex-shrink-0" />
-                        <span className="text-sm font-bold text-white truncate">{c.conceptName || c.dbaName || 'Processing Concept'}</span>
+                        <span className="text-sm font-bold text-white truncate">{c.merchantName || c.dbaName || 'Merchant ID'}</span>
                         <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-1.5 py-0.5">
                           {c.mccCode}
                         </span>
@@ -163,7 +163,7 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-24 gap-3">
       <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
-      <p className="text-sm text-gray-500">Loading concept details...</p>
+      <p className="text-sm text-gray-500">Loading Merchant ID details...</p>
     </div>
   );
 
