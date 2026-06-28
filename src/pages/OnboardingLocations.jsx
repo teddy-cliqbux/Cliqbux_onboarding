@@ -365,18 +365,19 @@ function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel }) 
   const doSave = async (addr) => {
     setSaving(true); setError('');
     try {
-      let targetEntityId = entityChoice === 'existing' ? selectedEntityId : undefined;
-      if (entityChoice === 'new') {
-        const res = await base44.functions.invoke('manageLegalEntity', { action: 'add', corporateId, legalBusinessName: newEntityName.trim(), federalEIN: newEINDigits });
-        if (res.data?.error) throw new Error(res.data.error);
-        targetEntityId = res.data.entities[res.data.entities.length - 1]?.entityId;
-      }
       const businessAddress = addr ? `${addr.street}, ${addr.city}, ${addr.state} ${addr.zip}` : addressDisplay.trim();
-      const locRes = await base44.functions.invoke('addSelfServeLocation', {
-        corporateId, entityId: targetEntityId, dbaName: dbaName.trim(),
+      const payload = {
+        corporateId, dbaName: dbaName.trim(),
         businessAddress, businessStreet: addr?.street || '', businessCity: addr?.city || '',
         businessState: addr?.state || '', businessZip: addr?.zip || '',
-      });
+      };
+      if (entityChoice === 'existing') {
+        payload.entityId = selectedEntityId;
+      } else if (entityChoice === 'new') {
+        payload.newEntityName = newEntityName.trim();
+        payload.newEntityEIN = newEINDigits;
+      }
+      const locRes = await base44.functions.invoke('addSelfServeLocation', payload);
       if (locRes.data?.error) throw new Error(locRes.data.error);
       onSaved({ location: locRes.data.location, merchantID: locRes.data.merchantID, reloadEntities: entityChoice === 'new' });
     } catch (err) { setError(err.message || 'Failed to save.'); }

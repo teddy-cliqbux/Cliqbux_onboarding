@@ -1,10 +1,18 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
+function randomUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
-    const { corporateId, dbaName, businessAddress, entityId, businessStreet, businessCity, businessState, businessZip } = body;
+    const { corporateId, dbaName, businessAddress, entityId, businessStreet, businessCity, businessState, businessZip,
+            newEntityName, newEntityEIN } = body;
 
     if (!corporateId || !dbaName) {
       return Response.json({ error: 'corporateId and dbaName are required' }, { status: 400 });
@@ -15,6 +23,21 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
     }
 
+    // If caller wants a new entity created, do it here with service role (avoids auth issues on magic-link sessions)
+    let resolvedEntityId = entityId;
+    if (!resolvedEntityId && newEntityName && newEntityEIN) {
+      const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
+      if (profiles && profiles.length > 0) {
+        const profileRecord = profiles[0];
+        const entities = profileRecord.legalEntities || [];
+        const newEntity = { entityId: randomUUID(), legalBusinessName: newEntityName.trim(), tradeNameDBA: newEntityName.trim(), federalEIN: newEntityEIN.trim() };
+        await base44.asServiceRole.entities.MerchantCorporateProfile.update(profileRecord.id, {
+          legalEntities: [...entities, newEntity]
+        });
+        resolvedEntityId = newEntity.entityId;
+      }
+    }
+
     const locationFields = {
       corporateId,
       dbaName,
@@ -22,7 +45,7 @@ Deno.serve(async (req) => {
       applicationStepStatus: 'In Review'
     };
 
-    if (entityId) locationFields.entityId = entityId;
+    if (resolvedEntityId) locationFields.entityId = resolvedEntityId;
     if (businessStreet) locationFields.businessStreet = businessStreet;
     if (businessCity) locationFields.businessCity = businessCity;
     if (businessState) locationFields.businessState = businessState;
