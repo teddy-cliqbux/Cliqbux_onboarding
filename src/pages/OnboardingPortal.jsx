@@ -8,6 +8,7 @@ import LoadingScreen from '@/components/onboarding/LoadingScreen';
 import SelfServePricing from '@/components/onboarding/SelfServePricing';
 // Plaid verification is now handled per-location inside OnboardingLocations
 import OnboardingLocations from './OnboardingLocations';
+import OnboardingBanking from './OnboardingBanking';
 import OnboardingVerification from './OnboardingVerification';
 import OnboardingSummary from './OnboardingSummary';
 import MobilePricing from '@/components/onboarding/MobilePricing';
@@ -17,7 +18,7 @@ const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'];
 
 // Steps within the post-agreement flow
 const STEP_LOCATIONS    = 'locations';
-const STEP_SUMMARY      = 'summary';
+const STEP_BANKING      = 'banking';
 const STEP_VERIFICATION = 'verification';
 const STEP_SUCCESS      = 'success';
 
@@ -91,20 +92,17 @@ export default function OnboardingPortal() {
     setMode('sales');
   };
 
-  const handleLocationsContinue = ({ locations: updatedLocations }) => {
+  const handleLocationsContinue = ({ locations: updatedLocations, legalEntities }) => {
+    setLocations(updatedLocations);
+    setStep(STEP_BANKING);
+  };
+
+  const handleBankingContinue = ({ locations: updatedLocations }) => {
     setLocations(updatedLocations);
     setStep(STEP_VERIFICATION);
   };
 
-  const onBackStep = () => {
-    // Returns to Step 1 (pricing). This step clears the profile so SelfServePricing
-    // re-renders — when pricing is confirmed again, the portal re-enters Locations
-    // with the *same saved locations* from state (sent via onContinue). Note:
-    // picking a *different* pricing tier creates a new deal with a new corporateId,
-    // so locations belonging to the old deal are naturally lost — that's expected.
-    // Step 1 Agreement shows the signed quote as-is.
-    setStep(STEP_LOCATIONS);
-  };
+  const onBackStep = () => setStep(STEP_LOCATIONS);
 
   const handleSigningComplete = async () => {
     // Mark submitted and redirect to dashboard
@@ -143,12 +141,21 @@ export default function OnboardingPortal() {
           />
         );
       }
+      if (step === STEP_BANKING) {
+        return (
+          <OnboardingBanking
+            profile={profile}
+            onContinue={handleBankingContinue}
+            onBack={() => setStep(STEP_LOCATIONS)}
+          />
+        );
+      }
       if (step === STEP_VERIFICATION) {
         return (
           <OnboardingVerification
             profile={profile}
             locations={locations}
-            onBack={() => setStep(STEP_LOCATIONS)}
+            onBack={() => setStep(STEP_BANKING)}
             onComplete={handleSigningComplete}
           />
         );
