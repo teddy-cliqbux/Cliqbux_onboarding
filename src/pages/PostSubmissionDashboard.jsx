@@ -102,7 +102,20 @@ export default function PostSubmissionDashboard() {
           {concepts.length > 0 && <UnderwritingTracker locations={locations} concepts={concepts} />}
 
           {/* Location Status Table */}
-          <LocationStatusTable locations={locations} concepts={concepts} />
+          <LocationStatusTable
+            locations={locations}
+            concepts={concepts}
+            corporateId={profile.corporateId}
+            onStatusChanged={async () => {
+              try {
+                const res = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
+                if (!res.data?.error) {
+                  setLocations(res.data.locations || []);
+                  setConcepts(res.data.concepts || []);
+                }
+              } catch (_) {}
+            }}
+          />
 
           {/* Checklist */}
           <div>
