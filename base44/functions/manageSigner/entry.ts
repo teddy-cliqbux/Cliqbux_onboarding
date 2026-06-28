@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
     if (action === 'update') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
       const ALLOWED = ['firstName','lastName','signerEmail','ownershipPercentage','isPrimarySigner',
-        'identityStatus','dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone'];
+        'identityStatus','dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl'];
       const update = {};
       for (const key of ALLOWED) {
         if (signerData[key] !== undefined) update[key] = signerData[key];
@@ -180,7 +180,7 @@ Deno.serve(async (req) => {
     // --- INLINE VERIFY (primary owner verifies directly on the portal, no email) ---
     if (action === 'inlineVerify') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
-      const ALLOWED = ['dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone'];
+      const ALLOWED = ['dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl'];
       const update = { identityStatus: 'Verified' };
       for (const key of ALLOWED) {
         if (signerData && signerData[key] !== undefined) update[key] = signerData[key];
@@ -188,6 +188,37 @@ Deno.serve(async (req) => {
       const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, update);
       return Response.json({ success: true, signer: updated });
     }
+
+    // --- LOOKUP BY EMAIL (check if signer has a prior verified record on another application) ---
+    if (action === 'lookupByEmail') {
+      const { signerEmail } = body;
+      if (!signerEmail) return Response.json({ found: false });
+      // Find all verified signers with this email across all corporate IDs except the current one
+      const allMatches = await base44.asServiceRole.entities.MerchantSigners.filter({ signerEmail });
+      const prior = allMatches.find(s =>
+        s.corporateId !== corporateId &&
+        s.identityStatus === 'Verified' &&
+        s.dobYear && s.ssn
+      );
+      if (!prior) return Response.json({ found: false });
+      return Response.json({
+        found: true,
+        signerData: {
+          dobMonth: prior.dobMonth || '',
+          dobDay: prior.dobDay || '',
+          dobYear: prior.dobYear || '',
+          ssn: prior.ssn || '',
+          homeStreet: prior.homeStreet || '',
+          homeCity: prior.homeCity || '',
+          homeState: prior.homeState || '',
+          homeZip: prior.homeZip || '',
+          corporatePhone: prior.corporatePhone || '',
+          idDocumentUrl: prior.idDocumentUrl || '',
+        }
+      });
+    }
+
+    // --- UPDATE (also allow idDocumentUrl) ---
 
     return Response.json({ error: 'Unknown action' }, { status: 400 });
   } catch (error) {
