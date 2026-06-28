@@ -93,10 +93,6 @@ export default function OnboardingPortal() {
 
   const handleLocationsContinue = ({ locations: updatedLocations }) => {
     setLocations(updatedLocations);
-    setStep(STEP_SUMMARY);
-  };
-
-  const handleSummaryContinue = ({ locations: updatedLocations, concepts: summaryConcepts }) => {
     setStep(STEP_VERIFICATION);
   };
 
@@ -147,22 +143,12 @@ export default function OnboardingPortal() {
           />
         );
       }
-      if (step === STEP_SUMMARY) {
-        return (
-          <OnboardingSummary
-            profile={profile}
-            locations={locations}
-            onContinue={handleSummaryContinue}
-            onBack={() => setStep(STEP_LOCATIONS)}
-          />
-        );
-      }
       if (step === STEP_VERIFICATION) {
         return (
           <OnboardingVerification
             profile={profile}
             locations={locations}
-            onBack={() => setStep(STEP_SUMMARY)}
+            onBack={() => setStep(STEP_LOCATIONS)}
             onComplete={handleSigningComplete}
           />
         );

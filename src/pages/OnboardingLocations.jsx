@@ -676,17 +676,19 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       setConcepts(loadedConcepts);
       setBankDetailsByLoc(bdMap);
 
-      // On first load with no locations, show the add form + auto-create entity if needed
+      // On first load with no locations, show the add form
+      // Only auto-create entity if we have a real 9-digit EIN
       if (loadedLocations.length === 0) {
         if (loadedEntities.length === 0) {
-          // Auto-create entity from profile
           const ein = (profile.taxId || '').replace(/\D/g, '').slice(0, 9);
-          const res = await base44.functions.invoke('manageLegalEntity', {
-            action: 'add', corporateId: profile.corporateId,
-            legalBusinessName: profile.legalName || '',
-            federalEIN: ein || '000000000',
-          });
-          if (!res.data?.error) setEntities(res.data?.entities || []);
+          if (ein.length === 9) {
+            const res = await base44.functions.invoke('manageLegalEntity', {
+              action: 'add', corporateId: profile.corporateId,
+              legalBusinessName: profile.legalName || '',
+              federalEIN: ein,
+            });
+            if (!res.data?.error) setEntities(res.data?.entities || []);
+          }
         }
         setShowAddForm(true);
       }
@@ -765,7 +767,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       <div className="px-8 pt-8 pb-6 border-b border-white/10">
         <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
           <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-          STEP 2 OF 4 — LOCATIONS &amp; BANKING
+          STEP 2 OF 3 — LOCATIONS &amp; BANKING
         </div>
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -900,7 +902,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           disabled={!isReady || saving}
           className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-black font-bold py-4 px-6 rounded-xl text-base transition-all shadow-lg shadow-amber-900/20"
         >
-          {saving ? <><Loader2 className="w-5 h-5 animate-spin text-black" /> Saving…</> : <>Continue to Review <ArrowRight className="w-5 h-5" /></>}
+          {saving ? <><Loader2 className="w-5 h-5 animate-spin text-black" /> Saving…</> : <>Continue to Signing <ArrowRight className="w-5 h-5" /></>}
         </button>
         {locations.length === 0 && <p className="text-center text-xs text-gray-600">Add at least one location to continue.</p>}
         {locations.length > 0 && !isReady && (
