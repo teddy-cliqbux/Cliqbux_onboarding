@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { ShieldCheck, CheckCircle, Loader2, Eye, EyeOff } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { ShieldCheck, CheckCircle2, Loader2, Eye, EyeOff, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { formatSSN, rawSSN, formatPhone, rawPhone } from '@/lib/textUtils';
 
@@ -13,15 +13,43 @@ const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 80 }, (_, i) => String(currentYear - 18 - i));
 
-const inputCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500';
-const labelCls = 'text-xs font-semibold text-gray-600 block mb-1.5';
+const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
+const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
+
+function usePlacesAutocomplete(ref, onParsed) {
+  useEffect(() => {
+    if (!ref.current || !window.google?.maps?.places) return;
+    const ac = new window.google.maps.places.Autocomplete(ref.current, {
+      types: ['address'], componentRestrictions: { country: 'us' },
+      fields: ['address_components'],
+    });
+    ac.addListener('place_changed', () => {
+      const place = ac.getPlace();
+      if (!place?.address_components) return;
+      const get = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).long_name || '';
+      const getS = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).short_name || '';
+      const street = (get(['street_number']) ? `${get(['street_number'])} ` : '') + get(['route']);
+      const city = get(['locality', 'sublocality']);
+      const state = getS(['administrative_area_level_1']);
+      const zip = get(['postal_code']);
+      onParsed({ street, city, state, zip });
+    });
+    return () => window.google?.maps?.event?.clearInstanceListeners(ac);
+  }, []);
+}
 
 export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
   const [expanded, setExpanded] = useState(false);
   const [showSsn, setShowSsn] = useState(false);
   const [saving, setSaving] = useState(false);
-
   const [error, setError] = useState('');
+  const [addressDisplay, setAddressDisplay] = useState(
+    signer.homeStreet
+      ? `${signer.homeStreet}${signer.homeCity ? ', ' + signer.homeCity : ''}${signer.homeState ? ', ' + signer.homeState : ''}${signer.homeZip ? ' ' + signer.homeZip : ''}`
+      : ''
+  );
+  const [addressVerified, setAddressVerified] = useState(!!signer.homeStreet);
+
   const [form, setForm] = useState({
     dobMonth: signer.dobMonth || '',
     dobDay: signer.dobDay || '',
@@ -34,7 +62,14 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
     corporatePhone: signer.corporatePhone || '',
   });
 
+  const addrRef = useRef(null);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  usePlacesAutocomplete(addrRef, ({ street, city, state, zip }) => {
+    setForm(p => ({ ...p, homeStreet: street, homeCity: city, homeState: state, homeZip: zip }));
+    setAddressDisplay(`${street}, ${city}, ${state} ${zip}`);
+    setAddressVerified(true);
+  });
 
   const handleVerify = async (e) => {
     e && e.preventDefault();
@@ -60,41 +95,39 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
     }
   };
 
-  if (signer.identityStatus === 'Verified') {
-    return null;
-  }
+  if (signer.identityStatus === 'Verified') return null;
 
   if (!expanded) {
     return (
       <button
         onClick={() => setExpanded(true)}
-        className="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-2.5 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1"
+        className="text-xs text-amber-400 hover:text-amber-300 border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15 px-3 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1.5"
       >
-        <ShieldCheck className="w-3 h-3" /> Verify Now
+        <ShieldCheck className="w-3.5 h-3.5" /> Verify Now
       </button>
     );
   }
 
   return (
-    <div className="border border-blue-200 bg-white rounded-lg p-4 max-w-sm space-y-3">
+    <div className="bg-[#111318] border border-white/10 rounded-xl p-4 space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-xs font-bold text-blue-700 uppercase tracking-widest">Complete Identity Verification</p>
-        <button onClick={() => setExpanded(false)} className="text-xs text-gray-400 hover:text-gray-600 underline">Cancel</button>
+        <p className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Complete Identity Verification</p>
+        <button onClick={() => setExpanded(false)} className="text-xs text-gray-500 hover:text-white transition-colors">Cancel</button>
       </div>
 
       {/* DOB */}
       <div>
-        <label className={labelCls}>Date of Birth</label>
+        <label className={labelCls}>Date of Birth *</label>
         <div className="flex gap-2">
-          <select className="flex-1 text-sm border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={form.dobMonth} onChange={e => set('dobMonth', e.target.value)}>
+          <select className={inputCls} value={form.dobMonth} onChange={e => set('dobMonth', e.target.value)} style={{ colorScheme: 'dark' }}>
             <option value="">Month</option>
             {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
           </select>
-          <select className="w-20 text-sm border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={form.dobDay} onChange={e => set('dobDay', e.target.value)}>
+          <select className={`${inputCls} w-24`} value={form.dobDay} onChange={e => set('dobDay', e.target.value)} style={{ colorScheme: 'dark' }}>
             <option value="">Day</option>
             {DAYS.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
-          <select className="w-24 text-sm border border-gray-200 rounded-lg px-2 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" value={form.dobYear} onChange={e => set('dobYear', e.target.value)}>
+          <select className={`${inputCls} w-28`} value={form.dobYear} onChange={e => set('dobYear', e.target.value)} style={{ colorScheme: 'dark' }}>
             <option value="">Year</option>
             {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
           </select>
@@ -103,12 +136,12 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
 
       {/* SSN */}
       <div>
-        <label className={labelCls}>Social Security Number (SSN)</label>
+        <label className={labelCls}>Social Security Number (SSN) *</label>
         <div className="relative">
           <input
             type={showSsn ? 'text' : 'password'}
             maxLength={showSsn ? 11 : 9}
-            className={`${inputCls} pr-9 font-mono tracking-[0.2em]`}
+            className={`${inputCls} pr-10 font-mono tracking-[0.2em]`}
             value={showSsn ? formatSSN(form.ssn || '') : (form.ssn || '')}
             onChange={e => set('ssn', e.target.value.replace(/\D/g, '').slice(0, 9))}
             placeholder="XXX-XX-XXXX"
@@ -116,22 +149,37 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
           <button
             type="button"
             onClick={() => setShowSsn(!showSsn)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
           >
             {showSsn ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           </button>
         </div>
       </div>
 
-      {/* Home Address */}
+      {/* Home Address — Google verified */}
       <div>
-        <label className={labelCls}>Home Address</label>
-        <input className={inputCls} value={form.homeStreet} onChange={e => set('homeStreet', e.target.value)} placeholder="123 Main St" />
-      </div>
-      <div className="grid grid-cols-3 gap-2">
-        <input className={`${inputCls} col-span-1`} value={form.homeCity} onChange={e => set('homeCity', e.target.value)} placeholder="City" />
-        <input className={inputCls} value={form.homeState} onChange={e => set('homeState', e.target.value)} placeholder="ST" maxLength={2} />
-        <input className={inputCls} value={form.homeZip} onChange={e => set('homeZip', e.target.value)} placeholder="ZIP" />
+        <label className={labelCls}>Home Address *</label>
+        {addressVerified ? (
+          <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-3.5 py-2.5">
+            <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+            <span className="text-sm text-green-300 flex-1 truncate">{addressDisplay}</span>
+            <button type="button" onClick={() => { setAddressVerified(false); setAddressDisplay(''); setForm(p => ({ ...p, homeStreet: '', homeCity: '', homeState: '', homeZip: '' })); }}
+              className="text-gray-500 hover:text-white">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <input
+            ref={addrRef}
+            type="text"
+            value={addressDisplay}
+            onChange={e => { setAddressDisplay(e.target.value); setAddressVerified(false); }}
+            onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
+            placeholder="Start typing to search…"
+            autoComplete="off"
+            className={inputCls}
+          />
+        )}
       </div>
 
       {/* Phone */}
@@ -140,15 +188,17 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
         <input type="tel" className={inputCls} value={formatPhone(form.corporatePhone)} onChange={e => set('corporatePhone', e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="(555) 555-5555" />
       </div>
 
-      {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300">{error}</div>
+      )}
 
       <button
         type="button"
         onClick={handleVerify}
         disabled={saving}
-        className="w-full flex items-center justify-center gap-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 py-2.5 rounded-lg transition-all"
+        className="w-full flex items-center justify-center gap-2 text-sm font-bold text-black bg-amber-500 hover:bg-amber-400 disabled:bg-gray-600 disabled:text-gray-400 py-3 rounded-xl transition-all"
       >
-        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
         {saving ? 'Verifying...' : 'Submit & Verify'}
       </button>
     </div>
