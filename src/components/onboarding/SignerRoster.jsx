@@ -3,6 +3,7 @@ import { UserPlus, CheckCircle2, AlertCircle, Clock, Mail, Trash2, Send, Loader2
 import { base44 } from '@/api/base44Client';
 import SignerModal from './SignerModal';
 import InlineVerifyForm from './InlineVerifyForm';
+import SignerIdUpload from './SignerIdUpload';
 
 function StatusBadge({ status }) {
   const map = {
@@ -295,6 +296,17 @@ export default function SignerRoster({ profile, onValidChange }) {
                     <InlineVerifyForm signer={signer} corporateId={profile.corporateId} onVerified={(updated) => {
                       setSigners(prev => prev.map(s => s.id === updated.id ? updated : s));
                     }} />
+                  </div>
+                )}
+                {/* ID document upload for all signers */}
+                {!isPrimary && (
+                  <div className="mt-3">
+                    <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Government ID Document</p>
+                    <SignerIdUpload
+                      signer={signer}
+                      corporateId={profile.corporateId}
+                      onUploaded={(updated) => setSigners(prev => prev.map(s => s.id === updated.id ? updated : s))}
+                    />
                   </div>
                 )}
               </div>

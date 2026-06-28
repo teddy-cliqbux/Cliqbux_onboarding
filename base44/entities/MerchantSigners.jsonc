@@ -65,7 +65,7 @@
     },
     "titleType": {
       "type": "string",
-      "description": "Signer's title — maps to Elavon principal.titleType",
+      "description": "Signer's title \u2014 maps to Elavon principal.titleType",
       "enum": [
         "CHIEF_EXECUTIVE_OFFICER",
         "PRESIDENT",
@@ -95,7 +95,7 @@
     },
     "idType": {
       "type": "string",
-      "description": "Government ID type — maps to Elavon principal.documentaryInfo.documentaryType",
+      "description": "Government ID type \u2014 maps to Elavon principal.documentaryInfo.documentaryType",
       "enum": [
         "DRIVER_LICENSE",
         "ID_CARD",
@@ -128,7 +128,11 @@
     },
     "idIssuingState": {
       "type": "string",
-      "description": "2-letter state code e.g. TN — converted to USA_TN at Elavon submission"
+      "description": "2-letter state code e.g. TN \u2014 converted to USA_TN at Elavon submission"
+    },
+    "idDocumentUrl": {
+      "type": "string",
+      "description": "Uploaded government ID document \u2014 image or PDF URL stored after UploadFile"
     }
   },
   "required": [

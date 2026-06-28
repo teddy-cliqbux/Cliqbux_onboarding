@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { ShieldCheck, CheckCircle2, Loader2, Eye, EyeOff, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { formatSSN, rawSSN, formatPhone, rawPhone } from '@/lib/textUtils';
+import SignerIdUpload from './SignerIdUpload';
 
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
@@ -189,6 +190,12 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
       <div>
         <label className={labelCls}>Phone Number</label>
         <input type="tel" className={inputCls} value={formatPhone(form.corporatePhone)} onChange={e => set('corporatePhone', e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="(555) 555-5555" />
+      </div>
+
+      {/* ID Document Upload */}
+      <div>
+        <label className={labelCls}>Government ID Document</label>
+        <SignerIdUpload signer={signer} corporateId={corporateId} onUploaded={() => {}} />
       </div>
 
       {error && (
