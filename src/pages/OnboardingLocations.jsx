@@ -535,7 +535,7 @@ function AddLocationForm({ corporateId, entities, onSaved, onCancel }) {
   const [addressDisplay, setAddressDisplay] = useState('');
   const [parsedAddress, setParsedAddress] = useState(null);
   const [unverifiedWarning, setUnverifiedWarning] = useState(false);
-  const [entityChoice, setEntityChoice] = useState(entities.length > 0 ? 'existing' : 'new');
+  const [entityChoice, setEntityChoice] = useState(entities.length > 0 ? 'existing' : 'none');
   const [selectedEntityId, setSelectedEntityId] = useState(entities[0]?.entityId || '');
   const [newEntityName, setNewEntityName] = useState('');
   const [newEntityEIN, setNewEntityEIN] = useState('');
@@ -562,7 +562,7 @@ function AddLocationForm({ corporateId, entities, onSaved, onCancel }) {
     setSaving(true);
     setError('');
     try {
-      let targetEntityId = selectedEntityId;
+      let targetEntityId = entityChoice === 'existing' ? selectedEntityId : undefined;
 
       if (entityChoice === 'new') {
         if (!newEntityName.trim()) { setError('Legal name is required for new entity.'); setSaving(false); return; }
@@ -651,7 +651,7 @@ function AddLocationForm({ corporateId, entities, onSaved, onCancel }) {
         <div>
           <label className={labelCls}>Legal Entity</label>
           {entities.length === 0 ? (
-            <p className="text-xs text-gray-500">A new corporate entity will be created automatically.</p>
+            <p className="text-xs text-gray-500">Will be created automatically from your business profile.</p>
           ) : (
             <div className="space-y-3">
               <div className="flex gap-2">
