@@ -93,7 +93,7 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
 
         {cs.length === 0 ? (
           <div className="px-6 py-5 text-center">
-            <p className="text-sm text-gray-200">No processing concepts set for this location yet.</p>
+            <p className="text-sm text-gray-200">No Merchant IDs set for this location yet.</p>
             <p className="text-xs text-gray-400 mt-1">You can add them from the Locations step.</p>
           </div>
         ) : (
@@ -241,8 +241,8 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
         {allLocations.length === 0 ? (
           <div className="text-center py-10 border border-dashed border-white/10 rounded-xl">
             <BarChart3 className="w-10 h-10 text-gray-500 mx-auto mb-3" />
-            <p className="text-sm text-gray-200">No concepts to review yet.</p>
-            <p className="text-xs text-gray-400 mt-1">Add processing concepts in the Locations step.</p>
+            <p className="text-sm text-gray-200">No Merchant IDs to review yet.</p>
+            <p className="text-xs text-gray-400 mt-1">Add Merchant IDs in the Locations step.</p>
           </div>
         ) : (
           allLocations.map(loc => renderLocationMerchantIDGroup(loc))
@@ -259,7 +259,7 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
               <p className="text-sm font-semibold text-white truncate">{loc.dbaName}</p>
               <p className="text-xs text-gray-200 truncate">{loc.businessAddress}</p>
             </div>
-            <span className="text-[10px] text-gray-400 bg-white/5 rounded px-2 py-1">No concepts</span>
+            <span className="text-[10px] text-gray-400 bg-white/5 rounded px-2 py-1">No Merchant IDs</span>
           </div>
         ))}
       </div>
@@ -293,14 +293,14 @@ function StatBox({ icon, label, value }) {
   );
 }
 
-function InlineConceptEdit({ concept, editData, setEditData, onSave, onCancel }) {
+function InlineMerchantIDEdit({ merchantID, editData, setEditData, onSave, onCancel }) {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="text-[10px] font-semibold text-gray-200 mb-1 block">Concept Name</label>
-          <input type="text" value={editData.conceptName || ''}
-            onChange={e => setEditData(p => ({ ...p, conceptName: e.target.value }))}
+          <label className="text-[10px] font-semibold text-gray-200 mb-1 block">Merchant ID Name</label>
+          <input type="text" value={editData.merchantName || ''}
+            onChange={e => setEditData(p => ({ ...p, merchantName: e.target.value }))}
             className={inputCls} />
         </div>
         <div>
