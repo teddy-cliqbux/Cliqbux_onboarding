@@ -197,13 +197,13 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
             <p className="text-lg font-bold text-white">{allLocations.length}</p>
           </div>
           <div>
-            <p className="text-[10px] font-semibold text-amber-400/70 uppercase tracking-wider">Total Concepts</p>
-            <p className="text-lg font-bold text-white">{concepts.length}</p>
+            <p className="text-[10px] font-semibold text-amber-400/70 uppercase tracking-wider">Total Merchant IDs</p>
+            <p className="text-lg font-bold text-white">{merchantIDs.length}</p>
           </div>
           <div>
             <p className="text-[10px] font-semibold text-amber-400/70 uppercase tracking-wider">Combined Monthly Volume</p>
             <p className="text-lg font-bold text-white">
-              {formatCurrency(concepts.reduce((sum, c) => sum + (Number(c.monthlyCardSales) || 0), 0))}
+              {formatCurrency(merchantIDs.reduce((sum, c) => sum + (Number(c.monthlyCardSales) || 0), 0))}
             </p>
           </div>
           <div>
@@ -218,9 +218,9 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
         <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-4">Onboarding Status</h3>
         <LocationStatusTable
           locations={locations}
-          concepts={concepts}
+          merchantIDs={merchantIDs}
           corporateId={profile.corporateId}
-          onStatusChanged={loadConcepts}
+          onStatusChanged={loadMerchantIDs}
         />
       </div>
 
