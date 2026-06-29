@@ -23,7 +23,13 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
     }
     const profile = profiles[0];
-    let entities = profile.legalEntities || [];
+
+    // Defensive: Base44 sometimes returns JSON fields as strings — parse if needed
+    let rawEntities = profile.legalEntities ?? [];
+    if (typeof rawEntities === 'string') {
+      try { rawEntities = JSON.parse(rawEntities); } catch { rawEntities = []; }
+    }
+    let entities: any[] = Array.isArray(rawEntities) ? rawEntities : [];
     const updateId = profile.id;
 
     if (action === 'edit') {
@@ -75,7 +81,8 @@ Deno.serve(async (req) => {
     }
 
     return Response.json({ error: 'Invalid action' }, { status: 400 });
-  } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+  } catch (error: any) {
+    console.error('[manageLegalEntity] uncaught error:', error?.message, error?.stack?.split('\n').slice(0,3).join(' | '));
+    return Response.json({ error: error?.message || String(error) }, { status: 500 });
   }
 });
