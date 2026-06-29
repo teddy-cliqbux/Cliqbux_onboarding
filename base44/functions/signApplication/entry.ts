@@ -88,6 +88,26 @@ function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
+function resolveLocationAddress(location: Record<string, any>): Record<string, any> {
+  if (location.businessStreet && location.businessCity && location.businessState) return location;
+  const flat = location.businessAddress || '';
+  const m = flat.match(/^(.+?),\s*(.+?),?\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i);
+  if (!m) return location;
+  return {
+    ...location,
+    businessStreet: location.businessStreet || m[1].trim(),
+    businessCity:   location.businessCity   || m[2].trim(),
+    businessState:  location.businessState  || m[3].toUpperCase(),
+    businessZip:    location.businessZip    || m[4].trim(),
+  };
+}
+
+const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']);
+function sanitizeState(s: string): string {
+  const code = (s || '').toUpperCase().trim();
+  return US_STATES.has(code) ? code : '';
+}
+
 function formatDob(year: string, month: string, day: string): string {
   if (!year || !month || !day) return '';
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -105,7 +125,8 @@ function buildFormPayload(
   location: Record<string, any>,
   concept: Record<string, any>,
   primarySigner: Record<string, any>,
-  additionalSigners: Record<string, any>[]
+  additionalSigners: Record<string, any>[],
+  entityMailing?: { street: string; city: string; state: string; zip: string } | null
 ): Record<string, unknown> {
   const signer = primarySigner || {};
   const bank = concept.bankDetails || location.bankDetails || {};
@@ -169,7 +190,7 @@ function buildFormPayload(
     owner_address_type: 'PRA',
     owner_address: s.homeStreet || '',
     owner_city: s.homeCity || '',
-    owner_state_usa: s.homeState || '',
+    owner_state_usa: sanitizeState(s.homeState),
     owner_zipcode: s.homeZip || '',
     owner_citizenship_country_1: 'USA',
     owner_id_type: 'SSN',
@@ -201,7 +222,17 @@ function buildFormPayload(
     business_city: location.businessCity || '',
     business_state_usa: location.businessState || '',
     business_zipcode: location.businessZip || '',
-    has_legal_address: 'business',
+    // If entity has a separate mailing address, send it as the legal address
+    ...(entityMailing?.street ? {
+      has_legal_address: 'mailing',
+      mailing_address_type: 'LGA',
+      mailing_address: entityMailing.street,
+      mailing_city: entityMailing.city,
+      mailing_state_usa: sanitizeState(entityMailing.state),
+      mailing_zipcode: entityMailing.zip,
+    } : {
+      has_legal_address: 'business',
+    }),
     owners: [
       {
         owner_responsible_party: true,
@@ -223,7 +254,7 @@ function buildFormPayload(
         owner_address_type: 'PRA',
         owner_address: signer.homeStreet || profile.homeStreet || '',
         owner_city: signer.homeCity || profile.homeCity || '',
-        owner_state_usa: signer.homeState || profile.homeState || '',
+        owner_state_usa: sanitizeState(signer.homeState || profile.homeState || '') || sanitizeState(location.businessState || ''),
         owner_zipcode: signer.homeZip || profile.homeZip || '',
         owner_citizenship_country_1: 'USA',
         owner_id_type: 'SSN',
@@ -258,7 +289,10 @@ function buildFormPayload(
     intl_card_handling_fee: '0.60',
     tokenization_service_fee: '0.0000',
     tokenization_platform_fee: '0.0000',
-    // debit_auth_method, debit_pricing_method, is_firearm_verified: let template defaults apply
+    has_pin_debit: false,       // attempt to disable debit fields; template may override
+    debit_auth_method: 'PNL',  // pinless — required when has_pin_debit=true (template default)
+    debit_pricing_method: 'ICPLS',
+    // is_firearm_verified: let template defaults apply
     // Per-network debit interchange fees required by template
     ACCL_per_auth: '0.00', ACCL_percent_fee: '0.0000', ACCL_transaction_fee: '0.00',
     AFFN_per_auth: '0.00', AFFN_percent_fee: '0.0000', AFFN_transaction_fee: '0.00',
@@ -346,6 +380,14 @@ Deno.serve(async (req) => {
     const locationMap: Record<string, any> = {};
     for (const loc of (allLocs || [])) locationMap[loc.id] = loc;
 
+    // Build entityId → mailing address lookup from profile's legalEntities
+    const entityMailingMap: Record<string, any> = {};
+    for (const ent of (profile.legalEntities || [])) {
+      if (ent.entityId && ent.mailingStreet && ent.mailingCity && ent.mailingState) {
+        entityMailingMap[ent.entityId] = { street: ent.mailingStreet, city: ent.mailingCity, state: ent.mailingState, zip: ent.mailingZip || '' };
+      }
+    }
+
     // ── 2. Filter to signable concepts ────────────────────────────────────────
     const DONE_STATUSES = ['Active', 'Active (Existing)', 'Pending MID'];
     let signable = (allConcepts || []).filter((c: any) =>
@@ -429,7 +471,8 @@ Deno.serve(async (req) => {
           concept.applicationStepStatus = 'In Review';
 
           // Fill form
-          const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners);
+          const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
+          const formPayload = buildFormPayload(profile, resolveLocationAddress(location), concept, primarySigner, additionalSigners, entityMailing);
           const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
             method: 'PUT',
             headers: mspHeaders,
@@ -478,42 +521,47 @@ Deno.serve(async (req) => {
 
       let packageExists = statusRes.ok && statusData?.success && statusData?.signers?.length > 0;
 
-      // Re-fill form before every signing attempt — capture completion_errors from PUT response
+      // Check current form completion via GET first — template defaults may already satisfy all fields
       let refillPercentComplete: number | null = null;
       let refillErrors: string[] = [];
       if (!packageExists) {
-        const location = locationMap[concept.locationId];
-        if (location) {
-          const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners);
-          console.log(`[signApplication] Refill payload for ${mspApplicationNo}:`, JSON.stringify(formPayload));
-          const refillRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
-            method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
-          });
-          const refillData = await refillRes.json();
-          console.log(`[signApplication] Re-fill raw response ${refillRes.status} for ${mspApplicationNo}:`, JSON.stringify(refillData));
-          refillPercentComplete = refillData?.percent_complete ?? null;
-          refillErrors = [
-            ...(refillData?.completion_errors || []),
-            ...(refillData?.data_errors       || []),
-            ...(refillData?.rule_violations    || []),
-          ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || JSON.stringify(e)));
+        const getRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
+        const getData = await getRes.json();
+        // percent_complete may be a string from MSPWare — parse it
+        const rawPct = getData?.percent_complete ?? getData?.validation?.percent_complete ?? null;
+        refillPercentComplete = rawPct !== null ? Math.round(parseFloat(String(rawPct))) : null;
+        const getErrors = [
+          ...(getData?.completion_errors || getData?.validation?.errors?.completion || []),
+          ...(getData?.data_errors       || getData?.validation?.errors?.data       || []),
+          ...(getData?.rule_violations   || getData?.validation?.errors?.rules      || []),
+        ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
+        console.log(`[signApplication] GET form status for ${mspApplicationNo}: ${refillPercentComplete ?? '?'}% complete, ${getErrors.length} errors`);
 
-          // If PUT returned errors or rejected fields, do a GET to get the actual completion status
-          if (!refillPercentComplete || refillErrors.length === 0) {
-            const getRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
-            const getData = await getRes.json();
-            refillPercentComplete = getData?.percent_complete ?? refillPercentComplete;
-            const getErrors = [
-              ...(getData?.completion_errors || []),
-              ...(getData?.data_errors       || []),
-              ...(getData?.rule_violations    || []),
-            ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || JSON.stringify(e)));
-            if (getErrors.length > 0) refillErrors = getErrors;
-            console.log(`[signApplication] GET form after refill: ${refillPercentComplete ?? '?'}% complete, errors:`, JSON.stringify(getErrors));
+        // Only re-fill if the form is not already at 100%
+        if (refillPercentComplete !== 100) {
+          const location = locationMap[concept.locationId];
+          if (location) {
+            const refillEntityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
+          const formPayload = buildFormPayload(profile, resolveLocationAddress(location), concept, primarySigner, additionalSigners, refillEntityMailing);
+            const refillRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
+              method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
+            });
+            const refillData = await refillRes.json();
+            // After PUT, always re-check via GET for true completion (PUT response can be misleading)
+            const getRes2 = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
+            const getData2 = await getRes2.json();
+            const rawPct2 = getData2?.percent_complete ?? getData2?.validation?.percent_complete ?? null;
+            refillPercentComplete = rawPct2 !== null ? Math.round(parseFloat(String(rawPct2))) : null;
+            refillErrors = [
+              ...(getData2?.completion_errors || getData2?.validation?.errors?.completion || []),
+              ...(getData2?.data_errors       || getData2?.validation?.errors?.data       || []),
+              ...(getData2?.rule_violations   || getData2?.validation?.errors?.rules      || []),
+            ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
+            console.log(`[signApplication] After refill GET: ${refillPercentComplete ?? '?'}% complete, ${refillErrors.length} errors`);
+            if (refillErrors.length) console.log(`[signApplication] Errors:`, JSON.stringify(refillErrors));
           }
-
-          console.log(`[signApplication] Re-fill ${refillRes.status} for ${mspApplicationNo}: ${refillPercentComplete ?? '?'}% complete, ${refillErrors.length} errors`);
-          if (refillErrors.length) console.log(`[signApplication] Errors:`, JSON.stringify(refillErrors));
+        } else {
+          console.log(`[signApplication] Form already at 100% — skipping re-fill`);
         }
       }
 
@@ -530,15 +578,16 @@ Deno.serve(async (req) => {
 
         if (!packageRes.ok || !packageData?.success) {
           const errMsg = packageData?.error || packageData?.message || `HTTP ${packageRes.status}`;
-
           applications.push({
             mspApplicationNo,
-            merchantIDName: conceptName,
+            conceptName,
             signingUrl: null,
             signers: [],
             allSigned: false,
-            error: `Application form incomplete: ${errMsg}`,
-            hint: 'Complete all required fields and try again.',
+            error: `Unable to prepare signing package: ${errMsg}`,
+            hint: refillPercentComplete !== null && refillPercentComplete < 100
+              ? `Form is ${refillPercentComplete}% complete. ${refillErrors.join('; ')}`
+              : 'Contact support if this persists.',
             percentComplete: refillPercentComplete,
             formErrors: refillErrors,
           });

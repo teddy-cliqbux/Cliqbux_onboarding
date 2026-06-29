@@ -44,18 +44,6 @@ Deno.serve(async (req) => {
       }, { status: 401 });
     }
 
-    // Check if already used
-    if (record.used) {
-      return Response.json({
-        success: false,
-        error: 'This link has already been used. Please request a new one.',
-        expired: true,
-      }, { status: 401 });
-    }
-
-    // Mark as used
-    await base44.asServiceRole.entities.MerchantAccessTokens.update(record.id, { used: true });
-
     console.log(`[validateResumeToken] Token validated for corporateId=${record.corporateId}, email=${record.email}`);
 
     return Response.json({

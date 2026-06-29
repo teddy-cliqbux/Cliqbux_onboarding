@@ -2,11 +2,12 @@ import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Lock, Loader2, CheckCircle2, AlertCircle, ShieldCheck, PenLine, ChevronRight } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import SignerRoster from '@/components/onboarding/SignerRoster';
+import SigningErrorGuide from '@/components/onboarding/SigningErrorGuide';
 
 // How often to poll MSPWare for signing completion (ms)
 const POLL_INTERVAL_MS = 5000;
 
-export default function OnboardingVerification({ profile, locations, initialSignersVerified, onSignersVerified, onBack, onComplete }) {
+export default function OnboardingVerification({ profile, locations, initialSignersVerified, onSignersVerified, onBack, onComplete, onNavigate }) {
   const [allVerified, setAllVerified] = useState(initialSignersVerified || false);
 
   const handleVerifiedChange = (v) => {
@@ -58,7 +59,8 @@ export default function OnboardingVerification({ profile, locations, initialSign
         return;
       }
 
-      setApplications(data.applications || []);
+      // Attach corporateId to each app for error diagnostics
+      setApplications((data.applications || []).map(a => ({ ...a, corporateId: profile.corporateId })));
 
       // Start at first unsigned application
       const firstUnsigned = (data.applications || []).findIndex(a => !a.allSigned);
@@ -76,7 +78,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
       const data = res.data;
       if (!data?.applications) return;
 
-      setApplications(data.applications);
+      setApplications(data.applications.map(a => ({ ...a, corporateId: profile.corporateId })));
 
       // If the active app just got signed, auto-advance to next unsigned
       const current = data.applications[activeIndex];
@@ -276,15 +278,9 @@ export default function OnboardingVerification({ profile, locations, initialSign
             </div>
           )}
 
-          {/* Error on a specific concept */}
+          {/* Error on a specific concept — guided fix */}
           {allVerified && activeApp?.error && !loadingSigning && (
-            <div className="border border-red-500/30 bg-red-500/10 rounded-xl flex items-start gap-3 px-5 py-4">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-semibold text-red-300">{activeApp.merchantIDName} — Form Incomplete</p>
-                <p className="text-xs text-red-400 mt-1">{activeApp.error}</p>
-              </div>
-            </div>
+            <SigningErrorGuide app={activeApp} onNavigate={onNavigate} />
           )}
 
           {/* Submit button — only after all signed */}

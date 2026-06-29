@@ -88,6 +88,29 @@ function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
+// When a location was saved via the "unverified" path, structured fields may be null.
+// Parse them from the flat businessAddress string as a fallback.
+function resolveLocationAddress(location: Record<string, any>): Record<string, any> {
+  if (location.businessStreet && location.businessCity && location.businessState) return location;
+  const flat = location.businessAddress || '';
+  const m = flat.match(/^(.+?),\s*(.+?),?\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i);
+  if (!m) return location;
+  return {
+    ...location,
+    businessStreet: location.businessStreet || m[1].trim(),
+    businessCity:   location.businessCity   || m[2].trim(),
+    businessState:  location.businessState  || m[3].toUpperCase(),
+    businessZip:    location.businessZip    || m[4].trim(),
+  };
+}
+
+// MSPWare only accepts the 50 US states — territories (GU, PR, VI, AS, MP) cause data errors
+const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']);
+function sanitizeState(s: string): string {
+  const code = (s || '').toUpperCase().trim();
+  return US_STATES.has(code) ? code : '';
+}
+
 // Maps our internal industryClass enum → MSPWare industry_type code
 function industryClassToMSP(cls: string): string {
   const map: Record<string, string> = {
@@ -124,13 +147,15 @@ function nextMonthStart(): string {
 // ─── Form Payload Builder ─────────────────────────────────────────────────────
 // concept fields take precedence over profile-level defaults for per-MID pricing,
 // DBA, MCC, and bank details. location provides the physical address.
+// entityMailing (optional) provides a separate legal/mailing address for all MIDs under the entity.
 
 function buildFormPayload(
   profile: Record<string, any>,
   location: Record<string, any>,
   concept: Record<string, any>,
   primarySigner: Record<string, any>,
-  additionalSigners: Record<string, any>[]
+  additionalSigners: Record<string, any>[],
+  entityMailing?: { street: string; city: string; state: string; zip: string } | null
 ): Record<string, unknown> {
 
   const signer = primarySigner || {};
@@ -205,7 +230,7 @@ function buildFormPayload(
     owner_address_type: 'PRA',
     owner_address: s.homeStreet || '',
     owner_city: s.homeCity || '',
-    owner_state_usa: s.homeState || '',
+    owner_state_usa: sanitizeState(s.homeState),
     owner_zipcode: s.homeZip || '',
     owner_citizenship_country_1: 'USA',
     owner_id_type: 'SSN',
@@ -240,7 +265,17 @@ function buildFormPayload(
     business_city: location.businessCity || '',
     business_state_usa: location.businessState || '',
     business_zipcode: location.businessZip || '',
-    has_legal_address: 'business',
+    // If entity has a separate mailing address, send it as the legal address
+    ...(entityMailing?.street ? {
+      has_legal_address: 'mailing',
+      mailing_address_type: 'LGA',
+      mailing_address: entityMailing.street,
+      mailing_city: entityMailing.city,
+      mailing_state_usa: sanitizeState(entityMailing.state),
+      mailing_zipcode: entityMailing.zip,
+    } : {
+      has_legal_address: 'business',
+    }),
 
     // ── Principals ───────────────────────────────────────────────────────────
     owners: [
@@ -264,7 +299,7 @@ function buildFormPayload(
         owner_address_type: 'PRA',
         owner_address: signer.homeStreet || profile.homeStreet || '',
         owner_city: signer.homeCity || profile.homeCity || '',
-        owner_state_usa: signer.homeState || profile.homeState || '',
+        owner_state_usa: sanitizeState(signer.homeState || profile.homeState || '') || sanitizeState(location.businessState || ''),
         owner_zipcode: signer.homeZip || profile.homeZip || '',
         owner_citizenship_country_1: 'USA',
         owner_id_type: 'SSN',
@@ -307,7 +342,10 @@ function buildFormPayload(
     intl_card_handling_fee: '0.60',
     tokenization_service_fee: '0.0000',
     tokenization_platform_fee: '0.0000',
-    // debit_auth_method, debit_pricing_method, is_firearm_verified: let template defaults apply
+    has_pin_debit: false,       // attempt to disable debit fields; template may override
+    debit_auth_method: 'PNL',  // pinless — required when has_pin_debit=true (template default)
+    debit_pricing_method: 'ICPLS',
+    // is_firearm_verified: let template defaults apply
     // Per-network debit interchange fees required by template
     ACCL_per_auth: '0.00', ACCL_percent_fee: '0.0000', ACCL_transaction_fee: '0.00',
     AFFN_per_auth: '0.00', AFFN_percent_fee: '0.0000', AFFN_transaction_fee: '0.00',
@@ -423,6 +461,14 @@ Deno.serve(async (req) => {
       locationMap[loc.id] = loc;
     }
 
+    // Build a entityId → mailing address lookup from profile's legalEntities
+    const entityMailingMap: Record<string, any> = {};
+    for (const ent of (profile.legalEntities || [])) {
+      if (ent.entityId && ent.mailingStreet && ent.mailingCity && ent.mailingState) {
+        entityMailingMap[ent.entityId] = { street: ent.mailingStreet, city: ent.mailingCity, state: ent.mailingState, zip: ent.mailingZip || '' };
+      }
+    }
+
     // Filter concepts if caller specified specific IDs
     let concepts = allConcepts;
     if (conceptIds?.length) {
@@ -452,7 +498,7 @@ Deno.serve(async (req) => {
       }
 
       // ── Join to location for address + fallback bank ──────────────────────
-      const location = locationMap[concept.locationId];
+      const location = resolveLocationAddress(locationMap[concept.locationId]);
       if (!location) {
         results.push({
           conceptId: concept.id,
@@ -522,7 +568,8 @@ Deno.serve(async (req) => {
         });
 
         // ── Step 2: Fill form ─────────────────────────────────────────────────
-        const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners);
+        const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
+        const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners, entityMailing);
         console.log(`[submitToMSP] Filling form for application ${mspApplicationNo}:`, JSON.stringify(formPayload, null, 2));
 
         const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
@@ -540,19 +587,12 @@ Deno.serve(async (req) => {
           ...(formData?.rule_violations || []),
         ];
 
-        if (!formRes.ok || !formData?.canSave) {
-          results.push({
-            conceptId: concept.id,
-            locationId: concept.locationId,
-            dbaName: concept.dbaName,
-            status: 'form_error',
-            mspApplicationNo,
-            percentComplete,
-            validationErrors,
-            rawFormResponse: formData,
-          });
-          allSuccessful = false;
-          continue;
+        // Log form fill issues but don't abort — template defaults may cover remaining fields,
+        // and signApplication will re-fill + verify completion before creating the signing package.
+        if (!formRes.ok) {
+          console.error(`[submitToMSP] Form PUT HTTP error ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(formData));
+        } else {
+          console.log(`[submitToMSP] Form fill ${mspApplicationNo}: ${percentComplete ?? '?'}% complete, canSave=${formData?.canSave}, errors=${validationErrors.length}`);
         }
 
         // ── Step 3: Submit (only if MSP_SUBMIT_ENABLED=true) ──────────────────

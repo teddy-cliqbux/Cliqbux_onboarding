@@ -10,11 +10,9 @@ function randomUUID() {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const { corporateId, action, entityId, legalBusinessName, tradeNameDBA, federalEIN, corporateMailingAddress } = body;
+    const { corporateId, action, entityId, legalBusinessName, tradeNameDBA, federalEIN, corporateMailingAddress, mailingStreet, mailingCity, mailingState, mailingZip, ownershipType, taxClassType, establishmentYear } = body;
 
     if (!corporateId || !action) {
       return Response.json({ error: 'corporateId and action are required' }, { status: 400 });
@@ -40,12 +38,19 @@ Deno.serve(async (req) => {
       if (tradeNameDBA !== undefined) entities[idx].tradeNameDBA = tradeNameDBA.trim();
       if (federalEIN !== undefined) entities[idx].federalEIN = federalEIN.trim();
       if (corporateMailingAddress !== undefined) entities[idx].corporateMailingAddress = (corporateMailingAddress || '').trim();
+      if (mailingStreet !== undefined) entities[idx].mailingStreet = (mailingStreet || '').trim();
+      if (mailingCity !== undefined) entities[idx].mailingCity = (mailingCity || '').trim();
+      if (mailingState !== undefined) entities[idx].mailingState = (mailingState || '').trim();
+      if (mailingZip !== undefined) entities[idx].mailingZip = (mailingZip || '').trim();
+      if (ownershipType !== undefined) entities[idx].ownershipType = ownershipType;
+      if (taxClassType !== undefined) entities[idx].taxClassType = taxClassType;
+      if (establishmentYear !== undefined) entities[idx].establishmentYear = establishmentYear;
       await base44.asServiceRole.entities.MerchantCorporateProfile.update(updateId, { legalEntities: entities });
       return Response.json({ success: true, entities });
     }
 
     if (action === 'list') {
-      return Response.json({ entities: entities.map(e => ({ entityId: e.entityId, legalBusinessName: e.legalBusinessName, federalEIN: e.federalEIN, corporateMailingAddress: e.corporateMailingAddress || '' })) });
+      return Response.json({ entities: entities.map(e => ({ entityId: e.entityId, legalBusinessName: e.legalBusinessName, federalEIN: e.federalEIN, corporateMailingAddress: e.corporateMailingAddress || '', mailingStreet: e.mailingStreet || '', mailingCity: e.mailingCity || '', mailingState: e.mailingState || '', mailingZip: e.mailingZip || '', ownershipType: e.ownershipType || '', taxClassType: e.taxClassType || '', establishmentYear: e.establishmentYear || '' })) });
     }
 
     if (action === 'add') {

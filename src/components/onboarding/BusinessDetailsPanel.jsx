@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Building2, ChevronDown, ChevronRight, Check, Loader2, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Building2, ChevronDown, ChevronRight, Check, Loader2, AlertCircle, Cloud } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
@@ -39,61 +39,98 @@ function isComplete(profile) {
     profile.taxId &&
     profile.ownershipType &&
     profile.taxClassType &&
-    profile.productDescription &&
     profile.establishmentYear &&
     profile.titleType
   );
+}
+
+function deriveOwnership(establishmentYear) {
+  if (!establishmentYear) return { years: '1', months: '0' };
+  const now = new Date();
+  const totalMonths = (now.getFullYear() - parseInt(establishmentYear, 10)) * 12 + now.getMonth();
+  const years = Math.max(0, Math.floor(totalMonths / 12));
+  const months = Math.max(0, totalMonths % 12);
+  return { years: String(years), months: String(months) };
+}
+
+function canAutoSave(form) {
+  return !!(form.legalName && form.taxId.length === 9 && form.ownershipType && form.taxClassType && form.titleType && form.establishmentYear);
 }
 
 export default function BusinessDetailsPanel({ profile, onSaved }) {
   const complete = isComplete(profile);
   const [expanded, setExpanded] = useState(!complete);
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
   const [error, setError] = useState('');
+  const saveTimerRef = useRef(null);
+  const latestFormRef = useRef(null);
 
-  const [form, setForm] = useState({
-    legalName: profile.legalName || '',
-    taxId: (profile.taxId || '').replace(/\D/g, ''),
-    ownershipType: profile.ownershipType || '',
-    taxClassType: profile.taxClassType || '',
-    titleType: profile.titleType || '',
-    productDescription: profile.productDescription || '',
-    establishmentYear: profile.establishmentYear || '',
-    currentOwnershipYears: profile.currentOwnershipYears || '1',
-    currentOwnershipMonths: profile.currentOwnershipMonths || '0',
+  const profileToForm = (p) => ({
+    legalName: p.legalName || '',
+    taxId: (p.taxId || '').replace(/\D/g, ''),
+    ownershipType: p.ownershipType || '',
+    taxClassType: p.taxClassType || '',
+    titleType: p.titleType || '',
+    establishmentYear: p.establishmentYear || '',
   });
 
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const [form, setForm] = useState(() => profileToForm(profile));
 
-  const canSave = form.legalName && form.taxId.length === 9 && form.ownershipType &&
-    form.taxClassType && form.titleType && form.productDescription && form.establishmentYear;
+  // Re-sync form if parent passes an updated profile (e.g. after page switch)
+  useEffect(() => {
+    setForm(profileToForm(profile));
+  }, [profile.corporateId, profile.taxId, profile.ownershipType, profile.taxClassType, profile.titleType, profile.establishmentYear]);
 
-  const handleSave = async () => {
-    if (!canSave) return;
+  const doSave = useCallback(async (f) => {
+    if (!canAutoSave(f)) return;
     setSaving(true);
     setError('');
     try {
+      const { years, months } = deriveOwnership(f.establishmentYear);
       const res = await base44.functions.invoke('updateMerchantProfile', {
         corporateId: profile.corporateId,
-        legalName: form.legalName,
-        taxId: form.taxId,
-        ownershipType: form.ownershipType,
-        taxClassType: form.taxClassType,
-        titleType: form.titleType,
-        productDescription: form.productDescription,
-        establishmentYear: form.establishmentYear,
-        currentOwnershipYears: form.currentOwnershipYears,
-        currentOwnershipMonths: form.currentOwnershipMonths,
+        legalName: f.legalName,
+        taxId: f.taxId,
+        ownershipType: f.ownershipType,
+        taxClassType: f.taxClassType,
+        titleType: f.titleType,
+        establishmentYear: f.establishmentYear,
+        currentOwnershipYears: years,
+        currentOwnershipMonths: months,
       });
       if (res.data?.error) throw new Error(res.data.error);
-      onSaved({ ...profile, ...form });
-      setExpanded(false);
+      setSavedAt(Date.now());
+      onSaved({ ...profile, ...f });
     } catch (err) {
       setError(err.message || 'Failed to save.');
     } finally {
       setSaving(false);
     }
+  }, [profile, onSaved]);
+
+  const set = (k, v) => {
+    setForm(prev => {
+      const next = { ...prev, [k]: v };
+      latestFormRef.current = next;
+      // Debounce: clear existing timer, set new one
+      clearTimeout(saveTimerRef.current);
+      if (canAutoSave(next)) {
+        saveTimerRef.current = setTimeout(() => doSave(latestFormRef.current), 600);
+      }
+      return next;
+    });
   };
+
+  // Cleanup timer on unmount — also flush save if dirty
+  useEffect(() => {
+    return () => {
+      clearTimeout(saveTimerRef.current);
+      if (latestFormRef.current && canAutoSave(latestFormRef.current)) {
+        doSave(latestFormRef.current);
+      }
+    };
+  }, [doSave]);
 
   return (
     <div className={`rounded-2xl border transition-all ${complete ? 'border-green-500/25 bg-[#1c2128]' : 'border-amber-500/30 bg-[#1c2128]'}`}>
@@ -110,12 +147,14 @@ export default function BusinessDetailsPanel({ profile, onSaved }) {
           <p className="text-[11px] text-gray-400 mt-0.5">
             {complete
               ? `${profile.legalName || form.legalName} · EIN ${form.taxId.slice(0,2)}-${form.taxId.slice(2)} · ${form.ownershipType.replace(/_/g, ' ')}`
-              : 'Required — EIN, entity type, product description'}
+              : 'Required — EIN, entity type, title, year established'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {saving && <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />}
+          {!saving && savedAt && <Cloud className="w-3.5 h-3.5 text-green-400" title="Saved" />}
           {!complete && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Required</span>}
-          {complete && <Check className="w-4 h-4 text-green-400" />}
+          {complete && !saving && <Check className="w-4 h-4 text-green-400" />}
           {expanded ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
         </div>
       </button>
@@ -176,37 +215,23 @@ export default function BusinessDetailsPanel({ profile, onSaved }) {
             <p className="text-[10px] text-gray-500 mt-1">Title of the primary signer/beneficial owner</p>
           </div>
 
-          {/* Product description */}
-          <div>
-            <label className={labelCls}>Products / Services Sold *</label>
-            <input value={form.productDescription}
-              onChange={e => set('productDescription', e.target.value)}
-              placeholder="e.g. Restaurant meals and beverages" className={inputCls} />
-          </div>
-
-          {/* Year established + ownership duration */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Year established */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Year Established *</label>
+              <label className={labelCls}>Year Business Established *</label>
               <input type="number" value={form.establishmentYear}
                 onChange={e => set('establishmentYear', e.target.value)}
                 placeholder="e.g. 2018" min="1900" max={new Date().getFullYear()} className={inputCls} />
+              {form.establishmentYear && (() => { const { years, months } = deriveOwnership(form.establishmentYear); return <p className="text-[10px] text-gray-500 mt-1">{years} yr{years !== '1' ? 's' : ''}{months !== '0' ? ` ${months} mo` : ''} under current ownership</p>; })()}
             </div>
-            <div>
-              <label className={labelCls}>Years Under Current Ownership</label>
-              <input type="number" value={form.currentOwnershipYears}
-                onChange={e => set('currentOwnershipYears', e.target.value)}
-                min="0" max="99" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Additional Months</label>
-              <select value={form.currentOwnershipMonths} onChange={e => set('currentOwnershipMonths', e.target.value)}
-                className={inputCls} style={{ colorScheme: 'dark' }}>
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i} value={String(i)}>{i} mo</option>
-                ))}
-              </select>
-            </div>
+          </div>
+
+          {/* Auto-save status */}
+          <div className="flex items-center gap-2 h-5">
+            {saving && <><Loader2 className="w-3 h-3 text-amber-400 animate-spin" /><span className="text-[11px] text-amber-400">Saving…</span></>}
+            {!saving && savedAt && <><Cloud className="w-3 h-3 text-green-400" /><span className="text-[11px] text-green-400">Saved automatically</span></>}
+            {!saving && !savedAt && canAutoSave(form) && <span className="text-[11px] text-gray-600">Changes will be saved automatically</span>}
+            {!saving && !canAutoSave(form) && form.taxId.length > 0 && <span className="text-[11px] text-gray-600">Fill all required fields to save</span>}
           </div>
 
           {error && (
@@ -215,12 +240,6 @@ export default function BusinessDetailsPanel({ profile, onSaved }) {
               <p className="text-sm text-red-300">{error}</p>
             </div>
           )}
-
-          <button onClick={handleSave} disabled={saving || !canSave}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold text-sm px-5 py-2.5 rounded-xl transition-all">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            {saving ? 'Saving…' : 'Save Business Details'}
-          </button>
         </div>
       )}
     </div>
