@@ -37,18 +37,21 @@ Deno.serve(async (req) => {
     });
     const sigData = await sigRes.json();
 
+    // Extract which fields are currently set vs empty from the form
+    const formFields = formData.form || {};
+    const emptyFields = Object.entries(formFields).filter(([, v]) => v === null || v === '' || v === undefined).map(([k]) => k);
+
     return Response.json({
-      form: {
-        status: formRes.status,
-        percent_complete: formData.percent_complete,
-        canSave: formData.canSave,
-        data_errors: formData.data_errors,
-        completion_errors: formData.completion_errors,
-        rule_violations: formData.rule_violations,
-        full: formData,
-      },
+      percent_complete: formData.percent_complete,
+      canSave: formData.canSave,
+      completion_errors: formData.completion_errors || [],
+      data_errors: formData.data_errors || [],
+      rule_violations: formData.rule_violations || [],
+      empty_fields: emptyFields,
+      current_form_values: formFields,
       signatures: {
         status: sigRes.status,
+        error: sigData.error || null,
         data: sigData,
       },
     });
