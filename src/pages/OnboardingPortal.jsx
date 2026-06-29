@@ -95,6 +95,14 @@ export default function OnboardingPortal() {
     setLoading(true);
     setError(null);
     try {
+      // Sync from HubSpot first (idempotent — won't overwrite existing progress)
+      try {
+        await base44.functions.invoke('syncFromHubspot', { dealId: id, force: false });
+      } catch {
+        // Non-fatal: if HubSpot sync fails, continue with whatever is in the database
+        console.warn('[OnboardingPortal] HubSpot sync failed, continuing with existing data');
+      }
+
       const res = await base44.functions.invoke('getMerchantData', { corporateId: id });
       const data = res.data;
       if (data?.error) {
