@@ -7,7 +7,6 @@ import {
   AlertTriangle, Check, ArrowLeft, Pencil, GripVertical, Cloud, Mail
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import BusinessDetailsPanel from '@/components/onboarding/BusinessDetailsPanel';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -362,6 +361,149 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
   );
 }
 
+// ─── Entity Details Panel (ownership type, tax class, year established) ──────
+
+const OWNERSHIP_TYPES = [
+  { value: 'SOLE_PROPRIETOR', label: 'Sole Proprietor' },
+  { value: 'LIMITED_COMPANY', label: 'LLC' },
+  { value: 'CORPORATION', label: 'Corporation' },
+  { value: 'GENERAL_PARTNERSHIP', label: 'General Partnership' },
+  { value: 'LIMITED_PARTNERSHIP', label: 'Limited Partnership' },
+  { value: 'NON_PROFIT', label: 'Non-Profit' },
+];
+
+const TAX_CLASS_TYPES = [
+  { value: 'SOLE_PROP', label: 'Sole Proprietor / Disregarded Entity' },
+  { value: 'LLC_CORPORATION', label: 'LLC taxed as C-Corp' },
+  { value: 'LLC_PARTNERSHIP', label: 'LLC taxed as Partnership' },
+  { value: 'CORPORATION', label: 'Corporation (C-Corp / S-Corp)' },
+  { value: 'PARTNERSHIP', label: 'Partnership' },
+];
+
+function deriveOwnership(year) {
+  if (!year) return { years: '1', months: '0' };
+  const now = new Date();
+  const totalMonths = (now.getFullYear() - parseInt(year, 10)) * 12 + now.getMonth();
+  const yrs = Math.max(0, Math.floor(totalMonths / 12));
+  const mos = Math.max(0, totalMonths % 12);
+  return { years: String(yrs), months: String(mos) };
+}
+
+function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
+  const isComplete = !!(entity.ownershipType && entity.taxClassType && entity.establishmentYear);
+  const [expanded, setExpanded] = useState(!isComplete);
+  const [form, setForm] = useState({
+    ownershipType: entity.ownershipType || '',
+    taxClassType: entity.taxClassType || '',
+    establishmentYear: entity.establishmentYear || '',
+  });
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
+  const saveTimerRef = useRef(null);
+  const latestRef = useRef(form);
+
+  const canSave = !!(form.ownershipType && form.taxClassType && form.establishmentYear);
+
+  const doSave = useCallback(async (f) => {
+    if (!f.ownershipType || !f.taxClassType || !f.establishmentYear) return;
+    setSaving(true);
+    const { years, months } = deriveOwnership(f.establishmentYear);
+    try {
+      await base44.functions.invoke('manageLegalEntity', {
+        action: 'edit', corporateId, entityId: entity.entityId,
+        ownershipType: f.ownershipType, taxClassType: f.taxClassType,
+        establishmentYear: f.establishmentYear,
+      });
+      // Also persist to corporate profile for MSPWare submissions
+      await base44.functions.invoke('updateMerchantProfile', {
+        corporateId,
+        ownershipType: f.ownershipType, taxClassType: f.taxClassType,
+        establishmentYear: f.establishmentYear,
+        currentOwnershipYears: years, currentOwnershipMonths: months,
+      });
+      setSavedAt(Date.now());
+      onUpdated({ ...entity, ...f });
+    } catch (_) {}
+    finally { setSaving(false); }
+  }, [corporateId, entity, onUpdated]);
+
+  const set = (k, v) => {
+    setForm(prev => {
+      const next = { ...prev, [k]: v };
+      latestRef.current = next;
+      clearTimeout(saveTimerRef.current);
+      if (next.ownershipType && next.taxClassType && next.establishmentYear) {
+        saveTimerRef.current = setTimeout(() => doSave(latestRef.current), 700);
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => () => {
+    clearTimeout(saveTimerRef.current);
+    if (latestRef.current && latestRef.current.ownershipType) doSave(latestRef.current);
+  }, [doSave]);
+
+  return (
+    <div className="border-t border-white/5 px-4 py-2">
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="flex items-center gap-2 text-[11px] font-semibold w-full text-left py-1 transition-colors"
+      >
+        <Building2 className={`w-3 h-3 flex-shrink-0 ${isComplete ? 'text-green-400' : 'text-amber-400'}`} />
+        <span className={`flex-1 ${isComplete ? 'text-gray-400' : 'text-amber-400'}`}>
+          {isComplete
+            ? <><span className="text-gray-300">{OWNERSHIP_TYPES.find(o => o.value === form.ownershipType)?.label || form.ownershipType}</span><span className="text-gray-600 font-normal ml-1.5">· Est. {form.establishmentYear}</span></>
+            : 'Business details required →'}
+        </span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {saving && <Loader2 className="w-3 h-3 text-amber-400 animate-spin" />}
+          {!saving && savedAt && <Cloud className="w-3 h-3 text-green-400" />}
+          {!isComplete && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">Required</span>}
+          {isComplete && !saving && <Check className="w-3 h-3 text-green-400" />}
+          {expanded ? <ChevronDown className="w-3 h-3 text-gray-500" /> : <ChevronRight className="w-3 h-3 text-gray-500" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="mt-2 mb-2 space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className={labelCls}>Business Entity Type *</label>
+              <select value={form.ownershipType} onChange={e => set('ownershipType', e.target.value)}
+                className={inputCls} style={{ colorScheme: 'dark' }}>
+                <option value="">Select…</option>
+                {OWNERSHIP_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>IRS Tax Classification *</label>
+              <select value={form.taxClassType} onChange={e => set('taxClassType', e.target.value)}
+                className={inputCls} style={{ colorScheme: 'dark' }}>
+                <option value="">Select…</option>
+                {TAX_CLASS_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className={labelCls}>Year Established *</label>
+              <input type="number" value={form.establishmentYear}
+                onChange={e => set('establishmentYear', e.target.value)}
+                placeholder="e.g. 2018" min="1900" max={new Date().getFullYear()} className={inputCls} />
+              {form.establishmentYear && (() => {
+                const { years, months } = deriveOwnership(form.establishmentYear);
+                return <p className="text-[10px] text-gray-500 mt-1">{years} yr{years !== '1' ? 's' : ''}{months !== '0' ? ` ${months} mo` : ''} in operation</p>;
+              })()}
+            </div>
+          </div>
+          {!canSave && <p className="text-[10px] text-gray-600">Fill all fields above to save</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Entity Mailing Address Panel ────────────────────────────────────────────
 
 function EntityMailingAddress({ entity, corporateId, onUpdated }) {
@@ -492,6 +634,9 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
           {allComplete && entityLocs.length > 0 && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
         </div>
       </div>
+
+      {/* Business details panel */}
+      <EntityDetailsPanel entity={entity} corporateId={corporateId} onUpdated={onEntityUpdated} />
 
       {/* Mailing address panel */}
       <EntityMailingAddress entity={entity} corporateId={corporateId} onUpdated={onEntityUpdated} />
@@ -803,6 +948,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         mailingCity: e.mailingCity || '',
         mailingState: e.mailingState || '',
         mailingZip: e.mailingZip || '',
+        ownershipType: e.ownershipType || '',
+        taxClassType: e.taxClassType || '',
+        establishmentYear: e.establishmentYear || '',
       }));
       const loadedLocations = (locRes.data?.locations || []).map(l => ({
         id: l.id || l.locationId, entityId: l.entityId || '',
@@ -810,8 +958,21 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         applicationStepStatus: l.applicationStepStatus || 'In Review', elavonMID: l.elavonMID,
       }));
 
+      // Backfill entity-level business fields from profile for existing entities missing them
+      const profileFallback = {
+        ownershipType: profile.ownershipType || '',
+        taxClassType: profile.taxClassType || '',
+        establishmentYear: profile.establishmentYear || '',
+      };
+      const enrichedEntities = loadedEntities.map(e => ({
+        ...e,
+        ownershipType: e.ownershipType || profileFallback.ownershipType,
+        taxClassType: e.taxClassType || profileFallback.taxClassType,
+        establishmentYear: e.establishmentYear || profileFallback.establishmentYear,
+      }));
+
       // If no entities exist yet, auto-seed one from the corporate profile so locations have somewhere to live
-      let finalEntities = loadedEntities;
+      let finalEntities = enrichedEntities;
       if (finalEntities.length === 0) {
         try {
           const seedRes = await base44.functions.invoke('manageLegalEntity', {
@@ -819,7 +980,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             legalBusinessName: profile.legalName || 'Primary Entity',
             federalEIN: (profile.taxId || '').replace(/\D/g, ''),
           });
-          if (seedRes.data?.entities?.length) finalEntities = seedRes.data.entities.map(e => ({ ...e, mailingStreet: e.mailingStreet || '', mailingCity: e.mailingCity || '', mailingState: e.mailingState || '', mailingZip: e.mailingZip || '' }));
+          if (seedRes.data?.entities?.length) finalEntities = seedRes.data.entities.map(e => ({ ...e, mailingStreet: e.mailingStreet || '', mailingCity: e.mailingCity || '', mailingState: e.mailingState || '', mailingZip: e.mailingZip || '', ownershipType: e.ownershipType || '', taxClassType: e.taxClassType || '', establishmentYear: e.establishmentYear || '' }));
         } catch (_) {}
       }
 
@@ -889,9 +1050,8 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     }
   };
 
-  const businessComplete = !!(
-    currentProfile.taxId && currentProfile.ownershipType && currentProfile.taxClassType &&
-    currentProfile.establishmentYear && currentProfile.titleType
+  const businessComplete = entities.length > 0 && entities.every(e =>
+    e.ownershipType && e.taxClassType && e.establishmentYear
   );
 
   const totalMids = merchantIDs.length;
@@ -940,11 +1100,6 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           {entities.length > 1 && <div><p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Legal Entities</p><p className="text-lg font-bold text-purple-400">{entities.length}</p></div>}
         </div>
       )}
-
-      {/* Business Details */}
-      <div className="px-8 pt-6 pb-2">
-        <BusinessDetailsPanel profile={currentProfile} onSaved={updated => setCurrentProfile(updated)} />
-      </div>
 
       {/* Hierarchy: Entity → Locations → MIDs */}
       <div className="px-8 py-6 space-y-4">
@@ -997,7 +1152,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-black font-bold py-4 px-6 rounded-xl text-base transition-all shadow-lg shadow-amber-900/20">
           Continue to Banking <ArrowRight className="w-5 h-5" />
         </button>
-        {!businessComplete && <p className="text-center text-xs text-amber-500/80">Complete the Business &amp; Legal Information section above to continue.</p>}
+        {!businessComplete && <p className="text-center text-xs text-amber-500/80">Complete the business details for each legal entity to continue.</p>}
         {businessComplete && locations.length === 0 && <p className="text-center text-xs text-gray-600">Add at least one location to continue.</p>}
         {businessComplete && locations.length > 0 && !allMidsComplete && (
           <p className="text-center text-xs text-amber-600/80">
