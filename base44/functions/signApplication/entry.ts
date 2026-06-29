@@ -125,7 +125,8 @@ function buildFormPayload(
   location: Record<string, any>,
   concept: Record<string, any>,
   primarySigner: Record<string, any>,
-  additionalSigners: Record<string, any>[]
+  additionalSigners: Record<string, any>[],
+  entityMailing?: { street: string; city: string; state: string; zip: string } | null
 ): Record<string, unknown> {
   const signer = primarySigner || {};
   const bank = concept.bankDetails || location.bankDetails || {};
@@ -221,7 +222,17 @@ function buildFormPayload(
     business_city: location.businessCity || '',
     business_state_usa: location.businessState || '',
     business_zipcode: location.businessZip || '',
-    has_legal_address: 'business',
+    // If entity has a separate mailing address, send it as the legal address
+    ...(entityMailing?.street ? {
+      has_legal_address: 'mailing',
+      mailing_address_type: 'LGA',
+      mailing_address: entityMailing.street,
+      mailing_city: entityMailing.city,
+      mailing_state_usa: sanitizeState(entityMailing.state),
+      mailing_zipcode: entityMailing.zip,
+    } : {
+      has_legal_address: 'business',
+    }),
     owners: [
       {
         owner_responsible_party: true,
@@ -369,6 +380,14 @@ Deno.serve(async (req) => {
     const locationMap: Record<string, any> = {};
     for (const loc of (allLocs || [])) locationMap[loc.id] = loc;
 
+    // Build entityId → mailing address lookup from profile's legalEntities
+    const entityMailingMap: Record<string, any> = {};
+    for (const ent of (profile.legalEntities || [])) {
+      if (ent.entityId && ent.mailingStreet && ent.mailingCity && ent.mailingState) {
+        entityMailingMap[ent.entityId] = { street: ent.mailingStreet, city: ent.mailingCity, state: ent.mailingState, zip: ent.mailingZip || '' };
+      }
+    }
+
     // ── 2. Filter to signable concepts ────────────────────────────────────────
     const DONE_STATUSES = ['Active', 'Active (Existing)', 'Pending MID'];
     let signable = (allConcepts || []).filter((c: any) =>
@@ -452,7 +471,8 @@ Deno.serve(async (req) => {
           concept.applicationStepStatus = 'In Review';
 
           // Fill form
-          const formPayload = buildFormPayload(profile, resolveLocationAddress(location), concept, primarySigner, additionalSigners);
+          const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
+          const formPayload = buildFormPayload(profile, resolveLocationAddress(location), concept, primarySigner, additionalSigners, entityMailing);
           const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
             method: 'PUT',
             headers: mspHeaders,
@@ -521,7 +541,8 @@ Deno.serve(async (req) => {
         if (refillPercentComplete !== 100) {
           const location = locationMap[concept.locationId];
           if (location) {
-            const formPayload = buildFormPayload(profile, resolveLocationAddress(location), concept, primarySigner, additionalSigners);
+            const refillEntityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
+          const formPayload = buildFormPayload(profile, resolveLocationAddress(location), concept, primarySigner, additionalSigners, refillEntityMailing);
             const refillRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
               method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
             });

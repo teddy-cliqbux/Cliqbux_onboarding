@@ -147,13 +147,15 @@ function nextMonthStart(): string {
 // ─── Form Payload Builder ─────────────────────────────────────────────────────
 // concept fields take precedence over profile-level defaults for per-MID pricing,
 // DBA, MCC, and bank details. location provides the physical address.
+// entityMailing (optional) provides a separate legal/mailing address for all MIDs under the entity.
 
 function buildFormPayload(
   profile: Record<string, any>,
   location: Record<string, any>,
   concept: Record<string, any>,
   primarySigner: Record<string, any>,
-  additionalSigners: Record<string, any>[]
+  additionalSigners: Record<string, any>[],
+  entityMailing?: { street: string; city: string; state: string; zip: string } | null
 ): Record<string, unknown> {
 
   const signer = primarySigner || {};
@@ -263,7 +265,17 @@ function buildFormPayload(
     business_city: location.businessCity || '',
     business_state_usa: location.businessState || '',
     business_zipcode: location.businessZip || '',
-    has_legal_address: 'business',
+    // If entity has a separate mailing address, send it as the legal address
+    ...(entityMailing?.street ? {
+      has_legal_address: 'mailing',
+      mailing_address_type: 'LGA',
+      mailing_address: entityMailing.street,
+      mailing_city: entityMailing.city,
+      mailing_state_usa: sanitizeState(entityMailing.state),
+      mailing_zipcode: entityMailing.zip,
+    } : {
+      has_legal_address: 'business',
+    }),
 
     // ── Principals ───────────────────────────────────────────────────────────
     owners: [
@@ -449,6 +461,14 @@ Deno.serve(async (req) => {
       locationMap[loc.id] = loc;
     }
 
+    // Build a entityId → mailing address lookup from profile's legalEntities
+    const entityMailingMap: Record<string, any> = {};
+    for (const ent of (profile.legalEntities || [])) {
+      if (ent.entityId && ent.mailingStreet && ent.mailingCity && ent.mailingState) {
+        entityMailingMap[ent.entityId] = { street: ent.mailingStreet, city: ent.mailingCity, state: ent.mailingState, zip: ent.mailingZip || '' };
+      }
+    }
+
     // Filter concepts if caller specified specific IDs
     let concepts = allConcepts;
     if (conceptIds?.length) {
@@ -548,7 +568,8 @@ Deno.serve(async (req) => {
         });
 
         // ── Step 2: Fill form ─────────────────────────────────────────────────
-        const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners);
+        const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
+        const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners, entityMailing);
         console.log(`[submitToMSP] Filling form for application ${mspApplicationNo}:`, JSON.stringify(formPayload, null, 2));
 
         const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {

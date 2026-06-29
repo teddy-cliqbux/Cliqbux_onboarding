@@ -4,7 +4,7 @@
   "properties": {
     "corporateId": {
       "type": "string",
-      "description": "Primary Key — matches HubSpot dealId or auto-generated for self-serve"
+      "description": "Primary Key \u2014 matches HubSpot dealId or auto-generated for self-serve"
     },
     "legalName": {
       "type": "string"
@@ -87,7 +87,7 @@
     },
     "ownershipType": {
       "type": "string",
-      "description": "Legal structure of the business entity — maps to Elavon businessInfo.ownershipType",
+      "description": "Legal structure of the business entity \u2014 maps to Elavon businessInfo.ownershipType",
       "enum": [
         "LIMITED_COMPANY",
         "CORPORATION",
@@ -99,7 +99,7 @@
     },
     "taxClassType": {
       "type": "string",
-      "description": "IRS tax classification — maps to Elavon businessInfo.taxClassType. LLC_CORPORATION→CORPORATION, LLC_PARTNERSHIP→PARTNERSHIP, SOLE_PROP→DISREGARDED_ENTITY at submission time.",
+      "description": "IRS tax classification \u2014 maps to Elavon businessInfo.taxClassType. LLC_CORPORATION\u2192CORPORATION, LLC_PARTNERSHIP\u2192PARTNERSHIP, SOLE_PROP\u2192DISREGARDED_ENTITY at submission time.",
       "enum": [
         "CORPORATION",
         "LLC_CORPORATION",
@@ -111,7 +111,7 @@
     },
     "industryClass": {
       "type": "string",
-      "description": "Business industry category — maps to Elavon businessInfo.industryClass",
+      "description": "Business industry category \u2014 maps to Elavon businessInfo.industryClass",
       "enum": [
         "RETAIL",
         "RESTAURANT",
@@ -131,11 +131,11 @@
     },
     "mccCode": {
       "type": "string",
-      "description": "Merchant Category Code — 4-digit code, auto-populated from industryClass"
+      "description": "Merchant Category Code \u2014 4-digit code, auto-populated from industryClass"
     },
     "productDescription": {
       "type": "string",
-      "description": "Short description of goods or services sold — maps to Elavon businessInfo.productDescription"
+      "description": "Short description of goods or services sold \u2014 maps to Elavon businessInfo.productDescription"
     },
     "establishmentYear": {
       "type": "string",
@@ -151,7 +151,7 @@
     },
     "titleType": {
       "type": "string",
-      "description": "Owner's title — maps to Elavon principal.titleType. OWNER→PROPRIETOR_OR_OWNER, PARTNER→PARTNER_OR_PRINCIPAL, MANAGER→GENERAL_MANAGER at submission time.",
+      "description": "Owner's title \u2014 maps to Elavon principal.titleType. OWNER\u2192PROPRIETOR_OR_OWNER, PARTNER\u2192PARTNER_OR_PRINCIPAL, MANAGER\u2192GENERAL_MANAGER at submission time.",
       "enum": [
         "CHIEF_EXECUTIVE_OFFICER",
         "CHIEF_FINANCIAL_OFFICER",
@@ -208,13 +208,13 @@
     },
     "legalEntities": {
       "type": "array",
-      "description": "Multi-EIN corporate entities — each owning a subset of locations",
+      "description": "Multi-EIN corporate entities \u2014 each owning a subset of locations",
       "items": {
         "type": "object",
         "properties": {
           "entityId": {
             "type": "string",
-            "description": "UUID — unique identifier for this legal entity"
+            "description": "UUID \u2014 unique identifier for this legal entity"
           },
           "legalBusinessName": {
             "type": "string"
@@ -224,6 +224,21 @@
           },
           "federalEIN": {
             "type": "string"
+          },
+          "mailingStreet": {
+            "type": "string",
+            "description": "Mailing address street \u2014 overrides location address for MSPWare legal_address when set"
+          },
+          "mailingCity": {
+            "type": "string"
+          },
+          "mailingState": {
+            "type": "string",
+            "description": "2-letter state code e.g. TN"
+          },
+          "mailingZip": {
+            "type": "string",
+            "description": "5-digit ZIP code"
           }
         }
       }

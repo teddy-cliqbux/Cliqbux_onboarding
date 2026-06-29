@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
   Plus, ArrowRight, Loader2, Store, Trash2, CheckCircle2,
   MapPin, Building2, CreditCard, ChevronDown, ChevronRight, X,
-  AlertTriangle, Check, ArrowLeft, Pencil, GripVertical, Cloud
+  AlertTriangle, Check, ArrowLeft, Pencil, GripVertical, Cloud, Mail
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import BusinessDetailsPanel from '@/components/onboarding/BusinessDetailsPanel';
@@ -362,9 +362,112 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
   );
 }
 
+// ─── Entity Mailing Address Panel ────────────────────────────────────────────
+
+function EntityMailingAddress({ entity, corporateId, onUpdated }) {
+  const hasMailingAddress = !!(entity.mailingStreet && entity.mailingCity && entity.mailingState);
+  const [expanded, setExpanded] = useState(false);
+  const [addressDisplay, setAddressDisplay] = useState(
+    hasMailingAddress ? `${entity.mailingStreet}, ${entity.mailingCity}, ${entity.mailingState} ${entity.mailingZip || ''}`.trim() : ''
+  );
+  const [parsedAddress, setParsedAddress] = useState(hasMailingAddress ? {
+    street: entity.mailingStreet, city: entity.mailingCity,
+    state: entity.mailingState, zip: entity.mailingZip || '',
+  } : null);
+  const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
+  const pendingSaveRef = useRef(false);
+
+  const addrRef = usePlacesCallbackRef((parsed) => {
+    setAddressDisplay(parsed.display);
+    setParsedAddress(parsed);
+    pendingSaveRef.current = true;
+  });
+
+  const handleSave = useCallback(async (addr) => {
+    setSaving(true);
+    try {
+      await base44.functions.invoke('manageLegalEntity', {
+        action: 'edit', corporateId, entityId: entity.entityId,
+        mailingStreet: addr.street, mailingCity: addr.city,
+        mailingState: addr.state, mailingZip: addr.zip,
+      });
+      setSavedAt(Date.now());
+      onUpdated({ ...entity, mailingStreet: addr.street, mailingCity: addr.city, mailingState: addr.state, mailingZip: addr.zip });
+    } catch (_) {}
+    finally { setSaving(false); }
+  }, [corporateId, entity, onUpdated]);
+
+  // Auto-save when address is selected from autocomplete
+  useEffect(() => {
+    if (parsedAddress && pendingSaveRef.current && !savedAt) {
+      pendingSaveRef.current = false;
+      handleSave(parsedAddress);
+    }
+  }, [parsedAddress, savedAt, handleSave]);
+
+  const handleClear = async () => {
+    setAddressDisplay(''); setParsedAddress(null); setSavedAt(null);
+    try {
+      await base44.functions.invoke('manageLegalEntity', {
+        action: 'edit', corporateId, entityId: entity.entityId,
+        mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '',
+      });
+      onUpdated({ ...entity, mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '' });
+    } catch (_) {}
+  };
+
+  return (
+    <div className="border-t border-white/5 px-4 py-2">
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="flex items-center gap-2 text-[11px] font-semibold text-gray-500 hover:text-gray-300 transition-colors w-full text-left py-1"
+      >
+        <Mail className="w-3 h-3 flex-shrink-0" />
+        <span className="flex-1">
+          {hasMailingAddress ? (
+            <><span className="text-blue-400">Mailing Address</span><span className="font-normal text-gray-600 ml-1.5">{entity.mailingStreet}, {entity.mailingCity}, {entity.mailingState}</span></>
+          ) : 'Add Mailing Address (optional)'}
+        </span>
+        {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+      </button>
+
+      {expanded && (
+        <div className="mt-2 mb-1 space-y-2">
+          <p className="text-[10px] text-gray-500">Applies to all MIDs under <span className="text-gray-400">{entity.legalBusinessName}</span>. If set, overrides the location address for the legal/mailing address on MSPWare applications.</p>
+          {parsedAddress ? (
+            <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3.5 py-2.5">
+              <Mail className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+              <span className="text-sm text-blue-300 flex-1 truncate">{addressDisplay}</span>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {saving && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
+                {!saving && savedAt && <Cloud className="w-3 h-3 text-green-400" title="Saved" />}
+              </div>
+              <button type="button" onClick={handleClear} className="text-gray-500 hover:text-white ml-1">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <input
+              ref={addrRef}
+              type="text"
+              value={addressDisplay}
+              onChange={e => { setAddressDisplay(e.target.value); setParsedAddress(null); }}
+              onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
+              placeholder="Start typing mailing address…"
+              autoComplete="off"
+              className={inputCls}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Entity Section (top-level group) ────────────────────────────────────────
 
-function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onAddLocation, isOnly }) {
+function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onAddLocation, isOnly, onEntityUpdated }) {
   const entityLocs = locations.filter(l => l.entityId === entity.entityId);
   const entityMids = merchantIDs.filter(m => entityLocs.some(l => l.id === m.locationId));
   const allComplete = entityLocs.length > 0 && entityLocs.every(l =>
@@ -389,6 +492,9 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
           {allComplete && entityLocs.length > 0 && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
         </div>
       </div>
+
+      {/* Mailing address panel */}
+      <EntityMailingAddress entity={entity} corporateId={corporateId} onUpdated={onEntityUpdated} />
 
       {/* Locations droppable */}
       <Droppable droppableId={entity.entityId} type="LOCATION">
@@ -691,7 +797,13 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         base44.functions.invoke('listLocations', { corporateId: profile.corporateId }),
         base44.functions.invoke('manageMerchantID', { action: 'list', corporateId: profile.corporateId }),
       ]);
-      const loadedEntities = entRes.data?.entities || [];
+      const loadedEntities = (entRes.data?.entities || []).map(e => ({
+        ...e,
+        mailingStreet: e.mailingStreet || '',
+        mailingCity: e.mailingCity || '',
+        mailingState: e.mailingState || '',
+        mailingZip: e.mailingZip || '',
+      }));
       const loadedLocations = (locRes.data?.locations || []).map(l => ({
         id: l.id || l.locationId, entityId: l.entityId || '',
         dbaName: l.dbaName, businessAddress: l.businessAddress,
@@ -707,7 +819,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             legalBusinessName: profile.legalName || 'Primary Entity',
             federalEIN: (profile.taxId || '').replace(/\D/g, ''),
           });
-          if (seedRes.data?.entities?.length) finalEntities = seedRes.data.entities;
+          if (seedRes.data?.entities?.length) finalEntities = seedRes.data.entities.map(e => ({ ...e, mailingStreet: e.mailingStreet || '', mailingCity: e.mailingCity || '', mailingState: e.mailingState || '', mailingZip: e.mailingZip || '' }));
         } catch (_) {}
       }
 
@@ -733,6 +845,10 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
   const handleEntityAdded = (entity) => {
     if (entity) setEntities(prev => [...prev, entity]);
+  };
+
+  const handleEntityUpdated = (updated) => {
+    setEntities(prev => prev.map(e => e.entityId === updated.entityId ? { ...e, ...updated } : e));
   };
 
   const handleDeleteLocation = async (loc) => {
@@ -854,6 +970,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                 onMerchantIDDeleted={m => setDeleteMidConfirm(m)}
                 onAddLocation={entityId => setAddFormEntityId(entityId)}
                 isOnly={entities.length === 1}
+                onEntityUpdated={handleEntityUpdated}
               />
             ))}
           </div>
