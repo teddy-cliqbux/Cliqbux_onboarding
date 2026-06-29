@@ -15,7 +15,11 @@ Deno.serve(async (req) => {
       'firstName', 'lastName', 'dobYear', 'dobMonth', 'dobDay',
       'ssn', 'homeStreet', 'homeCity', 'homeState', 'homeZip',
       'taxId', 'isManualMode', 'applicationStatus',
-      'corporatePhone', 'ownershipPercentage'
+      'corporatePhone', 'ownershipPercentage',
+      'legalName', 'ownershipType', 'taxClassType', 'titleType',
+      'productDescription', 'establishmentYear',
+      'currentOwnershipYears', 'currentOwnershipMonths',
+      'monthlyCardSales', 'avgSaleAmount', 'highestTicketAmount', 'annualRevenue',
     ];
 
     const update = {};

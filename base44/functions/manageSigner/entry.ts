@@ -146,7 +146,7 @@ Deno.serve(async (req) => {
     if (action === 'update') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
       const ALLOWED = ['firstName','lastName','signerEmail','ownershipPercentage','isPrimarySigner',
-        'identityStatus','dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl'];
+        'identityStatus','dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl','titleType'];
       const update: Record<string, any> = {};
       for (const key of ALLOWED) {
         if (signerData[key] !== undefined) update[key] = signerData[key];
@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
     // --- INLINE VERIFY ---
     if (action === 'inlineVerify') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
-      const ALLOWED = ['dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl'];
+      const ALLOWED = ['dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl','titleType'];
       const update: Record<string, any> = { identityStatus: 'Verified' };
       for (const key of ALLOWED) {
         if (signerData && signerData[key] !== undefined) update[key] = signerData[key];

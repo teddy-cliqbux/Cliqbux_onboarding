@@ -7,6 +7,7 @@ import {
   AlertTriangle, Check, GripVertical, ArrowLeft, Pencil, Info
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import BusinessDetailsPanel from '@/components/onboarding/BusinessDetailsPanel';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -495,6 +496,7 @@ function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel }) 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function OnboardingLocations({ profile, onContinue, onBack }) {
+  const [currentProfile, setCurrentProfile] = useState(profile);
   const [entities, setEntities] = useState([]);
   const [locations, setLocations] = useState([]);
   const [merchantIDs, setMerchantIDs] = useState([]);
@@ -606,7 +608,12 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     grouped[key].push(l);
   });
 
-  const allMidsComplete = locations.length > 0 && locations.every(l =>
+  const businessComplete = !!(
+    currentProfile.taxId && currentProfile.ownershipType && currentProfile.taxClassType &&
+    currentProfile.productDescription && currentProfile.establishmentYear && currentProfile.titleType
+  );
+
+  const allMidsComplete = businessComplete && locations.length > 0 && locations.every(l =>
     merchantIDs.some(c => c.locationId === l.id && c.mccCode && c.monthlyCardSales)
   );
 
@@ -653,6 +660,14 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           {movingItem && <div className="ml-auto flex items-center gap-2 text-xs text-gray-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</div>}
         </div>
       )}
+
+      {/* Business Details */}
+      <div className="px-8 pt-6 pb-2">
+        <BusinessDetailsPanel
+          profile={currentProfile}
+          onSaved={(updated) => setCurrentProfile(updated)}
+        />
+      </div>
 
       {/* Org chart */}
       <div className="px-8 py-6">
@@ -762,13 +777,14 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
       {/* Footer */}
       <div className="px-8 pt-2 pb-8 border-t border-white/10 space-y-3">
-        <button onClick={() => onContinue({ locations, legalEntities: entities })}
+        <button onClick={() => onContinue({ locations, legalEntities: entities, profile: currentProfile })}
           disabled={!allMidsComplete}
           className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-black font-bold py-4 px-6 rounded-xl text-base transition-all shadow-lg shadow-amber-900/20">
           Continue to Banking <ArrowRight className="w-5 h-5" />
         </button>
-        {locations.length === 0 && <p className="text-center text-xs text-gray-600">Add at least one location to continue.</p>}
-        {locations.length > 0 && !allMidsComplete && (
+        {!businessComplete && <p className="text-center text-xs text-amber-500/80">Complete the Business &amp; Legal Information section above to continue.</p>}
+        {businessComplete && locations.length === 0 && <p className="text-center text-xs text-gray-600">Add at least one location to continue.</p>}
+        {businessComplete && locations.length > 0 && !allMidsComplete && (
           <p className="text-center text-xs text-amber-600/80">
             {completeMids < totalMids
               ? `${totalMids - completeMids} MID${totalMids - completeMids > 1 ? 's' : ''} still need MCC code and volume info.`

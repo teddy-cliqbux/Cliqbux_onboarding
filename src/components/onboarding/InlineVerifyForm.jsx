@@ -42,11 +42,24 @@ function useAddressAutocomplete(onParsed) {
   return callbackRef;
 }
 
+const TITLE_TYPES = [
+  { value: 'CHIEF_EXECUTIVE_OFFICER', label: 'CEO' },
+  { value: 'PRESIDENT', label: 'President' },
+  { value: 'OWNER', label: 'Owner' },
+  { value: 'PARTNER', label: 'Partner' },
+  { value: 'MANAGER', label: 'Manager' },
+  { value: 'DIRECTOR', label: 'Director' },
+  { value: 'VICE_PRESIDENT', label: 'Vice President' },
+  { value: 'SECRETARY', label: 'Secretary' },
+  { value: 'TREASURER', label: 'Treasurer' },
+];
+
 const emptyForm = () => ({
   dobMonth: '', dobDay: '', dobYear: '',
   ssn: '',
   homeStreet: '', homeCity: '', homeState: '', homeZip: '',
   corporatePhone: '',
+  titleType: '',
 });
 
 export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
@@ -78,6 +91,7 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
     homeState: signer.homeState || '',
     homeZip: signer.homeZip || '',
     corporatePhone: signer.corporatePhone || '',
+    titleType: signer.titleType || '',
   });
 
   const [addressDisplay, setAddressDisplay] = useState(
@@ -193,6 +207,7 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
     if (!form.dobMonth || !form.dobDay || !form.dobYear) { setError('Date of birth is required.'); return; }
     if (!form.ssn || rawSSN(form.ssn).length !== 9) { setError('A valid 9-digit SSN is required.'); return; }
     if (!form.homeStreet || !form.homeCity || !form.homeState || !form.homeZip) { setError('Home address is required.'); return; }
+    if (!form.titleType) { setError('Please select your title / role.'); return; }
 
     setSaving(true);
     setError('');
@@ -206,6 +221,7 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
           ssn: rawSSN(form.ssn),
           corporatePhone: rawPhone(form.corporatePhone),
           idDocumentUrl: docUrl || '',
+          titleType: form.titleType,
         }
       });
       if (res.data?.error) throw new Error(res.data.error);
@@ -392,6 +408,15 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
                 onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
                 placeholder="Start typing to search…" autoComplete="off" className={inputCls} />
             )}
+          </div>
+
+          {/* Title */}
+          <div>
+            <label className={labelCls}>Your Title / Role *</label>
+            <select className={inputCls} value={form.titleType} onChange={e => set('titleType', e.target.value)} style={{ colorScheme: 'dark' }}>
+              <option value="">Select…</option>
+              {TITLE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
           </div>
 
           {/* Phone */}
