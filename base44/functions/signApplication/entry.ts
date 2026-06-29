@@ -88,6 +88,20 @@ function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
+function resolveLocationAddress(location: Record<string, any>): Record<string, any> {
+  if (location.businessStreet && location.businessCity && location.businessState) return location;
+  const flat = location.businessAddress || '';
+  const m = flat.match(/^(.+?),\s*(.+?),?\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i);
+  if (!m) return location;
+  return {
+    ...location,
+    businessStreet: location.businessStreet || m[1].trim(),
+    businessCity:   location.businessCity   || m[2].trim(),
+    businessState:  location.businessState  || m[3].toUpperCase(),
+    businessZip:    location.businessZip    || m[4].trim(),
+  };
+}
+
 const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']);
 function sanitizeState(s: string): string {
   const code = (s || '').toUpperCase().trim();
@@ -438,7 +452,7 @@ Deno.serve(async (req) => {
           concept.applicationStepStatus = 'In Review';
 
           // Fill form
-          const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners);
+          const formPayload = buildFormPayload(profile, resolveLocationAddress(location), concept, primarySigner, additionalSigners);
           const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
             method: 'PUT',
             headers: mspHeaders,
@@ -507,7 +521,7 @@ Deno.serve(async (req) => {
         if (refillPercentComplete !== 100) {
           const location = locationMap[concept.locationId];
           if (location) {
-            const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners);
+            const formPayload = buildFormPayload(profile, resolveLocationAddress(location), concept, primarySigner, additionalSigners);
             const refillRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
               method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
             });

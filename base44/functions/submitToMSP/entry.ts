@@ -88,6 +88,22 @@ function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
+// When a location was saved via the "unverified" path, structured fields may be null.
+// Parse them from the flat businessAddress string as a fallback.
+function resolveLocationAddress(location: Record<string, any>): Record<string, any> {
+  if (location.businessStreet && location.businessCity && location.businessState) return location;
+  const flat = location.businessAddress || '';
+  const m = flat.match(/^(.+?),\s*(.+?),?\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i);
+  if (!m) return location;
+  return {
+    ...location,
+    businessStreet: location.businessStreet || m[1].trim(),
+    businessCity:   location.businessCity   || m[2].trim(),
+    businessState:  location.businessState  || m[3].toUpperCase(),
+    businessZip:    location.businessZip    || m[4].trim(),
+  };
+}
+
 // MSPWare only accepts the 50 US states — territories (GU, PR, VI, AS, MP) cause data errors
 const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']);
 function sanitizeState(s: string): string {
@@ -462,7 +478,7 @@ Deno.serve(async (req) => {
       }
 
       // ── Join to location for address + fallback bank ──────────────────────
-      const location = locationMap[concept.locationId];
+      const location = resolveLocationAddress(locationMap[concept.locationId]);
       if (!location) {
         results.push({
           conceptId: concept.id,

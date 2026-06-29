@@ -38,7 +38,25 @@ Deno.serve(async (req) => {
       }
     }
 
-    const locationFields = {
+    // If structured fields are missing but we have a flat address, try to parse it
+    // Format expected: "123 Main St, City, ST 12345" or "123 Main St, City ST 12345"
+    let parsedStreet = businessStreet || '';
+    let parsedCity = businessCity || '';
+    let parsedState = businessState || '';
+    let parsedZip = businessZip || '';
+
+    if (businessAddress && (!parsedStreet || !parsedCity || !parsedState || !parsedZip)) {
+      // Try: "street, city, ST zip" or "street, city ST zip"
+      const m = businessAddress.match(/^(.+?),\s*(.+?),?\s+([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i);
+      if (m) {
+        parsedStreet = parsedStreet || m[1].trim();
+        parsedCity   = parsedCity   || m[2].trim();
+        parsedState  = parsedState  || m[3].toUpperCase();
+        parsedZip    = parsedZip    || m[4].trim();
+      }
+    }
+
+    const locationFields: Record<string, any> = {
       corporateId,
       dbaName,
       businessAddress,
@@ -46,10 +64,10 @@ Deno.serve(async (req) => {
     };
 
     if (resolvedEntityId) locationFields.entityId = resolvedEntityId;
-    if (businessStreet) locationFields.businessStreet = businessStreet;
-    if (businessCity) locationFields.businessCity = businessCity;
-    if (businessState) locationFields.businessState = businessState;
-    if (businessZip) locationFields.businessZip = businessZip;
+    if (parsedStreet) locationFields.businessStreet = parsedStreet;
+    if (parsedCity)   locationFields.businessCity   = parsedCity;
+    if (parsedState)  locationFields.businessState  = parsedState;
+    if (parsedZip)    locationFields.businessZip    = parsedZip;
 
     const location = await base44.asServiceRole.entities.MerchantLocations.create(locationFields);
 
