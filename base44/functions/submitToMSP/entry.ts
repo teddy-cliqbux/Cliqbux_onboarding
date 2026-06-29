@@ -510,62 +510,52 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Resolve bank: concept-level first, then location-level
-      const bank = concept.bankDetails || location.bankDetails || {};
-      const routing = bank.routingNumber || location.routingNumber || '';
-      const account = bank.accountNumber || location.accountNumber || '';
-
-      if (!routing || !account) {
-        results.push({
-          conceptId: concept.id,
-          locationId: concept.locationId,
-          dbaName: concept.dbaName,
-          status: 'skipped',
-          reason: 'Missing bank account details',
-        });
-        continue;
-      }
-
       try {
-        // ── Step 1: Create draft application ─────────────────────────────────
-        const isCashDiscount = (concept.pricingMethod || profile.pricingMethod || '').toUpperCase() === 'CASH_DISCOUNT';
-        const templateNo = concept.mspTemplateNo || profile.mspTemplateNo || (isCashDiscount ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
-        const createBody = {
-          dba: concept.dbaName || location.dbaName || profile.legalName,
-          merchantapplicationtypeno: MSP_APP_TYPE,
-          salespersonid: salespersonId,
-          templatemerchantapplicationno: templateNo,
-        };
+        // ── Step 1: Create draft application (skip if already has one) ────────
+        let mspApplicationNo = concept.mspApplicationNo;
 
-        const createRes = await fetch(`${mspBase}/applications`, {
-          method: 'POST',
-          headers: mspHeaders,
-          body: JSON.stringify(createBody),
-        });
-        const createData = await createRes.json();
+        if (!mspApplicationNo) {
+          const isCashDiscount = (concept.pricingMethod || profile.pricingMethod || '').toUpperCase() === 'CASH_DISCOUNT';
+          const templateNo = concept.mspTemplateNo || profile.mspTemplateNo || (isCashDiscount ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
+          const createBody = {
+            dba: concept.dbaName || location.dbaName || profile.legalName,
+            merchantapplicationtypeno: MSP_APP_TYPE,
+            salespersonid: salespersonId,
+            templatemerchantapplicationno: templateNo,
+          };
 
-        if (!createRes.ok || !createData.success) {
-          console.error(`[submitToMSP] Failed to create application for "${concept.dbaName}":`, JSON.stringify(createData));
-          await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { applicationStepStatus: 'Error' });
-          results.push({
-            conceptId: concept.id,
-            locationId: concept.locationId,
-            dbaName: concept.dbaName,
-            status: 'error',
-            error: createData.error || createData.message || `HTTP ${createRes.status}`,
+          const createRes = await fetch(`${mspBase}/applications`, {
+            method: 'POST',
+            headers: mspHeaders,
+            body: JSON.stringify(createBody),
           });
-          allSuccessful = false;
-          continue;
+          const createData = await createRes.json();
+
+          if (!createRes.ok || !createData.success) {
+            console.error(`[submitToMSP] Failed to create application for "${concept.dbaName}":`, JSON.stringify(createData));
+            await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { applicationStepStatus: 'Error' });
+            results.push({
+              conceptId: concept.id,
+              locationId: concept.locationId,
+              dbaName: concept.dbaName,
+              status: 'error',
+              error: createData.error || createData.message || `HTTP ${createRes.status}`,
+            });
+            allSuccessful = false;
+            continue;
+          }
+
+          mspApplicationNo = createData.merchantapplicationno;
+          console.log(`[submitToMSP] Created application ${mspApplicationNo} for "${concept.dbaName}"`);
+
+          // Persist application number immediately so it's trackable even if form fill fails
+          await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, {
+            mspApplicationNo: String(mspApplicationNo),
+            applicationStepStatus: 'In Review',
+          });
+        } else {
+          console.log(`[submitToMSP] Reusing existing draft ${mspApplicationNo} for "${concept.dbaName}"`);
         }
-
-        const mspApplicationNo = createData.merchantapplicationno;
-        console.log(`[submitToMSP] Created application ${mspApplicationNo} for "${concept.dbaName}"`);
-
-        // Persist application number immediately so it's trackable even if form fill fails
-        await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, {
-          mspApplicationNo: String(mspApplicationNo),
-          applicationStepStatus: 'In Review',
-        });
 
         // ── Step 2: Fill form ─────────────────────────────────────────────────
         const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
