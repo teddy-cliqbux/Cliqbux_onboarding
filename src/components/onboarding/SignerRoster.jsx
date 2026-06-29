@@ -293,7 +293,7 @@ export default function SignerRoster({ profile, onValidChange }) {
                 {/* Inline verify form renders below the row for primary signers */}
                 {isPrimary && (
                   <div className="mt-3">
-                    <InlineVerifyForm signer={signer} corporateId={profile.corporateId} onVerified={(updated) => {
+                    <InlineVerifyForm signer={signer} corporateId={profile.corporateId} profileTitleType={profile.titleType} onVerified={(updated) => {
                       setSigners(prev => prev.map(s => s.id === updated.id ? updated : s));
                     }} />
                   </div>

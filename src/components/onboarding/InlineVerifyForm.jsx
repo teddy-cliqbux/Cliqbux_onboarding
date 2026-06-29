@@ -62,7 +62,7 @@ const emptyForm = () => ({
   titleType: '',
 });
 
-export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
+export default function InlineVerifyForm({ signer, onVerified, corporateId, profileTitleType }) {
   const [expanded, setExpanded] = useState(false);
   const [phase, setPhase] = useState('upload'); // 'upload' | 'fields'
   const [showSsn, setShowSsn] = useState(false);
@@ -80,6 +80,9 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
   const [priorData, setPriorData] = useState(null); // data from a previous verified application
   const [lookingUp, setLookingUp] = useState(false);
 
+  // If titleType is already set on the signer or inherited from the corporate profile, skip asking again
+  const inheritedTitle = signer.titleType || profileTitleType || '';
+
   const [form, setForm] = useState({
     ...emptyForm(),
     dobMonth: signer.dobMonth || '',
@@ -91,7 +94,7 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
     homeState: signer.homeState || '',
     homeZip: signer.homeZip || '',
     corporatePhone: signer.corporatePhone || '',
-    titleType: signer.titleType || '',
+    titleType: inheritedTitle,
   });
 
   const [addressDisplay, setAddressDisplay] = useState(
@@ -410,14 +413,16 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId }) {
             )}
           </div>
 
-          {/* Title */}
-          <div>
-            <label className={labelCls}>Your Title / Role *</label>
-            <select className={inputCls} value={form.titleType} onChange={e => set('titleType', e.target.value)} style={{ colorScheme: 'dark' }}>
-              <option value="">Select…</option>
-              {TITLE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </div>
+          {/* Title — hidden if already set via Business Details panel */}
+          {!inheritedTitle && (
+            <div>
+              <label className={labelCls}>Your Title / Role *</label>
+              <select className={inputCls} value={form.titleType} onChange={e => set('titleType', e.target.value)} style={{ colorScheme: 'dark' }}>
+                <option value="">Select…</option>
+                {TITLE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+            </div>
+          )}
 
           {/* Phone */}
           <div>
