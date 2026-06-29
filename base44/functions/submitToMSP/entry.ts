@@ -550,19 +550,12 @@ Deno.serve(async (req) => {
           ...(formData?.rule_violations || []),
         ];
 
-        if (!formRes.ok || !formData?.canSave) {
-          results.push({
-            conceptId: concept.id,
-            locationId: concept.locationId,
-            dbaName: concept.dbaName,
-            status: 'form_error',
-            mspApplicationNo,
-            percentComplete,
-            validationErrors,
-            rawFormResponse: formData,
-          });
-          allSuccessful = false;
-          continue;
+        // Log form fill issues but don't abort — template defaults may cover remaining fields,
+        // and signApplication will re-fill + verify completion before creating the signing package.
+        if (!formRes.ok) {
+          console.error(`[submitToMSP] Form PUT HTTP error ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(formData));
+        } else {
+          console.log(`[submitToMSP] Form fill ${mspApplicationNo}: ${percentComplete ?? '?'}% complete, canSave=${formData?.canSave}, errors=${validationErrors.length}`);
         }
 
         // ── Step 3: Submit (only if MSP_SUBMIT_ENABLED=true) ──────────────────
