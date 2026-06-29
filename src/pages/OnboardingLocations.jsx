@@ -44,25 +44,29 @@ function formatEIN(raw) {
   return d.length >= 9 ? `${d.slice(0, 2)}-${d.slice(2, 9)}` : raw || '';
 }
 
-function usePlacesAutocomplete(ref, onParsed) {
-  useEffect(() => {
-    if (!ref.current || !window.google?.maps?.places) return;
-    const ac = new window.google.maps.places.Autocomplete(ref.current, {
+function parsePlaceResult(place, onParsed) {
+  if (!place?.address_components) return;
+  const get = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).long_name || '';
+  const getS = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).short_name || '';
+  const street = (get(['street_number']) ? `${get(['street_number'])} ` : '') + get(['route']);
+  const city = get(['locality', 'sublocality']);
+  const state = getS(['administrative_area_level_1']);
+  const zip = get(['postal_code']);
+  onParsed({ street, city, state, zip, display: `${street}, ${city}, ${state} ${zip}` });
+}
+
+// Returns a callback ref — attaches a fresh Autocomplete every time the input mounts
+function usePlacesCallbackRef(onParsed) {
+  const onParsedRef = useRef(onParsed);
+  onParsedRef.current = onParsed;
+
+  return useCallback((node) => {
+    if (!node || !window.google?.maps?.places) return;
+    const ac = new window.google.maps.places.Autocomplete(node, {
       types: ['address'], componentRestrictions: { country: 'us' },
       fields: ['address_components', 'formatted_address'],
     });
-    ac.addListener('place_changed', () => {
-      const place = ac.getPlace();
-      if (!place?.address_components) return;
-      const get = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).long_name || '';
-      const getS = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).short_name || '';
-      const street = (get(['street_number']) ? `${get(['street_number'])} ` : '') + get(['route']);
-      const city = get(['locality', 'sublocality']);
-      const state = getS(['administrative_area_level_1']);
-      const zip = get(['postal_code']);
-      onParsed({ street, city, state, zip, display: `${street}, ${city}, ${state} ${zip}` });
-    });
-    return () => window.google?.maps?.event?.clearInstanceListeners(ac);
+    ac.addListener('place_changed', () => parsePlaceResult(ac.getPlace(), onParsedRef.current));
   }, []);
 }
 
@@ -505,7 +509,7 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSa
   const [selectedEntityId, setSelectedEntityId] = useState(defaultEntityId || entities[0]?.entityId || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const addrRef = useRef(null);
+  const addrRef = usePlacesCallbackRef((parsed) => { setAddressDisplay(parsed.display); setParsedAddress(parsed); setUnverifiedWarning(false); });
   // Add Entity inline
   const [showAddEntity, setShowAddEntity] = useState(false);
   const [newEntityName, setNewEntityName] = useState('');
@@ -535,7 +539,7 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSa
     finally { setAddingEntity(false); }
   };
 
-  usePlacesAutocomplete(addrRef, (parsed) => { setAddressDisplay(parsed.display); setParsedAddress(parsed); setUnverifiedWarning(false); });
+
 
   const doSave = async (addr) => {
     setSaving(true); setError('');
