@@ -21,7 +21,7 @@ async function sendViaResend(to: string, subject: string, html: string): Promise
     method: 'POST',
     headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      from: 'Cliqbux Onboarding <onboarding@cliqbux.com>',
+      from: 'Cliqbux Onboarding <onboarding@onboarding.cliqbuxpos.com>',
       to,
       subject,
       html,
