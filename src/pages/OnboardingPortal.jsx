@@ -124,6 +124,8 @@ export default function OnboardingPortal() {
           // Non-fatal — if HubSpot sync fails, merchant can still fill in manually
         }
       }
+      // Merchant opened the portal — advance HubSpot stage (best-effort)
+      pushMilestoneToHubspot(id, 'link_opened');
     } catch {
       // If even the pre-check fails, fall through to fetchMerchantData which will handle it
     }
@@ -163,8 +165,9 @@ export default function OnboardingPortal() {
   };
 
   // Fire-and-forget HubSpot stage update — never blocks the UI
-  const pushStatusToHubspot = (corporateId, applicationStatus) => {
-    base44.functions.invoke('pushStatusToHubspot', { corporateId, applicationStatus }).catch(() => {
+  const pushMilestoneToHubspot = (corporateId, milestone) => {
+    if (!corporateId) return;
+    base44.functions.invoke('pushStatusToHubspot', { corporateId, milestone }).catch(() => {
       // Non-fatal — HubSpot sync is best-effort
     });
   };
@@ -173,7 +176,7 @@ export default function OnboardingPortal() {
     setProfile(prev => ({ ...prev, applicationStatus: newStatus }));
     if (newStatus === 'Quote Signed') {
       fetchMerchantData(profile.corporateId);
-      pushStatusToHubspot(profile.corporateId, newStatus);
+      pushMilestoneToHubspot(profile.corporateId, 'agreement_signed');
     }
   };
 
@@ -187,13 +190,13 @@ export default function OnboardingPortal() {
     setLocations(updatedLocations);
     setCompletedSteps(prev => ({ ...prev, locations: true }));
     setStep(STEP_BANKING);
+    pushMilestoneToHubspot(profile?.corporateId, 'locations_added');
   };
 
   const handleBankingContinue = ({ locations: updatedLocations }) => {
     setLocations(updatedLocations);
     setCompletedSteps(prev => ({ ...prev, banking: true }));
     setStep(STEP_VERIFICATION);
-    pushStatusToHubspot(profile?.corporateId, 'Banking Complete');
   };
 
   const onBackStep = () => setStep(STEP_LOCATIONS);
@@ -207,7 +210,7 @@ export default function OnboardingPortal() {
 
   const handleSigningComplete = async () => {
     // Mark submitted, sync to HubSpot, redirect to dashboard
-    pushStatusToHubspot(profile?.corporateId, 'Submitted');
+    pushMilestoneToHubspot(profile?.corporateId, 'application_submitted');
     setProfile(prev => ({ ...prev, applicationStatus: 'Submitted' }));
     navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`, { replace: true });
   };

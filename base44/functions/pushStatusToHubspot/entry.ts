@@ -1,32 +1,33 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ─── pushStatusToHubspot ──────────────────────────────────────────────────────
-// Syncs onboarding progress from Base44 → HubSpot deal stage.
-// Called whenever a merchant hits a key milestone in the portal.
+// Syncs onboarding milestones from Base44 → HubSpot deal stage.
+// All stage IDs match those created by setupHubspotPipeline.
 //
 // POST /functions/pushStatusToHubspot
-// Body: { corporateId, applicationStatus }
+// Body: { corporateId, milestone }
 //
-// Stage mapping (Cliqbux Merchant Pipeline):
-//   'Incomplete'         → stage_0   (Quote Signed — portal opened)
-//   'Quote Signed'       → stage_0   (Quote Signed)
-//   'Pricing Selected'   → stage_0   (Quote Signed)
-//   'Banking Submitted'  → contractsent  (Proposal Scheduled — banking verified)
-//   'Banking Complete'   → contractsent
-//   'Submitted'          → closedwon (Closed Won and Installed)
-//   'Approved'           → closedwon
-//   'Declined'           → closedlost
+// Milestones and their HubSpot stage mappings:
+//   link_sent           → onboarding_link_sent       (Onboarding Link Sent)
+//   link_opened         → onboarding_link_opened      (Onboarding Link Opened)
+//   agreement_filled    → merchant_agreement_filled   (Merchant Agreement Filled)
+//   agreement_signed    → merchant_agreement_signed   (Merchant Agreement Signed)
+//   locations_added     → locations_added             (Locations Added)
+//   application_submitted → application_submitted     (Application Submitted)
+//   closed_won          → closedwon                  (Closed Won and Installed)
+//   closed_lost         → closedlost                 (Closed Lost)
+//
+// Banking verified is intentionally NOT a stage transition.
 
-// HubSpot deal stage IDs (Cliqbux Merchant Pipeline)
-const STATUS_TO_STAGE: Record<string, string> = {
-  'Incomplete':        'stage_0',        // Quote Signed
-  'Pricing Selected':  'stage_0',        // Quote Signed
-  'Quote Signed':      'stage_0',        // Quote Signed
-  'Banking Submitted': 'contractsent',   // Proposal Scheduled (banking verified)
-  'Banking Complete':  'contractsent',   // Proposal Scheduled
-  'Submitted':         'closedwon',      // Closed Won and Installed
-  'Approved':          'closedwon',      // Closed Won and Installed
-  'Declined':          'closedlost',     // Closed Lost
+const MILESTONE_TO_STAGE: Record<string, string> = {
+  'link_sent':              'onboarding_link_sent',
+  'link_opened':            'onboarding_link_opened',
+  'agreement_filled':       'merchant_agreement_filled',
+  'agreement_signed':       'merchant_agreement_signed',
+  'locations_added':        'locations_added',
+  'application_submitted':  'application_submitted',
+  'closed_won':             'closedwon',
+  'closed_lost':            'closedlost',
 };
 
 Deno.serve(async (req) => {
@@ -36,21 +37,20 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const { corporateId, applicationStatus } = body;
+    const { corporateId, milestone } = body;
 
     if (!corporateId) return Response.json({ error: 'corporateId required' }, { status: 400 });
-    if (!applicationStatus) return Response.json({ error: 'applicationStatus required' }, { status: 400 });
+    if (!milestone)   return Response.json({ error: 'milestone required' }, { status: 400 });
 
     const hsKey = Deno.env.get('HUBSPOT_API_KEY');
     if (!hsKey) return Response.json({ error: 'HUBSPOT_API_KEY not set' }, { status: 500 });
 
-    const dealStage = STATUS_TO_STAGE[applicationStatus];
+    const dealStage = MILESTONE_TO_STAGE[milestone];
     if (!dealStage) {
-      // Unknown status — nothing to sync, not an error
       return Response.json({
         success: true,
         synced: false,
-        reason: `No HubSpot stage mapping for status "${applicationStatus}"`,
+        reason: `No HubSpot stage mapped for milestone "${milestone}". Valid milestones: ${Object.keys(MILESTONE_TO_STAGE).join(', ')}`,
       });
     }
 
@@ -61,8 +61,8 @@ Deno.serve(async (req) => {
 
     const patchBody: Record<string, any> = { dealstage: dealStage };
 
-    // For submitted deals, also set close date to today
-    if (applicationStatus === 'Submitted' || applicationStatus === 'Approved') {
+    // Set close date when deal is won
+    if (milestone === 'closed_won' || milestone === 'application_submitted') {
       patchBody.closedate = new Date().toISOString().split('T')[0];
     }
 
@@ -74,9 +74,13 @@ Deno.serve(async (req) => {
 
     if (!res.ok) {
       const err = await res.text();
-      // 404 = deal not in HubSpot (e.g. self-serve) — not fatal
       if (res.status === 404) {
-        return Response.json({ success: true, synced: false, reason: 'Deal not found in HubSpot (self-serve application)' });
+        // Self-serve application with no HubSpot deal — not an error
+        return Response.json({
+          success: true,
+          synced: false,
+          reason: 'Deal not found in HubSpot (self-serve application)',
+        });
       }
       return Response.json({
         success: false,
@@ -84,13 +88,13 @@ Deno.serve(async (req) => {
       }, { status: 500 });
     }
 
-    console.log(`[pushStatusToHubspot] deal=${corporateId} → stage=${dealStage} (${applicationStatus})`);
+    console.log(`[pushStatusToHubspot] deal=${corporateId} → stage=${dealStage} (${milestone})`);
 
     return Response.json({
       success: true,
       synced: true,
       corporateId,
-      applicationStatus,
+      milestone,
       hubspotStage: dealStage,
     });
 
