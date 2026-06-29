@@ -85,38 +85,54 @@ Deno.serve(async (req) => {
     // --- CREATE ---
     if (action === 'create') {
       const token = generateToken();
-      const record = await base44.asServiceRole.entities.MerchantSigners.create({
-        corporateId,
-        firstName: signerData.firstName,
-        lastName: signerData.lastName,
-        signerEmail: signerData.signerEmail,
-        ownershipPercentage: Number(signerData.ownershipPercentage) || 0,
-        isPrimarySigner: signerData.isPrimarySigner || false,
-        identityStatus: 'Pending Invitation',
-        verifyToken: token,
-        dobYear: signerData.dobYear || '',
-        dobMonth: signerData.dobMonth || '',
-        dobDay: signerData.dobDay || '',
-        ssn: signerData.ssn || '',
-        homeStreet: signerData.homeStreet || '',
-        homeCity: signerData.homeCity || '',
-        homeState: signerData.homeState || '',
-        homeZip: signerData.homeZip || '',
-        corporatePhone: signerData.corporatePhone || '',
-      });
 
-      if (sendInvite) {
-        const verifyUrl = `${getVerifyBaseUrl()}/verify?token=${token}`;
-        await base44.asServiceRole.integrations.Core.SendEmail({
-          to: signerData.signerEmail,
-          subject: `Action Required: Verify Your Identity — ${signerData.legalName || 'Cliqbux'} Merchant Application`,
-          body: buildInviteEmail(signerData.firstName, verifyUrl, signerData.legalName)
+      // Step 1: persist the signer record
+      let record;
+      try {
+        record = await base44.asServiceRole.entities.MerchantSigners.create({
+          corporateId,
+          firstName: signerData.firstName,
+          lastName: signerData.lastName,
+          signerEmail: signerData.signerEmail,
+          ownershipPercentage: Number(signerData.ownershipPercentage) || 0,
+          isPrimarySigner: signerData.isPrimarySigner || false,
+          identityStatus: 'Pending Invitation',
+          verifyToken: token,
+          dobYear: signerData.dobYear || '',
+          dobMonth: signerData.dobMonth || '',
+          dobDay: signerData.dobDay || '',
+          ssn: signerData.ssn || '',
+          homeStreet: signerData.homeStreet || '',
+          homeCity: signerData.homeCity || '',
+          homeState: signerData.homeState || '',
+          homeZip: signerData.homeZip || '',
+          corporatePhone: signerData.corporatePhone || '',
         });
-        await base44.asServiceRole.entities.MerchantSigners.update(record.id, { identityStatus: 'Sent' });
-        record.identityStatus = 'Sent';
+      } catch (createErr: any) {
+        console.error('[manageSigner] create failed:', createErr.message);
+        return Response.json({ error: `Failed to create signer record: ${createErr.message}` }, { status: 500 });
       }
 
-      return Response.json({ success: true, signer: record });
+      // Step 2: send invite email (non-fatal — signer is already saved)
+      let emailError: string | null = null;
+      if (sendInvite) {
+        try {
+          const verifyUrl = `${getVerifyBaseUrl()}/verify?token=${token}`;
+          await base44.asServiceRole.integrations.Core.SendEmail({
+            to: signerData.signerEmail,
+            subject: `Action Required: Verify Your Identity — ${signerData.legalName || 'Cliqbux'} Merchant Application`,
+            body: buildInviteEmail(signerData.firstName, verifyUrl, signerData.legalName)
+          });
+          await base44.asServiceRole.entities.MerchantSigners.update(record.id, { identityStatus: 'Sent' });
+          record.identityStatus = 'Sent';
+        } catch (emailErr: any) {
+          console.error('[manageSigner] email send failed:', emailErr.message);
+          emailError = emailErr.message;
+          // Keep identityStatus as 'Pending Invitation' — admin can resend later
+        }
+      }
+
+      return Response.json({ success: true, signer: record, ...(emailError ? { emailError } : {}) });
     }
 
     // --- UPDATE ---
