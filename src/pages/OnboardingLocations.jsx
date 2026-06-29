@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
   Plus, ArrowRight, Loader2, Store, Trash2, CheckCircle2,
   MapPin, Building2, CreditCard, ChevronDown, ChevronRight, X,
-  AlertTriangle, Check, ArrowLeft, Pencil
+  AlertTriangle, Check, ArrowLeft, Pencil, GripVertical
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import BusinessDetailsPanel from '@/components/onboarding/BusinessDetailsPanel';
@@ -34,8 +35,6 @@ const INDUSTRY_OPTIONS = [
   { value: 'MS', label: 'MOTO (MS)' },
   { value: 'ARU', label: 'ARU' },
 ];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
 const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
@@ -83,9 +82,9 @@ function StatusBadge({ status }) {
   );
 }
 
-// ─── MID Card ─────────────────────────────────────────────────────────────────
+// ─── MID Card (draggable) ─────────────────────────────────────────────────────
 
-function MidCard({ mid, locationId, corporateId, dbaName, onUpdated, onDelete }) {
+function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDelete }) {
   const [editing, setEditing] = useState(!mid.mccCode);
   const [form, setForm] = useState({
     merchantName: mid.merchantName || mid.dbaName || dbaName || '',
@@ -119,104 +118,112 @@ function MidCard({ mid, locationId, corporateId, dbaName, onUpdated, onDelete })
   };
 
   return (
-    <div className={`rounded-xl border transition-all ${isComplete ? 'border-blue-500/20 bg-blue-500/5' : 'border-white/10 bg-white/[0.02]'}`}>
-      <div className="flex items-center gap-2 px-3 py-2.5">
-        <CreditCard className={`w-3.5 h-3.5 flex-shrink-0 ${isComplete ? 'text-blue-400' : 'text-gray-500'}`} />
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-white truncate">{form.merchantName || dbaName}</p>
-          {isComplete
-            ? <p className="text-[10px] text-blue-400/70 font-mono">{mid.mccCode} · ${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo</p>
-            : <p className="text-[10px] text-amber-400/80">Needs MCC &amp; volume →</p>
-          }
-        </div>
-        <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
-        <button onClick={() => setEditing(e => !e)} className="p-1 text-gray-500 hover:text-amber-400 transition-colors">
-          <Pencil className="w-3 h-3" />
-        </button>
-        <button onClick={() => onDelete(mid)} className="p-1 text-gray-600 hover:text-red-400 transition-colors">
-          <Trash2 className="w-3 h-3" />
-        </button>
-      </div>
-
-      {editing && (
-        <div className="border-t border-white/5 px-3 pb-3 pt-2 space-y-2">
-          <div>
-            <label className={labelCls}>MID Label</label>
-            <input value={form.merchantName} onChange={e => setForm(p => ({ ...p, merchantName: e.target.value }))}
-              placeholder={`e.g. ${dbaName} – Bar`} className={inputCls} />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={labelCls}>MCC Code *</label>
-              <select value={form.mccCode} onChange={e => setForm(p => ({ ...p, mccCode: e.target.value }))}
-                className={inputCls} style={{ colorScheme: 'dark' }}>
-                <option value="">Select…</option>
-                {MCC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+    <Draggable draggableId={`mid-${mid.id}`} index={index}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          className={`rounded-xl border transition-all ${snapshot.isDragging ? 'border-blue-500/60 bg-[#1a2235] shadow-xl' : isComplete ? 'border-blue-500/20 bg-blue-500/5' : 'border-white/10 bg-white/[0.02]'}`}
+        >
+          <div className="flex items-center gap-2 px-3 py-2.5">
+            <span {...provided.dragHandleProps} className="text-gray-600 hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0">
+              <GripVertical className="w-3.5 h-3.5" />
+            </span>
+            <CreditCard className={`w-3.5 h-3.5 flex-shrink-0 ${isComplete ? 'text-blue-400' : 'text-gray-500'}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-white truncate">{form.merchantName || dbaName}</p>
+              {isComplete
+                ? <p className="text-[10px] text-blue-400/70 font-mono">{mid.mccCode} · ${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo</p>
+                : <p className="text-[10px] text-amber-400/80">Needs MCC &amp; volume →</p>
+              }
             </div>
-            <div>
-              <label className={labelCls}>Industry Type</label>
-              <select value={form.industryType} onChange={e => setForm(p => ({ ...p, industryType: e.target.value }))}
-                className={inputCls} style={{ colorScheme: 'dark' }}>
-                <option value="">Select…</option>
-                {INDUSTRY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Monthly Volume ($)</label>
-              <input type="number" value={form.monthlyCardSales} onChange={e => setForm(p => ({ ...p, monthlyCardSales: e.target.value }))}
-                placeholder="e.g. 8000" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Avg Sale ($)</label>
-              <input type="number" value={form.avgSaleAmount} onChange={e => setForm(p => ({ ...p, avgSaleAmount: e.target.value }))}
-                placeholder="e.g. 45" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Highest Ticket ($)</label>
-              <input type="number" value={form.highestTicketAmount} onChange={e => setForm(p => ({ ...p, highestTicketAmount: e.target.value }))}
-                placeholder="e.g. 200" className={inputCls} />
-            </div>
-          </div>
-          <div>
-            <label className={labelCls}>Card Split (must total 100%)</label>
-            <div className="grid grid-cols-3 gap-2">
-              {[['cardPresentPct', 'In-Person'], ['internetPct', 'Online'], ['motoPct', 'MOTO']].map(([k, lbl]) => (
-                <div key={k}>
-                  <span className="text-[10px] text-gray-500 mb-1 block">{lbl}</span>
-                  <input type="number" min="0" max="100" value={form[k]}
-                    onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))} className={inputCls} />
-                </div>
-              ))}
-            </div>
-            {pctSum !== 100 && <p className="text-[11px] text-amber-400 mt-1">Total: {pctSum}% (must be 100%)</p>}
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button onClick={handleSave} disabled={saving || !canSave}
-              className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-600 disabled:text-gray-400 text-black font-bold text-xs px-3 py-2 rounded-lg transition-all">
-              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-              {saving ? 'Saving…' : 'Save'}
+            <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
+            <button onClick={() => setEditing(e => !e)} className="p-1 text-gray-500 hover:text-amber-400 transition-colors">
+              <Pencil className="w-3 h-3" />
             </button>
-            <button onClick={() => setEditing(false)} className="text-xs text-gray-400 hover:text-white border border-white/10 px-3 py-2 rounded-lg transition-colors">Cancel</button>
+            <button onClick={() => onDelete(mid)} className="p-1 text-gray-600 hover:text-red-400 transition-colors">
+              <Trash2 className="w-3 h-3" />
+            </button>
           </div>
+
+          {editing && (
+            <div className="border-t border-white/5 px-3 pb-3 pt-2 space-y-2">
+              <div>
+                <label className={labelCls}>MID Label</label>
+                <input value={form.merchantName} onChange={e => setForm(p => ({ ...p, merchantName: e.target.value }))}
+                  placeholder={`e.g. ${dbaName} – Bar`} className={inputCls} />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelCls}>MCC Code *</label>
+                  <select value={form.mccCode} onChange={e => setForm(p => ({ ...p, mccCode: e.target.value }))}
+                    className={inputCls} style={{ colorScheme: 'dark' }}>
+                    <option value="">Select…</option>
+                    {MCC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Industry Type</label>
+                  <select value={form.industryType} onChange={e => setForm(p => ({ ...p, industryType: e.target.value }))}
+                    className={inputCls} style={{ colorScheme: 'dark' }}>
+                    <option value="">Select…</option>
+                    {INDUSTRY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Monthly Volume ($)</label>
+                  <input type="number" value={form.monthlyCardSales} onChange={e => setForm(p => ({ ...p, monthlyCardSales: e.target.value }))}
+                    placeholder="e.g. 8000" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Avg Sale ($)</label>
+                  <input type="number" value={form.avgSaleAmount} onChange={e => setForm(p => ({ ...p, avgSaleAmount: e.target.value }))}
+                    placeholder="e.g. 45" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Highest Ticket ($)</label>
+                  <input type="number" value={form.highestTicketAmount} onChange={e => setForm(p => ({ ...p, highestTicketAmount: e.target.value }))}
+                    placeholder="e.g. 200" className={inputCls} />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Card Split (must total 100%)</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[['cardPresentPct', 'In-Person'], ['internetPct', 'Online'], ['motoPct', 'MOTO']].map(([k, lbl]) => (
+                    <div key={k}>
+                      <span className="text-[10px] text-gray-500 mb-1 block">{lbl}</span>
+                      <input type="number" min="0" max="100" value={form[k]}
+                        onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))} className={inputCls} />
+                    </div>
+                  ))}
+                </div>
+                {pctSum !== 100 && <p className="text-[11px] text-amber-400 mt-1">Total: {pctSum}% (must be 100%)</p>}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={handleSave} disabled={saving || !canSave}
+                  className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-600 disabled:text-gray-400 text-black font-bold text-xs px-3 py-2 rounded-lg transition-all">
+                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+                <button onClick={() => setEditing(false)} className="text-xs text-gray-400 hover:text-white border border-white/10 px-3 py-2 rounded-lg transition-colors">Cancel</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
-    </div>
+    </Draggable>
   );
 }
 
-// ─── Location Card ────────────────────────────────────────────────────────────
+// ─── Location Card (nested inside Entity, draggable) ──────────────────────────
 
-function LocationCard({ location, entities, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onEntityChanged }) {
+function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, index }) {
   const locMids = merchantIDs.filter(c => c.locationId === location.id);
   const [expanded, setExpanded] = useState(locMids.length === 0 || locMids.some(m => !m.mccCode));
   const [addingMid, setAddingMid] = useState(false);
   const [addMidName, setAddMidName] = useState('');
   const [addMidSaving, setAddMidSaving] = useState(false);
-  const [changingEntity, setChangingEntity] = useState(false);
   const allMidsComplete = locMids.length > 0 && locMids.every(m => m.mccCode && m.monthlyCardSales);
-
-  const currentEntity = entities.find(e => e.entityId === location.entityId);
 
   const handleAddMid = async () => {
     setAddMidSaving(true);
@@ -231,119 +238,170 @@ function LocationCard({ location, entities, corporateId, merchantIDs, onDelete, 
     finally { setAddMidSaving(false); }
   };
 
-  const handleEntityChange = async (newEntityId) => {
-    setChangingEntity(false);
-    if (newEntityId === location.entityId) return;
-    onEntityChanged(location.id, newEntityId);
-    try {
-      await base44.functions.invoke('batchUpdateStatus', {
-        corporateId, action: 'moveToEntity', locationIds: [location.id], targetEntityId: newEntityId,
-      });
-    } catch (_) {}
-  };
-
   return (
-    <div className={`rounded-2xl border transition-all ${allMidsComplete ? 'border-green-500/25 bg-[#1c2128]' : 'border-white/10 bg-[#1c2128] hover:border-white/20'}`}>
-      {/* Location header */}
-      <div className="flex items-center gap-2.5 px-4 py-3">
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${allMidsComplete ? 'bg-green-500/15' : 'bg-amber-500/10'}`}>
-          <Store className={`w-4 h-4 ${allMidsComplete ? 'text-green-400' : 'text-amber-400'}`} />
-        </div>
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(e => !e)}>
-          <p className="text-sm font-bold text-white truncate">{location.dbaName}</p>
-          <p className="text-[11px] text-gray-400 truncate flex items-center gap-1">
-            <MapPin className="w-3 h-3 flex-shrink-0" />{location.businessAddress}
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {/* Entity badge — click to change if multiple entities exist */}
-          {entities.length > 1 && (
-            <div className="relative">
-              <button
-                onClick={() => setChangingEntity(e => !e)}
-                className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 text-amber-400/80 text-[10px] font-semibold px-2 py-0.5 rounded-full hover:bg-amber-500/20 transition-colors"
-              >
-                <Building2 className="w-2.5 h-2.5" />
-                {currentEntity?.legalBusinessName || 'Unassigned'}
-                <ChevronDown className="w-2.5 h-2.5" />
+    <Draggable draggableId={`loc-${location.id}`} index={index}>
+      {(provided, snapshot) => (
+        <div
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          className={`rounded-2xl border transition-all ${snapshot.isDragging ? 'border-amber-500/70 shadow-2xl' : allMidsComplete ? 'border-green-500/25 bg-[#161b23]' : 'border-white/10 bg-[#161b23] hover:border-white/20'}`}
+        >
+          {/* Location header */}
+          <div className="flex items-center gap-2.5 px-4 py-3">
+            <span {...provided.dragHandleProps} className="text-gray-600 hover:text-gray-300 cursor-grab active:cursor-grabbing flex-shrink-0">
+              <GripVertical className="w-4 h-4" />
+            </span>
+            <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${allMidsComplete ? 'bg-green-500/15' : 'bg-amber-500/10'}`}>
+              <Store className={`w-3.5 h-3.5 ${allMidsComplete ? 'text-green-400' : 'text-amber-400'}`} />
+            </div>
+            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(e => !e)}>
+              <p className="text-sm font-bold text-white truncate">{location.dbaName}</p>
+              <p className="text-[11px] text-gray-400 truncate flex items-center gap-1">
+                <MapPin className="w-3 h-3 flex-shrink-0" />{location.businessAddress}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {allMidsComplete && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
+              <span className="text-[10px] font-semibold text-gray-500 bg-white/5 rounded-full px-2 py-0.5">
+                {locMids.length} MID{locMids.length !== 1 ? 's' : ''}
+              </span>
+              <button onClick={e => { e.stopPropagation(); onDelete(location); }}
+                className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all">
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
-              {changingEntity && (
-                <div className="absolute right-0 top-full mt-1 z-50 bg-[#1c2128] border border-white/15 rounded-xl shadow-2xl overflow-hidden min-w-[180px]">
-                  {entities.map(e => (
-                    <button key={e.entityId} onClick={() => handleEntityChange(e.entityId)}
-                      className={`w-full text-left px-3 py-2 text-xs hover:bg-white/5 transition-colors ${e.entityId === location.entityId ? 'text-amber-400 font-bold' : 'text-gray-300'}`}>
-                      {e.legalBusinessName}
-                      {e.federalEIN && <span className="ml-1 text-gray-500 font-mono">{formatEIN(e.federalEIN)}</span>}
-                    </button>
-                  ))}
+              <button onClick={() => setExpanded(e => !e)} className="p-1.5 text-gray-500 hover:text-white transition-colors">
+                {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+
+          {/* MIDs — nested droppable */}
+          {expanded && (
+            <div className="border-t border-white/5 px-4 pb-3 pt-2">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                Merchant Applications (MIDs)
+              </p>
+              <Droppable droppableId={`mids-${location.id}`} type="MID">
+                {(drop, dropSnap) => (
+                  <div
+                    ref={drop.innerRef}
+                    {...drop.droppableProps}
+                    className={`space-y-1.5 min-h-[32px] rounded-xl transition-colors ${dropSnap.isDraggingOver ? 'bg-blue-500/5 ring-1 ring-blue-500/20' : ''}`}
+                  >
+                    {locMids.map((mid, idx) => (
+                      <MidCard
+                        key={mid.id}
+                        mid={mid}
+                        index={idx}
+                        locationId={location.id}
+                        corporateId={corporateId}
+                        dbaName={location.dbaName}
+                        onUpdated={onMerchantIDUpdated}
+                        onDelete={onMerchantIDDeleted}
+                      />
+                    ))}
+                    {drop.placeholder}
+                  </div>
+                )}
+              </Droppable>
+
+              {addingMid ? (
+                <div className="mt-2 flex gap-2 items-center">
+                  <input value={addMidName} onChange={e => setAddMidName(e.target.value)}
+                    placeholder={`e.g. ${location.dbaName} – Bar`}
+                    className={`${inputCls} text-xs py-2`} autoFocus
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddMid(); if (e.key === 'Escape') setAddingMid(false); }} />
+                  <button onClick={handleAddMid} disabled={addMidSaving}
+                    className="flex-shrink-0 flex items-center gap-1 bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-blue-500/30 disabled:opacity-50">
+                    {addMidSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Add
+                  </button>
+                  <button onClick={() => setAddingMid(false)} className="p-2 text-gray-500 hover:text-white flex-shrink-0"><X className="w-3 h-3" /></button>
                 </div>
+              ) : (
+                <button onClick={() => setAddingMid(true)}
+                  className="mt-2 w-full flex items-center justify-center gap-1.5 border border-dashed border-white/10 hover:border-blue-500/30 hover:text-blue-400 rounded-lg py-2 text-xs font-semibold text-gray-600 transition-all">
+                  <Plus className="w-3 h-3" /> Add MID (same address, different Merchant ID)
+                </button>
               )}
             </div>
           )}
-          {allMidsComplete && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
-          <span className="text-[10px] font-semibold text-gray-500 bg-white/5 rounded-full px-2 py-0.5">
-            {locMids.length} MID{locMids.length !== 1 ? 's' : ''}
-          </span>
-          <button onClick={e => { e.stopPropagation(); onDelete(location); }}
-            className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all">
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-          <button onClick={() => setExpanded(e => !e)} className="p-1.5 text-gray-500 hover:text-white transition-colors">
-            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-          </button>
+        </div>
+      )}
+    </Draggable>
+  );
+}
+
+// ─── Entity Section (top-level group) ────────────────────────────────────────
+
+function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onAddLocation, isOnly }) {
+  const entityLocs = locations.filter(l => l.entityId === entity.entityId);
+  const entityMids = merchantIDs.filter(m => entityLocs.some(l => l.id === m.locationId));
+  const allComplete = entityLocs.length > 0 && entityLocs.every(l =>
+    merchantIDs.some(m => m.locationId === l.id && m.mccCode && m.monthlyCardSales)
+  );
+
+  return (
+    <div className={`rounded-2xl border overflow-hidden ${allComplete ? 'border-green-500/20' : 'border-white/10'} bg-[#1c2128]`}>
+      {/* Entity header bar */}
+      <div className="flex items-center gap-3 px-5 py-3 bg-white/[0.03] border-b border-white/8">
+        <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center flex-shrink-0">
+          <Building2 className="w-3.5 h-3.5 text-amber-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-bold text-amber-300 uppercase tracking-wider truncate">{entity.legalBusinessName}</p>
+          {entity.federalEIN && (
+            <p className="text-[10px] text-gray-500 font-mono">EIN {formatEIN(entity.federalEIN)}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-[10px] text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''} · {entityMids.length} MID{entityMids.length !== 1 ? 's' : ''}</span>
+          {allComplete && entityLocs.length > 0 && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
         </div>
       </div>
 
-      {/* MIDs list */}
-      {expanded && (
-        <div className="border-t border-white/5 px-4 pb-3 pt-2">
-          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Merchant Applications (MIDs)</p>
-          <div className="space-y-1.5">
-            {locMids.map(mid => (
-              <MidCard
-                key={mid.id}
-                mid={mid}
-                locationId={location.id}
+      {/* Locations droppable */}
+      <Droppable droppableId={entity.entityId} type="LOCATION">
+        {(drop, dropSnap) => (
+          <div
+            ref={drop.innerRef}
+            {...drop.droppableProps}
+            className={`p-3 space-y-2 min-h-[48px] transition-colors ${dropSnap.isDraggingOver ? 'bg-amber-500/5' : ''}`}
+          >
+            {entityLocs.map((loc, idx) => (
+              <LocationCard
+                key={loc.id}
+                location={loc}
+                index={idx}
                 corporateId={corporateId}
-                dbaName={location.dbaName}
-                onUpdated={onMerchantIDUpdated}
-                onDelete={onMerchantIDDeleted}
+                merchantIDs={merchantIDs}
+                onDelete={onDeleteLocation}
+                onMerchantIDAdded={onMerchantIDAdded}
+                onMerchantIDUpdated={onMerchantIDUpdated}
+                onMerchantIDDeleted={onMerchantIDDeleted}
               />
             ))}
+            {drop.placeholder}
+            {entityLocs.length === 0 && !dropSnap.isDraggingOver && (
+              <p className="text-center text-xs text-gray-600 py-2">No locations yet — add one below or drag here</p>
+            )}
           </div>
+        )}
+      </Droppable>
 
-          {/* Add MID */}
-          {addingMid ? (
-            <div className="mt-2 flex gap-2 items-center">
-              <input
-                value={addMidName}
-                onChange={e => setAddMidName(e.target.value)}
-                placeholder={`e.g. ${location.dbaName} – Bar`}
-                className={`${inputCls} text-xs py-2`}
-                autoFocus
-                onKeyDown={e => { if (e.key === 'Enter') handleAddMid(); if (e.key === 'Escape') setAddingMid(false); }}
-              />
-              <button onClick={handleAddMid} disabled={addMidSaving}
-                className="flex-shrink-0 flex items-center gap-1 bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-blue-500/30 transition-colors disabled:opacity-50">
-                {addMidSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Add
-              </button>
-              <button onClick={() => setAddingMid(false)} className="flex-shrink-0 p-2 text-gray-500 hover:text-white"><X className="w-3 h-3" /></button>
-            </div>
-          ) : (
-            <button onClick={() => setAddingMid(true)}
-              className="mt-2 w-full flex items-center justify-center gap-1.5 border border-dashed border-white/10 hover:border-blue-500/30 hover:text-blue-400 rounded-lg py-2 text-xs font-semibold text-gray-600 transition-all">
-              <Plus className="w-3 h-3" /> Add MID (same address, different Merchant ID)
-            </button>
-          )}
-        </div>
-      )}
+      {/* Add location to this entity */}
+      <div className="px-3 pb-3">
+        <button onClick={() => onAddLocation(entity.entityId)}
+          className="w-full flex items-center justify-center gap-1.5 border border-dashed border-white/10 hover:border-amber-500/30 hover:text-amber-400 rounded-xl py-2.5 text-xs font-semibold text-gray-600 transition-all">
+          <Plus className="w-3 h-3" /> Add Location{isOnly ? '' : ` to ${entity.legalBusinessName}`}
+        </button>
+      </div>
     </div>
   );
 }
 
 // ─── Add Entity Modal ─────────────────────────────────────────────────────────
 
-function AddEntityModal({ corporateId, profile, onSaved, onClose }) {
+function AddEntityModal({ corporateId, onSaved, onClose }) {
   const [name, setName] = useState('');
   const [ein, setEin] = useState('');
   const [saving, setSaving] = useState(false);
@@ -376,10 +434,10 @@ function AddEntityModal({ corporateId, profile, onSaved, onClose }) {
             </div>
             <div>
               <h3 className="font-bold text-white text-sm">Add Legal Entity</h3>
-              <p className="text-[10px] text-gray-500">New EIN / legal business name</p>
+              <p className="text-[10px] text-gray-500">New EIN / separate legal business</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white p-1.5 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="text-gray-500 hover:text-white p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
         </div>
         <div className="space-y-3">
           <div>
@@ -389,7 +447,7 @@ function AddEntityModal({ corporateId, profile, onSaved, onClose }) {
           <div>
             <label className={labelCls}>Federal EIN *</label>
             <input value={ein} onChange={e => setEin(e.target.value.replace(/\D/g, '').slice(0, 9))}
-              placeholder="9 digits" className={`${inputCls} font-mono ${ein.length > 0 && einDigits.length !== 9 ? 'border-amber-500/50' : ''}`} />
+              placeholder="9 digits" className={`${inputCls} font-mono`} />
             {ein.length > 0 && einDigits.length !== 9 && <p className="text-[10px] text-amber-400 mt-1">{einDigits.length}/9 digits</p>}
             {einDigits.length === 9 && <p className="text-[10px] text-green-400 mt-1 flex items-center gap-1"><Check className="w-3 h-3" /> Valid EIN</p>}
           </div>
@@ -400,7 +458,7 @@ function AddEntityModal({ corporateId, profile, onSaved, onClose }) {
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               {saving ? 'Creating…' : 'Create Entity'}
             </button>
-            <button onClick={onClose} className="px-4 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl transition-all hover:text-white">Cancel</button>
+            <button onClick={onClose} className="px-4 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white">Cancel</button>
           </div>
         </div>
       </div>
@@ -410,22 +468,15 @@ function AddEntityModal({ corporateId, profile, onSaved, onClose }) {
 
 // ─── Add Location Form ────────────────────────────────────────────────────────
 
-function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel, onAddEntity }) {
+function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSaved, onCancel }) {
   const [dbaName, setDbaName] = useState('');
   const [addressDisplay, setAddressDisplay] = useState('');
   const [parsedAddress, setParsedAddress] = useState(null);
   const [unverifiedWarning, setUnverifiedWarning] = useState(false);
-  const [selectedEntityId, setSelectedEntityId] = useState(entities[0]?.entityId || '');
+  const [selectedEntityId, setSelectedEntityId] = useState(defaultEntityId || entities[0]?.entityId || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const addrRef = useRef(null);
-
-  // Keep selectedEntityId in sync if new entity is added
-  useEffect(() => {
-    if (entities.length > 0 && !selectedEntityId) {
-      setSelectedEntityId(entities[0].entityId);
-    }
-  }, [entities]);
 
   usePlacesAutocomplete(addrRef, (parsed) => { setAddressDisplay(parsed.display); setParsedAddress(parsed); setUnverifiedWarning(false); });
 
@@ -433,15 +484,14 @@ function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel, on
     setSaving(true); setError('');
     try {
       const businessAddress = addr ? `${addr.street}, ${addr.city}, ${addr.state} ${addr.zip}` : addressDisplay.trim();
-      const payload = {
+      const locRes = await base44.functions.invoke('addSelfServeLocation', {
         corporateId, dbaName: dbaName.trim(),
         businessAddress, businessStreet: addr?.street || '', businessCity: addr?.city || '',
         businessState: addr?.state || '', businessZip: addr?.zip || '',
         entityId: selectedEntityId || undefined,
-      };
-      const locRes = await base44.functions.invoke('addSelfServeLocation', payload);
+      });
       if (locRes.data?.error) throw new Error(locRes.data.error);
-      onSaved({ location: locRes.data.location, merchantID: locRes.data.merchantID });
+      onSaved({ location: locRes.data.location, merchantID: locRes.data.merchantID, entityId: selectedEntityId });
     } catch (err) { setError(err.message || 'Failed to save.'); }
     finally { setSaving(false); }
   };
@@ -461,7 +511,7 @@ function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel, on
           <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center"><Plus className="w-4 h-4 text-amber-400" /></div>
           <h3 className="text-sm font-bold text-white">New Location</h3>
         </div>
-        <button onClick={onCancel} className="text-gray-500 hover:text-white p-1.5 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
+        <button onClick={onCancel} className="text-gray-500 hover:text-white p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -500,16 +550,10 @@ function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel, on
           </div>
         </div>
 
-        {/* Entity assignment — only shown when multiple entities exist */}
+        {/* Entity selector — only shown when multiple entities exist */}
         {entities.length > 1 && (
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className={labelCls + ' mb-0'}>Legal Entity *</label>
-              <button type="button" onClick={onAddEntity}
-                className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 font-semibold">
-                <Plus className="w-3 h-3" /> New Entity
-              </button>
-            </div>
+            <label className={labelCls}>Legal Entity *</label>
             <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)}
               className={inputCls} style={{ colorScheme: 'dark' }}>
               {entities.map(e => (
@@ -543,7 +587,8 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const [locations, setLocations] = useState([]);
   const [merchantIDs, setMerchantIDs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [showAddForm, setShowAddForm] = useState(false);
+  // addFormEntityId: null = hidden, string = show form pre-targeted to that entity
+  const [addFormEntityId, setAddFormEntityId] = useState(null);
   const [showAddEntity, setShowAddEntity] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleteMidConfirm, setDeleteMidConfirm] = useState(null);
@@ -565,23 +610,47 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         dbaName: l.dbaName, businessAddress: l.businessAddress,
         applicationStepStatus: l.applicationStepStatus || 'In Review', elavonMID: l.elavonMID,
       }));
-      setEntities(loadedEntities);
-      setLocations(loadedLocations);
+
+      // If no entities exist yet, auto-seed one from the corporate profile so locations have somewhere to live
+      let finalEntities = loadedEntities;
+      if (finalEntities.length === 0) {
+        try {
+          const seedRes = await base44.functions.invoke('manageLegalEntity', {
+            action: 'create', corporateId: profile.corporateId,
+            data: {
+              legalBusinessName: profile.legalName || 'Primary Entity',
+              federalEIN: (profile.taxId || '').replace(/\D/g, ''),
+            },
+          });
+          if (seedRes.data?.entity) finalEntities = [seedRes.data.entity];
+        } catch (_) {}
+      }
+
+      // For locations missing entityId, assign to first entity
+      const firstEntityId = finalEntities[0]?.entityId || '';
+      const normalizedLocs = loadedLocations.map(l => ({
+        ...l,
+        entityId: l.entityId || firstEntityId,
+      }));
+
+      setEntities(finalEntities);
+      setLocations(normalizedLocs);
       setMerchantIDs(conRes.data?.merchantIDs || []);
-      if (loadedLocations.length === 0) setShowAddForm(true);
+      if (normalizedLocs.length === 0) setAddFormEntityId(firstEntityId);
     } catch (_) {}
     finally { setLoading(false); }
   };
 
-  const handleLocationSaved = async ({ merchantID }) => {
-    setShowAddForm(false);
-    if (merchantID) setMerchantIDs(prev => [...prev, merchantID]);
+  const handleLocationSaved = async ({ entityId }) => {
+    setAddFormEntityId(null);
     await loadAll();
   };
 
-  const handleEntityCreated = (entity) => {
+  const handleEntityCreated = async (entity) => {
     setShowAddEntity(false);
-    if (entity) setEntities(prev => [...prev, entity]);
+    if (entity) {
+      setEntities(prev => [...prev, entity]);
+    }
   };
 
   const handleDeleteLocation = async (loc) => {
@@ -601,8 +670,25 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     } catch (_) {}
   };
 
-  const handleEntityChanged = (locationId, newEntityId) => {
-    setLocations(prev => prev.map(l => l.id === locationId ? { ...l, entityId: newEntityId } : l));
+  const onDragEnd = async ({ type, source, destination, draggableId }) => {
+    if (!destination) return;
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+
+    if (type === 'LOCATION') {
+      const locId = draggableId.replace('loc-', '');
+      const targetEntityId = destination.droppableId;
+      setLocations(prev => prev.map(l => l.id === locId ? { ...l, entityId: targetEntityId } : l));
+      try {
+        await base44.functions.invoke('batchUpdateStatus', { corporateId: profile.corporateId, action: 'moveToEntity', locationIds: [locId], targetEntityId });
+      } catch (_) { await loadAll(); }
+    } else if (type === 'MID') {
+      const midId = draggableId.replace('mid-', '');
+      const targetLocId = destination.droppableId.replace('mids-', '');
+      setMerchantIDs(prev => prev.map(c => c.id === midId ? { ...c, locationId: targetLocId } : c));
+      try {
+        await base44.functions.invoke('manageMerchantID', { action: 'update', corporateId: profile.corporateId, merchantIDId: midId, locationId: targetLocId, data: { locationId: targetLocId } });
+      } catch (_) { await loadAll(); }
+    }
   };
 
   const businessComplete = !!(
@@ -620,7 +706,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-24 gap-3">
       <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
-      <p className="text-sm text-gray-500">Loading your locations…</p>
+      <p className="text-sm text-gray-500">Loading…</p>
     </div>
   );
 
@@ -635,7 +721,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-white mb-1.5">Locations &amp; Processing Setup</h2>
-            <p className="text-gray-400 text-sm">Add each storefront and fill in its MCC code and volume details.</p>
+            <p className="text-gray-400 text-sm">Add locations under each legal entity, then fill in each MID's processing details.</p>
           </div>
           <button onClick={() => setShowBackConfirm(true)}
             className="flex-shrink-0 flex items-center gap-2 text-sm font-medium text-gray-300 border border-white/15 hover:border-white/30 hover:bg-white/5 px-4 py-2 rounded-xl transition-all">
@@ -653,80 +739,58 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">MIDs Complete</p>
             <p className={`text-lg font-bold ${completeMids === totalMids && totalMids > 0 ? 'text-green-400' : 'text-amber-400'}`}>{completeMids}/{totalMids}</p>
           </div>
-          {entities.length > 1 && (
-            <div><p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Legal Entities</p><p className="text-lg font-bold text-purple-400">{entities.length}</p></div>
-          )}
+          {entities.length > 1 && <div><p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Legal Entities</p><p className="text-lg font-bold text-purple-400">{entities.length}</p></div>}
         </div>
       )}
 
       {/* Business Details */}
       <div className="px-8 pt-6 pb-2">
-        <BusinessDetailsPanel
-          profile={currentProfile}
-          onSaved={(updated) => setCurrentProfile(updated)}
-        />
+        <BusinessDetailsPanel profile={currentProfile} onSaved={updated => setCurrentProfile(updated)} />
       </div>
 
-      {/* Locations list */}
-      <div className="px-8 py-6">
-        {/* Multi-entity toolbar */}
-        {locations.length > 0 && (
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
-              {entities.length > 1 ? `${entities.length} Legal Entities · ${locations.length} Locations` : `${locations.length} Location${locations.length !== 1 ? 's' : ''}`}
-            </p>
-            <button onClick={() => setShowAddEntity(true)}
-              className="flex items-center gap-1.5 text-xs font-semibold text-purple-400 hover:text-purple-300 border border-purple-500/20 hover:border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 px-3 py-1.5 rounded-lg transition-all">
-              <Plus className="w-3 h-3" /> Add Legal Entity
-            </button>
-          </div>
-        )}
-
-        {locations.length === 0 && !showAddForm && (
-          <div className="text-center py-16 border border-dashed border-white/10 rounded-2xl">
-            <Store className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <p className="text-sm font-semibold text-gray-400">No locations yet</p>
-            <p className="text-xs text-gray-600 mt-1">Add your first storefront below.</p>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          {locations.map(loc => (
-            <LocationCard
-              key={loc.id}
-              location={loc}
-              entities={entities}
-              corporateId={profile.corporateId}
-              merchantIDs={merchantIDs}
-              onDelete={l => setDeleteConfirm(l)}
-              onMerchantIDAdded={c => setMerchantIDs(prev => [...prev, c])}
-              onMerchantIDUpdated={updated => setMerchantIDs(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))}
-              onMerchantIDDeleted={m => setDeleteMidConfirm(m)}
-              onEntityChanged={handleEntityChanged}
-            />
-          ))}
+      {/* Hierarchy: Entity → Locations → MIDs */}
+      <div className="px-8 py-6 space-y-4">
+        {/* Toolbar */}
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+            {entities.length > 1 ? `${entities.length} Legal Entities` : 'Org Structure'}
+          </p>
+          <button onClick={() => setShowAddEntity(true)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-purple-400 hover:text-purple-300 border border-purple-500/20 hover:border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 px-3 py-1.5 rounded-lg transition-all">
+            <Plus className="w-3 h-3" /> Add Legal Entity
+          </button>
         </div>
 
-        {/* Add Location Form */}
-        {showAddForm && (
-          <div className="mt-4">
-            <AddLocationForm
-              corporateId={profile.corporateId}
-              profile={profile}
-              entities={entities}
-              onSaved={handleLocationSaved}
-              onCancel={() => setShowAddForm(false)}
-              onAddEntity={() => setShowAddEntity(true)}
-            />
+        <DragDropContext onDragEnd={onDragEnd}>
+          <div className="space-y-4">
+            {entities.map(entity => (
+              <EntitySection
+                key={entity.entityId}
+                entity={entity}
+                locations={locations}
+                corporateId={profile.corporateId}
+                merchantIDs={merchantIDs}
+                onDeleteLocation={l => setDeleteConfirm(l)}
+                onMerchantIDAdded={c => setMerchantIDs(prev => [...prev, c])}
+                onMerchantIDUpdated={updated => setMerchantIDs(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))}
+                onMerchantIDDeleted={m => setDeleteMidConfirm(m)}
+                onAddLocation={entityId => setAddFormEntityId(entityId)}
+                isOnly={entities.length === 1}
+              />
+            ))}
           </div>
-        )}
+        </DragDropContext>
 
-        {/* Add Location button */}
-        {!showAddForm && (
-          <button onClick={() => setShowAddForm(true)}
-            className="mt-4 w-full flex items-center justify-center gap-2 border border-dashed border-white/15 hover:border-amber-500/40 hover:bg-amber-500/5 rounded-2xl py-4 text-sm font-semibold text-gray-500 hover:text-amber-400 transition-all">
-            <Plus className="w-4 h-4" /> Add {locations.length > 0 ? 'Another' : 'a'} Location
-          </button>
+        {/* Add Location Form — shown below when triggered */}
+        {addFormEntityId !== null && (
+          <AddLocationForm
+            corporateId={profile.corporateId}
+            profile={profile}
+            entities={entities}
+            defaultEntityId={addFormEntityId}
+            onSaved={handleLocationSaved}
+            onCancel={() => setAddFormEntityId(null)}
+          />
         )}
       </div>
 
@@ -750,12 +814,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
       {/* Add Entity Modal */}
       {showAddEntity && (
-        <AddEntityModal
-          corporateId={profile.corporateId}
-          profile={profile}
-          onSaved={handleEntityCreated}
-          onClose={() => setShowAddEntity(false)}
-        />
+        <AddEntityModal corporateId={profile.corporateId} onSaved={handleEntityCreated} onClose={() => setShowAddEntity(false)} />
       )}
 
       {/* Delete location confirm */}
@@ -763,9 +822,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4" onClick={() => setDeleteConfirm(null)}>
           <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0">
-                <AlertTriangle className="w-5 h-5 text-red-400" />
-              </div>
+              <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-red-400" /></div>
               <div>
                 <h3 className="font-bold text-white">Remove Location?</h3>
                 <p className="text-xs text-gray-400 mt-0.5">"{deleteConfirm.dbaName}" and all its MIDs will be deleted.</p>
@@ -773,7 +830,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             </div>
             <div className="flex gap-3">
               <button onClick={() => handleDeleteLocation(deleteConfirm)} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-bold text-sm py-2.5 rounded-xl transition-all">Remove</button>
-              <button onClick={() => setDeleteConfirm(null)} className="flex-1 border border-white/15 text-gray-300 hover:text-white font-semibold text-sm py-2.5 rounded-xl transition-all">Keep</button>
+              <button onClick={() => setDeleteConfirm(null)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl">Keep</button>
             </div>
           </div>
         </div>, document.body
@@ -792,7 +849,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             </div>
             <div className="flex gap-3">
               <button onClick={() => handleDeleteMid(deleteMidConfirm)} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-bold text-sm py-2.5 rounded-xl transition-all">Remove</button>
-              <button onClick={() => setDeleteMidConfirm(null)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl transition-all">Keep</button>
+              <button onClick={() => setDeleteMidConfirm(null)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl">Keep</button>
             </div>
           </div>
         </div>, document.body
@@ -803,10 +860,10 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4" onClick={() => setShowBackConfirm(false)}>
           <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-white mb-2">Go Back?</h3>
-            <p className="text-sm text-gray-400 mb-5">Your locations and MIDs are saved. You can return here anytime.</p>
+            <p className="text-sm text-gray-400 mb-5">Your locations and MIDs are saved.</p>
             <div className="flex gap-3">
-              <button onClick={() => { setShowBackConfirm(false); onBack(); }} className="flex-1 bg-white/10 hover:bg-white/15 text-white font-bold text-sm py-2.5 rounded-xl transition-all">Go Back</button>
-              <button onClick={() => setShowBackConfirm(false)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl transition-all">Stay</button>
+              <button onClick={() => { setShowBackConfirm(false); onBack(); }} className="flex-1 bg-white/10 hover:bg-white/15 text-white font-bold text-sm py-2.5 rounded-xl">Go Back</button>
+              <button onClick={() => setShowBackConfirm(false)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl">Stay</button>
             </div>
           </div>
         </div>, document.body
