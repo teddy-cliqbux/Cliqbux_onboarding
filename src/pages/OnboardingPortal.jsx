@@ -75,15 +75,16 @@ export default function OnboardingPortal() {
           title: data?.expired ? 'Link Expired' : 'Invalid Link',
           message: data?.error || 'This link is no longer valid. Please request a new one from the portal.',
         });
+        setLoading(false);
         return;
       }
-      // Token valid — treat like a sales/dealId flow but with the resolved corporateId
+      // Token valid — fetchMerchantData (triggered by dealId change) will set loading false
       setMode('sales');
       setDealId(data.corporateId);
     } catch {
       setError({ title: 'Connection Error', message: "We couldn't validate your link. Please try again or request a new one." });
+      setLoading(false);
     }
-    // loading will be set false by fetchMerchantData once dealId is set
   };
 
   useEffect(() => {
