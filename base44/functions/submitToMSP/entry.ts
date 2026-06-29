@@ -43,25 +43,30 @@ function mapLlcClass(t: string): string {
 
 function mapOwnerTitle(t: string): string {
   const map: Record<string, string> = {
-    'OWNER':               'OP',
-    'PROPRIETOR_OR_OWNER': 'OP',
-    'PARTNER':             'PP',
-    'PARTNER_OR_PRINCIPAL':'PP',
-    'MANAGER':             'GM',
-    'GENERAL_MANAGER':     'GM',
-    'CEO':                 'CEO',
-    'CFO':                 'CFO',
-    'COO':                 'COO',
-    'PRESIDENT':           'P',
-    'VP':                  'VP',
-    'VICE_PRESIDENT':      'VP',
-    'MANAGING_MEMBER':     'MM',
-    'DIRECTOR':            'D',
-    'OFFICER':             'O',
-    'TREASURER':           'T',
-    'SECRETARY':           'S',
+    // Full enum values from MerchantSigners / MerchantCorporateProfile entities
+    'CHIEF_EXECUTIVE_OFFICER': 'CEO',
+    'CHIEF_FINANCIAL_OFFICER':  'CFO',
+    'PRESIDENT':                'P',
+    'VICE_PRESIDENT':           'VP',
+    'DIRECTOR':                 'D',
+    'SECRETARY':                'S',
+    'TREASURER':                'T',
+    'MANAGING_MEMBER':          'MM',
+    'AUTHORIZED_SIGNER':        'OP',
+    'OWNER':                    'OP',
+    'PROPRIETOR_OR_OWNER':      'OP',
+    'PARTNER':                  'PP',
+    'PARTNER_OR_PRINCIPAL':     'PP',
+    'MANAGER':                  'GM',
+    'GENERAL_MANAGER':          'GM',
+    // Short aliases
+    'CEO':    'CEO',
+    'CFO':    'CFO',
+    'COO':    'COO',
+    'VP':     'VP',
+    'MM':     'MM',
   };
-  return map[t?.toUpperCase?.()] || map[t] || 'OP';
+  return map[t] || map[t?.toUpperCase?.()] || 'OP';
 }
 
 // Maps pricing category number → Elavon IndustryCode
@@ -150,7 +155,10 @@ function buildFormPayload(
     || TIER_TO_METHOD[(concept.pricingTier || profile.pricingTier || '').toUpperCase()]
     || 'ICPLS';
   const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'CLEAR' : rawPricingMethod;
-  const industryType = concept.industryType || profile.industryType || mapIndustryType(pricingCategory);
+  // Derive industryType from pricingCategory; only use concept.industryType if pricingCategory is also set
+  const industryType = (concept.pricingCategory && concept.industryType)
+    ? concept.industryType
+    : mapIndustryType(pricingCategory);
   const mcc = concept.mccCode || profile.mccCode || '5999';
   const dbaName = concept.dbaName || location.dbaName || profile.legalName || '';
   const monthlyCardSales = String(concept.monthlyCardSales || profile.monthlyCardSales || '6000');
@@ -298,7 +306,7 @@ function buildFormPayload(
     ...(routing && account ? {
       deposit_account_no: account,
       deposit_account_rtg: routing,
-      deposit_account_type: 'CK',   // CK = checking; SA = savings
+      deposit_account_type: bank.accountType === 'savings' ? 'SA' : 'CK',
     } : {}),
 
     // ── Statements ────────────────────────────────────────────────────────────

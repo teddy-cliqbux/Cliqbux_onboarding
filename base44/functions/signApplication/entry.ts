@@ -46,15 +46,25 @@ function mapLlcClass(t: string): string {
 
 function mapOwnerTitle(t: string): string {
   const map: Record<string, string> = {
-    'OWNER': 'OP', 'PROPRIETOR_OR_OWNER': 'OP',
-    'PARTNER': 'PP', 'PARTNER_OR_PRINCIPAL': 'PP',
-    'MANAGER': 'GM', 'GENERAL_MANAGER': 'GM',
+    'CHIEF_EXECUTIVE_OFFICER': 'CEO',
+    'CHIEF_FINANCIAL_OFFICER':  'CFO',
+    'PRESIDENT':                'P',
+    'VICE_PRESIDENT':           'VP',
+    'DIRECTOR':                 'D',
+    'SECRETARY':                'S',
+    'TREASURER':                'T',
+    'MANAGING_MEMBER':          'MM',
+    'AUTHORIZED_SIGNER':        'OP',
+    'OWNER':                    'OP',
+    'PROPRIETOR_OR_OWNER':      'OP',
+    'PARTNER':                  'PP',
+    'PARTNER_OR_PRINCIPAL':     'PP',
+    'MANAGER':                  'GM',
+    'GENERAL_MANAGER':          'GM',
     'CEO': 'CEO', 'CFO': 'CFO', 'COO': 'COO',
-    'PRESIDENT': 'P', 'VP': 'VP', 'VICE_PRESIDENT': 'VP',
-    'MANAGING_MEMBER': 'MM', 'DIRECTOR': 'D', 'OFFICER': 'O',
-    'TREASURER': 'T', 'SECRETARY': 'S',
+    'VP': 'VP', 'MM': 'MM',
   };
-  return map[t?.toUpperCase?.()] || map[t] || 'OP';
+  return map[t] || map[t?.toUpperCase?.()] || 'OP';
 }
 
 function mapIndustryType(pricingCategory: string): string {
@@ -115,7 +125,11 @@ function buildFormPayload(
     || TIER_TO_METHOD[(concept.pricingTier || profile.pricingTier || '').toUpperCase()]
     || 'ICPLS';
   const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'CLEAR' : rawPricingMethod;
-  const industryType = concept.industryType || profile.industryType || mapIndustryType(pricingCategory);
+  // Derive industryType from pricingCategory; only use concept.industryType if pricingCategory is also set
+  // (prevents mismatches like industryType=HT with pricingCategory=1/Retail)
+  const industryType = (concept.pricingCategory && concept.industryType)
+    ? concept.industryType
+    : mapIndustryType(pricingCategory);
   const mcc = concept.mccCode || profile.mccCode || '5999';
   const dbaName = concept.dbaName || location.dbaName || profile.legalName || '';
   const monthlyCardSales = String(concept.monthlyCardSales || profile.monthlyCardSales || '6000');
@@ -240,7 +254,7 @@ function buildFormPayload(
     ...(routing && account ? {
       deposit_account_no: account,
       deposit_account_rtg: routing,
-      deposit_account_type: 'CK',   // CK = checking (most common); SA = savings
+      deposit_account_type: bank.accountType === 'savings' ? 'SA' : 'CK',
     } : {}),
     statement_delivery_method: 'E',
     chargebacks_retrievals_format: 'WM',
@@ -448,16 +462,33 @@ Deno.serve(async (req) => {
         const location = locationMap[concept.locationId];
         if (location) {
           const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners);
+          console.log(`[signApplication] Refill payload for ${mspApplicationNo}:`, JSON.stringify(formPayload));
           const refillRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
             method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
           });
           const refillData = await refillRes.json();
+          console.log(`[signApplication] Re-fill raw response ${refillRes.status} for ${mspApplicationNo}:`, JSON.stringify(refillData));
           refillPercentComplete = refillData?.percent_complete ?? null;
           refillErrors = [
             ...(refillData?.completion_errors || []),
             ...(refillData?.data_errors       || []),
             ...(refillData?.rule_violations    || []),
           ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || JSON.stringify(e)));
+
+          // If PUT returned errors or rejected fields, do a GET to get the actual completion status
+          if (!refillPercentComplete || refillErrors.length === 0) {
+            const getRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
+            const getData = await getRes.json();
+            refillPercentComplete = getData?.percent_complete ?? refillPercentComplete;
+            const getErrors = [
+              ...(getData?.completion_errors || []),
+              ...(getData?.data_errors       || []),
+              ...(getData?.rule_violations    || []),
+            ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || JSON.stringify(e)));
+            if (getErrors.length > 0) refillErrors = getErrors;
+            console.log(`[signApplication] GET form after refill: ${refillPercentComplete ?? '?'}% complete, errors:`, JSON.stringify(getErrors));
+          }
+
           console.log(`[signApplication] Re-fill ${refillRes.status} for ${mspApplicationNo}: ${refillPercentComplete ?? '?'}% complete, ${refillErrors.length} errors`);
           if (refillErrors.length) console.log(`[signApplication] Errors:`, JSON.stringify(refillErrors));
         }
