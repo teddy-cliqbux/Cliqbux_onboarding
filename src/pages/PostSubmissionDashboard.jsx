@@ -13,7 +13,7 @@ export default function PostSubmissionDashboard() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
-  const [concepts, setConcepts] = useState([]);
+  const [merchantIDs, setMerchantIDs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showShipping, setShowShipping] = useState(false);
 
@@ -36,7 +36,7 @@ export default function PostSubmissionDashboard() {
         }
         setProfile(data.profile);
         setLocations(data.locations || []);
-        setConcepts(data.concepts || []);
+        setMerchantIDs(data.merchantIDs || []);
         if (data.profile?.applicationStatus !== 'Submitted') {
           navigate(`/?dealId=${corporateId}`, { replace: true });
           return;
@@ -99,19 +99,19 @@ export default function PostSubmissionDashboard() {
           </div>
 
           {/* Tracker */}
-          {concepts.length > 0 && <UnderwritingTracker locations={locations} concepts={concepts} />}
+          {merchantIDs.length > 0 && <UnderwritingTracker locations={locations} merchantIDs={merchantIDs} />}
 
           {/* Location Status Table */}
           <LocationStatusTable
             locations={locations}
-            concepts={concepts}
+            merchantIDs={merchantIDs}
             corporateId={profile.corporateId}
             onStatusChanged={async () => {
               try {
                 const res = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
                 if (!res.data?.error) {
                   setLocations(res.data.locations || []);
-                  setConcepts(res.data.concepts || []);
+                  setMerchantIDs(res.data.merchantIDs || []);
                 }
               } catch (_) {}
             }}

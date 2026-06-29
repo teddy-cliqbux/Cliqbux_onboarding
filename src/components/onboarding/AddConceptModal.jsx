@@ -30,8 +30,8 @@ const INDUSTRY_OPTIONS = [
 const inputCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-1 focus:ring-blue-500';
 const labelCls = 'text-[11px] font-semibold text-gray-500 uppercase tracking-wide block mb-1';
 
-export default function AddConceptModal({ locationName, onSave, onClose }) {
-  const [conceptName, setConceptName] = useState('');
+export default function AddMerchantIDModal({ locationName, onSave, onClose }) {
+  const [merchantName, setMerchantName] = useState('');
   const [mccCode, setMccCode] = useState('');
   const [industryType, setIndustryType] = useState('');
   const [avgSaleAmount, setAvgSaleAmount] = useState('');
@@ -48,7 +48,7 @@ export default function AddConceptModal({ locationName, onSave, onClose }) {
 
   const handleSave = () => {
     onSave({
-      conceptName: conceptName.trim() || locationName,
+      merchantName: merchantName.trim() || locationName,
       mccCode,
       industryType,
       avgSaleAmount,
@@ -62,16 +62,16 @@ export default function AddConceptModal({ locationName, onSave, onClose }) {
     });
   };
 
-  const isReady = !!conceptName.trim() && !!mccCode && pctValid;
+  const isReady = !!merchantName.trim() && !!mccCode && pctValid;
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 px-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h3 className="font-bold text-gray-900 text-base">Add Processing Concept</h3>
+            <h3 className="font-bold text-gray-900 text-base">Add Merchant ID</h3>
             <p className="text-xs text-gray-400 mt-0.5">
-              A concept is a distinct processing account (MID) under <strong className="text-gray-500">{locationName}</strong>. Each concept can have its own industry, volume, and rates.
+              A Merchant ID is a distinct processing account (MID) under <strong className="text-gray-500">{locationName}</strong>. Each Merchant ID can have its own industry, volume, and rates.
             </p>
           </div>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X className="w-4 h-4" /></button>
@@ -80,12 +80,12 @@ export default function AddConceptModal({ locationName, onSave, onClose }) {
         <div className="space-y-5">
           {/* — Concept Identity — */}
           <div className="border-b border-gray-100 pb-4">
-            <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Concept Identity</h4>
+            <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-3">Merchant ID Details</h4>
             <div className="space-y-3">
               <div>
-                <label className={labelCls}>Concept Name *</label>
+                <label className={labelCls}>Merchant ID Name *</label>
                 <input type="text" placeholder="e.g. Cafe, Bakery, Floral"
-                  value={conceptName} onChange={e => setConceptName(e.target.value)} className={inputCls} />
+                  value={merchantName} onChange={e => setMerchantName(e.target.value)} className={inputCls} />
               </div>
               <div>
                 <label className={labelCls}>MCC Code *</label>
@@ -168,7 +168,7 @@ export default function AddConceptModal({ locationName, onSave, onClose }) {
         <div className="flex gap-3 justify-end mt-6 pt-4 border-t border-gray-100">
           <button onClick={onClose} className="text-sm font-medium text-gray-500 border border-gray-200 rounded-xl py-2.5 px-5 hover:bg-gray-50">Cancel</button>
           <button onClick={handleSave} disabled={!isReady}
-            className="text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 rounded-xl py-2.5 px-5 transition-all">Add Concept</button>
+            className="text-sm font-semibold text-white bg-gray-900 hover:bg-gray-800 disabled:bg-gray-200 disabled:text-gray-400 rounded-xl py-2.5 px-5 transition-all">Add Merchant ID</button>
         </div>
       </div>
     </div>

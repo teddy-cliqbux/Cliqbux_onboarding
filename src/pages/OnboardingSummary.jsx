@@ -248,9 +248,9 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
           allLocations.map(loc => renderLocationMerchantIDGroup(loc))
         )}
 
-        {/* Locations without concepts — show as minimal cards */}
+        {/* Locations without Merchant IDs — show as minimal cards */}
         {locations.filter(l => {
-          const cs = conceptsByLoc[l.id];
+          const cs = merchantIDsByLoc[l.id];
           return !cs || cs.length === 0;
         }).map(loc => (
           <div key={loc.id} className="portal-card px-6 py-4 flex items-center gap-3">
