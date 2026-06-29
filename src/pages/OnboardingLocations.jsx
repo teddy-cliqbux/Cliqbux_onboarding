@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
-  Plus, ArrowRight, Loader2, Store, Landmark, Trash2, CheckCircle2,
+  Plus, ArrowRight, Loader2, Store, Trash2, CheckCircle2,
   MapPin, Building2, CreditCard, ChevronDown, ChevronRight, X,
-  AlertTriangle, Check, GripVertical, ArrowLeft, Pencil, Info
+  AlertTriangle, Check, ArrowLeft, Pencil
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import BusinessDetailsPanel from '@/components/onboarding/BusinessDetailsPanel';
@@ -84,10 +83,10 @@ function StatusBadge({ status }) {
   );
 }
 
-// ─── MID Card ────────────────────────────────────────────────────────────────
+// ─── MID Card ─────────────────────────────────────────────────────────────────
 
-function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDelete }) {
-  const [editing, setEditing] = useState(!mid.mccCode); // auto-open if stub
+function MidCard({ mid, locationId, corporateId, dbaName, onUpdated, onDelete }) {
+  const [editing, setEditing] = useState(!mid.mccCode);
   const [form, setForm] = useState({
     merchantName: mid.merchantName || mid.dbaName || dbaName || '',
     mccCode: mid.mccCode || '',
@@ -120,113 +119,104 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
   };
 
   return (
-    <Draggable draggableId={`mid-${mid.id}`} index={index}>
-      {(provided, snapshot) => (
-        <div
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          className={`rounded-xl border transition-all ${snapshot.isDragging ? 'border-blue-500/60 bg-[#1a2235] shadow-xl rotate-1' : isComplete ? 'border-blue-500/20 bg-blue-500/5' : 'border-white/10 bg-white/[0.02]'}`}
-        >
-          <div className="flex items-center gap-2 px-3 py-2.5">
-            {/* Drag handle */}
-            <span {...provided.dragHandleProps} className="text-gray-600 hover:text-gray-300 cursor-grab active:cursor-grabbing flex-shrink-0">
-              <GripVertical className="w-3.5 h-3.5" />
-            </span>
-            <CreditCard className={`w-3.5 h-3.5 flex-shrink-0 ${isComplete ? 'text-blue-400' : 'text-gray-500'}`} />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{form.merchantName || dbaName}</p>
-              {isComplete
-                ? <p className="text-[10px] text-blue-400/70 font-mono">{mid.mccCode} · ${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo</p>
-                : <p className="text-[10px] text-amber-400/80">Needs MCC &amp; volume →</p>
-              }
-            </div>
-            <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
-            <button onClick={() => setEditing(e => !e)} className="p-1 text-gray-500 hover:text-amber-400 transition-colors">
-              <Pencil className="w-3 h-3" />
-            </button>
-            <button onClick={() => onDelete(mid)} className="p-1 text-gray-600 hover:text-red-400 transition-colors">
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </div>
+    <div className={`rounded-xl border transition-all ${isComplete ? 'border-blue-500/20 bg-blue-500/5' : 'border-white/10 bg-white/[0.02]'}`}>
+      <div className="flex items-center gap-2 px-3 py-2.5">
+        <CreditCard className={`w-3.5 h-3.5 flex-shrink-0 ${isComplete ? 'text-blue-400' : 'text-gray-500'}`} />
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold text-white truncate">{form.merchantName || dbaName}</p>
+          {isComplete
+            ? <p className="text-[10px] text-blue-400/70 font-mono">{mid.mccCode} · ${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo</p>
+            : <p className="text-[10px] text-amber-400/80">Needs MCC &amp; volume →</p>
+          }
+        </div>
+        <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
+        <button onClick={() => setEditing(e => !e)} className="p-1 text-gray-500 hover:text-amber-400 transition-colors">
+          <Pencil className="w-3 h-3" />
+        </button>
+        <button onClick={() => onDelete(mid)} className="p-1 text-gray-600 hover:text-red-400 transition-colors">
+          <Trash2 className="w-3 h-3" />
+        </button>
+      </div>
 
-          {editing && (
-            <div className="border-t border-white/5 px-3 pb-3 pt-2 space-y-2">
-              <div>
-                <label className={labelCls}>MID Label</label>
-                <input value={form.merchantName} onChange={e => setForm(p => ({ ...p, merchantName: e.target.value }))}
-                  placeholder={`e.g. ${dbaName} – Bar`} className={inputCls} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className={labelCls}>MCC Code *</label>
-                  <select value={form.mccCode} onChange={e => setForm(p => ({ ...p, mccCode: e.target.value }))}
-                    className={inputCls} style={{ colorScheme: 'dark' }}>
-                    <option value="">Select…</option>
-                    {MCC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls}>Industry Type</label>
-                  <select value={form.industryType} onChange={e => setForm(p => ({ ...p, industryType: e.target.value }))}
-                    className={inputCls} style={{ colorScheme: 'dark' }}>
-                    <option value="">Select…</option>
-                    {INDUSTRY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls}>Monthly Volume ($)</label>
-                  <input type="number" value={form.monthlyCardSales} onChange={e => setForm(p => ({ ...p, monthlyCardSales: e.target.value }))}
-                    placeholder="e.g. 8000" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Avg Sale ($)</label>
-                  <input type="number" value={form.avgSaleAmount} onChange={e => setForm(p => ({ ...p, avgSaleAmount: e.target.value }))}
-                    placeholder="e.g. 45" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Highest Ticket ($)</label>
-                  <input type="number" value={form.highestTicketAmount} onChange={e => setForm(p => ({ ...p, highestTicketAmount: e.target.value }))}
-                    placeholder="e.g. 200" className={inputCls} />
-                </div>
-              </div>
-              <div>
-                <label className={labelCls}>Card Split (must total 100%)</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {[['cardPresentPct', 'In-Person'], ['internetPct', 'Online'], ['motoPct', 'MOTO']].map(([k, lbl]) => (
-                    <div key={k}>
-                      <span className="text-[10px] text-gray-500 mb-1 block">{lbl}</span>
-                      <input type="number" min="0" max="100" value={form[k]}
-                        onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))} className={inputCls} />
-                    </div>
-                  ))}
-                </div>
-                {pctSum !== 100 && <p className="text-[11px] text-amber-400 mt-1">Total: {pctSum}% (must be 100%)</p>}
-              </div>
-              <div className="flex gap-2 pt-1">
-                <button onClick={handleSave} disabled={saving || !canSave}
-                  className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-600 disabled:text-gray-400 text-black font-bold text-xs px-3 py-2 rounded-lg transition-all">
-                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                  {saving ? 'Saving…' : 'Save'}
-                </button>
-                <button onClick={() => setEditing(false)} className="text-xs text-gray-400 hover:text-white border border-white/10 px-3 py-2 rounded-lg transition-colors">Cancel</button>
-              </div>
+      {editing && (
+        <div className="border-t border-white/5 px-3 pb-3 pt-2 space-y-2">
+          <div>
+            <label className={labelCls}>MID Label</label>
+            <input value={form.merchantName} onChange={e => setForm(p => ({ ...p, merchantName: e.target.value }))}
+              placeholder={`e.g. ${dbaName} – Bar`} className={inputCls} />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className={labelCls}>MCC Code *</label>
+              <select value={form.mccCode} onChange={e => setForm(p => ({ ...p, mccCode: e.target.value }))}
+                className={inputCls} style={{ colorScheme: 'dark' }}>
+                <option value="">Select…</option>
+                {MCC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
             </div>
-          )}
+            <div>
+              <label className={labelCls}>Industry Type</label>
+              <select value={form.industryType} onChange={e => setForm(p => ({ ...p, industryType: e.target.value }))}
+                className={inputCls} style={{ colorScheme: 'dark' }}>
+                <option value="">Select…</option>
+                {INDUSTRY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Monthly Volume ($)</label>
+              <input type="number" value={form.monthlyCardSales} onChange={e => setForm(p => ({ ...p, monthlyCardSales: e.target.value }))}
+                placeholder="e.g. 8000" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Avg Sale ($)</label>
+              <input type="number" value={form.avgSaleAmount} onChange={e => setForm(p => ({ ...p, avgSaleAmount: e.target.value }))}
+                placeholder="e.g. 45" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Highest Ticket ($)</label>
+              <input type="number" value={form.highestTicketAmount} onChange={e => setForm(p => ({ ...p, highestTicketAmount: e.target.value }))}
+                placeholder="e.g. 200" className={inputCls} />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>Card Split (must total 100%)</label>
+            <div className="grid grid-cols-3 gap-2">
+              {[['cardPresentPct', 'In-Person'], ['internetPct', 'Online'], ['motoPct', 'MOTO']].map(([k, lbl]) => (
+                <div key={k}>
+                  <span className="text-[10px] text-gray-500 mb-1 block">{lbl}</span>
+                  <input type="number" min="0" max="100" value={form[k]}
+                    onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))} className={inputCls} />
+                </div>
+              ))}
+            </div>
+            {pctSum !== 100 && <p className="text-[11px] text-amber-400 mt-1">Total: {pctSum}% (must be 100%)</p>}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={handleSave} disabled={saving || !canSave}
+              className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-600 disabled:text-gray-400 text-black font-bold text-xs px-3 py-2 rounded-lg transition-all">
+              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button onClick={() => setEditing(false)} className="text-xs text-gray-400 hover:text-white border border-white/10 px-3 py-2 rounded-lg transition-colors">Cancel</button>
+          </div>
         </div>
       )}
-    </Draggable>
+    </div>
   );
 }
 
-// ─── Location Card (org chart node) ──────────────────────────────────────────
+// ─── Location Card ────────────────────────────────────────────────────────────
 
-function LocationOrgCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, index }) {
+function LocationCard({ location, entities, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onEntityChanged }) {
   const locMids = merchantIDs.filter(c => c.locationId === location.id);
   const [expanded, setExpanded] = useState(locMids.length === 0 || locMids.some(m => !m.mccCode));
   const [addingMid, setAddingMid] = useState(false);
   const [addMidName, setAddMidName] = useState('');
   const [addMidSaving, setAddMidSaving] = useState(false);
+  const [changingEntity, setChangingEntity] = useState(false);
   const allMidsComplete = locMids.length > 0 && locMids.every(m => m.mccCode && m.monthlyCardSales);
+
+  const currentEntity = entities.find(e => e.entityId === location.entityId);
 
   const handleAddMid = async () => {
     setAddMidSaving(true);
@@ -241,130 +231,203 @@ function LocationOrgCard({ location, corporateId, merchantIDs, onDelete, onMerch
     finally { setAddMidSaving(false); }
   };
 
+  const handleEntityChange = async (newEntityId) => {
+    setChangingEntity(false);
+    if (newEntityId === location.entityId) return;
+    onEntityChanged(location.id, newEntityId);
+    try {
+      await base44.functions.invoke('batchUpdateStatus', {
+        corporateId, action: 'moveToEntity', locationIds: [location.id], targetEntityId: newEntityId,
+      });
+    } catch (_) {}
+  };
+
   return (
-    <Draggable draggableId={`loc-${location.id}`} index={index}>
-      {(provided, snapshot) => (
-        <div
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          className={`rounded-2xl border transition-all ${snapshot.isDragging ? 'border-amber-500/70 bg-[#1c2128] shadow-2xl -rotate-1' : allMidsComplete ? 'border-green-500/25 bg-[#1c2128]' : 'border-white/10 bg-[#1c2128] hover:border-white/20'}`}
-        >
-          {/* Location header */}
-          <div className="flex items-center gap-2.5 px-4 py-3">
-            <span {...provided.dragHandleProps} className="text-gray-600 hover:text-gray-300 cursor-grab active:cursor-grabbing flex-shrink-0">
-              <GripVertical className="w-4 h-4" />
-            </span>
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${allMidsComplete ? 'bg-green-500/15' : 'bg-amber-500/10'}`}>
-              <Store className={`w-4 h-4 ${allMidsComplete ? 'text-green-400' : 'text-amber-400'}`} />
-            </div>
-            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(e => !e)}>
-              <p className="text-sm font-bold text-white truncate">{location.dbaName}</p>
-              <p className="text-[11px] text-gray-400 truncate flex items-center gap-1">
-                <MapPin className="w-3 h-3 flex-shrink-0" />{location.businessAddress}
-              </p>
-            </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              {allMidsComplete && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
-              <span className="text-[10px] font-semibold text-gray-500 bg-white/5 rounded-full px-2 py-0.5">
-                {locMids.length} MID{locMids.length !== 1 ? 's' : ''}
-              </span>
-              <button onClick={e => { e.stopPropagation(); onDelete(location); }}
-                className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all">
-                <Trash2 className="w-3.5 h-3.5" />
+    <div className={`rounded-2xl border transition-all ${allMidsComplete ? 'border-green-500/25 bg-[#1c2128]' : 'border-white/10 bg-[#1c2128] hover:border-white/20'}`}>
+      {/* Location header */}
+      <div className="flex items-center gap-2.5 px-4 py-3">
+        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${allMidsComplete ? 'bg-green-500/15' : 'bg-amber-500/10'}`}>
+          <Store className={`w-4 h-4 ${allMidsComplete ? 'text-green-400' : 'text-amber-400'}`} />
+        </div>
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(e => !e)}>
+          <p className="text-sm font-bold text-white truncate">{location.dbaName}</p>
+          <p className="text-[11px] text-gray-400 truncate flex items-center gap-1">
+            <MapPin className="w-3 h-3 flex-shrink-0" />{location.businessAddress}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {/* Entity badge — click to change if multiple entities exist */}
+          {entities.length > 1 && (
+            <div className="relative">
+              <button
+                onClick={() => setChangingEntity(e => !e)}
+                className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 text-amber-400/80 text-[10px] font-semibold px-2 py-0.5 rounded-full hover:bg-amber-500/20 transition-colors"
+              >
+                <Building2 className="w-2.5 h-2.5" />
+                {currentEntity?.legalBusinessName || 'Unassigned'}
+                <ChevronDown className="w-2.5 h-2.5" />
               </button>
-              <button onClick={() => setExpanded(e => !e)} className="p-1.5 text-gray-500 hover:text-white transition-colors">
-                {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          {/* MIDs list */}
-          {expanded && (
-            <div className="border-t border-white/5 px-4 pb-3 pt-2">
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                Merchant Applications (MIDs)
-                <span className="ml-1 text-gray-600 normal-case">· drag to reorder</span>
-              </p>
-              <Droppable droppableId={`mids-${location.id}`} type="MID">
-                {(dropProvided, dropSnapshot) => (
-                  <div
-                    ref={dropProvided.innerRef}
-                    {...dropProvided.droppableProps}
-                    className={`space-y-1.5 min-h-[32px] rounded-xl transition-colors ${dropSnapshot.isDraggingOver ? 'bg-blue-500/5 ring-1 ring-blue-500/30' : ''}`}
-                  >
-                    {locMids.map((mid, idx) => (
-                      <MidCard
-                        key={mid.id}
-                        mid={mid}
-                        index={idx}
-                        locationId={location.id}
-                        corporateId={corporateId}
-                        dbaName={location.dbaName}
-                        onUpdated={onMerchantIDUpdated}
-                        onDelete={onMerchantIDDeleted}
-                      />
-                    ))}
-                    {dropProvided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-
-              {/* Add MID */}
-              {addingMid ? (
-                <div className="mt-2 flex gap-2 items-center">
-                  <input
-                    value={addMidName}
-                    onChange={e => setAddMidName(e.target.value)}
-                    placeholder={`e.g. ${location.dbaName} – Bar`}
-                    className={`${inputCls} text-xs py-2`}
-                    autoFocus
-                    onKeyDown={e => { if (e.key === 'Enter') handleAddMid(); if (e.key === 'Escape') setAddingMid(false); }}
-                  />
-                  <button onClick={handleAddMid} disabled={addMidSaving}
-                    className="flex-shrink-0 flex items-center gap-1 bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-blue-500/30 transition-colors disabled:opacity-50">
-                    {addMidSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Add
-                  </button>
-                  <button onClick={() => setAddingMid(false)} className="flex-shrink-0 p-2 text-gray-500 hover:text-white"><X className="w-3 h-3" /></button>
+              {changingEntity && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-[#1c2128] border border-white/15 rounded-xl shadow-2xl overflow-hidden min-w-[180px]">
+                  {entities.map(e => (
+                    <button key={e.entityId} onClick={() => handleEntityChange(e.entityId)}
+                      className={`w-full text-left px-3 py-2 text-xs hover:bg-white/5 transition-colors ${e.entityId === location.entityId ? 'text-amber-400 font-bold' : 'text-gray-300'}`}>
+                      {e.legalBusinessName}
+                      {e.federalEIN && <span className="ml-1 text-gray-500 font-mono">{formatEIN(e.federalEIN)}</span>}
+                    </button>
+                  ))}
                 </div>
-              ) : (
-                <button onClick={() => setAddingMid(true)}
-                  className="mt-2 w-full flex items-center justify-center gap-1.5 border border-dashed border-white/10 hover:border-blue-500/30 hover:text-blue-400 rounded-lg py-2 text-xs font-semibold text-gray-600 transition-all">
-                  <Plus className="w-3 h-3" /> Add MID (same address, different Merchant ID)
-                </button>
               )}
             </div>
           )}
+          {allMidsComplete && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
+          <span className="text-[10px] font-semibold text-gray-500 bg-white/5 rounded-full px-2 py-0.5">
+            {locMids.length} MID{locMids.length !== 1 ? 's' : ''}
+          </span>
+          <button onClick={e => { e.stopPropagation(); onDelete(location); }}
+            className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+          <button onClick={() => setExpanded(e => !e)} className="p-1.5 text-gray-500 hover:text-white transition-colors">
+            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+        </div>
+      </div>
+
+      {/* MIDs list */}
+      {expanded && (
+        <div className="border-t border-white/5 px-4 pb-3 pt-2">
+          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Merchant Applications (MIDs)</p>
+          <div className="space-y-1.5">
+            {locMids.map(mid => (
+              <MidCard
+                key={mid.id}
+                mid={mid}
+                locationId={location.id}
+                corporateId={corporateId}
+                dbaName={location.dbaName}
+                onUpdated={onMerchantIDUpdated}
+                onDelete={onMerchantIDDeleted}
+              />
+            ))}
+          </div>
+
+          {/* Add MID */}
+          {addingMid ? (
+            <div className="mt-2 flex gap-2 items-center">
+              <input
+                value={addMidName}
+                onChange={e => setAddMidName(e.target.value)}
+                placeholder={`e.g. ${location.dbaName} – Bar`}
+                className={`${inputCls} text-xs py-2`}
+                autoFocus
+                onKeyDown={e => { if (e.key === 'Enter') handleAddMid(); if (e.key === 'Escape') setAddingMid(false); }}
+              />
+              <button onClick={handleAddMid} disabled={addMidSaving}
+                className="flex-shrink-0 flex items-center gap-1 bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-blue-500/30 transition-colors disabled:opacity-50">
+                {addMidSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Add
+              </button>
+              <button onClick={() => setAddingMid(false)} className="flex-shrink-0 p-2 text-gray-500 hover:text-white"><X className="w-3 h-3" /></button>
+            </div>
+          ) : (
+            <button onClick={() => setAddingMid(true)}
+              className="mt-2 w-full flex items-center justify-center gap-1.5 border border-dashed border-white/10 hover:border-blue-500/30 hover:text-blue-400 rounded-lg py-2 text-xs font-semibold text-gray-600 transition-all">
+              <Plus className="w-3 h-3" /> Add MID (same address, different Merchant ID)
+            </button>
+          )}
         </div>
       )}
-    </Draggable>
+    </div>
+  );
+}
+
+// ─── Add Entity Modal ─────────────────────────────────────────────────────────
+
+function AddEntityModal({ corporateId, profile, onSaved, onClose }) {
+  const [name, setName] = useState('');
+  const [ein, setEin] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const einDigits = ein.replace(/\D/g, '');
+  const canSave = name.trim() && einDigits.length === 9;
+
+  const handleSave = async () => {
+    if (!canSave) return;
+    setSaving(true); setError('');
+    try {
+      const res = await base44.functions.invoke('manageLegalEntity', {
+        action: 'create', corporateId,
+        data: { legalBusinessName: name.trim(), federalEIN: einDigits },
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      onSaved(res.data?.entity);
+    } catch (err) { setError(err.message || 'Failed to create entity.'); }
+    finally { setSaving(false); }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-4" onClick={onClose}>
+      <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-purple-500/15 flex items-center justify-center">
+              <Building2 className="w-4 h-4 text-purple-400" />
+            </div>
+            <div>
+              <h3 className="font-bold text-white text-sm">Add Legal Entity</h3>
+              <p className="text-[10px] text-gray-500">New EIN / legal business name</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white p-1.5 rounded-lg transition-colors"><X className="w-4 h-4" /></button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className={labelCls}>Legal Business Name *</label>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Northside LLC" className={inputCls} autoFocus />
+          </div>
+          <div>
+            <label className={labelCls}>Federal EIN *</label>
+            <input value={ein} onChange={e => setEin(e.target.value.replace(/\D/g, '').slice(0, 9))}
+              placeholder="9 digits" className={`${inputCls} font-mono ${ein.length > 0 && einDigits.length !== 9 ? 'border-amber-500/50' : ''}`} />
+            {ein.length > 0 && einDigits.length !== 9 && <p className="text-[10px] text-amber-400 mt-1">{einDigits.length}/9 digits</p>}
+            {einDigits.length === 9 && <p className="text-[10px] text-green-400 mt-1 flex items-center gap-1"><Check className="w-3 h-3" /> Valid EIN</p>}
+          </div>
+          {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300">{error}</div>}
+          <div className="flex gap-3 pt-1">
+            <button onClick={handleSave} disabled={saving || !canSave}
+              className="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold text-sm py-2.5 rounded-xl transition-all">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              {saving ? 'Creating…' : 'Create Entity'}
+            </button>
+            <button onClick={onClose} className="px-4 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl transition-all hover:text-white">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>, document.body
   );
 }
 
 // ─── Add Location Form ────────────────────────────────────────────────────────
 
-function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel }) {
-  const hasEntities = entities.length > 0;
-  const isSingleEntity = entities.length === 1;
+function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel, onAddEntity }) {
   const [dbaName, setDbaName] = useState('');
   const [addressDisplay, setAddressDisplay] = useState('');
   const [parsedAddress, setParsedAddress] = useState(null);
   const [unverifiedWarning, setUnverifiedWarning] = useState(false);
-  // Single entity: always use existing (no choice shown). Multi: default to existing.
-  const [entityChoice, setEntityChoice] = useState(hasEntities ? 'existing' : 'new');
   const [selectedEntityId, setSelectedEntityId] = useState(entities[0]?.entityId || '');
-  const [newEntityName, setNewEntityName] = useState(!hasEntities ? (profile?.legalName || '') : '');
-  const [newEntityEIN, setNewEntityEIN] = useState(() => {
-    if (hasEntities) return '';
-    return (profile?.taxId || '').replace(/\D/g, '').slice(0, 9);
-  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const addrRef = useRef(null);
-  usePlacesAutocomplete(addrRef, (parsed) => { setAddressDisplay(parsed.display); setParsedAddress(parsed); setUnverifiedWarning(false); });
 
-  const newEINDigits = newEntityEIN.replace(/\D/g, '');
-  // Single entity: always valid (auto-assigned). Multi/new entity: validate name + EIN.
-  const newEntityValid = isSingleEntity || entityChoice !== 'new' || (newEntityName.trim().length > 0 && newEINDigits.length === 9);
+  // Keep selectedEntityId in sync if new entity is added
+  useEffect(() => {
+    if (entities.length > 0 && !selectedEntityId) {
+      setSelectedEntityId(entities[0].entityId);
+    }
+  }, [entities]);
+
+  usePlacesAutocomplete(addrRef, (parsed) => { setAddressDisplay(parsed.display); setParsedAddress(parsed); setUnverifiedWarning(false); });
 
   const doSave = async (addr) => {
     setSaving(true); setError('');
@@ -374,16 +437,11 @@ function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel }) 
         corporateId, dbaName: dbaName.trim(),
         businessAddress, businessStreet: addr?.street || '', businessCity: addr?.city || '',
         businessState: addr?.state || '', businessZip: addr?.zip || '',
+        entityId: selectedEntityId || undefined,
       };
-      if (entityChoice === 'existing') {
-        payload.entityId = selectedEntityId;
-      } else if (entityChoice === 'new') {
-        payload.newEntityName = newEntityName.trim();
-        payload.newEntityEIN = newEINDigits;
-      }
       const locRes = await base44.functions.invoke('addSelfServeLocation', payload);
       if (locRes.data?.error) throw new Error(locRes.data.error);
-      onSaved({ location: locRes.data.location, merchantID: locRes.data.merchantID, reloadEntities: entityChoice === 'new' });
+      onSaved({ location: locRes.data.location, merchantID: locRes.data.merchantID });
     } catch (err) { setError(err.message || 'Failed to save.'); }
     finally { setSaving(false); }
   };
@@ -392,8 +450,6 @@ function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel }) 
     e.preventDefault(); setError('');
     if (!dbaName.trim()) { setError('Store name is required.'); return; }
     if (!addressDisplay.trim()) { setError('Address is required.'); return; }
-    if (entityChoice === 'new' && !newEntityName.trim()) { setError('Legal business name is required.'); return; }
-    if (entityChoice === 'new' && newEINDigits.length !== 9) { setError('A valid 9-digit EIN is required.'); return; }
     if (!parsedAddress) { setUnverifiedWarning(true); return; }
     await doSave(parsedAddress);
   };
@@ -444,50 +500,30 @@ function AddLocationForm({ corporateId, profile, entities, onSaved, onCancel }) 
           </div>
         </div>
 
-        {/* Entity assignment — hidden for single-entity (auto-assigned), shown for multi or no-entity */}
-        {!isSingleEntity && (
+        {/* Entity assignment — only shown when multiple entities exist */}
+        {entities.length > 1 && (
           <div>
-            <label className={labelCls}>Legal Entity *</label>
-            {hasEntities && (
-              <div className="flex gap-2 mb-3">
-                <button type="button" onClick={() => setEntityChoice('existing')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold border transition-all ${entityChoice === 'existing' ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
-                  <Building2 className="w-3.5 h-3.5" /> Use Existing Entity
-                </button>
-                <button type="button" onClick={() => setEntityChoice('new')}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold border transition-all ${entityChoice === 'new' ? 'bg-purple-500/15 border-purple-500/40 text-purple-300' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
-                  <Plus className="w-3.5 h-3.5" /> New EIN / Entity
-                </button>
-              </div>
-            )}
-            {entityChoice === 'existing' && hasEntities && (
-              <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)} className={inputCls} style={{ colorScheme: 'dark' }}>
-                {entities.map(e => <option key={e.entityId} value={e.entityId}>{e.legalBusinessName} {e.federalEIN ? `— ${formatEIN(e.federalEIN)}` : ''}</option>)}
-              </select>
-            )}
-            {entityChoice === 'new' && (
-              <div className="bg-white/[0.02] border border-purple-500/20 rounded-xl p-4 space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Legal Business Name *</label>
-                    <input value={newEntityName} onChange={e => setNewEntityName(e.target.value)} placeholder="e.g. Main St LLC" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Federal EIN *</label>
-                    <input value={newEntityEIN} onChange={e => setNewEntityEIN(e.target.value.replace(/\D/g, '').slice(0, 9))}
-                      placeholder="9 digits" className={`${inputCls} ${newEntityEIN.length > 0 && newEINDigits.length !== 9 ? 'border-amber-500/50' : ''}`} />
-                    {newEntityEIN.length > 0 && newEINDigits.length !== 9 && <p className="text-[10px] text-amber-400 mt-1">{newEINDigits.length}/9 digits</p>}
-                    {newEINDigits.length === 9 && <p className="text-[10px] text-green-400 mt-1 flex items-center gap-1"><Check className="w-3 h-3" /> Valid EIN</p>}
-                  </div>
-                </div>
-              </div>
-            )}
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelCls + ' mb-0'}>Legal Entity *</label>
+              <button type="button" onClick={onAddEntity}
+                className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-1 font-semibold">
+                <Plus className="w-3 h-3" /> New Entity
+              </button>
+            </div>
+            <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)}
+              className={inputCls} style={{ colorScheme: 'dark' }}>
+              {entities.map(e => (
+                <option key={e.entityId} value={e.entityId}>
+                  {e.legalBusinessName}{e.federalEIN ? ` — ${formatEIN(e.federalEIN)}` : ''}
+                </option>
+              ))}
+            </select>
           </div>
         )}
 
         {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300">{error}</div>}
         <div className="flex gap-3 pt-1">
-          <button type="submit" disabled={saving || !newEntityValid}
+          <button type="submit" disabled={saving}
             className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-600 disabled:to-gray-600 disabled:text-gray-400 text-black font-bold text-sm px-5 py-3 rounded-xl transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             {saving ? 'Adding…' : 'Add Location'}
@@ -508,10 +544,10 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const [merchantIDs, setMerchantIDs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showAddEntity, setShowAddEntity] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleteMidConfirm, setDeleteMidConfirm] = useState(null);
   const [showBackConfirm, setShowBackConfirm] = useState(false);
-  const [movingItem, setMovingItem] = useState(false);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -543,17 +579,17 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     await loadAll();
   };
 
+  const handleEntityCreated = (entity) => {
+    setShowAddEntity(false);
+    if (entity) setEntities(prev => [...prev, entity]);
+  };
+
   const handleDeleteLocation = async (loc) => {
     setDeleteConfirm(null);
     try {
       await base44.functions.invoke('removeSelfServeLocation', { locationId: loc.id });
-      const remaining = locations.filter(l => l.id !== loc.id && l.entityId === loc.entityId);
       setLocations(prev => prev.filter(l => l.id !== loc.id));
       setMerchantIDs(prev => prev.filter(c => c.locationId !== loc.id));
-      if (remaining.length === 0 && loc.entityId) {
-        try { await base44.functions.invoke('manageLegalEntity', { action: 'delete', corporateId: profile.corporateId, entityId: loc.entityId }); } catch (_) {}
-        setEntities(prev => prev.filter(e => e.entityId !== loc.entityId));
-      }
     } catch (_) {}
   };
 
@@ -565,74 +601,26 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     } catch (_) {}
   };
 
-  const handleMerchantIDUpdated = (updated) => {
-    setMerchantIDs(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c));
+  const handleEntityChanged = (locationId, newEntityId) => {
+    setLocations(prev => prev.map(l => l.id === locationId ? { ...l, entityId: newEntityId } : l));
   };
-
-  // Drag and drop handler
-  const onDragEnd = async ({ type, source, destination, draggableId }) => {
-    if (!destination) return;
-    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
-
-    if (type === 'LOCATION') {
-      // Moving a location between entities (droppableId = entityId)
-      const locId = draggableId.replace('loc-', '');
-      const targetEntityId = destination.droppableId;
-      if (!targetEntityId || targetEntityId === 'unassigned') return;
-
-      // Optimistic update
-      setLocations(prev => prev.map(l => l.id === locId ? { ...l, entityId: targetEntityId } : l));
-      setMovingItem(true);
-      try {
-        await base44.functions.invoke('batchUpdateStatus', { corporateId: profile.corporateId, action: 'moveToEntity', locationIds: [locId], targetEntityId });
-      } catch (_) {
-        await loadAll(); // revert on error
-      } finally { setMovingItem(false); }
-    } else if (type === 'MID') {
-      // Moving a MID between locations (droppableId = `mids-${locationId}`)
-      const midId = draggableId.replace('mid-', '');
-      const targetLocId = destination.droppableId.replace('mids-', '');
-      const targetLoc = locations.find(l => l.id === targetLocId);
-      if (!targetLoc) return;
-
-      // Optimistic update
-      setMerchantIDs(prev => prev.map(c => c.id === midId ? { ...c, locationId: targetLocId } : c));
-      setMovingItem(true);
-      try {
-        await base44.functions.invoke('manageMerchantID', { action: 'update', corporateId: profile.corporateId, merchantIDId: midId, locationId: targetLocId, data: { locationId: targetLocId } });
-      } catch (_) {
-        await loadAll(); // revert on error
-      } finally { setMovingItem(false); }
-    }
-  };
-
-  // Group locations by entity.
-  // If there's only 1 entity and a location has no entityId, treat it as belonging to that entity
-  // (covers the common single-entity case where entityId wasn't saved on the location record).
-  const singleEntityId = entities.length === 1 ? entities[0].entityId : null;
-  const grouped = {};
-  locations.forEach(l => {
-    const key = l.entityId || singleEntityId || 'unassigned';
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(l);
-  });
 
   const businessComplete = !!(
     currentProfile.taxId && currentProfile.ownershipType && currentProfile.taxClassType &&
-    currentProfile.productDescription && currentProfile.establishmentYear && currentProfile.titleType
-  );
-
-  const allMidsComplete = businessComplete && locations.length > 0 && locations.every(l =>
-    merchantIDs.some(c => c.locationId === l.id && c.mccCode && c.monthlyCardSales)
+    currentProfile.establishmentYear && currentProfile.titleType
   );
 
   const totalMids = merchantIDs.length;
   const completeMids = merchantIDs.filter(c => c.mccCode && c.monthlyCardSales).length;
 
+  const allMidsComplete = businessComplete && locations.length > 0 && locations.every(l =>
+    merchantIDs.some(c => c.locationId === l.id && c.mccCode && c.monthlyCardSales)
+  );
+
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-24 gap-3">
       <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
-      <p className="text-sm text-gray-500">Loading your org structure…</p>
+      <p className="text-sm text-gray-500">Loading your locations…</p>
     </div>
   );
 
@@ -642,12 +630,12 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       <div className="px-8 pt-8 pb-6 border-b border-white/10">
         <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
           <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-          STEP 2 OF 3 — ORG STRUCTURE &amp; MIDS
+          STEP 2 OF 3 — LOCATIONS &amp; MIDS
         </div>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-1.5">Build Your Merchant Org Chart</h2>
-            <p className="text-gray-400 text-sm">Add locations, assign them to legal entities, and fill out each MID's processing details. Drag to reorganize.</p>
+            <h2 className="text-2xl font-bold text-white mb-1.5">Locations &amp; Processing Setup</h2>
+            <p className="text-gray-400 text-sm">Add each storefront and fill in its MCC code and volume details.</p>
           </div>
           <button onClick={() => setShowBackConfirm(true)}
             className="flex-shrink-0 flex items-center gap-2 text-sm font-medium text-gray-300 border border-white/15 hover:border-white/30 hover:bg-white/5 px-4 py-2 rounded-xl transition-all">
@@ -665,8 +653,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">MIDs Complete</p>
             <p className={`text-lg font-bold ${completeMids === totalMids && totalMids > 0 ? 'text-green-400' : 'text-amber-400'}`}>{completeMids}/{totalMids}</p>
           </div>
-          {entities.length > 1 && <div><p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Legal Entities</p><p className="text-lg font-bold text-amber-400">{entities.length}</p></div>}
-          {movingItem && <div className="ml-auto flex items-center gap-2 text-xs text-gray-400"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</div>}
+          {entities.length > 1 && (
+            <div><p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Legal Entities</p><p className="text-lg font-bold text-purple-400">{entities.length}</p></div>
+          )}
         </div>
       )}
 
@@ -678,8 +667,21 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         />
       </div>
 
-      {/* Org chart */}
+      {/* Locations list */}
       <div className="px-8 py-6">
+        {/* Multi-entity toolbar */}
+        {locations.length > 0 && (
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+              {entities.length > 1 ? `${entities.length} Legal Entities · ${locations.length} Locations` : `${locations.length} Location${locations.length !== 1 ? 's' : ''}`}
+            </p>
+            <button onClick={() => setShowAddEntity(true)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-purple-400 hover:text-purple-300 border border-purple-500/20 hover:border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 px-3 py-1.5 rounded-lg transition-all">
+              <Plus className="w-3 h-3" /> Add Legal Entity
+            </button>
+          </div>
+        )}
+
         {locations.length === 0 && !showAddForm && (
           <div className="text-center py-16 border border-dashed border-white/10 rounded-2xl">
             <Store className="w-12 h-12 text-gray-600 mx-auto mb-4" />
@@ -688,94 +690,34 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           </div>
         )}
 
-        <DragDropContext onDragEnd={onDragEnd}>
-          <div className="space-y-6">
-            {entities.map(entity => {
-              const entityLocs = grouped[entity.entityId] || [];
-              return (
-                <div key={entity.entityId} className="bg-white/[0.015] border border-white/8 rounded-2xl overflow-hidden">
-                  {/* Entity header — only show EIN if different from corporate profile (multi-entity) */}
-                  {entities.length > 1 && (
-                    <div className="flex items-center gap-3 px-5 py-3 bg-white/[0.02] border-b border-white/5">
-                      <Building2 className="w-4 h-4 text-amber-400/70 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-xs font-bold text-amber-300/90 uppercase tracking-wider">{entity.legalBusinessName}</span>
-                        {entity.federalEIN && <span className="ml-2 text-[10px] text-gray-500 font-mono">{formatEIN(entity.federalEIN)}</span>}
-                      </div>
-                      <span className="text-[10px] text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''}</span>
-                    </div>
-                  )}
-
-                  {/* Drop zone for locations */}
-                  <Droppable droppableId={entity.entityId} type="LOCATION">
-                    {(provided, snapshot) => (
-                      <div
-                        ref={provided.innerRef}
-                        {...provided.droppableProps}
-                        className={`p-3 space-y-2 min-h-[56px] transition-colors ${snapshot.isDraggingOver ? 'bg-amber-500/5' : ''}`}
-                      >
-                        {entityLocs.map((loc, idx) => (
-                          <LocationOrgCard
-                            key={loc.id}
-                            location={loc}
-                            index={idx}
-                            corporateId={profile.corporateId}
-                            merchantIDs={merchantIDs}
-                            onDelete={l => setDeleteConfirm(l)}
-                            onMerchantIDAdded={c => setMerchantIDs(prev => [...prev, c])}
-                            onMerchantIDUpdated={handleMerchantIDUpdated}
-                            onMerchantIDDeleted={m => setDeleteMidConfirm(m)}
-                          />
-                        ))}
-                        {provided.placeholder}
-                        {entityLocs.length === 0 && !snapshot.isDraggingOver && (
-                          <p className="text-center text-xs text-gray-600 py-3">Drop a location here</p>
-                        )}
-                      </div>
-                    )}
-                  </Droppable>
-                </div>
-              );
-            })}
-
-            {/* Unassigned locations — only shown for multi-entity merchants */}
-            {(grouped['unassigned'] || []).length > 0 && entities.length > 1 && (
-              <div className="bg-white/[0.015] border border-dashed border-amber-500/20 rounded-2xl overflow-hidden">
-                <div className="px-5 py-3 border-b border-white/5 flex items-center gap-2">
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="text-xs font-bold text-amber-400/80 uppercase tracking-wider">Unassigned Locations</span>
-                  <span className="text-[10px] text-gray-500 ml-1">— drag into a legal entity above</span>
-                </div>
-                <Droppable droppableId="unassigned" type="LOCATION">
-                  {(provided) => (
-                    <div ref={provided.innerRef} {...provided.droppableProps} className="p-3 space-y-2 min-h-[56px]">
-                      {(grouped['unassigned'] || []).map((loc, idx) => (
-                        <LocationOrgCard key={loc.id} location={loc} index={idx} corporateId={profile.corporateId} merchantIDs={merchantIDs}
-                          onDelete={l => setDeleteConfirm(l)} onMerchantIDAdded={c => setMerchantIDs(prev => [...prev, c])}
-                          onMerchantIDUpdated={handleMerchantIDUpdated} onMerchantIDDeleted={m => setDeleteMidConfirm(m)} />
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </div>
-            )}
-          </div>
-        </DragDropContext>
-
-        {/* Hint when multiple entities */}
-        {entities.length > 1 && locations.length > 0 && (
-          <div className="mt-4 flex items-center gap-2 bg-white/[0.02] border border-white/5 rounded-xl px-4 py-2.5">
-            <Info className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-            <p className="text-[11px] text-gray-500">Drag location cards between entity sections to reassign them. Drag MID cards between locations to move them.</p>
-          </div>
-        )}
+        <div className="space-y-3">
+          {locations.map(loc => (
+            <LocationCard
+              key={loc.id}
+              location={loc}
+              entities={entities}
+              corporateId={profile.corporateId}
+              merchantIDs={merchantIDs}
+              onDelete={l => setDeleteConfirm(l)}
+              onMerchantIDAdded={c => setMerchantIDs(prev => [...prev, c])}
+              onMerchantIDUpdated={updated => setMerchantIDs(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))}
+              onMerchantIDDeleted={m => setDeleteMidConfirm(m)}
+              onEntityChanged={handleEntityChanged}
+            />
+          ))}
+        </div>
 
         {/* Add Location Form */}
         {showAddForm && (
           <div className="mt-4">
-            <AddLocationForm corporateId={profile.corporateId} profile={profile} entities={entities}
-              onSaved={handleLocationSaved} onCancel={() => setShowAddForm(false)} />
+            <AddLocationForm
+              corporateId={profile.corporateId}
+              profile={profile}
+              entities={entities}
+              onSaved={handleLocationSaved}
+              onCancel={() => setShowAddForm(false)}
+              onAddEntity={() => setShowAddEntity(true)}
+            />
           </div>
         )}
 
@@ -805,6 +747,16 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           </p>
         )}
       </div>
+
+      {/* Add Entity Modal */}
+      {showAddEntity && (
+        <AddEntityModal
+          corporateId={profile.corporateId}
+          profile={profile}
+          onSaved={handleEntityCreated}
+          onClose={() => setShowAddEntity(false)}
+        />
+      )}
 
       {/* Delete location confirm */}
       {deleteConfirm && createPortal(
