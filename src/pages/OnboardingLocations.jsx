@@ -442,11 +442,13 @@ function AddEntityModal({ corporateId, onSaved, onClose }) {
     setSaving(true); setError('');
     try {
       const res = await base44.functions.invoke('manageLegalEntity', {
-        action: 'create', corporateId,
-        data: { legalBusinessName: name.trim(), federalEIN: einDigits },
+        action: 'add', corporateId,
+        legalBusinessName: name.trim(), federalEIN: einDigits,
       });
       if (res.data?.error) throw new Error(res.data.error);
-      onSaved(res.data?.entity);
+      // Function returns updated entities array — extract the last one (newly created)
+      const newEntities = res.data?.entities || [];
+      onSaved(newEntities[newEntities.length - 1]);
     } catch (err) { setError(err.message || 'Failed to create entity.'); }
     finally { setSaving(false); }
   };
@@ -495,7 +497,7 @@ function AddEntityModal({ corporateId, onSaved, onClose }) {
 
 // ─── Add Location Form ────────────────────────────────────────────────────────
 
-function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSaved, onCancel }) {
+function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSaved, onCancel, onEntityAdded }) {
   const [dbaName, setDbaName] = useState('');
   const [addressDisplay, setAddressDisplay] = useState('');
   const [parsedAddress, setParsedAddress] = useState(null);
@@ -504,6 +506,34 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSa
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const addrRef = useRef(null);
+  // Add Entity inline
+  const [showAddEntity, setShowAddEntity] = useState(false);
+  const [newEntityName, setNewEntityName] = useState('');
+  const [newEntityEIN, setNewEntityEIN] = useState('');
+  const [addingEntity, setAddingEntity] = useState(false);
+  const [addEntityError, setAddEntityError] = useState('');
+
+  const handleAddEntity = async () => {
+    const einDigits = newEntityEIN.replace(/\D/g, '');
+    if (!newEntityName.trim() || einDigits.length !== 9) return;
+    setAddingEntity(true); setAddEntityError('');
+    try {
+      const res = await base44.functions.invoke('manageLegalEntity', {
+        action: 'add', corporateId,
+        legalBusinessName: newEntityName.trim(), federalEIN: einDigits,
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      const newEntities = res.data?.entities || [];
+      const created = newEntities[newEntities.length - 1];
+      if (created) {
+        onEntityAdded(created);
+        setSelectedEntityId(created.entityId);
+        setShowAddEntity(false);
+        setNewEntityName(''); setNewEntityEIN('');
+      }
+    } catch (err) { setAddEntityError(err.message || 'Failed to create entity.'); }
+    finally { setAddingEntity(false); }
+  };
 
   usePlacesAutocomplete(addrRef, (parsed) => { setAddressDisplay(parsed.display); setParsedAddress(parsed); setUnverifiedWarning(false); });
 
@@ -577,10 +607,37 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSa
           </div>
         </div>
 
-        {/* Entity selector — only shown when multiple entities exist */}
-        {entities.length > 1 && (
-          <div>
-            <label className={labelCls}>Legal Entity *</label>
+        {/* Entity selector — always shown so user can also add a new entity */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className={labelCls + ' mb-0'}>Legal Entity</label>
+            <button type="button" onClick={() => setShowAddEntity(e => !e)}
+              className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 transition-colors">
+              <Plus className="w-3 h-3" /> New Legal Entity
+            </button>
+          </div>
+          {showAddEntity ? (
+            <div className="bg-[#111318] border border-purple-500/30 rounded-xl p-3 space-y-2">
+              <p className="text-[10px] font-bold text-purple-300 uppercase tracking-wider">New Legal Entity</p>
+              <input value={newEntityName} onChange={e => setNewEntityName(e.target.value)}
+                placeholder="Legal Business Name" className={inputCls} autoFocus />
+              <input value={newEntityEIN} onChange={e => setNewEntityEIN(e.target.value.replace(/\D/g,'').slice(0,9))}
+                placeholder="Federal EIN (9 digits)" className={`${inputCls} font-mono`} />
+              {newEntityEIN.length > 0 && newEntityEIN.replace(/\D/g,'').length !== 9 && (
+                <p className="text-[10px] text-amber-400">{newEntityEIN.replace(/\D/g,'').length}/9 digits</p>
+              )}
+              {addEntityError && <p className="text-[11px] text-red-400">{addEntityError}</p>}
+              <div className="flex gap-2">
+                <button type="button" onClick={handleAddEntity} disabled={addingEntity || !newEntityName.trim() || newEntityEIN.replace(/\D/g,'').length !== 9}
+                  className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold text-xs px-3 py-2 rounded-lg transition-all">
+                  {addingEntity ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                  {addingEntity ? 'Creating…' : 'Create Entity'}
+                </button>
+                <button type="button" onClick={() => { setShowAddEntity(false); setAddEntityError(''); }}
+                  className="text-xs text-gray-500 hover:text-white border border-white/10 px-3 py-2 rounded-lg transition-colors">Cancel</button>
+              </div>
+            </div>
+          ) : (
             <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)}
               className={inputCls} style={{ colorScheme: 'dark' }}>
               {entities.map(e => (
@@ -589,8 +646,8 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSa
                 </option>
               ))}
             </select>
-          </div>
-        )}
+          )}
+        </div>
 
         {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300">{error}</div>}
         <div className="flex gap-3 pt-1">
@@ -616,7 +673,6 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const [loading, setLoading] = useState(true);
   // addFormEntityId: null = hidden, string = show form pre-targeted to that entity
   const [addFormEntityId, setAddFormEntityId] = useState(null);
-  const [showAddEntity, setShowAddEntity] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleteMidConfirm, setDeleteMidConfirm] = useState(null);
   const [showBackConfirm, setShowBackConfirm] = useState(false);
@@ -643,13 +699,11 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       if (finalEntities.length === 0) {
         try {
           const seedRes = await base44.functions.invoke('manageLegalEntity', {
-            action: 'create', corporateId: profile.corporateId,
-            data: {
-              legalBusinessName: profile.legalName || 'Primary Entity',
-              federalEIN: (profile.taxId || '').replace(/\D/g, ''),
-            },
+            action: 'add', corporateId: profile.corporateId,
+            legalBusinessName: profile.legalName || 'Primary Entity',
+            federalEIN: (profile.taxId || '').replace(/\D/g, ''),
           });
-          if (seedRes.data?.entity) finalEntities = [seedRes.data.entity];
+          if (seedRes.data?.entities?.length) finalEntities = seedRes.data.entities;
         } catch (_) {}
       }
 
@@ -673,11 +727,8 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     await loadAll();
   };
 
-  const handleEntityCreated = async (entity) => {
-    setShowAddEntity(false);
-    if (entity) {
-      setEntities(prev => [...prev, entity]);
-    }
+  const handleEntityAdded = (entity) => {
+    if (entity) setEntities(prev => [...prev, entity]);
   };
 
   const handleDeleteLocation = async (loc) => {
@@ -782,10 +833,6 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
             {entities.length > 1 ? `${entities.length} Legal Entities` : 'Org Structure'}
           </p>
-          <button onClick={() => setShowAddEntity(true)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-purple-400 hover:text-purple-300 border border-purple-500/20 hover:border-purple-500/40 bg-purple-500/5 hover:bg-purple-500/10 px-3 py-1.5 rounded-lg transition-all">
-            <Plus className="w-3 h-3" /> Add Legal Entity
-          </button>
         </div>
 
         <DragDropContext onDragEnd={onDragEnd}>
@@ -817,6 +864,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             defaultEntityId={addFormEntityId}
             onSaved={handleLocationSaved}
             onCancel={() => setAddFormEntityId(null)}
+            onEntityAdded={handleEntityAdded}
           />
         )}
       </div>
@@ -838,11 +886,6 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           </p>
         )}
       </div>
-
-      {/* Add Entity Modal */}
-      {showAddEntity && (
-        <AddEntityModal corporateId={profile.corporateId} onSaved={handleEntityCreated} onClose={() => setShowAddEntity(false)} />
-      )}
 
       {/* Delete location confirm */}
       {deleteConfirm && createPortal(
