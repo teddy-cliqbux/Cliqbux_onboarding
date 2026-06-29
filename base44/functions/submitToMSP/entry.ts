@@ -511,8 +511,21 @@ Deno.serve(async (req) => {
       }
 
       try {
-        // ── Step 1: Create draft application (skip if already has one) ────────
+        // ── Step 1: Create draft application (skip if already has one, unless it was deleted) ────────
         let mspApplicationNo = concept.mspApplicationNo;
+
+        // If we have a stored application number, verify it still exists in MSP.
+        // If it was deleted from the MSP dashboard, clear it so we create a fresh draft.
+        if (mspApplicationNo) {
+          const checkRes = await fetch(`${mspBase}/applications/${mspApplicationNo}`, { headers: mspHeaders });
+          if (checkRes.status === 404) {
+            console.warn(`[submitToMSP] Application ${mspApplicationNo} not found in MSP (deleted?) — will create a new draft for "${concept.dbaName}"`);
+            mspApplicationNo = null;
+            await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { mspApplicationNo: null });
+          } else {
+            console.log(`[submitToMSP] Reusing existing draft ${mspApplicationNo} for "${concept.dbaName}"`);
+          }
+        }
 
         if (!mspApplicationNo) {
           const isCashDiscount = (concept.pricingMethod || profile.pricingMethod || '').toUpperCase() === 'CASH_DISCOUNT';
@@ -553,8 +566,6 @@ Deno.serve(async (req) => {
             mspApplicationNo: String(mspApplicationNo),
             applicationStepStatus: 'In Review',
           });
-        } else {
-          console.log(`[submitToMSP] Reusing existing draft ${mspApplicationNo} for "${concept.dbaName}"`);
         }
 
         // ── Step 2: Fill form ─────────────────────────────────────────────────
