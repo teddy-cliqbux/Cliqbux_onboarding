@@ -443,6 +443,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
   // Core save — uses refs so it's never stale
   const executeSave = async (ot, tc, ey) => {
     if (!ot || !tc || !ey) return;
+    console.log('[EntityDetailsPanel] executeSave →', { corporateId, entityId: entityIdRef.current, ot, tc, ey });
     setSaving(true);
     setSaveError(null);
     try {
@@ -450,6 +451,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
         action: 'edit', corporateId, entityId: entityIdRef.current,
         ownershipType: ot, taxClassType: tc, establishmentYear: ey,
       });
+      console.log('[EntityDetailsPanel] manageLegalEntity response →', res.data);
       if (res.data?.error) throw new Error(res.data.error);
 
       const { years, months } = deriveOwnership(ey);
@@ -459,6 +461,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
       });
       setSavedAt(Date.now());
       onUpdatedRef.current({ ...entity, ownershipType: ot, taxClassType: tc, establishmentYear: ey });
+      console.log('[EntityDetailsPanel] save complete ✓');
     } catch (err) {
       setSaveError(err?.message || 'Save failed');
       console.error('[EntityDetailsPanel] save failed:', err);
@@ -982,6 +985,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         base44.functions.invoke('listLocations', { corporateId: profile.corporateId }),
         base44.functions.invoke('manageMerchantID', { action: 'list', corporateId: profile.corporateId }),
       ]);
+      console.log('[loadAll] raw entities from DB →', entRes.data?.entities);
       const loadedEntities = (entRes.data?.entities || []).map(e => ({
         ...e,
         mailingStreet: e.mailingStreet || '',
