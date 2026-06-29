@@ -199,8 +199,9 @@ function buildFormPayload(
     ownership_years: String(profile.currentOwnershipYears || '1'),
     ownership_months: String(profile.currentOwnershipMonths || '0'),
     ownership_type: ownershipType,
-    tin: taxId,
-    ...((!taxId && ssn) ? { ssn } : {}),
+    // Only send TIN/SSN when non-empty — MSPWare rejects the ENTIRE payload for invalid formats
+    ...(taxId ? { tin: taxId } : {}),
+    ...(!taxId && ssn ? { ssn } : {}),
     ...(isLLC ? { llc_class: mapLlcClass(ownershipRaw) } : {}),
     country_formation: 'USA',
     country_operations: 'USA',
@@ -286,13 +287,26 @@ function buildFormPayload(
     tokenization_platform_fee: '0.0000',
 
     // ── Bank Accounts ─────────────────────────────────────────────────────────
-    deposit_account_no: account,
-    deposit_account_rtg: routing,
+    // Only send when both routing and account are present — empty strings fail MSPWare validation
+    ...(routing && account ? {
+      deposit_account_no: account,
+      deposit_account_rtg: routing,
+      deposit_account_type: 'CK',   // CK = checking; SA = savings
+    } : {}),
 
     // ── Statements ────────────────────────────────────────────────────────────
     statement_delivery_method: 'E',
     chargebacks_retrievals_format: 'WM',
     chargebacks_retrievals_email: signer.signerEmail || profile.signerEmail || '',
+
+    // ── Additional required fields ────────────────────────────────────────────
+    state_of_formation: location.businessState || profile.stateOfFormation || '',
+    currently_processing: profile.currentlyProcessing ? 'Y' : 'N',
+    ...(profile.currentlyProcessing ? {
+      current_processor_name: profile.currentProcessorName || '',
+    } : {}),
+    seasonal_business: profile.isSeasonal ? 'Y' : 'N',
+    refund_policy: profile.refundPolicy || 'R',  // R=refund within 30d, E=exchange, N=no refund
   };
 }
 

@@ -154,8 +154,9 @@ function buildFormPayload(
     ownership_years: String(profile.currentOwnershipYears || '1'),
     ownership_months: String(profile.currentOwnershipMonths || '0'),
     ownership_type: ownershipType,
-    tin: taxId,
-    ...((!taxId && ssn) ? { ssn } : {}),
+    // Only send TIN/SSN when non-empty — MSPWare rejects the ENTIRE payload for invalid formats
+    ...(taxId ? { tin: taxId } : {}),
+    ...(!taxId && ssn ? { ssn } : {}),
     ...(isLLC ? { llc_class: mapLlcClass(ownershipRaw) } : {}),
     country_formation: 'USA',
     country_operations: 'USA',
@@ -227,11 +228,23 @@ function buildFormPayload(
     intl_card_handling_fee: '0.60',
     tokenization_service_fee: '0.0000',
     tokenization_platform_fee: '0.0000',
-    deposit_account_no: account,
-    deposit_account_rtg: routing,
+    // Only send bank details when both routing and account are present
+    ...(routing && account ? {
+      deposit_account_no: account,
+      deposit_account_rtg: routing,
+      deposit_account_type: 'CK',   // CK = checking (most common); SA = savings
+    } : {}),
     statement_delivery_method: 'E',
     chargebacks_retrievals_format: 'WM',
     chargebacks_retrievals_email: signer.signerEmail || profile.signerEmail || '',
+    // Additional fields commonly required for form completion
+    state_of_formation: location.businessState || profile.stateOfFormation || '',
+    currently_processing: profile.currentlyProcessing ? 'Y' : 'N',
+    ...(profile.currentlyProcessing ? {
+      current_processor_name: profile.currentProcessorName || '',
+    } : {}),
+    seasonal_business: profile.isSeasonal ? 'Y' : 'N',
+    refund_policy: profile.refundPolicy || 'R',  // R=refund, E=exchange, N=no refund, O=other
   };
 }
 
@@ -420,6 +433,22 @@ Deno.serve(async (req) => {
 
       let packageExists = statusRes.ok && statusData?.success && statusData?.signers?.length > 0;
 
+      // Re-fill form before every signing attempt to ensure latest data is in MSPWare
+      if (!packageExists) {
+        const location = locationMap[concept.locationId];
+        if (location) {
+          const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners);
+          const refillRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
+            method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
+          });
+          const refillData = await refillRes.json();
+          console.log(`[signApplication] Re-fill form ${refillRes.status} for ${mspApplicationNo}: ${refillData?.percent_complete ?? '?'}% complete`);
+          if (refillData?.completion_errors?.length) {
+            console.log(`[signApplication] Completion errors:`, JSON.stringify(refillData.completion_errors));
+          }
+        }
+      }
+
       // Create package if not yet done
       if (!packageExists) {
         console.log(`[signApplication] Creating signature package for app ${mspApplicationNo}`);
@@ -433,14 +462,31 @@ Deno.serve(async (req) => {
 
         if (!packageRes.ok || !packageData?.success) {
           const errMsg = packageData?.error || packageData?.message || `HTTP ${packageRes.status}`;
+
+          // Fetch current form status to surface specific missing fields to the UI
+          let percentComplete: number | null = null;
+          let formErrors: string[] = [];
+          try {
+            const formCheckRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
+            const formCheckData = await formCheckRes.json();
+            percentComplete = formCheckData?.percent_complete ?? null;
+            formErrors = [
+              ...(formCheckData?.completion_errors || []),
+              ...(formCheckData?.data_errors       || []),
+              ...(formCheckData?.rule_violations    || []),
+            ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || JSON.stringify(e)));
+          } catch { /* non-fatal */ }
+
           applications.push({
             mspApplicationNo,
-            conceptName,
+            merchantIDName: conceptName,
             signingUrl: null,
             signers: [],
             allSigned: false,
             error: `Application form incomplete: ${errMsg}`,
-            hint: 'Ensure all required fields are filled (bank account, SSN, DOB, addresses).',
+            hint: 'Complete all required fields and try again.',
+            percentComplete,
+            formErrors,
           });
           continue;
         }
