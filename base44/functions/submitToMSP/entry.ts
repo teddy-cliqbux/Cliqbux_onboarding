@@ -141,7 +141,14 @@ function buildFormPayload(
 
   // Concept-level fields override profile-level for per-MID differentiation
   const pricingCategory = String(concept.pricingCategory || profile.pricingCategory || '1');
-  const rawPricingMethod = concept.pricingMethod || profile.pricingMethod || 'ICPLS';
+  const TIER_TO_METHOD: Record<string, string> = {
+    'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
+    'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
+    'CASH_DISCOUNT': 'CLEAR', 'SELF_CASH_DISCOUNT': 'CLEAR',
+  };
+  const rawPricingMethod = concept.pricingMethod || profile.pricingMethod
+    || TIER_TO_METHOD[(concept.pricingTier || profile.pricingTier || '').toUpperCase()]
+    || 'ICPLS';
   const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'CLEAR' : rawPricingMethod;
   const industryType = concept.industryType || profile.industryType || mapIndustryType(pricingCategory);
   const mcc = concept.mccCode || profile.mccCode || '5999';
