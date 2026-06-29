@@ -416,57 +416,72 @@ function deriveOwnership(year) {
 function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
   const isComplete = !!(entity.ownershipType && entity.taxClassType && entity.establishmentYear);
   const [expanded, setExpanded] = useState(!isComplete);
-  const [form, setForm] = useState({
-    ownershipType: entity.ownershipType || '',
-    taxClassType: entity.taxClassType || '',
-    establishmentYear: entity.establishmentYear || '',
-  });
-  const [saving, setSaving] = useState(false);
-  const [savedAt, setSavedAt] = useState(null);
-  const saveTimerRef = useRef(null);
-  const latestRef = useRef(form);
 
-  const canSave = !!(form.ownershipType && form.taxClassType && form.establishmentYear);
+  // Three separate state values — no object, no stale-closure risk
+  const [ownershipType, setOwnershipType] = useState(entity.ownershipType || '');
+  const [taxClassType, setTaxClassType]   = useState(entity.taxClassType  || '');
+  const [estYear, setEstYear]             = useState(entity.establishmentYear || '');
 
-  const doSave = useCallback(async (f) => {
-    if (!f.ownershipType || !f.taxClassType || !f.establishmentYear) return;
+  const [saving, setSaving]     = useState(false);
+  const [savedAt, setSavedAt]   = useState(null);
+  const [saveError, setSaveError] = useState(null);
+
+  // Refs — always current, never stale
+  const entityIdRef    = useRef(entity.entityId);
+  const onUpdatedRef   = useRef(onUpdated);
+  const timerRef       = useRef(null);
+  onUpdatedRef.current = onUpdated; // keep in sync each render
+
+  // Sync if parent reloads different data into this entity slot
+  useEffect(() => {
+    entityIdRef.current = entity.entityId;
+    if (entity.ownershipType)     setOwnershipType(entity.ownershipType);
+    if (entity.taxClassType)      setTaxClassType(entity.taxClassType);
+    if (entity.establishmentYear) setEstYear(entity.establishmentYear);
+  }, [entity.entityId, entity.ownershipType, entity.taxClassType, entity.establishmentYear]);
+
+  // Core save — uses refs so it's never stale
+  const executeSave = async (ot, tc, ey) => {
+    if (!ot || !tc || !ey) return;
     setSaving(true);
-    const { years, months } = deriveOwnership(f.establishmentYear);
+    setSaveError(null);
     try {
-      await base44.functions.invoke('manageLegalEntity', {
-        action: 'edit', corporateId, entityId: entity.entityId,
-        ownershipType: f.ownershipType, taxClassType: f.taxClassType,
-        establishmentYear: f.establishmentYear,
+      const res = await base44.functions.invoke('manageLegalEntity', {
+        action: 'edit', corporateId, entityId: entityIdRef.current,
+        ownershipType: ot, taxClassType: tc, establishmentYear: ey,
       });
-      // Also persist to corporate profile for MSPWare submissions
+      if (res.data?.error) throw new Error(res.data.error);
+
+      const { years, months } = deriveOwnership(ey);
       await base44.functions.invoke('updateMerchantProfile', {
-        corporateId,
-        ownershipType: f.ownershipType, taxClassType: f.taxClassType,
-        establishmentYear: f.establishmentYear,
+        corporateId, ownershipType: ot, taxClassType: tc, establishmentYear: ey,
         currentOwnershipYears: years, currentOwnershipMonths: months,
       });
       setSavedAt(Date.now());
-      onUpdated({ ...entity, ...f });
-    } catch (_) {}
-    finally { setSaving(false); }
-  }, [corporateId, entity, onUpdated]);
-
-  const set = (k, v) => {
-    setForm(prev => {
-      const next = { ...prev, [k]: v };
-      latestRef.current = next;
-      clearTimeout(saveTimerRef.current);
-      if (next.ownershipType && next.taxClassType && next.establishmentYear) {
-        saveTimerRef.current = setTimeout(() => doSave(latestRef.current), 700);
-      }
-      return next;
-    });
+      onUpdatedRef.current({ ...entity, ownershipType: ot, taxClassType: tc, establishmentYear: ey });
+    } catch (err) {
+      setSaveError(err?.message || 'Save failed');
+      console.error('[EntityDetailsPanel] save failed:', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  useEffect(() => () => {
-    clearTimeout(saveTimerRef.current);
-    if (latestRef.current && latestRef.current.ownershipType) doSave(latestRef.current);
-  }, [doSave]);
+  // Debounced trigger — values passed explicitly, no closures
+  const scheduleSave = (ot, tc, ey) => {
+    clearTimeout(timerRef.current);
+    if (ot && tc && ey) {
+      timerRef.current = setTimeout(() => executeSave(ot, tc, ey), 600);
+    }
+  };
+
+  const handleOwnership = (v) => { setOwnershipType(v); scheduleSave(v, taxClassType, estYear); };
+  const handleTaxClass  = (v) => { setTaxClassType(v);  scheduleSave(ownershipType, v, estYear); };
+  const handleYear      = (v) => { setEstYear(v);        scheduleSave(ownershipType, taxClassType, v); };
+
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  const canSave = !!(ownershipType && taxClassType && estYear);
 
   return (
     <div className="border-t border-white/5 px-4 py-2">
@@ -477,12 +492,12 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
         <Building2 className={`w-3 h-3 flex-shrink-0 ${isComplete ? 'text-green-400' : 'text-amber-400'}`} />
         <span className={`flex-1 ${isComplete ? 'text-gray-400' : 'text-amber-400'}`}>
           {isComplete
-            ? <><span className="text-gray-300">{OWNERSHIP_TYPES.find(o => o.value === form.ownershipType)?.label || form.ownershipType}</span><span className="text-gray-600 font-normal ml-1.5">· Est. {form.establishmentYear}</span></>
+            ? <><span className="text-gray-300">{OWNERSHIP_TYPES.find(o => o.value === ownershipType)?.label || ownershipType}</span><span className="text-gray-600 font-normal ml-1.5">· Est. {estYear}</span></>
             : 'Business details required →'}
         </span>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {saving && <Loader2 className="w-3 h-3 text-amber-400 animate-spin" />}
-          {!saving && savedAt && <Cloud className="w-3 h-3 text-green-400" />}
+          {!saving && savedAt && !saveError && <Cloud className="w-3 h-3 text-green-400" />}
           {!isComplete && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">Required</span>}
           {isComplete && !saving && <Check className="w-3 h-3 text-green-400" />}
           {expanded ? <ChevronDown className="w-3 h-3 text-gray-500" /> : <ChevronRight className="w-3 h-3 text-gray-500" />}
@@ -494,7 +509,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <label className={labelCls}>Business Entity Type *</label>
-              <select value={form.ownershipType} onChange={e => set('ownershipType', e.target.value)}
+              <select value={ownershipType} onChange={e => handleOwnership(e.target.value)}
                 className={inputCls} style={{ colorScheme: 'dark' }}>
                 <option value="">Select…</option>
                 {OWNERSHIP_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -502,7 +517,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
             </div>
             <div>
               <label className={labelCls}>IRS Tax Classification *</label>
-              <select value={form.taxClassType} onChange={e => set('taxClassType', e.target.value)}
+              <select value={taxClassType} onChange={e => handleTaxClass(e.target.value)}
                 className={inputCls} style={{ colorScheme: 'dark' }}>
                 <option value="">Select…</option>
                 {TAX_CLASS_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -512,16 +527,17 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <label className={labelCls}>Year Established *</label>
-              <input type="number" value={form.establishmentYear}
-                onChange={e => set('establishmentYear', e.target.value)}
+              <input type="number" value={estYear}
+                onChange={e => handleYear(e.target.value)}
                 placeholder="e.g. 2018" min="1900" max={new Date().getFullYear()} className={inputCls} />
-              {form.establishmentYear && (() => {
-                const { years, months } = deriveOwnership(form.establishmentYear);
+              {estYear && (() => {
+                const { years, months } = deriveOwnership(estYear);
                 return <p className="text-[10px] text-gray-500 mt-1">{years} yr{years !== '1' ? 's' : ''}{months !== '0' ? ` ${months} mo` : ''} in operation</p>;
               })()}
             </div>
           </div>
           {!canSave && <p className="text-[10px] text-gray-600">Fill all fields above to save</p>}
+          {saveError && <p className="text-[10px] text-red-400">⚠ {saveError}</p>}
         </div>
       )}
     </div>
