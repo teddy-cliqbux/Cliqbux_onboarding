@@ -10,8 +10,6 @@ function randomUUID() {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
     const { corporateId, action, entityId, legalBusinessName, tradeNameDBA, federalEIN, corporateMailingAddress, mailingStreet, mailingCity, mailingState, mailingZip, ownershipType, taxClassType, establishmentYear } = body;
