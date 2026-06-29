@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
   Plus, ArrowRight, Loader2, Store, Trash2, CheckCircle2,
   MapPin, Building2, CreditCard, ChevronDown, ChevronRight, X,
-  AlertTriangle, Check, ArrowLeft, Pencil, GripVertical
+  AlertTriangle, Check, ArrowLeft, Pencil, GripVertical, Cloud
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import BusinessDetailsPanel from '@/components/onboarding/BusinessDetailsPanel';
@@ -98,24 +98,49 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
     motoPct: mid.motoPct != null ? String(mid.motoPct) : '0',
   });
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
+  const saveTimerRef = useRef(null);
+  const latestFormRef = useRef(form);
 
   const pctSum = (parseInt(form.cardPresentPct) || 0) + (parseInt(form.internetPct) || 0) + (parseInt(form.motoPct) || 0);
   const canSave = form.mccCode && pctSum === 100;
   const isComplete = !!(mid.mccCode && mid.monthlyCardSales);
 
-  const handleSave = async () => {
-    if (!canSave) return;
+  const doSave = useCallback(async (f) => {
+    const sum = (parseInt(f.cardPresentPct) || 0) + (parseInt(f.internetPct) || 0) + (parseInt(f.motoPct) || 0);
+    if (!f.mccCode || sum !== 100) return;
     setSaving(true);
     try {
       const res = await base44.functions.invoke('manageMerchantID', {
         action: 'update', locationId, corporateId, merchantIDId: mid.id,
-        data: { ...form, merchantName: form.merchantName || dbaName },
+        data: { ...f, merchantName: f.merchantName || dbaName },
       });
       const saved = res.data?.updatedMerchantID || res.data?.merchantID;
-      if (saved) { onUpdated(saved); setEditing(false); }
+      if (saved) { onUpdated(saved); setSavedAt(Date.now()); }
     } catch (_) {}
     finally { setSaving(false); }
+  }, [locationId, corporateId, mid.id, dbaName, onUpdated]);
+
+  const setField = (k, v) => {
+    setForm(prev => {
+      const next = { ...prev, [k]: v };
+      latestFormRef.current = next;
+      clearTimeout(saveTimerRef.current);
+      const sum = (parseInt(next.cardPresentPct) || 0) + (parseInt(next.internetPct) || 0) + (parseInt(next.motoPct) || 0);
+      if (next.mccCode && sum === 100) {
+        saveTimerRef.current = setTimeout(() => doSave(latestFormRef.current), 800);
+      }
+      return next;
+    });
   };
+
+  // Flush on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(saveTimerRef.current);
+      if (latestFormRef.current) doSave(latestFormRef.current);
+    };
+  }, [doSave]);
 
   return (
     <Draggable draggableId={`mid-${mid.id}`} index={index}>
@@ -150,13 +175,13 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
             <div className="border-t border-white/5 px-3 pb-3 pt-2 space-y-2">
               <div>
                 <label className={labelCls}>MID Label</label>
-                <input value={form.merchantName} onChange={e => setForm(p => ({ ...p, merchantName: e.target.value }))}
+                <input value={form.merchantName} onChange={e => setField('merchantName', e.target.value)}
                   placeholder={`e.g. ${dbaName} – Bar`} className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className={labelCls}>MCC Code *</label>
-                  <select value={form.mccCode} onChange={e => setForm(p => ({ ...p, mccCode: e.target.value }))}
+                  <select value={form.mccCode} onChange={e => setField('mccCode', e.target.value)}
                     className={inputCls} style={{ colorScheme: 'dark' }}>
                     <option value="">Select…</option>
                     {MCC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -164,7 +189,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
                 </div>
                 <div>
                   <label className={labelCls}>Industry Type</label>
-                  <select value={form.industryType} onChange={e => setForm(p => ({ ...p, industryType: e.target.value }))}
+                  <select value={form.industryType} onChange={e => setField('industryType', e.target.value)}
                     className={inputCls} style={{ colorScheme: 'dark' }}>
                     <option value="">Select…</option>
                     {INDUSTRY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -172,17 +197,17 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
                 </div>
                 <div>
                   <label className={labelCls}>Monthly Volume ($)</label>
-                  <input type="number" value={form.monthlyCardSales} onChange={e => setForm(p => ({ ...p, monthlyCardSales: e.target.value }))}
+                  <input type="number" value={form.monthlyCardSales} onChange={e => setField('monthlyCardSales', e.target.value)}
                     placeholder="e.g. 8000" className={inputCls} />
                 </div>
                 <div>
                   <label className={labelCls}>Avg Sale ($)</label>
-                  <input type="number" value={form.avgSaleAmount} onChange={e => setForm(p => ({ ...p, avgSaleAmount: e.target.value }))}
+                  <input type="number" value={form.avgSaleAmount} onChange={e => setField('avgSaleAmount', e.target.value)}
                     placeholder="e.g. 45" className={inputCls} />
                 </div>
                 <div>
                   <label className={labelCls}>Highest Ticket ($)</label>
-                  <input type="number" value={form.highestTicketAmount} onChange={e => setForm(p => ({ ...p, highestTicketAmount: e.target.value }))}
+                  <input type="number" value={form.highestTicketAmount} onChange={e => setField('highestTicketAmount', e.target.value)}
                     placeholder="e.g. 200" className={inputCls} />
                 </div>
               </div>
@@ -193,19 +218,21 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
                     <div key={k}>
                       <span className="text-[10px] text-gray-500 mb-1 block">{lbl}</span>
                       <input type="number" min="0" max="100" value={form[k]}
-                        onChange={e => setForm(p => ({ ...p, [k]: e.target.value }))} className={inputCls} />
+                        onChange={e => setField(k, e.target.value)} className={inputCls} />
                     </div>
                   ))}
                 </div>
                 {pctSum !== 100 && <p className="text-[11px] text-amber-400 mt-1">Total: {pctSum}% (must be 100%)</p>}
               </div>
-              <div className="flex gap-2 pt-1">
-                <button onClick={handleSave} disabled={saving || !canSave}
-                  className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-600 disabled:text-gray-400 text-black font-bold text-xs px-3 py-2 rounded-lg transition-all">
-                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                  {saving ? 'Saving…' : 'Save'}
-                </button>
-                <button onClick={() => setEditing(false)} className="text-xs text-gray-400 hover:text-white border border-white/10 px-3 py-2 rounded-lg transition-colors">Cancel</button>
+              {/* Auto-save status + collapse */}
+              <div className="flex items-center justify-between pt-1">
+                <div className="flex items-center gap-1.5">
+                  {saving && <><Loader2 className="w-3 h-3 text-amber-400 animate-spin" /><span className="text-[11px] text-amber-400">Saving…</span></>}
+                  {!saving && savedAt && <><Cloud className="w-3 h-3 text-green-400" /><span className="text-[11px] text-green-400">Saved</span></>}
+                  {!saving && !savedAt && canSave && <span className="text-[11px] text-gray-600">Auto-saves as you type</span>}
+                  {!canSave && <span className="text-[11px] text-gray-600">Fill MCC &amp; card split to save</span>}
+                </div>
+                <button onClick={() => setEditing(false)} className="text-xs text-gray-500 hover:text-white transition-colors">Done</button>
               </div>
             </div>
           )}

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Building2, ChevronDown, ChevronRight, Check, Loader2, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Building2, ChevronDown, ChevronRight, Check, Loader2, AlertCircle, Cloud } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
@@ -44,7 +44,6 @@ function isComplete(profile) {
   );
 }
 
-// Derive years/months of ownership from establishment year
 function deriveOwnership(establishmentYear) {
   if (!establishmentYear) return { years: '1', months: '0' };
   const now = new Date();
@@ -54,11 +53,18 @@ function deriveOwnership(establishmentYear) {
   return { years: String(years), months: String(months) };
 }
 
+function canAutoSave(form) {
+  return !!(form.legalName && form.taxId.length === 9 && form.ownershipType && form.taxClassType && form.titleType && form.establishmentYear);
+}
+
 export default function BusinessDetailsPanel({ profile, onSaved }) {
   const complete = isComplete(profile);
   const [expanded, setExpanded] = useState(!complete);
   const [saving, setSaving] = useState(false);
+  const [savedAt, setSavedAt] = useState(null);
   const [error, setError] = useState('');
+  const saveTimerRef = useRef(null);
+  const latestFormRef = useRef(null);
 
   const profileToForm = (p) => ({
     legalName: p.legalName || '',
@@ -76,37 +82,55 @@ export default function BusinessDetailsPanel({ profile, onSaved }) {
     setForm(profileToForm(profile));
   }, [profile.corporateId, profile.taxId, profile.ownershipType, profile.taxClassType, profile.titleType, profile.establishmentYear]);
 
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-  const canSave = form.legalName && form.taxId.length === 9 && form.ownershipType &&
-    form.taxClassType && form.titleType && form.establishmentYear;
-
-  const handleSave = async () => {
-    if (!canSave) return;
+  const doSave = useCallback(async (f) => {
+    if (!canAutoSave(f)) return;
     setSaving(true);
     setError('');
     try {
-      const { years, months } = deriveOwnership(form.establishmentYear);
+      const { years, months } = deriveOwnership(f.establishmentYear);
       const res = await base44.functions.invoke('updateMerchantProfile', {
         corporateId: profile.corporateId,
-        legalName: form.legalName,
-        taxId: form.taxId,
-        ownershipType: form.ownershipType,
-        taxClassType: form.taxClassType,
-        titleType: form.titleType,
-        establishmentYear: form.establishmentYear,
+        legalName: f.legalName,
+        taxId: f.taxId,
+        ownershipType: f.ownershipType,
+        taxClassType: f.taxClassType,
+        titleType: f.titleType,
+        establishmentYear: f.establishmentYear,
         currentOwnershipYears: years,
         currentOwnershipMonths: months,
       });
       if (res.data?.error) throw new Error(res.data.error);
-      onSaved({ ...profile, ...form });
-      setExpanded(false);
+      setSavedAt(Date.now());
+      onSaved({ ...profile, ...f });
     } catch (err) {
       setError(err.message || 'Failed to save.');
     } finally {
       setSaving(false);
     }
+  }, [profile, onSaved]);
+
+  const set = (k, v) => {
+    setForm(prev => {
+      const next = { ...prev, [k]: v };
+      latestFormRef.current = next;
+      // Debounce: clear existing timer, set new one
+      clearTimeout(saveTimerRef.current);
+      if (canAutoSave(next)) {
+        saveTimerRef.current = setTimeout(() => doSave(latestFormRef.current), 600);
+      }
+      return next;
+    });
   };
+
+  // Cleanup timer on unmount — also flush save if dirty
+  useEffect(() => {
+    return () => {
+      clearTimeout(saveTimerRef.current);
+      if (latestFormRef.current && canAutoSave(latestFormRef.current)) {
+        doSave(latestFormRef.current);
+      }
+    };
+  }, [doSave]);
 
   return (
     <div className={`rounded-2xl border transition-all ${complete ? 'border-green-500/25 bg-[#1c2128]' : 'border-amber-500/30 bg-[#1c2128]'}`}>
@@ -127,8 +151,10 @@ export default function BusinessDetailsPanel({ profile, onSaved }) {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {saving && <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin" />}
+          {!saving && savedAt && <Cloud className="w-3.5 h-3.5 text-green-400" title="Saved" />}
           {!complete && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Required</span>}
-          {complete && <Check className="w-4 h-4 text-green-400" />}
+          {complete && !saving && <Check className="w-4 h-4 text-green-400" />}
           {expanded ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
         </div>
       </button>
@@ -189,7 +215,7 @@ export default function BusinessDetailsPanel({ profile, onSaved }) {
             <p className="text-[10px] text-gray-500 mt-1">Title of the primary signer/beneficial owner</p>
           </div>
 
-          {/* Year established — ownership duration derived automatically */}
+          {/* Year established */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Year Business Established *</label>
@@ -200,18 +226,20 @@ export default function BusinessDetailsPanel({ profile, onSaved }) {
             </div>
           </div>
 
+          {/* Auto-save status */}
+          <div className="flex items-center gap-2 h-5">
+            {saving && <><Loader2 className="w-3 h-3 text-amber-400 animate-spin" /><span className="text-[11px] text-amber-400">Saving…</span></>}
+            {!saving && savedAt && <><Cloud className="w-3 h-3 text-green-400" /><span className="text-[11px] text-green-400">Saved automatically</span></>}
+            {!saving && !savedAt && canAutoSave(form) && <span className="text-[11px] text-gray-600">Changes will be saved automatically</span>}
+            {!saving && !canAutoSave(form) && form.taxId.length > 0 && <span className="text-[11px] text-gray-600">Fill all required fields to save</span>}
+          </div>
+
           {error && (
             <div className="flex items-start gap-2 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3">
               <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-red-300">{error}</p>
             </div>
           )}
-
-          <button onClick={handleSave} disabled={saving || !canSave}
-            className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold text-sm px-5 py-2.5 rounded-xl transition-all">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            {saving ? 'Saving…' : 'Save Business Details'}
-          </button>
         </div>
       )}
     </div>
