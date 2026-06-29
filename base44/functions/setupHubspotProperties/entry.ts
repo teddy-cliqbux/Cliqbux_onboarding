@@ -114,6 +114,18 @@ const COMPANY_PROPERTIES = [
   },
 ];
 
+// Deal-level custom properties
+const DEAL_PROPERTIES = [
+  {
+    name: 'portal_url',
+    label: 'Onboarding Portal URL',
+    description: 'Direct link to this merchant\'s Cliqbux onboarding portal. Written automatically by syncFromHubspot.',
+    type: 'string',
+    fieldType: 'text',
+    groupName: 'dealinformation',
+  },
+];
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -152,6 +164,27 @@ Deno.serve(async (req) => {
         }
       } catch (e: any) {
         results.push({ name: prop.name, status: 'error', error: e.message });
+      }
+    }
+
+    // Create deal properties
+    for (const prop of DEAL_PROPERTIES) {
+      try {
+        const res = await fetch('https://api.hubapi.com/crm/v3/properties/deals', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(prop),
+        });
+        if (res.ok) {
+          results.push({ name: `deal.${prop.name}`, status: 'created' });
+        } else if (res.status === 409) {
+          results.push({ name: `deal.${prop.name}`, status: 'already_exists' });
+        } else {
+          const err = await res.text();
+          results.push({ name: `deal.${prop.name}`, status: 'error', error: `${res.status}: ${err.slice(0, 200)}` });
+        }
+      } catch (e: any) {
+        results.push({ name: `deal.${prop.name}`, status: 'error', error: e.message });
       }
     }
 

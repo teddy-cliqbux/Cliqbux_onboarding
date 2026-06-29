@@ -355,6 +355,19 @@ Deno.serve(async (req) => {
     result.portalUrl = `${Deno.env.get('PORTAL_BASE_URL') || 'https://cliqbux-onboard-prime.base44.app'}?dealId=${corporateId}`;
     result.summary = `${result.profileAction} profile, ${result.locations.filter((l: any) => l.action !== 'error').length} location(s) synced`;
 
+    // ── 7. Write portal URL back to HubSpot deal ──────────────────────────────
+    try {
+      await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${corporateId}`, {
+        method: 'PATCH',
+        headers: hsHeaders,
+        body: JSON.stringify({ properties: { portal_url: result.portalUrl } }),
+      });
+      result.portalUrlWrittenBack = true;
+    } catch (e: any) {
+      console.warn(`[syncFromHubspot] Could not write portal_url back to deal: ${e.message}`);
+      result.portalUrlWrittenBack = false;
+    }
+
     console.log(`[syncFromHubspot] deal=${corporateId}: ${result.summary}`);
     return Response.json(result);
 

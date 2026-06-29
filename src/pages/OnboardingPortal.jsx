@@ -88,8 +88,36 @@ export default function OnboardingPortal() {
   };
 
   useEffect(() => {
-    if (mode === 'sales' && dealId) fetchMerchantData(dealId);
+    if (mode === 'sales' && dealId) initMerchantData(dealId);
   }, [mode, dealId]);
+
+  // On first load with a dealId, sync from HubSpot before fetching local data.
+  // This pre-populates locations/MIDs from the sales rep's HubSpot record so the
+  // merchant doesn't have to enter them manually.
+  const initMerchantData = async (id) => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Quick pre-check: does this profile already have locations? If yes, skip sync
+      // to avoid unnecessary HubSpot API calls on every portal visit.
+      const checkRes = await base44.functions.invoke('getMerchantData', { corporateId: id });
+      const checkData = checkRes.data;
+      const hasLocations = (checkData?.locations?.length ?? 0) > 0;
+      const alreadySynced = checkData?.profile?.hubspotSynced === true;
+
+      if (!alreadySynced && !hasLocations) {
+        // First visit or no locations yet — pull from HubSpot silently
+        try {
+          await base44.functions.invoke('syncFromHubspot', { dealId: id });
+        } catch {
+          // Non-fatal — if HubSpot sync fails, merchant can still fill in manually
+        }
+      }
+    } catch {
+      // If even the pre-check fails, fall through to fetchMerchantData which will handle it
+    }
+    await fetchMerchantData(id);
+  };
 
   const fetchMerchantData = async (id) => {
     setLoading(true);
@@ -115,9 +143,19 @@ export default function OnboardingPortal() {
     }
   };
 
+  // Fire-and-forget HubSpot stage update — never blocks the UI
+  const pushStatusToHubspot = (corporateId, applicationStatus) => {
+    base44.functions.invoke('pushStatusToHubspot', { corporateId, applicationStatus }).catch(() => {
+      // Non-fatal — HubSpot sync is best-effort
+    });
+  };
+
   const handleStatusChange = (newStatus) => {
     setProfile(prev => ({ ...prev, applicationStatus: newStatus }));
-    if (newStatus === 'Quote Signed') fetchMerchantData(profile.corporateId);
+    if (newStatus === 'Quote Signed') {
+      fetchMerchantData(profile.corporateId);
+      pushStatusToHubspot(profile.corporateId, newStatus);
+    }
   };
 
   const handleSelfServeComplete = (newProfile) => {
@@ -136,6 +174,7 @@ export default function OnboardingPortal() {
     setLocations(updatedLocations);
     setCompletedSteps(prev => ({ ...prev, banking: true }));
     setStep(STEP_VERIFICATION);
+    pushStatusToHubspot(profile?.corporateId, 'Banking Complete');
   };
 
   const onBackStep = () => setStep(STEP_LOCATIONS);
@@ -148,7 +187,8 @@ export default function OnboardingPortal() {
   };
 
   const handleSigningComplete = async () => {
-    // Mark submitted and redirect to dashboard
+    // Mark submitted, sync to HubSpot, redirect to dashboard
+    pushStatusToHubspot(profile?.corporateId, 'Submitted');
     setProfile(prev => ({ ...prev, applicationStatus: 'Submitted' }));
     navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`, { replace: true });
   };
