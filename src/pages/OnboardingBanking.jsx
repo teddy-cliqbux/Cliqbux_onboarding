@@ -178,8 +178,8 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
 
 // ─── Location Banking Row ─────────────────────────────────────────────────────
 
-function LocationBankingRow({ location, corporateId, concepts, bankDetails, reuseDetails, plaidAccounts, onAccountsConnected, onBankSaved, isExpanded, onToggleExpand }) {
-  const locMids = concepts.filter(c => c.locationId === location.id);
+function LocationBankingRow({ location, corporateId, merchantIDs, bankDetails, reuseDetails, plaidAccounts, onAccountsConnected, onBankSaved, isExpanded, onToggleExpand }) {
+  const locMids = merchantIDs.filter(c => c.locationId === location.id);
   const hasBanking = !!(bankDetails?.routingNumber);
 
   return (
@@ -225,7 +225,7 @@ function LocationBankingRow({ location, corporateId, concepts, bankDetails, reus
             <div className="mb-4 flex flex-wrap gap-1.5">
               {locMids.map(m => (
                 <span key={m.id} className="flex items-center gap-1 text-[10px] text-blue-400/70 bg-blue-500/10 border border-blue-500/15 rounded-full px-2 py-0.5">
-                  <CreditCard className="w-2.5 h-2.5" /> {m.conceptName || m.dbaName} {m.mccCode && `· ${m.mccCode}`}
+                  <CreditCard className="w-2.5 h-2.5" /> {m.merchantName || m.dbaName} {m.mccCode && `· ${m.mccCode}`}
                 </span>
               ))}
             </div>
@@ -251,7 +251,7 @@ function LocationBankingRow({ location, corporateId, concepts, bankDetails, reus
 export default function OnboardingBanking({ profile, onContinue, onBack }) {
   const [entities, setEntities] = useState([]);
   const [locations, setLocations] = useState([]);
-  const [concepts, setConcepts] = useState([]);
+  const [merchantIDs, setMerchantIDs] = useState([]);
   const [bankDetailsByLoc, setBankDetailsByLoc] = useState({});
   const [manualBankByEntity, setManualBankByEntity] = useState({});
   const [plaidAccounts, setPlaidAccounts] = useState({});
@@ -266,7 +266,7 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
       const [entRes, locRes, conRes] = await Promise.all([
         base44.functions.invoke('manageLegalEntity', { action: 'list', corporateId: profile.corporateId }),
         base44.functions.invoke('listLocations', { corporateId: profile.corporateId }),
-        base44.functions.invoke('manageConcept', { action: 'list', corporateId: profile.corporateId }),
+        base44.functions.invoke('manageMerchantID', { action: 'list', corporateId: profile.corporateId }),
       ]);
 
       const loadedEntities = entRes.data?.entities || [];
@@ -293,7 +293,7 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
 
       setEntities(loadedEntities);
       setLocations(loadedLocations);
-      setConcepts(conRes.data?.concepts || []);
+      setMerchantIDs(conRes.data?.merchantIDs || []);
       setBankDetailsByLoc(bdMap);
       setManualBankByEntity(manualByEntity);
 
@@ -388,7 +388,7 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
                     key={loc.id}
                     location={loc}
                     corporateId={profile.corporateId}
-                    concepts={concepts}
+                    merchantIDs={merchantIDs}
                     bankDetails={bankDetailsByLoc[loc.id] || null}
                     reuseDetails={manualBankByEntity[loc.entityId] || null}
                     plaidAccounts={plaidAccounts}
@@ -407,7 +407,7 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
         {(grouped['unassigned'] || []).length > 0 && (
           <div className="space-y-2">
             {(grouped['unassigned'] || []).map(loc => (
-              <LocationBankingRow key={loc.id} location={loc} corporateId={profile.corporateId} concepts={concepts}
+              <LocationBankingRow key={loc.id} location={loc} corporateId={profile.corporateId} merchantIDs={merchantIDs}
                 bankDetails={bankDetailsByLoc[loc.id] || null} reuseDetails={null}
                 plaidAccounts={plaidAccounts} onAccountsConnected={handleAccountsConnected}
                 onBankSaved={handleBankSaved}

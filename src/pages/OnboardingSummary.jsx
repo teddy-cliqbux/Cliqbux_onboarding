@@ -248,7 +248,7 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
           allLocations.map(loc => renderLocationMerchantIDGroup(loc))
         )}
 
-        {/* Locations without concepts — show as minimal cards */}
+        {/* Locations without Merchant IDs — show as minimal cards */}
         {locations.filter(l => {
           const cs = merchantIDsByLoc[l.id];
           return !cs || cs.length === 0;

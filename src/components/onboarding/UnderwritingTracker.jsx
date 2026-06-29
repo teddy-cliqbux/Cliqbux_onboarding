@@ -6,9 +6,9 @@ const STAGES = [
   { key: 'provisioned', label: 'MIDs Provisioned / Active' },
 ];
 
-export default function UnderwritingTracker({ locations = [], concepts = [] }) {
-  // Use concepts for status tracking when available (new), else fall back to locations (legacy)
-  const items = concepts.length > 0 ? concepts : locations;
+export default function UnderwritingTracker({ locations = [], merchantIDs = [] }) {
+  // Use merchantIDs for status tracking when available (new), else fall back to locations (legacy)
+  const items = merchantIDs.length > 0 ? merchantIDs : locations;
   const provisioned = items.filter((i) => i.elavonMID).length;
   const total = items.length;
   // Submitted > Underwriting while waiting for MIDs, Active once at least one MID arrives
@@ -25,10 +25,10 @@ export default function UnderwritingTracker({ locations = [], concepts = [] }) {
             <p className="text-white font-bold text-sm">Underwriting Status</p>
             <p className="text-gray-400 text-xs">
               {activeStage === 2
-                ? `All ${concepts.length > 0 ? 'concepts are' : 'locations are'} active and ready to process payments.`
+                ? `All ${merchantIDs.length > 0 ? 'Merchant IDs are' : 'locations are'} active and ready to process payments.`
                 : activeStage === 0
                 ? 'MIDs are pending — Elavon is reviewing your application.'
-                : `${provisioned} of ${total} ${concepts.length > 0 ? 'concepts' : 'locations'} have been activated.`}
+                : `${provisioned} of ${total} ${merchantIDs.length > 0 ? 'Merchant IDs' : 'locations'} have been activated.`}
             </p>
           </div>
           <span className="text-xs font-semibold text-green-400 bg-green-400/10 border border-green-400/20 px-2.5 py-1 rounded-full flex-shrink-0">

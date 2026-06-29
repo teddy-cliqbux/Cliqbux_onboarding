@@ -17,7 +17,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
   // Signing state — array of applications returned by signApplication
   const [loadingSigning, setLoadingSigning] = useState(false);
   const [signingError, setSigningError]     = useState('');
-  const [applications, setApplications]     = useState([]); // [{ mspApplicationNo, conceptName, signingUrl, signers, allSigned, error }]
+  const [applications, setApplications]     = useState([]); // [{ mspApplicationNo, merchantIDName, signingUrl, signers, allSigned, error }]
   const [activeIndex, setActiveIndex]       = useState(0);  // which app is currently in the iframe
   const pollRef = useRef(null);
 
@@ -210,7 +210,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
                       ? <AlertCircle className="w-3.5 h-3.5" />
                       : <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px] leading-none">{i + 1}</span>
                     }
-                    {app.conceptName}
+                    {app.merchantIDName}
                   </button>
                 ))}
               </div>
@@ -240,7 +240,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
                   <span className="text-xs font-semibold text-gray-200">
-                    {activeApp.conceptName}
+                    {activeApp.merchantIDName}
                     {totalCount > 1 && (
                       <span className="text-gray-500 font-normal"> — Agreement {activeIndex + 1} of {totalCount}</span>
                     )}
@@ -254,7 +254,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
               </div>
               <iframe
                 src={activeApp.signingUrl}
-                title={`Merchant Processing Agreement — ${activeApp.conceptName}`}
+                title={`Merchant Processing Agreement — ${activeApp.merchantIDName}`}
                 className="w-full"
                 style={{ height: 680, border: 'none', display: 'block' }}
                 allow="same-origin"
@@ -281,7 +281,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
             <div className="border border-red-500/30 bg-red-500/10 rounded-xl flex items-start gap-3 px-5 py-4">
               <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-red-300">{activeApp.conceptName} — Form Incomplete</p>
+                <p className="text-sm font-semibold text-red-300">{activeApp.merchantIDName} — Form Incomplete</p>
                 <p className="text-xs text-red-400 mt-1">{activeApp.error}</p>
               </div>
             </div>

@@ -20,7 +20,7 @@ function formatCurrency(val) {
   return '$' + Number(val).toLocaleString();
 }
 
-export default function LocationStatusTable({ locations = [], concepts = [], loading, corporateId, onStatusChanged }) {
+export default function LocationStatusTable({ locations = [], merchantIDs = [], loading, corporateId, onStatusChanged }) {
   const [selectedIds, setSelectedIds] = useState([]);
   const [entities, setEntities] = useState([]);
   const [batchStatus, setBatchStatus] = useState('');
@@ -46,15 +46,15 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
     }
   }, [corporateId]);
 
-  // Group concepts by locationId
-  const conceptsByLoc = {};
-  concepts.forEach(c => {
-    if (!conceptsByLoc[c.locationId]) conceptsByLoc[c.locationId] = [];
-    conceptsByLoc[c.locationId].push(c);
+  // Group Merchant IDs by locationId
+  const merchantIDsByLoc = {};
+  merchantIDs.forEach(c => {
+    if (!merchantIDsByLoc[c.locationId]) merchantIDsByLoc[c.locationId] = [];
+    merchantIDsByLoc[c.locationId].push(c);
   });
 
   const getLocationStatus = (loc) => {
-    const cs = conceptsByLoc[loc.id];
+    const cs = merchantIDsByLoc[loc.id];
     if (cs && cs.length > 0) {
       const order = { 'Error': 0, 'Active': 1, 'Active (Existing)': 2, 'Pending MID': 3, 'Ready to Submit': 4, 'In Review': 5 };
       const best = cs.reduce((a, b) => (order[a.applicationStepStatus] || 99) < (order[b.applicationStepStatus] || 99) ? a : b);
@@ -160,7 +160,7 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
   }
 
   const renderRow = (loc, dragHandleProps, isDragging) => {
-    const cs = conceptsByLoc[loc.id] || [];
+    const cs = merchantIDsByLoc[loc.id] || [];
     const status = getLocationStatus(loc);
     const statDef = STATUS_STYLES[status] || STATUS_STYLES['In Review'];
     const StatIcon = statDef.icon;
@@ -196,14 +196,14 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
             </div>
           </div>
         </td>
-        {/* Concepts */}
+        {/* Merchant IDs */}
         <td className="px-4 py-4">
           {cs.length > 0 ? (
             <div className="flex flex-col gap-1">
               {cs.map(c => (
                 <div key={c.id} className="flex items-center gap-1.5">
                   <CreditCard className="w-3 h-3 text-amber-400/70 flex-shrink-0" />
-                  <span className="text-xs text-gray-200 truncate max-w-[120px]">{c.conceptName || c.dbaName || 'Concept'}</span>
+                  <span className="text-xs text-gray-200 truncate max-w-[120px]">{c.merchantName || c.dbaName || 'Merchant ID'}</span>
                   {c.elavonMID && <span className="text-[10px] font-mono text-green-500/70">MID</span>}
                 </div>
               ))}
@@ -274,7 +274,7 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
           </button>
         </th>
         <th className="text-left px-2 py-3">Location</th>
-        <th className="text-left px-4 py-3">Concepts</th>
+        <th className="text-left px-4 py-3">Merchant IDs</th>
         <th className="text-left px-4 py-3">MCC / Industry</th>
         <th className="text-right px-4 py-3">Monthly Volume</th>
         <th className="text-right px-4 py-3">Avg Sale</th>
@@ -293,13 +293,13 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
           <p className="text-lg font-bold text-white">{locations.length}</p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Concepts</p>
-          <p className="text-lg font-bold text-white">{concepts.length}</p>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Merchant IDs</p>
+          <p className="text-lg font-bold text-white">{merchantIDs.length}</p>
         </div>
         <div>
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Combined Volume</p>
           <p className="text-lg font-bold text-white">
-            {formatCurrency(concepts.reduce((s, c) => s + (Number(c.monthlyCardSales) || 0), 0))}
+            {formatCurrency(merchantIDs.reduce((s, c) => s + (Number(c.monthlyCardSales) || 0), 0))}
           </p>
         </div>
         <div>
@@ -376,7 +376,7 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
                 const isCollapsed = collapsedGroups.has(group.entityId);
                 // Compute group-level stats for the summary pill
                 const groupVolume = group.locations.reduce((sum, l) => {
-                  return sum + (conceptsByLoc[l.id] || []).reduce((s, c) => s + (Number(c.monthlyCardSales) || 0), 0);
+                  return sum + (merchantIDsByLoc[l.id] || []).reduce((s, c) => s + (Number(c.monthlyCardSales) || 0), 0);
                 }, 0);
                 const activeCount = group.locations.filter(l => {
                   const s = getLocationStatus(l);
@@ -434,7 +434,7 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
                                       {selectedIds.includes(loc.id) ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4 text-gray-500" />}
                                     </button>
                                   </td>
-                                  {renderRowCells(loc, conceptsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds)}
+                                  {renderRowCells(loc, merchantIDsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds)}
                                 </tr>
                               )}
                             </Draggable>
@@ -472,7 +472,7 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
                             {selectedIds.includes(loc.id) ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4 text-gray-500" />}
                           </button>
                         </td>
-                        {renderRowCells(loc, conceptsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds)}
+                        {renderRowCells(loc, merchantIDsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds)}
                       </tr>
                     ))}
                   </tbody>
@@ -493,7 +493,7 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
                       {selectedIds.includes(loc.id) ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4 text-gray-500" />}
                     </button>
                   </td>
-                  {renderRowCells(loc, conceptsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds)}
+                  {renderRowCells(loc, merchantIDsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds)}
                 </tr>
               ))}
             </tbody>
@@ -505,8 +505,8 @@ export default function LocationStatusTable({ locations = [], concepts = [], loa
 }
 
 // Extracted shared row cells (everything after the grip + checkbox columns)
-function renderRowCells(loc, conceptsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds) {
-  const cs = conceptsByLoc[loc.id] || [];
+function renderRowCells(loc, merchantIDsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds) {
+  const cs = merchantIDsByLoc[loc.id] || [];
   const status = (() => {
     if (cs.length > 0) {
       const order = { 'Error': 0, 'Active': 1, 'Active (Existing)': 2, 'Pending MID': 3, 'Ready to Submit': 4, 'In Review': 5 };
@@ -540,7 +540,7 @@ function renderRowCells(loc, conceptsByLoc, movingLocId, duplicatingIds, handleD
             {cs.map(c => (
               <div key={c.id} className="flex items-center gap-1.5">
                 <CreditCard className="w-3 h-3 text-amber-400/70 flex-shrink-0" />
-                <span className="text-xs text-gray-200 truncate max-w-[120px]">{c.conceptName || c.dbaName || 'Concept'}</span>
+                <span className="text-xs text-gray-200 truncate max-w-[120px]">{c.merchantName || c.dbaName || 'Merchant ID'}</span>
                 {c.elavonMID && <span className="text-[10px] font-mono text-green-500/70">MID</span>}
               </div>
             ))}
