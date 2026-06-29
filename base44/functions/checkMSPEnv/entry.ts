@@ -25,17 +25,31 @@ Deno.serve(async (req) => {
       });
     }
 
+    const { testPayload } = body;
+
+    // If testPayload provided, do a PUT and return the raw response
+    if (testPayload) {
+      const putRes = await fetch(`${mspBase}/applications/${applicationNo}/form`, {
+        method: 'PUT',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify(testPayload),
+      });
+      const putData = await putRes.json();
+      return Response.json({
+        putStatus: putRes.status,
+        canSave: putData.canSave,
+        percent_complete: putData.percent_complete,
+        data_errors: putData.validation?.errors?.data || putData.data_errors || [],
+        completion_errors: putData.validation?.errors?.completion || putData.completion_errors || [],
+        rule_violations: putData.validation?.errors?.rules || putData.rule_violations || [],
+        messages: putData.messages || [],
+        rawResponse: putData,
+      });
+    }
+
     // Fetch raw form GET for the given application
     const formRes = await fetch(`${mspBase}/applications/${applicationNo}/form`, { headers });
     const formData = await formRes.json();
-
-    // Also fetch POST /signatures to see why it fails
-    const sigRes = await fetch(`${mspBase}/applications/${applicationNo}/signatures`, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sendEmail: false }),
-    });
-    const sigData = await sigRes.json();
 
     // Extract which fields are currently set vs empty from the form
     const formFields = formData.form || {};
@@ -49,11 +63,6 @@ Deno.serve(async (req) => {
       rule_violations: formData.rule_violations || [],
       empty_fields: emptyFields,
       current_form_values: formFields,
-      signatures: {
-        status: sigRes.status,
-        error: sigData.error || null,
-        data: sigData,
-      },
     });
   } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });

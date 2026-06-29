@@ -161,12 +161,19 @@ function buildFormPayload(
     : mapIndustryType(pricingCategory);
   const mcc = concept.mccCode || profile.mccCode || '5999';
   const dbaName = concept.dbaName || location.dbaName || profile.legalName || '';
-  const monthlyCardSales = String(concept.monthlyCardSales || profile.monthlyCardSales || '6000');
-  const avgSaleAmount = String(concept.avgSaleAmount || profile.avgSaleAmount || '100');
-  const highestTicketAmount = String(concept.highestTicketAmount || profile.highestTicketAmount || profile.avgSaleAmount || '200');
-  const deliveryDelayDays = String(concept.deliveryDelayDays ?? profile.deliveryDelayDays ?? '0');
-
-  const cardPresentPct = parseInt(String(concept.cardPresentPct ?? profile.cardPresentPct ?? '100'), 10);
+  const monthlyCardSales = Math.max(1, parseFloat(String(concept.monthlyCardSales || profile.monthlyCardSales || '6000')) || 6000);
+  const rawAvg = parseFloat(String(concept.avgSaleAmount || profile.avgSaleAmount || '100')) || 100;
+  const rawHighest = parseFloat(String(concept.highestTicketAmount || profile.highestTicketAmount || '200')) || 200;
+  // MSPWare rule: average_sales and highest_ticket must be LESS THAN monthly_sales
+  const cap = Math.max(monthlyCardSales - 1, 1);
+  const avgSaleAmount = String(Math.min(rawAvg, cap));
+  const highestTicketAmount = String(Math.min(rawHighest, cap));
+  // MSPWare rule: delayed_delivery must be >= 1
+  const rawDelay = parseInt(String(concept.deliveryDelayDays ?? profile.deliveryDelayDays ?? '0'), 10);
+  const deliveryDelayDays = String(Math.max(rawDelay, 1));
+  // cardPresentPct: treat null/undefined as 100 (in-person default), NOT 0
+  const rawCpPct = concept.cardPresentPct != null ? concept.cardPresentPct : (profile.cardPresentPct != null ? profile.cardPresentPct : 100);
+  const cardPresentPct = Math.max(0, Math.min(100, parseInt(String(rawCpPct), 10) || 100));
   const cnpPct = 100 - cardPresentPct;
   // internetPct and motoPct are collected separately on Step 2.
   // int_percent = internet only; MSPWare derives MOTO as cnp - int.
@@ -271,7 +278,7 @@ function buildFormPayload(
 
     // ── Financial Information ─────────────────────────────────────────────────
     annual_revenue: annualRevenue,
-    monthly_sales: monthlyCardSales,
+    monthly_sales: String(monthlyCardSales),
     average_sales: avgSaleAmount,
     highest_ticket: highestTicketAmount,
     freq_highest_average_ticket: String(profile.highestTicketFrequency || '24'),
@@ -300,6 +307,21 @@ function buildFormPayload(
     intl_card_handling_fee: '0.60',
     tokenization_service_fee: '0.0000',
     tokenization_platform_fee: '0.0000',
+    // debit_auth_method, debit_pricing_method, is_firearm_verified: let template defaults apply
+    // Per-network debit interchange fees required by template
+    ACCL_per_auth: '0.00', ACCL_percent_fee: '0.0000', ACCL_transaction_fee: '0.00',
+    AFFN_per_auth: '0.00', AFFN_percent_fee: '0.0000', AFFN_transaction_fee: '0.00',
+    ALAS_per_auth: '0.00', ALAS_percent_fee: '0.0000', ALAS_transaction_fee: '0.00',
+    CU24_per_auth: '0.00', CU24_percent_fee: '0.0000', CU24_transaction_fee: '0.00',
+    INKL_per_auth: '0.00', INKL_percent_fee: '0.0000', INKL_transaction_fee: '0.00',
+    MSTO_per_auth: '0.00', MSTO_percent_fee: '0.0000', MSTO_transaction_fee: '0.00',
+    NETS_per_auth: '0.00', NETS_percent_fee: '0.0000', NETS_transaction_fee: '0.00',
+    NYCE_per_auth: '0.00', NYCE_percent_fee: '0.0000', NYCE_transaction_fee: '0.00',
+    POSD_per_auth: '0.00', POSD_percent_fee: '0.0000', POSD_transaction_fee: '0.00',
+    PULSE_per_auth: '0.00', PULSE_percent_fee: '0.0000', PULSE_transaction_fee: '0.00',
+    ITS_per_auth: '0.00', ITS_percent_fee: '0.0000', ITS_transaction_fee: '0.00',
+    STAR_per_auth: '0.00', STAR_percent_fee: '0.0000', STAR_transaction_fee: '0.00',
+    UPDBT_per_auth: '0.00', UPDBT_percent_fee: '0.0000', UPDBT_transaction_fee: '0.00',
 
     // ── Bank Accounts ─────────────────────────────────────────────────────────
     // Only send when both routing and account are present — empty strings fail MSPWare validation
