@@ -19,7 +19,23 @@ Deno.serve(async (req) => {
       const profile = profiles[0] || null;
       return Response.json({
         success: true,
-        signer: { id: signer.id, firstName: signer.firstName, lastName: signer.lastName, signerEmail: signer.signerEmail, identityStatus: signer.identityStatus, corporateId: signer.corporateId },
+        signer: {
+          id: signer.id,
+          firstName: signer.firstName,
+          lastName: signer.lastName,
+          signerEmail: signer.signerEmail,
+          identityStatus: signer.identityStatus,
+          corporateId: signer.corporateId,
+          dobMonth: signer.dobMonth || '',
+          dobDay: signer.dobDay || '',
+          dobYear: signer.dobYear || '',
+          ssn: signer.ssn || '',
+          homeStreet: signer.homeStreet || '',
+          homeCity: signer.homeCity || '',
+          homeState: signer.homeState || '',
+          homeZip: signer.homeZip || '',
+          corporatePhone: signer.corporatePhone || '',
+        },
         legalName: profile?.legalName || '',
         corporateId: signer.corporateId,
       });

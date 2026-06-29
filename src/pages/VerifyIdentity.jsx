@@ -46,7 +46,20 @@ export default function VerifyIdentity() {
       setSignerInfo(s);
       setLegalName(res.data.legalName || '');
       if (s.identityStatus === 'Verified') setDone(true);
-      setForm(f => ({ ...f, firstName: s.firstName || '', lastName: s.lastName || '' }));
+      // Pre-populate all previously saved fields so returning signers don't have to re-enter
+      setForm({
+        firstName: s.firstName || '',
+        lastName: s.lastName || '',
+        dobMonth: s.dobMonth || '',
+        dobDay: s.dobDay || '',
+        dobYear: s.dobYear || '',
+        ssn: s.ssn || '',
+        homeStreet: s.homeStreet || '',
+        homeCity: s.homeCity || '',
+        homeState: s.homeState || '',
+        homeZip: s.homeZip || '',
+        corporatePhone: s.corporatePhone || '',
+      });
     } catch (err) {
       setError(err.message || 'Invalid or expired verification link.');
     } finally {
