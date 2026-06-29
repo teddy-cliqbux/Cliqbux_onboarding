@@ -433,7 +433,9 @@ Deno.serve(async (req) => {
 
       let packageExists = statusRes.ok && statusData?.success && statusData?.signers?.length > 0;
 
-      // Re-fill form before every signing attempt to ensure latest data is in MSPWare
+      // Re-fill form before every signing attempt — capture completion_errors from PUT response
+      let refillPercentComplete: number | null = null;
+      let refillErrors: string[] = [];
       if (!packageExists) {
         const location = locationMap[concept.locationId];
         if (location) {
@@ -442,10 +444,14 @@ Deno.serve(async (req) => {
             method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
           });
           const refillData = await refillRes.json();
-          console.log(`[signApplication] Re-fill form ${refillRes.status} for ${mspApplicationNo}: ${refillData?.percent_complete ?? '?'}% complete`);
-          if (refillData?.completion_errors?.length) {
-            console.log(`[signApplication] Completion errors:`, JSON.stringify(refillData.completion_errors));
-          }
+          refillPercentComplete = refillData?.percent_complete ?? null;
+          refillErrors = [
+            ...(refillData?.completion_errors || []),
+            ...(refillData?.data_errors       || []),
+            ...(refillData?.rule_violations    || []),
+          ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || JSON.stringify(e)));
+          console.log(`[signApplication] Re-fill ${refillRes.status} for ${mspApplicationNo}: ${refillPercentComplete ?? '?'}% complete, ${refillErrors.length} errors`);
+          if (refillErrors.length) console.log(`[signApplication] Errors:`, JSON.stringify(refillErrors));
         }
       }
 
@@ -463,20 +469,6 @@ Deno.serve(async (req) => {
         if (!packageRes.ok || !packageData?.success) {
           const errMsg = packageData?.error || packageData?.message || `HTTP ${packageRes.status}`;
 
-          // Fetch current form status to surface specific missing fields to the UI
-          let percentComplete: number | null = null;
-          let formErrors: string[] = [];
-          try {
-            const formCheckRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
-            const formCheckData = await formCheckRes.json();
-            percentComplete = formCheckData?.percent_complete ?? null;
-            formErrors = [
-              ...(formCheckData?.completion_errors || []),
-              ...(formCheckData?.data_errors       || []),
-              ...(formCheckData?.rule_violations    || []),
-            ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || JSON.stringify(e)));
-          } catch { /* non-fatal */ }
-
           applications.push({
             mspApplicationNo,
             merchantIDName: conceptName,
@@ -485,8 +477,8 @@ Deno.serve(async (req) => {
             allSigned: false,
             error: `Application form incomplete: ${errMsg}`,
             hint: 'Complete all required fields and try again.',
-            percentComplete,
-            formErrors,
+            percentComplete: refillPercentComplete,
+            formErrors: refillErrors,
           });
           continue;
         }
