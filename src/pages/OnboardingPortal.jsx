@@ -219,6 +219,7 @@ export default function OnboardingPortal() {
             onSignersVerified={handleSignersVerified}
             onBack={() => setStep(STEP_BANKING)}
             onComplete={handleSigningComplete}
+            onNavigate={handleNavigate}
           />
         );
       }
