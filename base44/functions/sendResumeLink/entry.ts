@@ -1,25 +1,36 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-// ─── sendResumeLink ───────────────────────────────────────────────────────────
-// Looks up a merchant by email, generates a time-limited magic link token,
-// and emails them a link to resume their application.
-//
-// Always returns success:true even if the email isn't found, to prevent
-// email enumeration attacks.
-//
-// POST /functions/sendResumeLink
-// Body: { email }
-
 const TOKEN_TTL_DAYS = 7;
 
 function getPortalBaseUrl(): string {
-  return Deno.env.get('PORTAL_BASE_URL') || 'https://cliqbux-onboard-prime.base44.app';
+  const configured = Deno.env.get('PUBLIC_APP_URL');
+  if (configured && configured.startsWith('http')) return configured.replace(/\/$/, '');
+  return 'https://cliqbux-onboard-prime.base44.app';
 }
 
 function generateToken(): string {
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function sendViaResend(to: string, subject: string, html: string): Promise<void> {
+  const apiKey = Deno.env.get('RESEND_API_KEY');
+  if (!apiKey) throw new Error('RESEND_API_KEY not set');
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      from: 'Cliqbux Onboarding <onboarding@cliqbux.com>',
+      to,
+      subject,
+      html,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Resend error ${res.status}: ${err}`);
+  }
 }
 
 function buildResumeEmail(firstName: string, resumeUrl: string, businessName: string): string {
@@ -30,13 +41,11 @@ function buildResumeEmail(firstName: string, resumeUrl: string, businessName: st
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
     <tr><td align="center">
       <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
-        <!-- Header -->
         <tr>
           <td style="background:#111827;padding:28px 40px;text-align:center;">
             <span style="color:#F59E0B;font-size:22px;font-weight:800;letter-spacing:-0.5px;">⬡ cliqbux</span>
           </td>
         </tr>
-        <!-- Body -->
         <tr>
           <td style="padding:36px 40px;">
             <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.06em;">Resume Your Application</p>
@@ -45,7 +54,6 @@ function buildResumeEmail(firstName: string, resumeUrl: string, businessName: st
               Hi ${firstName || 'there'},<br><br>
               Click below to pick up where you left off on your <strong>${businessName || 'Cliqbux'}</strong> merchant application. Your progress is saved — just click and continue.
             </p>
-            <!-- CTA Button -->
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td align="center" style="padding:8px 0 28px;">
@@ -65,7 +73,6 @@ function buildResumeEmail(firstName: string, resumeUrl: string, businessName: st
             </p>
           </td>
         </tr>
-        <!-- Footer -->
         <tr>
           <td style="background:#F9FAFB;padding:20px 40px;text-align:center;border-top:1px solid #E5E7EB;">
             <p style="margin:0;font-size:12px;color:#9CA3AF;">
@@ -95,7 +102,6 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'email is required' }, { status: 400 });
     }
 
-    // Look up merchant by email — check signerEmail on profile AND on signers table
     const [profiles, signers] = await Promise.all([
       base44.asServiceRole.entities.MerchantCorporateProfile.filter({ signerEmail: email }),
       base44.asServiceRole.entities.MerchantSigners.filter({ signerEmail: email }),
@@ -103,68 +109,45 @@ Deno.serve(async (req) => {
 
     const profile = profiles?.[0];
     const signerRecord = signers?.[0];
-
-    // Resolve corporateId — profile hit is preferred; fall back to signer's corporateId
     const corporateId = profile?.corporateId || signerRecord?.corporateId;
 
     if (!corporateId) {
-      // Don't reveal that the email wasn't found — just acknowledge
       console.log(`[sendResumeLink] No merchant found for email: ${email}`);
       return Response.json({ success: true, message: 'If an application exists for that email, a link has been sent.' });
     }
 
-    // Resolve display name from profile or signer
     const resolvedProfile = profile || (signerRecord?.corporateId
       ? (await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId: signerRecord.corporateId }))?.[0]
       : null);
 
-    const firstName = resolvedProfile?.firstName || profile?.firstName || '';
+    const firstName = resolvedProfile?.firstName || '';
     const businessName = resolvedProfile?.legalName || '';
 
-    // Generate token
     const token = generateToken();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
-    // Invalidate any existing unused tokens for this corporateId to keep things tidy
     try {
       const existing = await base44.asServiceRole.entities.MerchantAccessTokens.filter({ corporateId, used: false });
       for (const t of (existing || [])) {
         await base44.asServiceRole.entities.MerchantAccessTokens.update(t.id, { used: true });
       }
     } catch {
-      // Non-fatal — old tokens will just expire naturally
+      // Non-fatal
     }
 
-    // Store the new token
     await base44.asServiceRole.entities.MerchantAccessTokens.create({
-      token,
-      corporateId,
-      email,
-      expiresAt,
-      used: false,
-      createdAt: now.toISOString(),
+      token, corporateId, email, expiresAt, used: false, createdAt: now.toISOString(),
     });
 
-    // Build and send the email
     const resumeUrl = `${getPortalBaseUrl()}?token=${token}`;
-    await base44.asServiceRole.integrations.Core.SendEmail({
-      to: email,
-      subject: `Resume your Cliqbux merchant application`,
-      body: buildResumeEmail(firstName, resumeUrl, businessName),
-    });
+    await sendViaResend(email, `Resume your Cliqbux merchant application`, buildResumeEmail(firstName, resumeUrl, businessName));
 
-    console.log(`[sendResumeLink] Sent resume link to ${email} for corporateId=${corporateId}, expires=${expiresAt}`);
+    console.log(`[sendResumeLink] Sent resume link to ${email} for corporateId=${corporateId}`);
 
-    return Response.json({
-      success: true,
-      message: 'If an application exists for that email, a link has been sent.',
-    });
+    return Response.json({ success: true, message: 'If an application exists for that email, a link has been sent.' });
 
   } catch (error: any) {
-    return Response.json({
-      error: error.message,
-      stack: error.stack?.split('\n').slice(0, 3).join(' | '),
-    }, { status: 500 });
+    return Response.json({ error: error.message, stack: error.stack?.split('\n').slice(0, 3).join(' | ') }, { status: 500 });
   }
 });
