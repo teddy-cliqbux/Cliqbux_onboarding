@@ -88,6 +88,12 @@ function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
+const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']);
+function sanitizeState(s: string): string {
+  const code = (s || '').toUpperCase().trim();
+  return US_STATES.has(code) ? code : '';
+}
+
 function formatDob(year: string, month: string, day: string): string {
   if (!year || !month || !day) return '';
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -169,7 +175,7 @@ function buildFormPayload(
     owner_address_type: 'PRA',
     owner_address: s.homeStreet || '',
     owner_city: s.homeCity || '',
-    owner_state_usa: s.homeState || '',
+    owner_state_usa: sanitizeState(s.homeState),
     owner_zipcode: s.homeZip || '',
     owner_citizenship_country_1: 'USA',
     owner_id_type: 'SSN',
@@ -223,7 +229,7 @@ function buildFormPayload(
         owner_address_type: 'PRA',
         owner_address: signer.homeStreet || profile.homeStreet || '',
         owner_city: signer.homeCity || profile.homeCity || '',
-        owner_state_usa: signer.homeState || profile.homeState || '',
+        owner_state_usa: sanitizeState(signer.homeState || profile.homeState || '') || sanitizeState(location.businessState || ''),
         owner_zipcode: signer.homeZip || profile.homeZip || '',
         owner_citizenship_country_1: 'USA',
         owner_id_type: 'SSN',
@@ -258,7 +264,10 @@ function buildFormPayload(
     intl_card_handling_fee: '0.60',
     tokenization_service_fee: '0.0000',
     tokenization_platform_fee: '0.0000',
-    // debit_auth_method, debit_pricing_method, is_firearm_verified: let template defaults apply
+    has_pin_debit: false,       // attempt to disable debit fields; template may override
+    debit_auth_method: 'PNL',  // pinless — required when has_pin_debit=true (template default)
+    debit_pricing_method: 'ICPLS',
+    // is_firearm_verified: let template defaults apply
     // Per-network debit interchange fees required by template
     ACCL_per_auth: '0.00', ACCL_percent_fee: '0.0000', ACCL_transaction_fee: '0.00',
     AFFN_per_auth: '0.00', AFFN_percent_fee: '0.0000', AFFN_transaction_fee: '0.00',
