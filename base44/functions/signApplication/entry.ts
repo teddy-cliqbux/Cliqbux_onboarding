@@ -487,42 +487,46 @@ Deno.serve(async (req) => {
 
       let packageExists = statusRes.ok && statusData?.success && statusData?.signers?.length > 0;
 
-      // Re-fill form before every signing attempt — capture completion_errors from PUT response
+      // Check current form completion via GET first — template defaults may already satisfy all fields
       let refillPercentComplete: number | null = null;
       let refillErrors: string[] = [];
       if (!packageExists) {
-        const location = locationMap[concept.locationId];
-        if (location) {
-          const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners);
-          console.log(`[signApplication] Refill payload for ${mspApplicationNo}:`, JSON.stringify(formPayload));
-          const refillRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
-            method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
-          });
-          const refillData = await refillRes.json();
-          console.log(`[signApplication] Re-fill raw response ${refillRes.status} for ${mspApplicationNo}:`, JSON.stringify(refillData));
-          refillPercentComplete = refillData?.percent_complete ?? null;
-          refillErrors = [
-            ...(refillData?.completion_errors || []),
-            ...(refillData?.data_errors       || []),
-            ...(refillData?.rule_violations    || []),
-          ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || JSON.stringify(e)));
+        const getRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
+        const getData = await getRes.json();
+        // percent_complete may be a string from MSPWare — parse it
+        const rawPct = getData?.percent_complete ?? getData?.validation?.percent_complete ?? null;
+        refillPercentComplete = rawPct !== null ? Math.round(parseFloat(String(rawPct))) : null;
+        const getErrors = [
+          ...(getData?.completion_errors || getData?.validation?.errors?.completion || []),
+          ...(getData?.data_errors       || getData?.validation?.errors?.data       || []),
+          ...(getData?.rule_violations   || getData?.validation?.errors?.rules      || []),
+        ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
+        console.log(`[signApplication] GET form status for ${mspApplicationNo}: ${refillPercentComplete ?? '?'}% complete, ${getErrors.length} errors`);
 
-          // If PUT returned errors or rejected fields, do a GET to get the actual completion status
-          if (!refillPercentComplete || refillErrors.length === 0) {
-            const getRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
-            const getData = await getRes.json();
-            refillPercentComplete = getData?.percent_complete ?? refillPercentComplete;
-            const getErrors = [
-              ...(getData?.completion_errors || []),
-              ...(getData?.data_errors       || []),
-              ...(getData?.rule_violations    || []),
-            ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || JSON.stringify(e)));
-            if (getErrors.length > 0) refillErrors = getErrors;
-            console.log(`[signApplication] GET form after refill: ${refillPercentComplete ?? '?'}% complete, errors:`, JSON.stringify(getErrors));
+        // Only re-fill if the form is not already at 100%
+        if (refillPercentComplete !== 100) {
+          const location = locationMap[concept.locationId];
+          if (location) {
+            const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners);
+            const refillRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
+              method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
+            });
+            const refillData = await refillRes.json();
+            // After PUT, always re-check via GET for true completion (PUT response can be misleading)
+            const getRes2 = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
+            const getData2 = await getRes2.json();
+            const rawPct2 = getData2?.percent_complete ?? getData2?.validation?.percent_complete ?? null;
+            refillPercentComplete = rawPct2 !== null ? Math.round(parseFloat(String(rawPct2))) : null;
+            refillErrors = [
+              ...(getData2?.completion_errors || getData2?.validation?.errors?.completion || []),
+              ...(getData2?.data_errors       || getData2?.validation?.errors?.data       || []),
+              ...(getData2?.rule_violations   || getData2?.validation?.errors?.rules      || []),
+            ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
+            console.log(`[signApplication] After refill GET: ${refillPercentComplete ?? '?'}% complete, ${refillErrors.length} errors`);
+            if (refillErrors.length) console.log(`[signApplication] Errors:`, JSON.stringify(refillErrors));
           }
-
-          console.log(`[signApplication] Re-fill ${refillRes.status} for ${mspApplicationNo}: ${refillPercentComplete ?? '?'}% complete, ${refillErrors.length} errors`);
-          if (refillErrors.length) console.log(`[signApplication] Errors:`, JSON.stringify(refillErrors));
+        } else {
+          console.log(`[signApplication] Form already at 100% — skipping re-fill`);
         }
       }
 
@@ -539,15 +543,16 @@ Deno.serve(async (req) => {
 
         if (!packageRes.ok || !packageData?.success) {
           const errMsg = packageData?.error || packageData?.message || `HTTP ${packageRes.status}`;
-
           applications.push({
             mspApplicationNo,
-            merchantIDName: conceptName,
+            conceptName,
             signingUrl: null,
             signers: [],
             allSigned: false,
-            error: `Application form incomplete: ${errMsg}`,
-            hint: 'Complete all required fields and try again.',
+            error: `Unable to prepare signing package: ${errMsg}`,
+            hint: refillPercentComplete !== null && refillPercentComplete < 100
+              ? `Form is ${refillPercentComplete}% complete. ${refillErrors.join('; ')}`
+              : 'Contact support if this persists.',
             percentComplete: refillPercentComplete,
             formErrors: refillErrors,
           });
