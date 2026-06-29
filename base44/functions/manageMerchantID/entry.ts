@@ -48,6 +48,11 @@ Deno.serve(async (req) => {
     // — UPDATE —
     if (action === 'update') {
       if (!merchantIDId) return Response.json({ error: 'merchantIDId is required for update' }, { status: 400 });
+      const existing = await base44.asServiceRole.entities.MerchantProcessingConcept.get(merchantIDId);
+      const LOCKED = ['Pending MID', 'Active', 'Active (Existing)'];
+      if (existing && LOCKED.includes(existing.applicationStepStatus) && !(data?.applicationStepStatus !== undefined && Object.keys(data).length === 1)) {
+        return Response.json({ error: 'Cannot edit: Application is in a locked status' }, { status: 403 });
+      }
       const updateFields = {};
       const d = data || {};
       if (d.merchantName !== undefined) { updateFields.merchantName = d.merchantName; updateFields.conceptName = d.merchantName; updateFields.dbaName = d.merchantName; }
@@ -68,6 +73,11 @@ Deno.serve(async (req) => {
     // — DELETE —
     if (action === 'delete') {
       if (!merchantIDId) return Response.json({ error: 'merchantIDId is required for delete' }, { status: 400 });
+      const toDelete = await base44.asServiceRole.entities.MerchantProcessingConcept.get(merchantIDId);
+      const LOCKED = ['Pending MID', 'Active', 'Active (Existing)'];
+      if (toDelete && LOCKED.includes(toDelete.applicationStepStatus)) {
+        return Response.json({ error: 'Cannot delete: Application is in a locked status' }, { status: 403 });
+      }
       await base44.asServiceRole.entities.MerchantProcessingConcept.delete(merchantIDId);
       return Response.json({ success: true });
     }

@@ -4,9 +4,11 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
   Plus, ArrowRight, Loader2, Store, Trash2, CheckCircle2,
   MapPin, Building2, CreditCard, ChevronDown, ChevronRight, X,
-  AlertTriangle, Check, ArrowLeft, Pencil, GripVertical, Cloud, Mail
+  AlertTriangle, Check, ArrowLeft, Pencil, GripVertical, Cloud, Mail, Lock
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { isLocked as getMidLocked, isImported as getMidImported } from '@/utils/statusUtils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -88,7 +90,9 @@ function StatusBadge({ status }) {
 // ─── MID Card (draggable) ─────────────────────────────────────────────────────
 
 function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDelete }) {
-  const [editing, setEditing] = useState(!mid.mccCode);
+  const locked = getMidLocked(mid);
+  const imported = getMidImported(mid);
+  const [editing, setEditing] = useState(!mid.mccCode && !locked);
   const [form, setForm] = useState({
     merchantName: mid.merchantName || mid.dbaName || dbaName || '',
     mccCode: mid.mccCode || '',
@@ -151,13 +155,13 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
-          className={`rounded-xl border transition-all ${snapshot.isDragging ? 'border-blue-500/60 bg-[#1a2235] shadow-xl' : isComplete ? 'border-blue-500/20 bg-blue-500/5' : 'border-white/10 bg-white/[0.02]'}`}
+          className={`rounded-xl border transition-all ${snapshot.isDragging ? 'border-blue-500/60 bg-[#1a2235] shadow-xl' : locked ? 'border-white/5 bg-white/[0.01] opacity-70' : isComplete ? 'border-blue-500/20 bg-blue-500/5' : 'border-white/10 bg-white/[0.02]'}`}
         >
           <div className="flex items-center gap-2 px-3 py-2.5">
-            <span {...provided.dragHandleProps} className="text-gray-600 hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0">
+            <span {...provided.dragHandleProps} className={`text-gray-600 flex-shrink-0 ${locked ? 'cursor-not-allowed' : 'hover:text-gray-400 cursor-grab active:cursor-grabbing'}`}>
               <GripVertical className="w-3.5 h-3.5" />
             </span>
-            <CreditCard className={`w-3.5 h-3.5 flex-shrink-0 ${isComplete ? 'text-blue-400' : 'text-gray-500'}`} />
+            <CreditCard className={`w-3.5 h-3.5 flex-shrink-0 ${locked ? 'text-gray-600' : isComplete ? 'text-blue-400' : 'text-gray-500'}`} />
             <div className="flex-1 min-w-0">
               <p className="text-xs font-semibold text-white truncate">{form.merchantName || dbaName}</p>
               {isComplete
@@ -165,16 +169,36 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
                 : <p className="text-[10px] text-amber-400/80">Needs MCC &amp; volume →</p>
               }
             </div>
-            <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
-            <button onClick={() => setEditing(e => !e)} className="p-1 text-gray-500 hover:text-amber-400 transition-colors">
-              <Pencil className="w-3 h-3" />
-            </button>
-            <button onClick={() => onDelete(mid)} className="p-1 text-gray-600 hover:text-red-400 transition-colors">
-              <Trash2 className="w-3 h-3" />
-            </button>
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              {imported && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-500/10 text-gray-400 border border-gray-500/20">Imported</span>}
+              {!imported && !locked && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">New</span>}
+              <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
+              {locked && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="p-1 text-gray-500 cursor-default"><Lock className="w-3 h-3" /></span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs max-w-[200px] text-center">
+                      Application in progress — changes require support assistance.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+            {!locked && (
+              <>
+                <button onClick={() => setEditing(e => !e)} className="p-1 text-gray-500 hover:text-amber-400 transition-colors">
+                  <Pencil className="w-3 h-3" />
+                </button>
+                <button onClick={() => onDelete(mid)} className="p-1 text-gray-600 hover:text-red-400 transition-colors">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </>
+            )}
           </div>
 
-          {editing && (
+          {editing && !locked && (
             <div className="border-t border-white/5 px-3 pb-3 pt-2 space-y-2">
               <div>
                 <label className={labelCls}>MID Label</label>
@@ -327,7 +351,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
                         corporateId={corporateId}
                         dbaName={location.dbaName}
                         onUpdated={onMerchantIDUpdated}
-                        onDelete={onMerchantIDDeleted}
+                        onDelete={getMidLocked(mid) ? () => {} : onMerchantIDDeleted}
                       />
                     ))}
                     {drop.placeholder}
