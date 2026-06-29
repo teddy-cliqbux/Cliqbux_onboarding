@@ -18,8 +18,9 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // Body: { corporateId }
 
 // ─── Constants (shared with submitToMSP) ─────────────────────────────────────
-const MSP_APP_TYPE = 24;          // Elavon US Application
-const DEFAULT_TEMPLATE_NO = 6;    // Cliqbux Template Swipe Keyed
+const MSP_APP_TYPE = 24;           // Elavon US Application
+const DEFAULT_TEMPLATE_NO = 6;    // Cliqbux Template Swipe Keyed (ICPLS)
+const CD_TEMPLATE_NO = 154;       // Cliqbux Template Cash Discount
 const DEFAULT_SALESPERSON_ID = 0;
 
 // ─── Helpers (mirrored from submitToMSP) ─────────────────────────────────────
@@ -331,7 +332,8 @@ Deno.serve(async (req) => {
         }
 
         try {
-          const templateNo = concept.mspTemplateNo || profile.mspTemplateNo || DEFAULT_TEMPLATE_NO;
+          const isCashDiscount = (concept.pricingMethod || profile.pricingMethod || '').toUpperCase() === 'CASH_DISCOUNT';
+          const templateNo = concept.mspTemplateNo || profile.mspTemplateNo || (isCashDiscount ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
           const createBody = {
             dba: concept.dbaName || location.dbaName || profile.legalName,
             merchantapplicationtypeno: MSP_APP_TYPE,

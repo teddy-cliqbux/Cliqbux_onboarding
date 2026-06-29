@@ -3,9 +3,11 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // ─── MSPWare / PulsePoint Constants ───────────────────────────────────────────
 // Application type 24 = "Elavon US Application" in this account
 const MSP_APP_TYPE = 24;
-// Template 6 = "Cliqbux Template Swipe Keyed" — holds default pricing/fees/equipment
+// Template 6  = "Cliqbux Template Swipe Keyed"  — ICPLS (interchange plus) default
+// Template 154 = "Cliqbux Template Cash Discount" — Cash Discount / CLEAR pricing
 // Override per-merchant via profile.mspTemplateNo if needed
 const DEFAULT_TEMPLATE_NO = 6;
+const CD_TEMPLATE_NO = 154;
 
 // ─── Value Mappings ───────────────────────────────────────────────────────────
 
@@ -428,7 +430,8 @@ Deno.serve(async (req) => {
 
       try {
         // ── Step 1: Create draft application ─────────────────────────────────
-        const templateNo = concept.mspTemplateNo || profile.mspTemplateNo || DEFAULT_TEMPLATE_NO;
+        const isCashDiscount = (concept.pricingMethod || profile.pricingMethod || '').toUpperCase() === 'CASH_DISCOUNT';
+        const templateNo = concept.mspTemplateNo || profile.mspTemplateNo || (isCashDiscount ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
         const createBody = {
           dba: concept.dbaName || location.dbaName || profile.legalName,
           merchantapplicationtypeno: MSP_APP_TYPE,

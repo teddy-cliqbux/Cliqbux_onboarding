@@ -48,10 +48,10 @@ const ICPLS_STATIC = {
   card_acceptance_split: 'CP',     // default card-present; overridden to OMNI for keyed merchants
 };
 
-// Cash Discount — surcharge passed to cardholder
+// Cash Discount — surcharge passed to cardholder; MSPWare uses "CLEAR" as the pricing_method value
 const CD_STATIC = {
   ...ALWAYS_STATIC,
-  pricing_method:       'CASH_DISCOUNT',
+  pricing_method:       'CLEAR',
   pricing_category:     '1',
   card_acceptance_split: 'CP',
 };
