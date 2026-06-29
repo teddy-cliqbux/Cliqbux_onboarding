@@ -694,15 +694,17 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
               const entityLocs = grouped[entity.entityId] || [];
               return (
                 <div key={entity.entityId} className="bg-white/[0.015] border border-white/8 rounded-2xl overflow-hidden">
-                  {/* Entity header */}
-                  <div className="flex items-center gap-3 px-5 py-3 bg-white/[0.02] border-b border-white/5">
-                    <Building2 className="w-4 h-4 text-amber-400/70 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs font-bold text-amber-300/90 uppercase tracking-wider">{entity.legalBusinessName}</span>
-                      {entity.federalEIN && <span className="ml-2 text-[10px] text-gray-500 font-mono">{formatEIN(entity.federalEIN)}</span>}
+                  {/* Entity header — only show EIN if different from corporate profile (multi-entity) */}
+                  {entities.length > 1 && (
+                    <div className="flex items-center gap-3 px-5 py-3 bg-white/[0.02] border-b border-white/5">
+                      <Building2 className="w-4 h-4 text-amber-400/70 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-xs font-bold text-amber-300/90 uppercase tracking-wider">{entity.legalBusinessName}</span>
+                        {entity.federalEIN && <span className="ml-2 text-[10px] text-gray-500 font-mono">{formatEIN(entity.federalEIN)}</span>}
+                      </div>
+                      <span className="text-[10px] text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''}</span>
                     </div>
-                    <span className="text-[10px] text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''}</span>
-                  </div>
+                  )}
 
                   {/* Drop zone for locations */}
                   <Droppable droppableId={entity.entityId} type="LOCATION">

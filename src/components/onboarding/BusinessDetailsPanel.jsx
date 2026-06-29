@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Building2, ChevronDown, ChevronRight, Check, Loader2, AlertCircle } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
@@ -39,10 +39,19 @@ function isComplete(profile) {
     profile.taxId &&
     profile.ownershipType &&
     profile.taxClassType &&
-    profile.productDescription &&
     profile.establishmentYear &&
     profile.titleType
   );
+}
+
+// Derive years/months of ownership from establishment year
+function deriveOwnership(establishmentYear) {
+  if (!establishmentYear) return { years: '1', months: '0' };
+  const now = new Date();
+  const totalMonths = (now.getFullYear() - parseInt(establishmentYear, 10)) * 12 + now.getMonth();
+  const years = Math.max(0, Math.floor(totalMonths / 12));
+  const months = Math.max(0, totalMonths % 12);
+  return { years: String(years), months: String(months) };
 }
 
 export default function BusinessDetailsPanel({ profile, onSaved }) {
@@ -51,28 +60,33 @@ export default function BusinessDetailsPanel({ profile, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const [form, setForm] = useState({
-    legalName: profile.legalName || '',
-    taxId: (profile.taxId || '').replace(/\D/g, ''),
-    ownershipType: profile.ownershipType || '',
-    taxClassType: profile.taxClassType || '',
-    titleType: profile.titleType || '',
-    productDescription: profile.productDescription || '',
-    establishmentYear: profile.establishmentYear || '',
-    currentOwnershipYears: profile.currentOwnershipYears || '1',
-    currentOwnershipMonths: profile.currentOwnershipMonths || '0',
+  const profileToForm = (p) => ({
+    legalName: p.legalName || '',
+    taxId: (p.taxId || '').replace(/\D/g, ''),
+    ownershipType: p.ownershipType || '',
+    taxClassType: p.taxClassType || '',
+    titleType: p.titleType || '',
+    establishmentYear: p.establishmentYear || '',
   });
+
+  const [form, setForm] = useState(() => profileToForm(profile));
+
+  // Re-sync form if parent passes an updated profile (e.g. after page switch)
+  useEffect(() => {
+    setForm(profileToForm(profile));
+  }, [profile.corporateId, profile.taxId, profile.ownershipType, profile.taxClassType, profile.titleType, profile.establishmentYear]);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
   const canSave = form.legalName && form.taxId.length === 9 && form.ownershipType &&
-    form.taxClassType && form.titleType && form.productDescription && form.establishmentYear;
+    form.taxClassType && form.titleType && form.establishmentYear;
 
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
     setError('');
     try {
+      const { years, months } = deriveOwnership(form.establishmentYear);
       const res = await base44.functions.invoke('updateMerchantProfile', {
         corporateId: profile.corporateId,
         legalName: form.legalName,
@@ -80,10 +94,9 @@ export default function BusinessDetailsPanel({ profile, onSaved }) {
         ownershipType: form.ownershipType,
         taxClassType: form.taxClassType,
         titleType: form.titleType,
-        productDescription: form.productDescription,
         establishmentYear: form.establishmentYear,
-        currentOwnershipYears: form.currentOwnershipYears,
-        currentOwnershipMonths: form.currentOwnershipMonths,
+        currentOwnershipYears: years,
+        currentOwnershipMonths: months,
       });
       if (res.data?.error) throw new Error(res.data.error);
       onSaved({ ...profile, ...form });
@@ -110,7 +123,7 @@ export default function BusinessDetailsPanel({ profile, onSaved }) {
           <p className="text-[11px] text-gray-400 mt-0.5">
             {complete
               ? `${profile.legalName || form.legalName} · EIN ${form.taxId.slice(0,2)}-${form.taxId.slice(2)} · ${form.ownershipType.replace(/_/g, ' ')}`
-              : 'Required — EIN, entity type, product description'}
+              : 'Required — EIN, entity type, title, year established'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -176,36 +189,14 @@ export default function BusinessDetailsPanel({ profile, onSaved }) {
             <p className="text-[10px] text-gray-500 mt-1">Title of the primary signer/beneficial owner</p>
           </div>
 
-          {/* Product description */}
-          <div>
-            <label className={labelCls}>Products / Services Sold *</label>
-            <input value={form.productDescription}
-              onChange={e => set('productDescription', e.target.value)}
-              placeholder="e.g. Restaurant meals and beverages" className={inputCls} />
-          </div>
-
-          {/* Year established + ownership duration */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Year established — ownership duration derived automatically */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className={labelCls}>Year Established *</label>
+              <label className={labelCls}>Year Business Established *</label>
               <input type="number" value={form.establishmentYear}
                 onChange={e => set('establishmentYear', e.target.value)}
                 placeholder="e.g. 2018" min="1900" max={new Date().getFullYear()} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Years Under Current Ownership</label>
-              <input type="number" value={form.currentOwnershipYears}
-                onChange={e => set('currentOwnershipYears', e.target.value)}
-                min="0" max="99" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Additional Months</label>
-              <select value={form.currentOwnershipMonths} onChange={e => set('currentOwnershipMonths', e.target.value)}
-                className={inputCls} style={{ colorScheme: 'dark' }}>
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i} value={String(i)}>{i} mo</option>
-                ))}
-              </select>
+              {form.establishmentYear && (() => { const { years, months } = deriveOwnership(form.establishmentYear); return <p className="text-[10px] text-gray-500 mt-1">{years} yr{years !== '1' ? 's' : ''}{months !== '0' ? ` ${months} mo` : ''} under current ownership</p>; })()}
             </div>
           </div>
 
