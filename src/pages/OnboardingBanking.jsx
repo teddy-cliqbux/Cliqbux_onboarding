@@ -27,6 +27,7 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
   const [selectedId, setSelectedId] = useState(entityAccounts[0]?.accountId || '');
   const [routing, setRouting] = useState(bankDetails?.authMethod === 'Manual' ? (bankDetails?.routingNumber || '') : '');
   const [account, setAccount] = useState(bankDetails?.authMethod === 'Manual' ? (bankDetails?.accountNumber || '') : '');
+  const [accountType, setAccountType] = useState(bankDetails?.authMethod === 'Manual' ? (bankDetails?.accountType || '') : '');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(!!(bankDetails?.routingNumber));
   const [connecting, setConnecting] = useState(false);
@@ -42,7 +43,10 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
       await base44.functions.invoke('saveLocationBankDetails', { locations: [{ id: location.id, bankDetails: details }] });
       setSaved(true);
       onBankSaved(location.id, details, entityId);
-    } catch (_) {}
+    } catch (err) {
+      // Never log bank field values — message only
+      console.error('[BankingPanel.saveBank] failed to save bank details:', err?.message || 'Unknown error');
+    }
     finally { setSaving(false); }
   };
 
@@ -62,22 +66,30 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
             if (accounts[0]) {
               setSelectedId(accounts[0].accountId);
               setMode('plaid');
-              await saveBank({ routingNumber: accounts[0].routingNumber, accountNumber: accounts[0].accountNumber, authMethod: 'Plaid', accountNumberMasked: `••••${accounts[0].mask || ''}` });
+              await saveBank({ routingNumber: accounts[0].routingNumber, accountNumber: accounts[0].accountNumber, authMethod: 'Plaid', accountNumberMasked: `••••${accounts[0].mask || ''}`, accountType: accounts[0].subtype || null });
             }
-          } catch (_) { setPlaidError('Failed to retrieve account from Plaid.'); }
+          } catch (err) {
+            // Never log bank field values — message only
+            console.error('[BankingPanel.handlePlaidConnect] exchange failed:', err?.message || 'Unknown error');
+            setPlaidError('Failed to retrieve account from Plaid.');
+          }
           finally { setConnecting(false); }
         },
         onExit: () => setConnecting(false),
       });
       handler.open();
-    } catch (_) { setPlaidError('Connection failed.'); setConnecting(false); }
+    } catch (err) {
+      console.error('[BankingPanel.handlePlaidConnect] link token request failed:', err?.message || 'Unknown error');
+      setPlaidError('Connection failed.');
+      setConnecting(false);
+    }
   };
 
   const handlePlaidSelect = async (accountId) => {
     setSelectedId(accountId);
     const acct = entityAccounts.find(a => a.accountId === accountId);
     if (!acct) return;
-    await saveBank({ routingNumber: acct.routingNumber, accountNumber: acct.accountNumber, authMethod: 'Plaid', accountNumberMasked: `••••${acct.mask || ''}` });
+    await saveBank({ routingNumber: acct.routingNumber, accountNumber: acct.accountNumber, authMethod: 'Plaid', accountNumberMasked: `••••${acct.mask || ''}`, accountType: acct.subtype || null });
   };
 
   // Saved state — show summary
@@ -163,9 +175,18 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
                 onChange={e => setAccount(e.target.value.replace(/\D/g, '').slice(0, 17))}
                 placeholder="000123456789" className={inputCls} />
             </div>
+            <div>
+              <label className={labelCls}>Account Type</label>
+              <select value={accountType} onChange={e => setAccountType(e.target.value)}
+                className={inputCls} style={{ colorScheme: 'dark' }}>
+                <option value="">Select…</option>
+                <option value="checking">Checking</option>
+                <option value="savings">Savings</option>
+              </select>
+            </div>
           </div>
-          <button onClick={() => saveBank({ routingNumber: routing, accountNumber: account, authMethod: 'Manual', accountNumberMasked: `••••${account.slice(-4)}` })}
-            disabled={saving || routing.length !== 9 || account.length < 4}
+          <button onClick={() => saveBank({ routingNumber: routing, accountNumber: account, authMethod: 'Manual', accountNumberMasked: `••••${account.slice(-4)}`, accountType })}
+            disabled={saving || routing.length !== 9 || account.length < 4 || !accountType}
             className="w-full flex items-center justify-center gap-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 disabled:opacity-40 text-blue-300 font-semibold text-sm py-2.5 rounded-xl transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             {saving ? 'Saving…' : 'Save Bank Details'}
@@ -303,7 +324,7 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
       const needsBank = loadedLocations.find(l => !bdMap[l.id]?.routingNumber);
       if (needsBank) setExpandedLocId(needsBank.id);
     } catch (err) {
-      console.error('[OnboardingBanking] loadAll failed:', err?.message || err);
+      console.error('[OnboardingBanking] loadAll failed:', err?.message || 'Unknown error');
     } finally { setLoading(false); }
   };
 
@@ -345,7 +366,7 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
       <div className="px-8 pt-8 pb-6 border-b border-white/10">
         <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-          STEP 2B OF 3 — BANKING
+          STEP 3 OF 4 — BANKING
         </div>
         <div className="flex items-start justify-between gap-4">
           <div>

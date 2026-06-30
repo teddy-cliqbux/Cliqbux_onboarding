@@ -88,6 +88,21 @@ function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
+// Strips SSN and bank account/routing numbers before logging — recurses into
+// arrays (e.g. owners[]) so additional-owner SSNs are caught too.
+const SENSITIVE_LOG_KEYS = new Set(['owner_id_number', 'ssn', 'deposit_account_no', 'deposit_account_rtg']);
+function redactSensitive(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(redactSensitive);
+  if (obj && typeof obj === 'object') {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(obj as Record<string, any>)) {
+      out[k] = SENSITIVE_LOG_KEYS.has(k) ? '[REDACTED]' : redactSensitive(v);
+    }
+    return out;
+  }
+  return obj;
+}
+
 function resolveLocationAddress(location: Record<string, any>): Record<string, any> {
   if (location.businessStreet && location.businessCity && location.businessState) return location;
   const flat = location.businessAddress || '';
@@ -296,18 +311,10 @@ function buildFormPayload(
     has_pin_debit: false,       // attempt to disable debit fields; template may override
     debit_auth_method: 'PNL',  // pinless — required when has_pin_debit=true (template default)
     debit_pricing_method: 'ICPLS',
-<<<<<<< HEAD
-    // ⚠️  CRITICAL — DO NOT CHANGE THIS VALUE ⚠️
-    // MSPWare expects the STRING "no" (not boolean false, not "N", not "yes").
-    // Sending "yes" triggers the firearms MCC validation rule and blocks signing for ALL merchants.
-    // Sending a boolean or "N" is also rejected silently. The only correct value is the string "no".
-    is_firearm_verified: 'no',
-=======
     // is_firearm_verified: OMIT — Template #6/#154 already has this set correctly.
     // Sending ANY value here (including "yes", false, "N") overrides the template and drops
     // completion below 100%, blocking signing. The GET-first check above handles this: if
     // the form is already at 100% the PUT is skipped entirely, preserving the template value.
->>>>>>> 874ea8a (fix: is_firearm_verified must be omitted — template sets it, any API value overrides and breaks completion)
     // Per-network debit interchange fees required by template
     ACCL_per_auth: '0.00', ACCL_percent_fee: '0.0000', ACCL_transaction_fee: '0.00',
     AFFN_per_auth: '0.00', AFFN_percent_fee: '0.0000', AFFN_transaction_fee: '0.00',
@@ -477,7 +484,7 @@ Deno.serve(async (req) => {
             method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
           });
           const formData = await formRes.json();
-          console.log(`[signApplication] Form fill ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(formData));
+          console.log(`[signApplication] Form fill ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(formData)));
         } catch (err: any) {
           console.error(`[signApplication] Exception creating draft for "${concept.dbaName}":`, err.message);
         }
@@ -523,7 +530,7 @@ Deno.serve(async (req) => {
         const rawPct = getData?.percent_complete ?? getData?.validation?.percent_complete ?? null;
         refillPercentComplete = rawPct !== null ? Math.round(parseFloat(String(rawPct))) : null;
         // Log full form response to surface any hidden completion/rule errors
-        console.log(`[signApplication] Full GET form response for ${mspApplicationNo}:`, JSON.stringify(getData));
+        console.log(`[signApplication] Full GET form response for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(getData)));
 
         const getErrors = [
               ...(getData?.completion_errors || getData?.validation?.errors?.completion || []),
@@ -550,7 +557,7 @@ Deno.serve(async (req) => {
             const getData2 = await getRes2.json();
             const rawPct2 = getData2?.percent_complete ?? getData2?.validation?.percent_complete ?? null;
             refillPercentComplete = rawPct2 !== null ? Math.round(parseFloat(String(rawPct2))) : null;
-        console.log(`[signApplication] Full GET form response AFTER refill for ${mspApplicationNo}:`, JSON.stringify(getData2));
+        console.log(`[signApplication] Full GET form response AFTER refill for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(getData2)));
 
             refillErrors = [
               ...(getData2?.completion_errors || getData2?.validation?.errors?.completion || []),

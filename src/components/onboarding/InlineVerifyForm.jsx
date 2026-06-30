@@ -131,7 +131,10 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId, prof
         if (res.data?.found) {
           setPriorData(res.data.signerData);
         }
-      } catch (_) {}
+      } catch (err) {
+        // Message only — never log signerData (contains SSN/DOB/address)
+        console.error('[InlineVerifyForm.lookupByEmail]', err?.message || 'Unknown error');
+      }
       finally { setLookingUp(false); }
     })();
   }, [expanded]);

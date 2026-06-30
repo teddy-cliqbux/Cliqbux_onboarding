@@ -88,6 +88,21 @@ function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
+// Strips SSN and bank account/routing numbers before logging — recurses into
+// arrays (e.g. owners[]) so additional-owner SSNs are caught too.
+const SENSITIVE_LOG_KEYS = new Set(['owner_id_number', 'ssn', 'deposit_account_no', 'deposit_account_rtg']);
+function redactSensitive(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(redactSensitive);
+  if (obj && typeof obj === 'object') {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(obj as Record<string, any>)) {
+      out[k] = SENSITIVE_LOG_KEYS.has(k) ? '[REDACTED]' : redactSensitive(v);
+    }
+    return out;
+  }
+  return obj;
+}
+
 // When a location was saved via the "unverified" path, structured fields may be null.
 // Parse them from the flat businessAddress string as a fallback.
 function resolveLocationAddress(location: Record<string, any>): Record<string, any> {
@@ -579,7 +594,7 @@ Deno.serve(async (req) => {
         // ── Step 2: Fill form ─────────────────────────────────────────────────
         const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
         const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners, entityMailing);
-        console.log(`[submitToMSP] Filling form for application ${mspApplicationNo}:`, JSON.stringify(formPayload, null, 2));
+        console.log(`[submitToMSP] Filling form for application ${mspApplicationNo}:`, JSON.stringify(redactSensitive(formPayload), null, 2));
 
         const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
           method: 'PUT',
@@ -587,7 +602,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify(formPayload),
         });
         const formData = await formRes.json();
-        console.log(`[submitToMSP] Form fill response ${formRes.status}:`, JSON.stringify(formData, null, 2));
+        console.log(`[submitToMSP] Form fill response ${formRes.status}:`, JSON.stringify(redactSensitive(formData), null, 2));
 
         const percentComplete = formData?.percent_complete ?? null;
         const validationErrors = [
@@ -599,7 +614,7 @@ Deno.serve(async (req) => {
         // Log form fill issues but don't abort — template defaults may cover remaining fields,
         // and signApplication will re-fill + verify completion before creating the signing package.
         if (!formRes.ok) {
-          console.error(`[submitToMSP] Form PUT HTTP error ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(formData));
+          console.error(`[submitToMSP] Form PUT HTTP error ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(formData)));
         } else {
           console.log(`[submitToMSP] Form fill ${mspApplicationNo}: ${percentComplete ?? '?'}% complete, canSave=${formData?.canSave}, errors=${validationErrors.length}`);
         }
@@ -625,7 +640,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({}),
         });
         const submitData = await submitRes.json();
-        console.log(`[submitToMSP] Submit response ${submitRes.status}:`, JSON.stringify(submitData, null, 2));
+        console.log(`[submitToMSP] Submit response ${submitRes.status}:`, JSON.stringify(redactSensitive(submitData), null, 2));
 
         if (submitRes.ok && submitData?.success) {
           await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, {

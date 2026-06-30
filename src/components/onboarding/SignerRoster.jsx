@@ -70,7 +70,9 @@ export default function SignerRoster({ profile, onValidChange }) {
         }
       }
       setSigners(list);
-    } catch (_) {
+    } catch (err) {
+      // Message only — never log signerData (contains SSN/DOB/address)
+      console.error('[SignerRoster.loadSigners]', err?.message || 'Unknown error');
       setSigners([]);
     } finally {
       setLoading(false);
@@ -110,7 +112,9 @@ export default function SignerRoster({ profile, onValidChange }) {
       if (res.data?.signer) {
         setSigners(prev => prev.map(s => s.id === signer.id ? { ...s, identityStatus: 'Sent' } : s));
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error('[SignerRoster.handleResendInvite]', err?.message || 'Unknown error');
+    }
     setResendingId(null);
   };
 
@@ -155,7 +159,9 @@ export default function SignerRoster({ profile, onValidChange }) {
           }
         }
       }
-    } catch (_) {}
+    } catch (err) {
+      console.error('[SignerRoster.handleSaveRow]', err?.message || 'Unknown error');
+    }
     setEditingRowId(null);
   };
 

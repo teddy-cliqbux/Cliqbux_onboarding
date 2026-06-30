@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
-import { ExternalLink, RefreshCw, Clock } from 'lucide-react';
+import { ExternalLink, Clock, RefreshCw } from 'lucide-react';
 
 export default function Step1Agreement({ profile, onStatusChange }) {
-  const [iframeError, setIframeError] = useState(false);
   const [pollingActive, setPollingActive] = useState(true);
 
-  // Poll every 5 seconds to detect Quote Signed status
   useEffect(() => {
     if (!pollingActive || !profile?.corporateId) return;
 
@@ -13,14 +11,13 @@ export default function Step1Agreement({ profile, onStatusChange }) {
       try {
         const { base44 } = await import('@/api/base44Client');
         const response = await base44.functions.invoke('getMerchantData', {
-          corporateId: profile?.corporateId
+          corporateId: profile.corporateId,
         });
-        const data = response.data;
-        if (data?.profile?.applicationStatus === 'Quote Signed') {
+        if (response.data?.profile?.applicationStatus === 'Quote Signed') {
           setPollingActive(false);
           onStatusChange('Quote Signed');
         }
-      } catch (e) {
+      } catch {
         // silently continue polling
       }
     }, 5000);
@@ -36,77 +33,55 @@ export default function Step1Agreement({ profile, onStatusChange }) {
           <div>
             <div className="inline-flex items-center gap-2 bg-blue-500/15 text-blue-300 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
               <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-              STEP 1 OF 3 — MERCHANT AGREEMENT
+              STEP 1 OF 4 — MERCHANT AGREEMENT
             </div>
             <h2 className="text-2xl font-bold text-white mb-1.5">Review & Sign Your Agreement</h2>
             <p className="text-gray-400 text-sm">
-              Hello, <span className="font-semibold text-white">{profile?.legalName}</span>. Please review the merchant agreement below and sign to proceed.
+              Hello, <span className="font-semibold text-white">{profile?.legalName}</span>. Please review the merchant agreement and sign to proceed.
             </p>
           </div>
-          <div className="flex items-center gap-2 text-xs text-gray-400 bg-white/5 border border-white/10 px-3 py-2 rounded-lg ml-4">
+          <div className="flex items-center gap-2 text-xs text-gray-400 bg-white/5 border border-white/10 px-3 py-2 rounded-lg ml-4 flex-shrink-0">
             <Clock className="w-3.5 h-3.5" />
             <span>Waiting for signature...</span>
           </div>
         </div>
       </div>
 
-      {/* iFrame Area */}
-      <div className="flex-1 px-8 py-6">
+      {/* Main area */}
+      <div className="flex-1 px-8 py-10 flex items-center justify-center">
         {profile?.hubspotQuoteUrl ? (
-          <div className="relative rounded-xl overflow-hidden border border-white/10 bg-white/5" style={{ minHeight: '800px' }}>
-            {iframeError ? (
-              <div className="flex flex-col items-center justify-center h-full min-h-96 gap-4 p-8 text-center">
-                <div className="w-12 h-12 rounded-full bg-amber-500/15 flex items-center justify-center">
-                  <ExternalLink className="w-6 h-6 text-amber-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-white mb-1">Unable to display agreement inline</p>
-                  <p className="text-gray-400 text-sm mb-4">Your browser may be blocking the embedded view. Click below to open your agreement.</p>
-                  <a
-                    href={profile?.hubspotQuoteUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg text-sm transition-colors"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    Open Agreement in New Tab
-                  </a>
-                </div>
-              </div>
-            ) : (
-              <>
-                <iframe
-                  src={profile?.hubspotQuoteUrl}
-                  className="w-full"
-                  style={{ minHeight: '800px', border: 'none' }}
-                  title="Merchant Agreement"
-                  onError={() => setIframeError(true)}
-                  allow="payment"
-                />
-                {/* Fallback link always available */}
-                <div className="absolute bottom-4 right-4">
-                  <a
-                    href={profile?.hubspotQuoteUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-500 transition-colors bg-white/80 backdrop-blur px-3 py-1.5 rounded-full shadow-sm border border-gray-200"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    Open in new tab
-                  </a>
-                </div>
-              </>
-            )}
+          <div className="w-full max-w-lg text-center flex flex-col items-center gap-6">
+            <div className="w-16 h-16 rounded-full bg-blue-500/15 flex items-center justify-center">
+              <ExternalLink className="w-7 h-7 text-blue-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white mb-2">Your agreement is ready to review</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">
+                Click the button below to open your merchant agreement in a new tab. Read through the terms and sign electronically to continue your onboarding.
+              </p>
+            </div>
+            <a
+              href={profile.hubspotQuoteUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold px-8 py-3.5 rounded-lg text-sm transition-colors"
+            >
+              <ExternalLink className="w-4 h-4" />
+              Open Agreement
+            </a>
+            <p className="text-gray-500 text-xs">
+              Once you sign, this page will automatically advance — no need to refresh.
+            </p>
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center min-h-96 bg-white/5 rounded-xl border-2 border-dashed border-white/10 gap-4">
+          <div className="flex flex-col items-center justify-center gap-4 text-center">
             <RefreshCw className="w-8 h-8 text-gray-400 animate-spin" />
             <p className="text-gray-400 text-sm">Your agreement is being prepared. Please check back shortly.</p>
           </div>
         )}
       </div>
 
-      {/* Footer note */}
+      {/* Footer */}
       <div className="px-8 pb-8">
         <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-3">
           <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse flex-shrink-0" />

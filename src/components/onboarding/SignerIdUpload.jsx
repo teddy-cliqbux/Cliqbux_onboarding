@@ -51,7 +51,8 @@ export default function SignerIdUpload({ signer, corporateId, onUploaded }) {
       });
       setDocUrl('');
       if (onUploaded) onUploaded({ ...signer, idDocumentUrl: '' });
-    } catch (_) {
+    } catch (err) {
+      console.error('[SignerIdUpload.handleRemove]', err?.message || 'Unknown error');
       setError('Could not remove file.');
     } finally {
       setUploading(false);

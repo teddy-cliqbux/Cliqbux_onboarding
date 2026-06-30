@@ -91,8 +91,9 @@ export default function OnboardingVerification({ profile, locations, initialSign
           setActiveIndex(nextUnsigned);
         }
       }
-    } catch (_) {
-      // silent — polling failure shouldn't block the UI
+    } catch (err) {
+      // Polling failure shouldn't block the UI — message only, never raw err
+      console.error('[OnboardingVerification.pollSigningStatus]', err?.message || 'Unknown error');
     }
   };
 
