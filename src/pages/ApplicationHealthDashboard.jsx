@@ -191,7 +191,7 @@ function MidRow({ mid, isLoading, mspStatus }) {
 
 // ─── Merchant Card ────────────────────────────────────────────────────────────
 
-function MerchantCard({ corporateId, merchantName, trackStage }) {
+function MerchantCard({ corporateId, merchantName, trackStage, profile }) {
   const [expanded, setExpanded] = useState(false);
   const [mids, setMids]         = useState([]);
   const [signers, setSigners]   = useState([]);
@@ -200,12 +200,19 @@ function MerchantCard({ corporateId, merchantName, trackStage }) {
   const [loadingMsp, setLoadingMsp]       = useState(false);
 
   const p = trackStage?.prefilledData || {};
-  const currentStep = p.currentStep || 'agreement';
-  const completedSteps = p.completedSteps || {};
+  // Derive current step from profile.applicationStatus when no tracking data exists
+  const appStatus = p.applicationStatus || profile?.applicationStatus || 'Incomplete';
+  const currentStep = p.currentStep || (
+    appStatus === 'Submitted' ? 'submitted' :
+    appStatus === 'Quote Signed' || appStatus === 'Pricing Selected' ? 'locations' :
+    'agreement'
+  );
+  const completedSteps = p.completedSteps || {
+    ...(appStatus !== 'Incomplete' ? { agreement: true } : {}),
+  };
   const lastSeen = p.lastSeenAt
     ? new Date(p.lastSeenAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : null;
-  const appStatus = p.applicationStatus || 'Incomplete';
 
   // Derive overall health from local MID data before MSP is loaded
   const midsWithMcc      = mids.filter(m => m.mccCode && m.monthlyCardSales).length;
@@ -428,16 +435,26 @@ function MerchantCard({ corporateId, merchantName, trackStage }) {
 // ─── Summary Stats Bar ────────────────────────────────────────────────────────
 
 function SummaryBar({ merchants }) {
-  const total       = merchants.length;
-  const submitted   = merchants.filter(m => (m.trackStage?.prefilledData?.applicationStatus === 'Submitted') || m.trackStage?.prefilledData?.currentStep === 'submitted').length;
-  const inProgress  = merchants.filter(m => {
-    const step = m.trackStage?.prefilledData?.currentStep;
-    return step && step !== 'submitted' && step !== 'agreement';
+  const total      = merchants.length;
+  const submitted  = merchants.filter(m =>
+    m.profile?.applicationStatus === 'Submitted' ||
+    m.trackStage?.prefilledData?.applicationStatus === 'Submitted' ||
+    m.trackStage?.prefilledData?.currentStep === 'submitted'
+  ).length;
+  const inProgress = merchants.filter(m => {
+    const status = m.profile?.applicationStatus;
+    const step   = m.trackStage?.prefilledData?.currentStep;
+    return (status === 'Quote Signed' || status === 'Pricing Selected') && status !== 'Submitted' ||
+           (step && step !== 'submitted' && step !== 'agreement');
   }).length;
-  const notStarted  = merchants.filter(m => !m.trackStage?.prefilledData?.currentStep || m.trackStage?.prefilledData?.currentStep === 'agreement').length;
-  const stuckCount  = merchants.filter(m => {
+  const notStarted = merchants.filter(m =>
+    (!m.trackStage?.prefilledData?.currentStep || m.trackStage?.prefilledData?.currentStep === 'agreement') &&
+    (!m.profile?.applicationStatus || m.profile?.applicationStatus === 'Incomplete')
+  ).length;
+  const stuckCount = merchants.filter(m => {
     const p = m.trackStage?.prefilledData;
-    return p?.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) > 3 * 24 * 60 * 60 * 1000 && p?.applicationStatus !== 'Submitted';
+    return p?.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) > 3 * 24 * 60 * 60 * 1000 &&
+      m.profile?.applicationStatus !== 'Submitted';
   }).length;
 
   const stats = [
@@ -472,32 +489,37 @@ export default function ApplicationHealthDashboard() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await base44.functions.invoke('manageStagedApplication', { action: 'list' });
-      const stages = res.data?.stages || [];
+      // Load all profiles AND all staged applications in parallel
+      const [profilesRes, stagesRes] = await Promise.all([
+        base44.entities.MerchantCorporateProfile.list('-updated_date', 200),
+        base44.functions.invoke('manageStagedApplication', { action: 'list' }),
+      ]);
 
-      // Group by corporateId — only take the auto-track record per merchant
-      const grouped = {};
+      const profiles = profilesRes || [];
+      const stages = stagesRes.data?.stages || [];
+
+      // Build a map of corporateId → auto-track stage
+      const trackMap = {};
       for (const s of stages) {
-        const cid = s.corporateId || 'unknown';
-        if (!grouped[cid]) grouped[cid] = { track: null };
-        if (s.label === '__auto_track__') grouped[cid].track = s;
+        if (s.label === '__auto_track__' && s.corporateId) {
+          trackMap[s.corporateId] = s;
+        }
       }
 
-      const entries = Object.entries(grouped).map(([cid, { track }]) => ({
-        corporateId: cid,
-        trackStage: track,
+      // Every profile gets an entry — merge in their tracking stage if one exists
+      const entries = profiles.map(p => ({
+        corporateId: p.corporateId,
+        trackStage: trackMap[p.corporateId] || null,
+        profile: p,
       }));
 
       setMerchants(entries);
 
-      // Resolve merchant names
+      // Build name map directly from profiles (no extra API calls needed)
       const nameMap = {};
-      await Promise.all(entries.map(async ({ corporateId }) => {
-        try {
-          const r = await base44.functions.invoke('getMerchantData', { corporateId });
-          nameMap[corporateId] = r.data?.profile?.legalName || corporateId;
-        } catch (_) { nameMap[corporateId] = corporateId; }
-      }));
+      for (const p of profiles) {
+        nameMap[p.corporateId] = p.legalName || p.corporateId;
+      }
       setMerchantNames(nameMap);
     } catch (_) {}
     finally { setLoading(false); }
@@ -511,10 +533,10 @@ export default function ApplicationHealthDashboard() {
     if (!matchesSearch) return false;
 
     if (stepFilter === 'all') return true;
-    if (stepFilter === 'submitted') return m.trackStage?.prefilledData?.applicationStatus === 'Submitted' || m.trackStage?.prefilledData?.currentStep === 'submitted';
+    if (stepFilter === 'submitted') return m.profile?.applicationStatus === 'Submitted' || m.trackStage?.prefilledData?.applicationStatus === 'Submitted' || m.trackStage?.prefilledData?.currentStep === 'submitted';
     if (stepFilter === 'stuck') {
       const p = m.trackStage?.prefilledData;
-      return p?.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) > 3 * 24 * 60 * 60 * 1000 && p?.applicationStatus !== 'Submitted';
+      return p?.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) > 3 * 24 * 60 * 60 * 1000 && m.profile?.applicationStatus !== 'Submitted';
     }
     return m.trackStage?.prefilledData?.currentStep === stepFilter;
   });
@@ -607,6 +629,7 @@ export default function ApplicationHealthDashboard() {
                 corporateId={m.corporateId}
                 merchantName={merchantNames[m.corporateId] || m.corporateId}
                 trackStage={m.trackStage}
+                profile={m.profile}
               />
             ))}
           </div>
