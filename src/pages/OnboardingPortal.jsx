@@ -182,6 +182,16 @@ export default function OnboardingPortal() {
       }
       setProfile(mergedProfile);
       setLocations(filteredLocations);
+      // Track that merchant opened the portal — creates a record if none exists
+      if (mergedProfile?.corporateId && mergedProfile?.applicationStatus !== 'Submitted') {
+        trackProgress(mergedProfile.corporateId, {
+          currentStep: mergedProfile.applicationStatus === 'Incomplete' ? 'agreement' : 'locations',
+          merchantName: mergedProfile.legalName,
+          signerEmail: mergedProfile.signerEmail,
+          pricingTier: mergedProfile.pricingTier,
+          applicationStatus: mergedProfile.applicationStatus,
+        });
+      }
       if (data.profile?.applicationStatus === 'Submitted') {
         setRedirected(true);
         navigate(`/onboarding/dashboard?dealId=${data.profile.corporateId}`, { replace: true });
@@ -202,11 +212,22 @@ export default function OnboardingPortal() {
     });
   };
 
+  // Fire-and-forget progress tracking — upserts a StagedApplication record for admin visibility
+  const trackProgress = (corporateId, progressData) => {
+    if (!corporateId) return;
+    base44.functions.invoke('manageStagedApplication', {
+      action: 'trackProgress',
+      corporateId,
+      data: progressData,
+    }).catch(() => {});
+  };
+
   const handleStatusChange = (newStatus) => {
     setProfile(prev => ({ ...prev, applicationStatus: newStatus }));
     if (newStatus === 'Quote Signed') {
       fetchMerchantData(profile.corporateId);
       pushMilestoneToHubspot(profile.corporateId, 'agreement_signed');
+      trackProgress(profile.corporateId, { currentStep: 'locations', completedSteps: { agreement: true } });
     }
   };
 
@@ -221,12 +242,14 @@ export default function OnboardingPortal() {
     setCompletedSteps(prev => ({ ...prev, locations: true }));
     setStep(STEP_BANKING);
     pushMilestoneToHubspot(profile?.corporateId, 'locations_added');
+    trackProgress(profile?.corporateId, { currentStep: 'banking', completedSteps: { agreement: true, locations: true } });
   };
 
   const handleBankingContinue = ({ locations: updatedLocations }) => {
     setLocations(updatedLocations);
     setCompletedSteps(prev => ({ ...prev, banking: true }));
     setStep(STEP_VERIFICATION);
+    trackProgress(profile?.corporateId, { currentStep: 'verification', completedSteps: { agreement: true, locations: true, banking: true } });
   };
 
   const onBackStep = () => setStep(STEP_LOCATIONS);
@@ -241,6 +264,7 @@ export default function OnboardingPortal() {
   const handleSigningComplete = async () => {
     // Mark submitted, sync to HubSpot, redirect to dashboard
     pushMilestoneToHubspot(profile?.corporateId, 'application_submitted');
+    trackProgress(profile?.corporateId, { currentStep: 'submitted', completedSteps: { agreement: true, locations: true, banking: true, verify: true }, applicationStatus: 'Submitted' });
     setProfile(prev => ({ ...prev, applicationStatus: 'Submitted' }));
     navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`, { replace: true });
   };

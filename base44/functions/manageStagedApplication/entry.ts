@@ -97,6 +97,43 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, stage: updated, link });
     }
 
+    // trackProgress — auto-upsert a tracking record when a merchant opens/advances through the portal
+    if (action === 'trackProgress') {
+      if (!corporateId) return Response.json({ error: 'corporateId required' }, { status: 400 });
+
+      // Find existing auto-tracking record for this merchant (label = '__auto_track__')
+      const existing = await base44.asServiceRole.entities.StagedApplication.filter(
+        { corporateId, label: '__auto_track__' }, '-created_date', 1
+      );
+
+      const trackData: any = {
+        corporateId,
+        label: '__auto_track__',
+        status: 'draft',
+        prefilledData: {
+          currentStep: data?.currentStep || 'agreement',
+          completedSteps: data?.completedSteps || {},
+          merchantName: data?.merchantName || '',
+          signerEmail: data?.signerEmail || '',
+          pricingTier: data?.pricingTier || '',
+          applicationStatus: data?.applicationStatus || '',
+          lastSeenAt: new Date().toISOString(),
+        },
+      };
+
+      if (existing.length > 0) {
+        // Merge with existing prefilledData so we don't overwrite fields not sent this call
+        const prev = existing[0].prefilledData || {};
+        trackData.prefilledData = { ...prev, ...trackData.prefilledData };
+        const updated = await base44.asServiceRole.entities.StagedApplication.update(existing[0].id, trackData);
+        return Response.json({ success: true, stage: updated });
+      } else {
+        const token = generateToken();
+        const created = await base44.asServiceRole.entities.StagedApplication.create({ ...trackData, accessToken: token });
+        return Response.json({ success: true, stage: created });
+      }
+    }
+
     return Response.json({ error: `Unknown action: ${action}` }, { status: 400 });
 
   } catch (error: any) {

@@ -461,6 +461,62 @@ function SendModal({ stage, publicUrl, onSent, onClose }) {
   );
 }
 
+// ── Progress Track Card (auto-created for merchants who opened the portal) ─────
+const STEP_ORDER = ['agreement', 'locations', 'banking', 'verification', 'submitted'];
+const STEP_LABELS = { agreement: 'Agreement', locations: 'Locations', banking: 'Banking', verification: 'Signing', submitted: 'Submitted' };
+
+function ProgressTrackCard({ stage }) {
+  const p = stage.prefilledData || {};
+  const completed = p.completedSteps || {};
+  const currentStep = p.currentStep || 'agreement';
+  const lastSeen = p.lastSeenAt ? new Date(p.lastSeenAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
+
+  return (
+    <div className="bg-[#1c2128] border border-blue-500/20 rounded-2xl p-4">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">In Progress</span>
+            {p.pricingTier && <span className="text-[10px] text-gray-500">{p.pricingTier}</span>}
+          </div>
+          {p.signerEmail && <p className="text-[11px] text-gray-400 truncate">{p.signerEmail}</p>}
+        </div>
+        {lastSeen && (
+          <p className="text-[10px] text-gray-600 flex items-center gap-1 flex-shrink-0">
+            <Clock className="w-2.5 h-2.5" /> {lastSeen}
+          </p>
+        )}
+      </div>
+      {/* Step progress dots */}
+      <div className="flex items-center gap-1">
+        {STEP_ORDER.map((step, i) => {
+          const done = completed[step] || p.applicationStatus === 'Submitted';
+          const active = currentStep === step;
+          return (
+            <div key={step} className="flex items-center gap-1 flex-1 min-w-0">
+              <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold border transition-all ${
+                done ? 'bg-green-500 border-green-500 text-white' :
+                active ? 'bg-blue-500 border-blue-500 text-white' :
+                'bg-transparent border-gray-600 text-gray-600'
+              }`}>
+                {done ? '✓' : i + 1}
+              </div>
+              {i < STEP_ORDER.length - 1 && <div className={`flex-1 h-px ${done ? 'bg-green-500/40' : 'bg-gray-700'}`} />}
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex mt-1">
+        {STEP_ORDER.map((step) => (
+          <div key={step} className="flex-1 min-w-0">
+            <p className={`text-[8px] truncate ${currentStep === step ? 'text-blue-400 font-semibold' : 'text-gray-600'}`}>{STEP_LABELS[step]}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Stage Card ────────────────────────────────────────────────────────────────
 function StageCard({ stage, publicUrl, onEdit, onSend, onDelete }) {
   const [copied, setCopied] = useState(false);
@@ -472,6 +528,11 @@ function StageCard({ stage, publicUrl, onEdit, onSend, onDelete }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  // Auto-tracked progress records render differently
+  if (stage.label === '__auto_track__') {
+    return <ProgressTrackCard stage={stage} />;
+  }
 
   return (
     <div className="bg-[#1c2128] border border-white/10 rounded-2xl p-4 hover:border-white/20 transition-all group">
@@ -617,6 +678,9 @@ export default function StagedApplicationManager() {
     const matchSearch = !searchText || s.label?.toLowerCase().includes(searchText.toLowerCase()) || name.toLowerCase().includes(searchText.toLowerCase());
     return matchStatus && matchSearch;
   });
+
+  // Separate auto-tracked "in progress" records from admin-created stages
+  const isAutoTrack = (s) => s.label === '__auto_track__';
 
   // Group by corporateId when showing all
   const grouped = isFiltered
