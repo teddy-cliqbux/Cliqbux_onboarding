@@ -359,7 +359,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
 
 // ── Send Modal ────────────────────────────────────────────────────────────────
 function SendModal({ stage, publicUrl, onSent, onClose }) {
-  const [email, setEmail]     = useState(stage.sentToEmail || '');
+  const [email, setEmail]     = useState(stage.sentToEmail || stage.prefilledData?.signerEmail || '');
   const [sending, setSending] = useState(false);
   const [sent, setSent]       = useState(false);
   const [link, setLink]       = useState('');
@@ -458,8 +458,6 @@ function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, pu
   const [mids, setMids]               = useState([]);
   const [loadingMids, setLoadingMids] = useState(false);
   const [copied, setCopied]           = useState(null);
-  const [resending, setResending]     = useState(false);
-  const [resendDone, setResendDone]   = useState(false);
 
   const p = trackStage?.prefilledData || {};
   const completed = p.completedSteps || {};
@@ -491,25 +489,6 @@ function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, pu
     setCopied('link');
     setTimeout(() => setCopied(null), 2000);
   };
-
-  const handleResend = async (e) => {
-    e.stopPropagation();
-    const email = p.signerEmail;
-    if (!email || !linkStage) return;
-    setResending(true);
-    try {
-      await base44.functions.invoke('manageStagedApplication', {
-        action: 'send',
-        stageId: linkStage.id,
-        data: { email },
-      });
-      setResendDone(true);
-      setTimeout(() => setResendDone(false), 3000);
-    } catch (_) {}
-    finally { setResending(false); }
-  };
-
-  const canResend = !!(p.signerEmail && linkStage);
 
   return (
     <div className="bg-[#1c2128] border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-all">
@@ -568,17 +547,12 @@ function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, pu
             {copied === 'link' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
             {copied === 'link' ? 'Copied!' : 'Copy Link'}
           </button>
-          {/* Resend to merchant email */}
-          {canResend && (
-            <button onClick={handleResend} disabled={resending}
-              title={`Resend portal link to ${p.signerEmail}`}
-              className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all ${
-                resendDone
-                  ? 'bg-green-500/15 text-green-400 border-green-500/30'
-                  : 'bg-white/5 text-gray-400 border-white/10 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/20'
-              }`}>
-              {resending ? <Loader2 className="w-3 h-3 animate-spin" /> : resendDone ? <Check className="w-3 h-3" /> : <Send className="w-3 h-3" />}
-              {resendDone ? 'Sent!' : 'Resend'}
+          {/* Send/Resend — always shown when there's a linkStage */}
+          {linkStage && (
+            <button onClick={(e) => { e.stopPropagation(); onSend(linkStage); }}
+              title="Send portal link to merchant"
+              className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all bg-white/5 text-gray-400 border-white/10 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/20">
+              <Send className="w-3 h-3" /> Send
             </button>
           )}
           <button onClick={() => onEdit(corporateId, merchantName)} title="New stage"
