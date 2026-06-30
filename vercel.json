@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/apps/:path*",
+      "destination": "https://cliqbux-onboard-prime.base44.app/api/apps/:path*"
+    }
+  ]
+}
