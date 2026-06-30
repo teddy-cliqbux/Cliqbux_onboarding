@@ -66,7 +66,9 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId, prof
   // If the signer already has data filled in, pre-expand and skip the upload phase
   const alreadyHasDoc = !!(signer.idDocumentUrl);
   const alreadyHasData = !!(signer.dobYear && signer.ssn && signer.homeStreet);
-  const [expanded, setExpanded] = useState(alreadyHasDoc || alreadyHasData);
+  // Don't auto-expand if data is already complete — user must explicitly click to re-verify
+  // Auto-expand only when doc is uploaded but form hasn't been submitted yet (partial state)
+  const [expanded, setExpanded] = useState(alreadyHasDoc && !alreadyHasData);
   const [phase, setPhase] = useState(alreadyHasDoc ? 'fields' : 'upload'); // 'upload' | 'fields'
   const [showSsn, setShowSsn] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -239,7 +241,12 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId, prof
     }
   };
 
+  // Don't show the verify form if already verified or data is complete
   if (signer.identityStatus === 'Verified') return null;
+
+  // If signer has all required data AND was previously verified (may have been reset),
+  // show a compact "re-verify" prompt instead of auto-expanding the full form
+  const dataIsComplete = !!(signer.dobYear && signer.ssn && signer.homeStreet && signer.titleType);
 
   if (!expanded) {
     return (
@@ -247,7 +254,8 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId, prof
         onClick={() => setExpanded(true)}
         className="text-xs text-amber-400 hover:text-amber-300 border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15 px-3 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1.5"
       >
-        <ShieldCheck className="w-3.5 h-3.5" /> Verify Now
+        <ShieldCheck className="w-3.5 h-3.5" />
+        {dataIsComplete ? 'Re-submit Verification' : 'Verify Now'}
       </button>
     );
   }

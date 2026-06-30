@@ -32,9 +32,11 @@ export default function OnboardingVerification({ profile, locations, initialSign
   const allSigned   = totalCount > 0 && totalSigned === totalCount;
   const activeApp   = applications[activeIndex] || null;
 
-  // Kick off signing fetch once signers are verified
+  // Kick off signing fetch once signers are verified, or immediately on mount if already verified
+  // Also re-fetch if all apps have errors (e.g. after returning from fixing Locations/MIDs)
   useEffect(() => {
-    if (allVerified && applications.length === 0 && !loadingSigning) {
+    const hasOnlyErrors = applications.length > 0 && applications.every(a => a.error);
+    if (allVerified && (applications.length === 0 || hasOnlyErrors) && !loadingSigning) {
       fetchSigningState();
     }
   }, [allVerified]);
@@ -280,7 +282,18 @@ export default function OnboardingVerification({ profile, locations, initialSign
 
           {/* Error on a specific concept — guided fix */}
           {allVerified && activeApp?.error && !loadingSigning && (
-            <SigningErrorGuide app={activeApp} onNavigate={onNavigate} />
+            <SigningErrorGuide
+              app={activeApp}
+              onNavigate={(step) => {
+                // 'verify' means fix is on THIS page (SSN/identity) — just scroll up, don't navigate away
+                if (step === 'verify') {
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                  onNavigate(step);
+                }
+              }}
+              onRetry={fetchSigningState}
+            />
           )}
 
           {/* Submit button — only after all signed */}

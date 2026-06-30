@@ -123,7 +123,7 @@ const SEVERITY_COLORS = {
   error:    'text-amber-300 bg-amber-500/10 border-amber-500/30',
 };
 
-export default function SigningErrorGuide({ app, onNavigate }) {
+export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
   const [checking, setChecking] = useState(false);
   const [details, setDetails] = useState(null);
   const [expanded, setExpanded] = useState(false);
@@ -279,16 +279,37 @@ export default function SigningErrorGuide({ app, onNavigate }) {
       </div>
 
       {/* Fix button */}
-      {!checking && onNavigate && (
-        <div className="border-t border-red-500/20 px-5 py-3 flex items-center gap-3">
-          <button
-            onClick={() => onNavigate(targetStep)}
-            className="flex items-center gap-2 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 px-4 py-2 rounded-lg transition-all"
-          >
-            <Wrench className="w-3.5 h-3.5" />
-            Fix in {rawByStep[targetStep]?.stepLabel || byStep[targetStep]?.stepLabel || 'Locations & MIDs'}
-          </button>
-          <span className="text-[11px] text-gray-500">Fix the issues above, then return here to sign.</span>
+      {!checking && (hasDetails || details?.signaturesError) && (
+        <div className="border-t border-red-500/20 px-5 py-3 flex flex-wrap items-center gap-2">
+          {/* Only show "Fix in X" when navigating away makes sense (not for verify = current page) */}
+          {onNavigate && targetStep !== 'verify' && (
+            <button
+              onClick={() => onNavigate(targetStep)}
+              className="flex items-center gap-2 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 px-4 py-2 rounded-lg transition-all"
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              Fix in {rawByStep[targetStep]?.stepLabel || byStep[targetStep]?.stepLabel || 'Locations & MIDs'}
+            </button>
+          )}
+          {/* For verify-step issues, scroll to the form above */}
+          {onNavigate && targetStep === 'verify' && (
+            <button
+              onClick={() => onNavigate('verify')}
+              className="flex items-center gap-2 text-xs font-bold text-black bg-purple-500 hover:bg-purple-400 px-4 py-2 rounded-lg transition-all"
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              Update Identity Info Above
+            </button>
+          )}
+          {/* Retry signing after fixing */}
+          {onRetry && (
+            <button
+              onClick={onRetry}
+              className="flex items-center gap-2 text-xs font-bold text-gray-200 bg-white/10 hover:bg-white/20 border border-white/15 px-4 py-2 rounded-lg transition-all"
+            >
+              Retry Signing
+            </button>
+          )}
         </div>
       )}
     </div>
