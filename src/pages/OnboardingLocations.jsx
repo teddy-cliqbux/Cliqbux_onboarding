@@ -651,7 +651,7 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
 
 // ─── Entity Section (top-level group) ────────────────────────────────────────
 
-function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onAddLocation, isOnly, onEntityUpdated, showValidation }) {
+function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onAddLocation, isOnly, onEntityUpdated, onDeleteEntity, showValidation }) {
   const entityLocs = locations.filter(l => l.entityId === entity.entityId);
   const entityMids = merchantIDs.filter(m => entityLocs.some(l => l.id === m.locationId));
   const allComplete = entityLocs.length > 0 && entityLocs.every(l =>
@@ -676,6 +676,12 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-[10px] text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''} · {entityMids.length} MID{entityMids.length !== 1 ? 's' : ''}</span>
           {allComplete && entityLocs.length > 0 && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
+          {!isOnly && (
+            <button onClick={() => onDeleteEntity(entity)} title="Delete legal entity"
+              className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -975,6 +981,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const [addFormEntityId, setAddFormEntityId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleteMidConfirm, setDeleteMidConfirm] = useState(null);
+  const [deleteEntityConfirm, setDeleteEntityConfirm] = useState(null);
   const [showBackConfirm, setShowBackConfirm] = useState(false);
 
   useEffect(() => { loadAll(); }, []);
@@ -1063,9 +1070,27 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const handleDeleteMid = async (mid) => {
     setDeleteMidConfirm(null);
     try {
-      await base44.functions.invoke('manageMerchantID', { action: 'delete', corporateId: profile.corporateId, merchantIDId: mid.id });
+      const res = await base44.functions.invoke('manageMerchantID', { action: 'delete', corporateId: profile.corporateId, merchantIDId: mid.id });
+      if (res.data?.error) throw new Error(res.data.error);
       setMerchantIDs(prev => prev.filter(c => c.id !== mid.id));
-    } catch (_) {}
+    } catch (err) {
+      console.error('[handleDeleteMid]', err);
+      alert('Failed to delete MID: ' + (err.message || 'Unknown error'));
+    }
+  };
+
+  const handleDeleteEntity = async (entity) => {
+    setDeleteEntityConfirm(null);
+    try {
+      const res = await base44.functions.invoke('manageLegalEntity', { action: 'delete', corporateId: profile.corporateId, entityId: entity.entityId });
+      if (res.data?.error) throw new Error(res.data.error);
+      setEntities(prev => prev.filter(e => e.entityId !== entity.entityId));
+      // Reassign orphaned locations to first remaining entity
+      setLocations(prev => prev.map(l => l.entityId === entity.entityId ? { ...l, entityId: entities.find(e => e.entityId !== entity.entityId)?.entityId || '' } : l));
+    } catch (err) {
+      console.error('[handleDeleteEntity]', err);
+      alert('Failed to delete entity: ' + (err.message || 'Unknown error'));
+    }
   };
 
   const onDragEnd = async ({ type, source, destination, draggableId }) => {
@@ -1187,6 +1212,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                 onAddLocation={entityId => setAddFormEntityId(entityId)}
                 isOnly={entities.length === 1}
                 onEntityUpdated={handleEntityUpdated}
+                onDeleteEntity={e => setDeleteEntityConfirm(e)}
                 showValidation={showValidation}
               />
             ))}
@@ -1287,6 +1313,25 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             <div className="flex gap-3">
               <button onClick={() => handleDeleteMid(deleteMidConfirm)} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-bold text-sm py-2.5 rounded-xl transition-all">Remove</button>
               <button onClick={() => setDeleteMidConfirm(null)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl">Keep</button>
+            </div>
+          </div>
+        </div>, document.body
+      )}
+
+      {/* Delete entity confirm */}
+      {deleteEntityConfirm && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4" onClick={() => setDeleteEntityConfirm(null)}>
+          <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-red-400" /></div>
+              <div>
+                <h3 className="font-bold text-white">Remove Legal Entity?</h3>
+                <p className="text-xs text-gray-400 mt-0.5">"{deleteEntityConfirm.legalBusinessName}" will be removed. Its locations will become unassigned.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => handleDeleteEntity(deleteEntityConfirm)} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-bold text-sm py-2.5 rounded-xl transition-all">Remove</button>
+              <button onClick={() => setDeleteEntityConfirm(null)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl">Keep</button>
             </div>
           </div>
         </div>, document.body
