@@ -1,7 +1,59 @@
 # AGENTS.md
 # Cliqbux E-Onboarding — AI Agent Briefing
 
-This file is the authoritative context document for any AI agent (Claude, Base44 AI, etc.) working on this repo. Read it fully before making changes. Update it when you make architectural decisions.
+This file is the authoritative context document for any AI agent (Claude, Base44 AI, etc.) working on this repo. **Read it fully before making any changes.** Update it whenever you make architectural decisions, discover a hard-won fix, or rule out an approach after testing.
+
+## ⚠️ MANDATORY FOR ALL AI AGENTS
+
+Before touching any file in this repo:
+1. Read this entire file.
+2. Read `AI_CHANNEL.md` for the latest inter-AI decisions.
+3. After completing work, **append what you learned** to the relevant section below — especially failed approaches and confirmed values. Future agents (including yourself in a new session) will not remember what you tested.
+
+**If you are Base44 AI:** every time you start a session on this codebase, open `AGENTS.md` and `AI_CHANNEL.md` first via the GitHub connector. Before ending a session where you made substantive changes or discoveries, commit an update to `AGENTS.md` documenting what you found. This is how we prevent repeating expensive debugging sessions.
+
+---
+
+## 🚨 Critical Lessons — Do Not Repeat These Mistakes
+
+These are hard-won findings from real debugging. Each one cost hours. Read them before touching the relevant code.
+
+### 1. `is_firearm_verified` — OMIT from all PUT /form payloads
+**The mistake:** We captured `"is_firearm_verified":"yes"` from MSPWare network traffic and added it to `submitToMSP` and `signApplication`. This was wrong.
+
+**Why it's wrong:** That network capture came from MSPWare's internal `TestData.cfc` UI endpoint, which has different validation than the API's `PUT /applications/{no}/form`. The API rejects every value for this field (`"yes"`, `false`, `"N"`, `true`, `"YES"` — all tested, all cause the form to drop below 100%).
+
+**The correct behaviour:** MSPWare template #6 (ICPLS) and #154 (Cash Discount) already have `is_firearm_verified` set to the correct internal value. `signApplication` GETs the form first — when the template default is intact, the form reads 100% and the PUT is **skipped entirely**, preserving the template value. Signing URLs then generate from the API with no manual MSP dashboard action required.
+
+**Rule:** Never add `is_firearm_verified` to any API payload. If you see it in either function, remove it immediately.
+
+---
+
+### 2. Rate limiting — old admin bundle spam
+**The mistake:** The old `EntityDetailsPanel` in `OnboardingLocations.jsx` had a runaway autosave timer (setTimeout inside a setForm updater) that called `manageLegalEntity` hundreds of times per minute, saturating the Base44 per-account `asServiceRole` limit and causing ALL functions to return `{"error":"Rate limit exceeded"}`.
+
+**Rule:** Never put repeated API calls inside a React `setForm` updater, `useEffect` without proper deps, or `setInterval`. Autosave for entity-level dropdown fields must use an explicit Save button, not a debounce timer.
+
+---
+
+### 3. `manageLegalEntity` — portal users have no auth session
+**The mistake:** `manageLegalEntity` required `base44.auth.me()`, which returns null for magic-link portal users. Every save appeared to succeed (no UI error) but silently returned 401 and wrote nothing to the database.
+
+**Rule:** Any function callable from the merchant portal must use `asServiceRole` and must NOT call `base44.auth.me()` to gate writes.
+
+---
+
+### 4. `legalEntities` schema — declare all fields or Base44 strips them
+**The mistake:** `ownershipType`, `taxClassType`, `establishmentYear` were not declared in the `legalEntities` array items schema in `base44/entities/Merchant Corporate Profile.jsonc`. Base44's platform strips undeclared keys from nested array objects on every save, silently losing the data.
+
+**Rule:** Any field you want to persist inside a nested array (like `legalEntities`) must be declared in that array's item schema. Verify in `base44/entities/` before adding new fields to nested objects.
+
+---
+
+### 5. `mspApplicationNo` — only clear on explicit HTTP 404
+**The mistake:** `signApplication` was clearing `mspApplicationNo` on any non-success API response (network error, rate limit, etc.), then creating a new duplicate draft in MSPWare, causing merchants to accumulate multiple applications.
+
+**Rule:** Only clear a stored `mspApplicationNo` when MSPWare returns an explicit HTTP 404. All other errors (5xx, timeouts, rate limits) must leave the number intact.
 
 ---
 
