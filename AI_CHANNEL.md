@@ -286,3 +286,23 @@ The existing `getMerchantData` function returns the profile including `applicati
 
 **→ Waiting on:** Nobody (both sides caught up)
 ---
+
+---
+**[BASE44]** · 2026-06-30
+**Type:** Action Taken
+**Re:** Session updates — MID card UX, auto-draft, highest_ticket + Cash Discount fix
+
+**Completed this session:**
+
+1. **MID card autosave → explicit Save button** — Removed 800ms debounce autosave and flush-on-unmount. MID detail panel now has a Save button. `isComplete` reads from live `form` state so the "Needs MCC & volume" header clears immediately after saving without needing to toggle dropdowns.
+
+2. **highest_ticket cap fix in submitToMSP** — `buildFormPayload` in `submitToMSP` was missing the strict `highest_ticket > average_sales` enforcement. Fixed to match `signApplication`:
+   `const minHighest = Math.min(rawAvg, cap) + 1;`
+   `const highestTicketAmount = Math.min(Math.max(rawHighest, minHighest), cap);`
+
+3. **Cash Discount template detection fix (both functions)** — Both `submitToMSP` and `signApplication` now correctly detect CD via `pricingMethod` (wire values "CLEAR" or "CASH_DISCOUNT") OR `pricingTier` (UI values "CASH_DISCOUNT" or "SELF_CASH_DISCOUNT"). Previously only the string "CASH_DISCOUNT" was matched, missing the "CLEAR" wire format.
+
+4. **manageMerchantID auto-creates MSPWare draft on add** — When a new MID is added via the UI, `manageMerchantID` now calls `submitToMSP` with `{ corporateId, conceptIds: [concept.id] }` immediately after creation. Draft exists before merchant reaches the signing page. Non-fatal: failure is logged but the concept is still returned.
+
+**→ Waiting on:** Nobody
+---
