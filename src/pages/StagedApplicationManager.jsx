@@ -465,10 +465,12 @@ function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, pu
   const currentStep = p.currentStep || 'agreement';
   const lastSeen = p.lastSeenAt ? new Date(p.lastSeenAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
 
-  // Build the portal link: prefer the first admin stage (has a real stageId+token), fall back to trackStage
-  const linkStage = adminStages[0] || trackStage;
+  // Build the portal link: only use admin stages (not auto-track records) for sending
+  const linkStage = adminStages[0] || null;
   const portalLink = linkStage
     ? `${publicUrl}/?stageId=${linkStage.id}&token=${linkStage.accessToken}`
+    : trackStage
+    ? `${publicUrl}/?stageId=${trackStage.id}&token=${trackStage.accessToken}`
     : `${publicUrl}/?corporateId=${corporateId}`;
 
   const handleExpand = async () => {
