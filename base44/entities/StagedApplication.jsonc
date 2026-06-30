@@ -1,0 +1,64 @@
+{
+  "name": "StagedApplication",
+  "type": "object",
+  "properties": {
+    "corporateId": {
+      "type": "string",
+      "description": "FK \u2192 MerchantCorporateProfile.corporateId"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "ready",
+        "sent"
+      ],
+      "default": "draft",
+      "description": "draft = being built; ready = finalized; sent = link emailed to merchant"
+    },
+    "label": {
+      "type": "string",
+      "description": "Internal label for this staged application e.g. 'Main Street Locations'"
+    },
+    "includedLocationIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "IDs of MerchantLocations to show in this staged application"
+    },
+    "includedConceptIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "IDs of MerchantProcessingConcept records to include"
+    },
+    "includedSignerIds": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "IDs of MerchantSigners required for this application"
+    },
+    "prefilledData": {
+      "type": "object",
+      "description": "Key-value overrides merged on top of the profile when the portal loads"
+    },
+    "accessToken": {
+      "type": "string",
+      "description": "Magic-link token for this staged application"
+    },
+    "sentAt": {
+      "type": "string",
+      "description": "ISO timestamp when the link was emailed"
+    },
+    "sentToEmail": {
+      "type": "string",
+      "description": "Email address the link was sent to"
+    }
+  },
+  "required": [
+    "corporateId"
+  ]
+}

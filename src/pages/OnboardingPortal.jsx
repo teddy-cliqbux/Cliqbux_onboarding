@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import TopNav from '@/components/onboarding/TopNav';
@@ -45,6 +45,8 @@ export default function OnboardingPortal() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
   const [redirected, setRedirected]   = useState(false);
+  const [stagedApp, setStagedApp]     = useState(null); // active StagedApplication record
+  const stagedAppRef                  = useRef(null);   // readable in async fetchMerchantData
   // Track which steps have been completed for the progress tracker
   const [completedSteps, setCompletedSteps] = useState({});
   // Track whether verification step had all signers verified (survives back navigation)
@@ -57,13 +59,35 @@ export default function OnboardingPortal() {
   const navigate                      = useNavigate();
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id    = params.get('dealId') || params.get('corporateId');
-    const token = params.get('token');
-    if (id)         { setMode('sales'); setDealId(id); }
-    else if (token) { validateResumeToken(token); }
-    else            { setMode('entry'); setLoading(false); }
+    const params  = new URLSearchParams(window.location.search);
+    const id      = params.get('dealId') || params.get('corporateId');
+    const token   = params.get('token');
+    const stageId = params.get('stageId');
+    if (stageId && token) { validateStageToken(stageId, token); }
+    else if (id)          { setMode('sales'); setDealId(id); }
+    else if (token)       { validateResumeToken(token); }
+    else                  { setMode('entry'); setLoading(false); }
   }, []);
+
+  const validateStageToken = async (stageId, token) => {
+    setLoading(true);
+    try {
+      const res = await base44.functions.invoke('manageStagedApplication', { action: 'get', stageId });
+      const stage = res.data?.stage;
+      if (!stage || stage.accessToken !== token) {
+        setError({ title: 'Invalid Link', message: 'This staged application link is invalid or has expired.' });
+        setLoading(false);
+        return;
+      }
+      setStagedApp(stage);
+      stagedAppRef.current = stage;
+      setMode('sales');
+      setDealId(stage.corporateId);
+    } catch {
+      setError({ title: 'Connection Error', message: "We couldn't validate your link. Please try again." });
+      setLoading(false);
+    }
+  };
 
   const validateResumeToken = async (token) => {
     setLoading(true);
@@ -144,8 +168,20 @@ export default function OnboardingPortal() {
         setError({ title: 'Merchant Not Found', message: "We couldn't find your merchant profile. Please verify your link or contact your Cliqbux representative." });
         return;
       }
-      setProfile(data.profile);
-      setLocations(data.locations || []);
+      // Apply staged application filters if present
+      let mergedProfile = data.profile;
+      let filteredLocations = data.locations || [];
+      const stage = stagedAppRef.current;
+      if (stage) {
+        if (stage.prefilledData && Object.keys(stage.prefilledData).length > 0) {
+          mergedProfile = { ...mergedProfile, ...stage.prefilledData };
+        }
+        if (stage.includedLocationIds?.length > 0) {
+          filteredLocations = filteredLocations.filter(l => stage.includedLocationIds.includes(l.id || l.locationId));
+        }
+      }
+      setProfile(mergedProfile);
+      setLocations(filteredLocations);
       if (data.profile?.applicationStatus === 'Submitted') {
         setRedirected(true);
         navigate(`/onboarding/dashboard?dealId=${data.profile.corporateId}`, { replace: true });

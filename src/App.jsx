@@ -9,6 +9,7 @@ import OnboardingPortal from './pages/OnboardingPortal';
 import VerifyIdentity from './pages/VerifyIdentity';
 import PostSubmissionDashboard from './pages/PostSubmissionDashboard';
 import SystemAdminHidden from './pages/SystemAdminHidden';
+import StagedApplicationManager from './pages/StagedApplicationManager';
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
             <Route path="/verify" element={<VerifyIdentity />} />
             <Route path="/onboarding/dashboard" element={<PostSubmissionDashboard />} />
             <Route path="/admin/architecture" element={<SystemAdminHidden />} />
+            <Route path="/admin/staged" element={<StagedApplicationManager />} />
             <Route path="*" element={<PageNotFound />} />
           </Routes>
         </Router>
