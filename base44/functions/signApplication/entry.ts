@@ -440,7 +440,10 @@ Deno.serve(async (req) => {
           continue;
         }
         try {
-          const isCashDiscount = (concept.pricingMethod || profile.pricingMethod || '').toUpperCase() === 'CASH_DISCOUNT';
+          // Detect cash discount via pricingMethod (wire value "CLEAR") OR pricingTier (UI value "CASH_DISCOUNT")
+          const isCashDiscount =
+            ['CLEAR', 'CASH_DISCOUNT'].includes((concept.pricingMethod || '').toUpperCase()) ||
+            ['CASH_DISCOUNT', 'SELF_CASH_DISCOUNT'].includes((concept.pricingTier || profile.pricingTier || '').toUpperCase());
           const templateNo = concept.mspTemplateNo || profile.mspTemplateNo || (isCashDiscount ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
           const createBody = {
             dba: concept.dbaName || location.dbaName || profile.legalName,
