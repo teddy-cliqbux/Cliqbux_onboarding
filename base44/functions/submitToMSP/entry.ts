@@ -345,7 +345,7 @@ function buildFormPayload(
     has_pin_debit: false,       // attempt to disable debit fields; template may override
     debit_auth_method: 'PNL',  // pinless — required when has_pin_debit=true (template default)
     debit_pricing_method: 'ICPLS',
-    // is_firearm_verified: let template defaults apply
+    is_firearm_verified: 'yes',
     // Per-network debit interchange fees required by template
     ACCL_per_auth: '0.00', ACCL_percent_fee: '0.0000', ACCL_transaction_fee: '0.00',
     AFFN_per_auth: '0.00', AFFN_percent_fee: '0.0000', AFFN_transaction_fee: '0.00',
