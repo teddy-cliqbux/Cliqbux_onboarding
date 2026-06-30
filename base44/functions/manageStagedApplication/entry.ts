@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          from: 'Cliqbux Onboarding <onboarding@resend.dev>',
+          from: 'Cliqbux Onboarding <onboarding@onboarding.cliqbux.com>',
           to: [toEmail],
           subject: 'Your Cliqbux Merchant Application',
           html: emailHtml,
@@ -98,11 +98,7 @@ Deno.serve(async (req) => {
       });
       if (!emailRes.ok) {
         const errBody = await emailRes.json().catch(() => ({})) as any;
-        // Provide a clear actionable message for domain verification issues
-        if (errBody?.statusCode === 403) {
-          throw new Error('Email domain not verified. Please verify cliqbux.com at resend.com/domains before sending to external recipients.');
-        }
-        throw new Error(`Email send failed: ${errBody?.message || JSON.stringify(errBody)}`);
+        throw new Error(`Email send failed (${emailRes.status}): ${errBody?.message || JSON.stringify(errBody)}`);
       }
 
       const updated = await base44.asServiceRole.entities.StagedApplication.update(stageId, {
