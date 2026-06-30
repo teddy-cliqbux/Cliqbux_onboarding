@@ -24,9 +24,9 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 const MSP_BASE = 'https://api.msppulsepoint.com/v2';
 
 function getMspHeaders() {
-  const apiKey = Deno.env.get('MSP_API_KEY');
+  const apiKey = Deno.env.get('MSP_APP_KEY');
   const appId  = Deno.env.get('MSP_APP_ID') || 'cliqbux';
-  if (!apiKey) throw new Error('MSP_API_KEY is not set');
+  if (!apiKey) throw new Error('MSP_APP_KEY is not set');
   return { 'X-API-KEY': apiKey, 'X-App-ID': appId, 'Content-Type': 'application/json' };
 }
 
