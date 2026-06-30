@@ -156,10 +156,14 @@ function buildFormPayload(
   const monthlyCardSales = Math.max(1, parseFloat(String(concept.monthlyCardSales || profile.monthlyCardSales || '6000')) || 6000);
   const rawAvg = parseFloat(String(concept.avgSaleAmount || profile.avgSaleAmount || '100')) || 100;
   const rawHighest = parseFloat(String(concept.highestTicketAmount || profile.highestTicketAmount || '200')) || 200;
-  // MSPWare rule: average_sales and highest_ticket must be LESS THAN monthly_sales
+  // MSPWare rules:
+  // 1. average_sales must be LESS THAN monthly_sales
+  // 2. highest_ticket must be GREATER THAN OR EQUAL TO average_sales (and less than monthly_sales)
   const cap = Math.max(monthlyCardSales - 1, 1);
   const avgSaleAmount = String(Math.min(rawAvg, cap));
-  const highestTicketAmount = String(Math.min(rawHighest, cap));
+  // highest_ticket must be STRICTLY GREATER THAN average_sales AND less than monthly_sales
+  const minHighest = Math.min(rawAvg, cap) + 1; // at least 1 more than average
+  const highestTicketAmount = String(Math.min(Math.max(rawHighest, minHighest), cap));
   // MSPWare rule: delayed_delivery must be >= 1
   const rawDelay = parseInt(String(concept.deliveryDelayDays ?? profile.deliveryDelayDays ?? '0'), 10);
   const deliveryDelayDays = String(Math.max(rawDelay, 1));
