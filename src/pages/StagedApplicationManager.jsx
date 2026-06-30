@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Plus, Loader2, Send, Trash2, Check, X, Copy, ExternalLink,
-  Clock, Store, Users, FileText, Edit2, Search, ChevronRight,
-  Building2, CreditCard, ArrowLeft, Mail, Link, CheckCircle2,
-  AlertCircle, Eye
+  Clock, Store, Users, FileText, Edit2, Search,
+  Building2, CreditCard, ArrowLeft, Link, CheckCircle2,
+  AlertCircle, Eye, BarChart2, Zap
 } from 'lucide-react';
 
 const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
@@ -15,8 +16,9 @@ const STATUS_STYLES = {
   ready: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',
   sent:  'bg-green-500/15 text-green-400 border border-green-500/30',
 };
+const STAGE_COLORS = { draft: '#6b7280', ready: '#3b82f6', sent: '#22c55e' };
+const STAGE_LABELS = { draft: 'Draft', ready: 'Ready', sent: 'Sent' };
 
-// ── Prefill Fields — guided UI instead of raw JSON ─────────────────────────────
 const PREFILL_FIELDS = [
   { key: 'pricingTier', label: 'Pricing Tier', type: 'select', options: ['Standard', 'Premium', 'Custom', 'Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'] },
   { key: 'legalName', label: 'Legal Business Name', type: 'text', placeholder: 'Override legal name…' },
@@ -26,11 +28,111 @@ const PREFILL_FIELDS = [
   { key: 'taxClassType', label: 'Tax Classification', type: 'select', options: ['SOLE_PROP', 'LLC_CORPORATION', 'LLC_PARTNERSHIP', 'CORPORATION', 'PARTNERSHIP'] },
 ];
 
+// ── Pipeline Overview ─────────────────────────────────────────────────────────
+function PipelineOverview({ onQuickCreate }) {
+  const [allStages, setAllStages] = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [quickId, setQuickId]     = useState('');
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await base44.functions.invoke('manageStagedApplication', { action: 'list' });
+        setAllStages(res.data?.stages || []);
+      } catch (_) {}
+      finally { setLoading(false); }
+    })();
+  }, []);
+
+  const counts = allStages.reduce((acc, s) => {
+    acc[s.status] = (acc[s.status] || 0) + 1;
+    return acc;
+  }, {});
+
+  const chartData = ['draft', 'ready', 'sent']
+    .filter(k => counts[k])
+    .map(k => ({ name: STAGE_LABELS[k], value: counts[k], color: STAGE_COLORS[k] }));
+
+  const handleQuickCreate = () => {
+    if (!quickId.trim()) return;
+    onQuickCreate(quickId.trim());
+    setQuickId('');
+  };
+
+  return (
+    <div className="border-b border-white/8 bg-[#161b23] px-6 py-4 flex flex-wrap items-center gap-8">
+      {/* Donut + stats */}
+      <div className="flex items-center gap-4">
+        {chartData.length > 0 ? (
+          <div className="w-20 h-14 flex-shrink-0">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={chartData} dataKey="value" cx="50%" cy="50%" innerRadius={18} outerRadius={30} strokeWidth={0}>
+                  {chartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ background: '#1c2128', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 }}
+                  itemStyle={{ color: '#e5e7eb' }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+            <BarChart2 className="w-4 h-4 text-amber-400" />
+          </div>
+        )}
+        <div>
+          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Pipeline Overview</p>
+          <div className="flex items-center gap-3">
+            <span className="text-xl font-bold text-white">{allStages.length}</span>
+            <span className="text-xs text-gray-500">total</span>
+            {loading && <Loader2 className="w-3 h-3 text-gray-600 animate-spin" />}
+          </div>
+          <div className="flex items-center gap-3 mt-1">
+            {['draft', 'ready', 'sent'].map(k => (
+              <span key={k} className="flex items-center gap-1 text-[11px]">
+                <span className="w-2 h-2 rounded-full" style={{ background: STAGE_COLORS[k] }} />
+                <span className="text-gray-400">{counts[k] || 0} {STAGE_LABELS[k]}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Divider */}
+      <div className="hidden sm:block w-px h-10 bg-white/8 flex-shrink-0" />
+
+      {/* Quick create */}
+      <div className="flex-shrink-0">
+        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Quick Start — New Stage</p>
+        <div className="flex gap-2 items-center">
+          <input
+            value={quickId}
+            onChange={e => setQuickId(e.target.value)}
+            placeholder="Enter Corporate ID…"
+            onKeyDown={e => e.key === 'Enter' && handleQuickCreate()}
+            className="bg-[#111318] border border-white/20 rounded-xl px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500 w-48"
+          />
+          <button
+            onClick={handleQuickCreate}
+            disabled={!quickId.trim()}
+            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold text-xs px-3 py-2 rounded-xl transition-all flex-shrink-0"
+          >
+            <Zap className="w-3 h-3" /> Create
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Checkbox Row ──────────────────────────────────────────────────────────────
 function CheckRow({ checked, onChange, color = 'amber', children }) {
   const colors = {
-    amber:  { checked: 'bg-amber-500 border-amber-500',  ring: 'border-amber-500/40 bg-amber-500/5' },
-    blue:   { checked: 'bg-blue-500 border-blue-500',    ring: 'border-blue-500/40 bg-blue-500/5' },
+    amber:  { checked: 'bg-amber-500 border-amber-500',   ring: 'border-amber-500/40 bg-amber-500/5' },
+    blue:   { checked: 'bg-blue-500 border-blue-500',     ring: 'border-blue-500/40 bg-blue-500/5' },
     purple: { checked: 'bg-purple-500 border-purple-500', ring: 'border-purple-500/40 bg-purple-500/5' },
   }[color];
 
@@ -45,20 +147,20 @@ function CheckRow({ checked, onChange, color = 'amber', children }) {
   );
 }
 
-// ── Stage Editor (full-panel) ─────────────────────────────────────────────────
+// ── Stage Editor ──────────────────────────────────────────────────────────────
 function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
-  const [label, setLabel]               = useState(stage?.label || '');
-  const [locations, setLocations]       = useState([]);
-  const [concepts, setConcepts]         = useState([]);
-  const [signers, setSigners]           = useState([]);
-  const [selLocs, setSelLocs]           = useState(new Set(stage?.includedLocationIds || []));
-  const [selConcepts, setSelConcepts]   = useState(new Set(stage?.includedConceptIds || []));
-  const [selSigners, setSelSigners]     = useState(new Set(stage?.includedSignerIds || []));
-  const [prefill, setPrefill]           = useState(stage?.prefilledData || {});
-  const [loading, setLoading]           = useState(true);
-  const [saving, setSaving]             = useState(false);
-  const [error, setError]               = useState('');
-  const [activeTab, setActiveTab]       = useState('locations'); // locations | signers | prefill
+  const [label, setLabel]             = useState(stage?.label || '');
+  const [locations, setLocations]     = useState([]);
+  const [concepts, setConcepts]       = useState([]);
+  const [signers, setSigners]         = useState([]);
+  const [selLocs, setSelLocs]         = useState(new Set(stage?.includedLocationIds || []));
+  const [selConcepts, setSelConcepts] = useState(new Set(stage?.includedConceptIds || []));
+  const [selSigners, setSelSigners]   = useState(new Set(stage?.includedSignerIds || []));
+  const [prefill, setPrefill]         = useState(stage?.prefilledData || {});
+  const [loading, setLoading]         = useState(true);
+  const [saving, setSaving]           = useState(false);
+  const [error, setError]             = useState('');
+  const [activeTab, setActiveTab]     = useState('locations');
 
   useEffect(() => { loadData(); }, []);
 
@@ -73,20 +175,16 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
       setLocations(locRes.data?.locations || []);
       setConcepts(conRes.data?.merchantIDs || []);
       setSigners(sigRes.data?.signers || []);
-      // Auto-select all if creating new
       if (!stage) {
-        const locs = locRes.data?.locations || [];
-        const cons = conRes.data?.merchantIDs || [];
-        const sigs = sigRes.data?.signers || [];
-        setSelLocs(new Set(locs.map(l => l.id || l.locationId)));
-        setSelConcepts(new Set(cons.map(c => c.id)));
-        setSelSigners(new Set(sigs.map(s => s.id)));
+        setSelLocs(new Set((locRes.data?.locations || []).map(l => l.id || l.locationId)));
+        setSelConcepts(new Set((conRes.data?.merchantIDs || []).map(c => c.id)));
+        setSelSigners(new Set((sigRes.data?.signers || []).map(s => s.id)));
       }
     } catch (_) {}
     finally { setLoading(false); }
   };
 
-  const toggle = (id, set, setFn) => setFn(prev => {
+  const toggle = (id, setFn) => setFn(prev => {
     const next = new Set(prev);
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
@@ -123,7 +221,6 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
     finally { setSaving(false); }
   };
 
-  const conceptsForSelLocs = concepts.filter(c => selLocs.has(c.locationId));
   const tabs = [
     { key: 'locations', label: 'Locations', count: selLocs.size, total: locations.length, icon: Store },
     { key: 'signers',   label: 'Signers',   count: selSigners.size, total: signers.length, icon: Users },
@@ -132,14 +229,13 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Editor header */}
       <div className="flex items-center gap-3 px-6 py-4 border-b border-white/8">
         <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-lg transition-colors">
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider">{merchantName}</p>
-          <p className="text-sm font-bold text-white">{stage?.id ? 'Edit Application Stage' : 'New Application Stage'}</p>
+          <p className="text-sm font-bold text-white">{stage?.id ? 'Edit Stage' : 'New Stage'}</p>
         </div>
         <button onClick={handleSave} disabled={saving}
           className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold text-sm px-4 py-2 rounded-xl transition-all">
@@ -154,15 +250,12 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
-          {/* Stage label */}
           <div className="px-6 pt-5 pb-4 border-b border-white/5">
             <label className={labelCls}>Stage Label (internal)</label>
             <input value={label} onChange={e => setLabel(e.target.value)}
-              placeholder="e.g. Downtown Locations — Phase 1"
-              className={inputCls} />
+              placeholder="e.g. Downtown Locations — Phase 1" className={inputCls} />
           </div>
 
-          {/* Tab bar */}
           <div className="flex border-b border-white/8 px-6 gap-1 pt-2">
             {tabs.map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key)}
@@ -179,7 +272,6 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
           </div>
 
           <div className="px-6 py-5 space-y-3">
-            {/* Locations tab */}
             {activeTab === 'locations' && (
               <>
                 <p className="text-[11px] text-gray-500">Only selected locations will appear in the merchant's portal.</p>
@@ -190,7 +282,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                     const locConcepts = concepts.filter(c => c.locationId === id);
                     return (
                       <div key={id}>
-                        <CheckRow checked={selLocs.has(id)} onChange={() => toggle(id, selLocs, setSelLocs)} color="amber">
+                        <CheckRow checked={selLocs.has(id)} onChange={() => toggle(id, setSelLocs)} color="amber">
                           <Store className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-white truncate">{loc.dbaName}</p>
@@ -198,11 +290,10 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                           </div>
                           <span className="text-[9px] text-gray-600 flex-shrink-0">{locConcepts.length} MID{locConcepts.length !== 1 ? 's' : ''}</span>
                         </CheckRow>
-                        {/* MIDs under this location — only show if location selected */}
                         {selLocs.has(id) && locConcepts.length > 0 && (
                           <div className="ml-8 mt-1 space-y-1">
                             {locConcepts.map(c => (
-                              <CheckRow key={c.id} checked={selConcepts.has(c.id)} onChange={() => toggle(c.id, selConcepts, setSelConcepts)} color="blue">
+                              <CheckRow key={c.id} checked={selConcepts.has(c.id)} onChange={() => toggle(c.id, setSelConcepts)} color="blue">
                                 <CreditCard className="w-3 h-3 text-blue-400 flex-shrink-0" />
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs font-semibold text-white truncate">{c.dbaName || c.merchantName}</p>
@@ -219,14 +310,13 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
               </>
             )}
 
-            {/* Signers tab */}
             {activeTab === 'signers' && (
               <>
                 <p className="text-[11px] text-gray-500">Only selected signers will be required to verify their identity.</p>
                 {signers.length === 0
                   ? <p className="text-xs text-gray-600 italic py-4 text-center">No signers found.</p>
                   : signers.map(s => (
-                    <CheckRow key={s.id} checked={selSigners.has(s.id)} onChange={() => toggle(s.id, selSigners, setSelSigners)} color="purple">
+                    <CheckRow key={s.id} checked={selSigners.has(s.id)} onChange={() => toggle(s.id, setSelSigners)} color="purple">
                       <Users className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white">{s.firstName} {s.lastName}</p>
@@ -244,7 +334,6 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
               </>
             )}
 
-            {/* Prefill tab — guided fields */}
             {activeTab === 'prefill' && (
               <>
                 <p className="text-[11px] text-gray-500">These values will override the merchant's profile when they open the portal. Leave blank to use existing data.</p>
@@ -253,8 +342,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                     <div key={field.key}>
                       <label className={labelCls}>{field.label}</label>
                       {field.type === 'select' ? (
-                        <select value={prefill[field.key] || ''}
-                          onChange={e => setPrefillField(field.key, e.target.value)}
+                        <select value={prefill[field.key] || ''} onChange={e => setPrefillField(field.key, e.target.value)}
                           className={inputCls} style={{ colorScheme: 'dark' }}>
                           <option value="">(no override)</option>
                           {field.options.map(o => <option key={o} value={o}>{o}</option>)}
@@ -262,8 +350,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                       ) : (
                         <input type="text" value={prefill[field.key] || ''}
                           onChange={e => setPrefillField(field.key, e.target.value)}
-                          placeholder={field.placeholder || ''}
-                          className={inputCls} />
+                          placeholder={field.placeholder || ''} className={inputCls} />
                       )}
                     </div>
                   ))}
@@ -294,14 +381,14 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
   );
 }
 
-// ── Send Modal ─────────────────────────────────────────────────────────────────
+// ── Send Modal ────────────────────────────────────────────────────────────────
 function SendModal({ stage, publicUrl, onSent, onClose }) {
-  const [email, setEmail]   = useState(stage.sentToEmail || '');
+  const [email, setEmail]     = useState(stage.sentToEmail || '');
   const [sending, setSending] = useState(false);
-  const [sent, setSent]     = useState(false);
-  const [link, setLink]     = useState('');
-  const [copied, setCopied] = useState(false);
-  const [error, setError]   = useState('');
+  const [sent, setSent]       = useState(false);
+  const [link, setLink]       = useState('');
+  const [copied, setCopied]   = useState(false);
+  const [error, setError]     = useState('');
 
   const handleSend = async () => {
     if (!email.trim()) { setError('Email is required'); return; }
@@ -331,7 +418,6 @@ function SendModal({ stage, publicUrl, onSent, onClose }) {
           </div>
           <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-lg"><X className="w-4 h-4" /></button>
         </div>
-
         {sent ? (
           <div className="space-y-4">
             <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3">
@@ -342,15 +428,15 @@ function SendModal({ stage, publicUrl, onSent, onClose }) {
               <label className={labelCls}>Magic Link</label>
               <div className="flex items-center gap-2 bg-[#111318] border border-white/15 rounded-xl px-3.5 py-2.5">
                 <p className="text-xs text-gray-400 flex-1 truncate font-mono">{link}</p>
-                <button onClick={copyLink} className="flex-shrink-0 text-amber-400 hover:text-amber-300 transition-colors">
+                <button onClick={copyLink} className="flex-shrink-0 text-amber-400 hover:text-amber-300">
                   {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
-                <a href={link} target="_blank" rel="noreferrer" className="flex-shrink-0 text-gray-500 hover:text-white transition-colors">
+                <a href={link} target="_blank" rel="noreferrer" className="flex-shrink-0 text-gray-500 hover:text-white">
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               </div>
             </div>
-            <button onClick={onClose} className="w-full border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white transition-colors">Done</button>
+            <button onClick={onClose} className="w-full border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white">Done</button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -366,7 +452,7 @@ function SendModal({ stage, publicUrl, onSent, onClose }) {
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 {sending ? 'Sending…' : 'Send Link'}
               </button>
-              <button onClick={onClose} className="px-4 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white transition-colors">Cancel</button>
+              <button onClick={onClose} className="px-4 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white">Cancel</button>
             </div>
           </div>
         )}
@@ -375,19 +461,17 @@ function SendModal({ stage, publicUrl, onSent, onClose }) {
   );
 }
 
-// ── Stage Card ─────────────────────────────────────────────────────────────────
+// ── Stage Card ────────────────────────────────────────────────────────────────
 function StageCard({ stage, publicUrl, onEdit, onSend, onDelete }) {
   const [copied, setCopied] = useState(false);
+  const link = `${publicUrl}/?stageId=${stage.id}&token=${stage.accessToken}`;
 
   const copyLink = (e) => {
     e.stopPropagation();
-    const link = `${publicUrl}/?stageId=${stage.id}&token=${stage.accessToken}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  const previewLink = `${publicUrl}/?stageId=${stage.id}&token=${stage.accessToken}`;
 
   return (
     <div className="bg-[#1c2128] border border-white/10 rounded-2xl p-4 hover:border-white/20 transition-all group">
@@ -410,12 +494,11 @@ function StageCard({ stage, publicUrl, onEdit, onSend, onDelete }) {
           <button onClick={copyLink} title="Copy link" className="p-1.5 text-gray-500 hover:text-blue-400 rounded-lg transition-colors">
             {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Link className="w-3.5 h-3.5" />}
           </button>
-          <a href={previewLink} target="_blank" rel="noreferrer" title="Preview" className="p-1.5 text-gray-500 hover:text-gray-200 rounded-lg transition-colors"><Eye className="w-3.5 h-3.5" /></a>
+          <a href={link} target="_blank" rel="noreferrer" title="Preview" className="p-1.5 text-gray-500 hover:text-gray-200 rounded-lg transition-colors"><Eye className="w-3.5 h-3.5" /></a>
           <button onClick={() => onSend(stage)} title="Send to merchant" className="p-1.5 text-gray-500 hover:text-green-400 rounded-lg transition-colors"><Send className="w-3.5 h-3.5" /></button>
           <button onClick={() => onDelete(stage)} title="Delete" className="p-1.5 text-gray-500 hover:text-red-400 rounded-lg transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       </div>
-
       <div className="flex items-center gap-4 text-[10px] text-gray-500">
         <span className="flex items-center gap-1"><Store className="w-3 h-3" />{(stage.includedLocationIds || []).length} locations</span>
         <span className="flex items-center gap-1"><CreditCard className="w-3 h-3" />{(stage.includedConceptIds || []).length} MIDs</span>
@@ -428,15 +511,15 @@ function StageCard({ stage, publicUrl, onEdit, onSend, onDelete }) {
   );
 }
 
-// ── Main Page ──────────────────────────────────────────────────────────────────
+// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function StagedApplicationManager() {
-  const [inputId, setInputId]         = useState('');
-  const [corporateId, setCorporateId] = useState('');
+  const [inputId, setInputId]           = useState('');
+  const [corporateId, setCorporateId]   = useState('');
   const [merchantName, setMerchantName] = useState('');
-  const [stages, setStages]           = useState([]);
-  const [loading, setLoading]         = useState(false);
-  const [editing, setEditing]         = useState(null);  // null | 'new' | stage object
-  const [sending, setSending]         = useState(null);
+  const [stages, setStages]             = useState([]);
+  const [loading, setLoading]           = useState(false);
+  const [editing, setEditing]           = useState(null);
+  const [sending, setSending]           = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
 
   const publicUrl = (import.meta.env.VITE_PUBLIC_URL || window.location.origin).replace(/\/$/, '');
@@ -453,12 +536,17 @@ export default function StagedApplicationManager() {
         base44.functions.invoke('getMerchantData', { corporateId: id.trim() }),
         base44.functions.invoke('manageStagedApplication', { action: 'list', corporateId: id.trim() }),
       ]);
-      const name = profileRes.data?.profile?.legalName || id.trim();
       setCorporateId(id.trim());
-      setMerchantName(name);
+      setMerchantName(profileRes.data?.profile?.legalName || id.trim());
       setStages(stagesRes.data?.stages || []);
     } catch (_) {}
     finally { setLoading(false); }
+  };
+
+  const handleQuickCreate = async (id) => {
+    setInputId(id);
+    await loadMerchant(id);
+    setEditing('new');
   };
 
   const handleStageSaved = (stage) => {
@@ -481,108 +569,107 @@ export default function StagedApplicationManager() {
   const showEditor = editing !== null;
 
   return (
-    <div className="min-h-screen bg-[#111318] flex">
-      {/* Left panel — always visible */}
-      <div className={`flex flex-col transition-all duration-300 ${showEditor ? 'w-[380px] flex-shrink-0' : 'flex-1'} border-r border-white/8 overflow-y-auto`}>
-        <div className="px-6 py-6 border-b border-white/8">
-          <p className="text-[10px] font-mono text-amber-500 uppercase tracking-widest mb-2">Admin Tool</p>
-          <h1 className="text-xl font-bold text-white mb-0.5">Staged Applications</h1>
-          <p className="text-gray-500 text-xs">Curate the onboarding experience before sending to merchants.</p>
-        </div>
+    <div className="min-h-screen bg-[#111318] flex flex-col">
+      {/* Pipeline overview bar */}
+      <PipelineOverview onQuickCreate={handleQuickCreate} />
 
-        {/* Merchant search */}
-        <div className="px-6 py-4 border-b border-white/5">
-          <label className={labelCls}>Merchant Corporate ID</label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
-              <input value={inputId} onChange={e => setInputId(e.target.value)}
-                placeholder="e.g. 333351592657"
-                className={`${inputCls} pl-9`}
-                onKeyDown={e => e.key === 'Enter' && loadMerchant(inputId)} />
-            </div>
-            <button onClick={() => loadMerchant(inputId)} disabled={loading || !inputId.trim()}
-              className="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 disabled:opacity-40 font-bold text-xs px-4 py-2 rounded-xl transition-all flex-shrink-0">
-              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Load'}
-            </button>
+      {/* Two-panel workspace */}
+      <div className="flex flex-1 min-h-0">
+        {/* Left panel */}
+        <div className={`flex flex-col transition-all duration-300 ${showEditor ? 'w-[380px] flex-shrink-0' : 'flex-1'} border-r border-white/8 overflow-y-auto`}>
+          <div className="px-6 py-5 border-b border-white/8">
+            <p className="text-[10px] font-mono text-amber-500 uppercase tracking-widest mb-1.5">Admin Tool</p>
+            <h1 className="text-xl font-bold text-white mb-0.5">Staged Applications</h1>
+            <p className="text-gray-500 text-xs">Curate the onboarding experience before sending to merchants.</p>
           </div>
-        </div>
 
-        {/* Merchant info + stages */}
-        {corporateId && !loading && (
-          <>
-            {/* Merchant name banner */}
-            <div className="px-6 py-3 bg-amber-500/5 border-b border-amber-500/10 flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-white truncate">{merchantName}</p>
-                <p className="text-[10px] text-gray-500 font-mono">{corporateId}</p>
+          {/* Merchant search */}
+          <div className="px-6 py-4 border-b border-white/5">
+            <label className={labelCls}>Merchant Corporate ID</label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
+                <input value={inputId} onChange={e => setInputId(e.target.value)}
+                  placeholder="e.g. 333351592657"
+                  className={`${inputCls} pl-9`}
+                  onKeyDown={e => e.key === 'Enter' && loadMerchant(inputId)} />
               </div>
-              <button onClick={() => setEditing('new')}
-                className="flex-shrink-0 flex items-center gap-1 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition-all">
-                <Plus className="w-3 h-3" /> New
+              <button onClick={() => loadMerchant(inputId)} disabled={loading || !inputId.trim()}
+                className="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 disabled:opacity-40 font-bold text-xs px-4 py-2 rounded-xl transition-all flex-shrink-0">
+                {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Load'}
               </button>
             </div>
-
-            {/* Stage list */}
-            <div className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
-              {stages.length === 0 ? (
-                <div className="text-center py-12 border border-dashed border-white/10 rounded-2xl mx-2">
-                  <FileText className="w-7 h-7 text-gray-600 mx-auto mb-3" />
-                  <p className="text-gray-500 text-sm mb-3">No staged applications yet.</p>
-                  <button onClick={() => setEditing('new')}
-                    className="text-xs text-amber-400 hover:text-amber-300 font-semibold border border-amber-500/30 px-4 py-2 rounded-xl transition-colors">
-                    Create First Stage
-                  </button>
-                </div>
-              ) : (
-                stages.map(s => (
-                  <StageCard
-                    key={s.id}
-                    stage={s}
-                    publicUrl={publicUrl}
-                    onEdit={setEditing}
-                    onSend={setSending}
-                    onDelete={setDeleteConfirm}
-                  />
-                ))
-              )}
-            </div>
-          </>
-        )}
-
-        {loading && (
-          <div className="flex-1 flex items-center justify-center">
-            <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
           </div>
-        )}
 
-        {!corporateId && !loading && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-8 py-16">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-2">
-              <Building2 className="w-6 h-6 text-amber-500/60" />
+          {corporateId && !loading && (
+            <>
+              <div className="px-6 py-3 bg-amber-500/5 border-b border-amber-500/10 flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-white truncate">{merchantName}</p>
+                  <p className="text-[10px] text-gray-500 font-mono">{corporateId}</p>
+                </div>
+                <button onClick={() => setEditing('new')}
+                  className="flex-shrink-0 flex items-center gap-1 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 font-bold text-xs px-3 py-1.5 rounded-xl transition-all">
+                  <Plus className="w-3 h-3" /> New
+                </button>
+              </div>
+
+              <div className="flex-1 px-4 py-4 space-y-2 overflow-y-auto">
+                {stages.length === 0 ? (
+                  <div className="text-center py-12 border border-dashed border-white/10 rounded-2xl mx-2">
+                    <FileText className="w-7 h-7 text-gray-600 mx-auto mb-3" />
+                    <p className="text-gray-500 text-sm mb-3">No staged applications yet.</p>
+                    <button onClick={() => setEditing('new')}
+                      className="text-xs text-amber-400 hover:text-amber-300 font-semibold border border-amber-500/30 px-4 py-2 rounded-xl transition-colors">
+                      Create First Stage
+                    </button>
+                  </div>
+                ) : (
+                  stages.map(s => (
+                    <StageCard key={s.id} stage={s} publicUrl={publicUrl}
+                      onEdit={setEditing} onSend={setSending} onDelete={setDeleteConfirm} />
+                  ))
+                )}
+              </div>
+            </>
+          )}
+
+          {loading && (
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
             </div>
-            <p className="text-gray-500 text-sm">Enter a merchant corporate ID above to load their staged applications.</p>
+          )}
+
+          {!corporateId && !loading && (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-8 py-16">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-2">
+                <Building2 className="w-6 h-6 text-amber-500/60" />
+              </div>
+              <p className="text-gray-500 text-sm">Enter a merchant corporate ID above, or use Quick Start in the overview bar.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Right panel — editor */}
+        {showEditor && (
+          <div className="flex-1 flex flex-col bg-[#161b23] overflow-hidden">
+            <StageEditor
+              stage={editing === 'new' ? null : editing}
+              corporateId={corporateId}
+              merchantName={merchantName}
+              onSaved={handleStageSaved}
+              onClose={() => setEditing(null)}
+            />
           </div>
         )}
       </div>
 
-      {/* Right panel — editor */}
-      {showEditor && (
-        <div className="flex-1 flex flex-col bg-[#161b23] overflow-hidden">
-          <StageEditor
-            stage={editing === 'new' ? null : editing}
-            corporateId={corporateId}
-            merchantName={merchantName}
-            onSaved={handleStageSaved}
-            onClose={() => setEditing(null)}
-          />
-        </div>
-      )}
-
       {/* Send modal */}
       {sending && (
-        <SendModal stage={sending} publicUrl={publicUrl} onSent={s => setStages(prev => prev.map(x => x.id === s.id ? s : x))} onClose={() => setSending(null)} />
+        <SendModal stage={sending} publicUrl={publicUrl}
+          onSent={s => setStages(prev => prev.map(x => x.id === s.id ? s : x))}
+          onClose={() => setSending(null)} />
       )}
 
       {/* Delete confirm */}
