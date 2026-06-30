@@ -128,12 +128,34 @@ function formatDob(year: string, month: string, day: string): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
-function nextMonthStart(): string {
-  const now = new Date();
-  const y = now.getMonth() === 11 ? now.getFullYear() + 1 : now.getFullYear();
-  const m = now.getMonth() === 11 ? 1 : now.getMonth() + 2;
-  return `${y}-${String(m).padStart(2, '0')}-01`;
-}
+// ─── Form Payload Builder ─────────────────────────────────────────────────────
+//
+// STRICT TEMPLATE PRESERVATION RULE — READ BEFORE EDITING
+// =========================================================
+// MSPWare templates (#6 ICPLS, #154 Cash Discount) pre-fill a large set of
+// fee schedule, equipment, and account configuration fields. Sending ANY of
+// those fields in a PUT /form payload OVERWRITES the template value — even
+// if you send the same value the template already has. This causes form
+// completion to drop below 100%, blocking signing.
+//
+// This function sends ONLY merchant-specific fields. The following are
+// intentionally OMITTED because the template owns them:
+//
+//   billing_method, billing_frequency, funding_type, monetary_code, statement_type,
+//   monthly_minimum_fee, chargeback_fee, account_maintenance_fee, rtp_monthly_fee,
+//   touch_tone_auth, avs_service_auth, bank_referral_auth, op_assisted_auth,
+//   C4_surcharging_cardholder_surcharge, tokenization, tokenization_service_fee,
+//   tokenization_platform_fee, tokenization_sharing_indicator,
+//   has_pin_debit, debit_auth_method, debit_pricing_method,
+//   all per-network debit interchange fee fields (ACCL_*, AFFN_*, ALAS_*, CU24_*,
+//   INKL_*, MSTO_*, NETS_*, NYCE_*, POSD_*, PULSE_*, ITS_*, STAR_*, UPDBT_*),
+//   fixed_individual_tiers_pricing, multi_currency_conversion, secure3d,
+//   all_markup_discount, all_markup_per_item, all_card_auth_per_item,
+//   intl_card_handling_fee, auth_pricing_program, annual_fee_start_date,
+//   is_firearm_verified (CRITICAL: every value is rejected by the API; omit always)
+//
+// If you need to add a new field, verify it is NOT in the template by reading
+// GET /applications/154/form before adding it here.
 
 function buildFormPayload(
   profile: Record<string, any>,
@@ -297,39 +319,16 @@ function buildFormPayload(
     cards_accepted: ['VISA', 'VISA_DEBIT', 'MASTERCARD', 'MASTERCARD_DEBIT', 'DISCOVER', 'AMEX'],
     card_acceptance_split: cardPresentPct >= 100 ? 'CP' : 'OMNI',
     mcc,
+    // ── Pricing (merchant-specific only — template owns fee schedule, debit rates, etc.) ──
     pricing_method: pricingMethod,
     pricing_category: pricingCategory,
-    billing_method: 'N',
-    annual_fee_start_date: nextMonthStart(),
-    auth_pricing_program: '49999',
-    all_markup_discount: '0.0000',
-    all_markup_per_item: '0.000',
-    all_card_auth_per_item: '0.050',
-    intl_card_handling_fee: '0.60',
-    tokenization_service_fee: '0.0000',
-    tokenization_platform_fee: '0.0000',
-    has_pin_debit: false,       // attempt to disable debit fields; template may override
-    debit_auth_method: 'PNL',  // pinless — required when has_pin_debit=true (template default)
-    debit_pricing_method: 'ICPLS',
-    // is_firearm_verified: OMIT — Template #6/#154 already has this set correctly.
-    // Sending ANY value here (including "yes", false, "N") overrides the template and drops
-    // completion below 100%, blocking signing. The GET-first check above handles this: if
-    // the form is already at 100% the PUT is skipped entirely, preserving the template value.
-    // Per-network debit interchange fees required by template
-    ACCL_per_auth: '0.00', ACCL_percent_fee: '0.0000', ACCL_transaction_fee: '0.00',
-    AFFN_per_auth: '0.00', AFFN_percent_fee: '0.0000', AFFN_transaction_fee: '0.00',
-    ALAS_per_auth: '0.00', ALAS_percent_fee: '0.0000', ALAS_transaction_fee: '0.00',
-    CU24_per_auth: '0.00', CU24_percent_fee: '0.0000', CU24_transaction_fee: '0.00',
-    INKL_per_auth: '0.00', INKL_percent_fee: '0.0000', INKL_transaction_fee: '0.00',
-    MSTO_per_auth: '0.00', MSTO_percent_fee: '0.0000', MSTO_transaction_fee: '0.00',
-    NETS_per_auth: '0.00', NETS_percent_fee: '0.0000', NETS_transaction_fee: '0.00',
-    NYCE_per_auth: '0.00', NYCE_percent_fee: '0.0000', NYCE_transaction_fee: '0.00',
-    POSD_per_auth: '0.00', POSD_percent_fee: '0.0000', POSD_transaction_fee: '0.00',
-    PULSE_per_auth: '0.00', PULSE_percent_fee: '0.0000', PULSE_transaction_fee: '0.00',
-    ITS_per_auth: '0.00', ITS_percent_fee: '0.0000', ITS_transaction_fee: '0.00',
-    STAR_per_auth: '0.00', STAR_percent_fee: '0.0000', STAR_transaction_fee: '0.00',
-    UPDBT_per_auth: '0.00', UPDBT_percent_fee: '0.0000', UPDBT_transaction_fee: '0.00',
-    // Only send bank details when both routing and account are present
+    // is_firearm_verified intentionally omitted — any API value overrides the template and drops completion
+    // billing_method, billing_frequency, funding_type, monthly_minimum_fee, chargeback_fee,
+    // account_maintenance_fee, rtp_monthly_fee, C4_surcharging_cardholder_surcharge, tokenization,
+    // tokenization_service_fee, monetary_code, statement_type, has_pin_debit, debit_auth_method,
+    // debit_pricing_method, and all per-network debit interchange fees — all owned by template #6/#154.
+
+    // ── Bank Accounts ─────────────────────────────────────────────────────────
     ...(routing && account ? {
       deposit_account_no: account,
       deposit_account_rtg: routing,
