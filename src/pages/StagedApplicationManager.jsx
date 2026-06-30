@@ -4,8 +4,8 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Plus, Loader2, Send, Trash2, Check, X, Copy, ExternalLink,
   Clock, Store, Users, FileText, Edit2, Search,
-  Building2, CreditCard, ArrowLeft, Link, CheckCircle2,
-  AlertCircle, Eye, BarChart2, Zap
+  Building2, CreditCard, ArrowLeft, CheckCircle2,
+  AlertCircle, Eye, BarChart2, Zap, ChevronDown, ChevronRight
 } from 'lucide-react';
 
 const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
@@ -18,6 +18,9 @@ const STATUS_STYLES = {
 };
 const STAGE_COLORS = { draft: '#6b7280', ready: '#3b82f6', sent: '#22c55e' };
 const STAGE_LABELS = { draft: 'Draft', ready: 'Ready', sent: 'Sent' };
+
+const STEP_ORDER = ['agreement', 'locations', 'banking', 'verification', 'submitted'];
+const STEP_LABELS_MAP = { agreement: 'Agreement', locations: 'Locations', banking: 'Banking', verification: 'Signing', submitted: 'Submitted' };
 
 const PREFILL_FIELDS = [
   { key: 'pricingTier', label: 'Pricing Tier', type: 'select', options: ['Standard', 'Premium', 'Custom', 'Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'] },
@@ -62,7 +65,6 @@ function PipelineOverview({ onQuickCreate }) {
 
   return (
     <div className="border-b border-white/8 bg-[#161b23] px-6 py-4 flex flex-wrap items-center gap-8">
-      {/* Donut + stats */}
       <div className="flex items-center gap-4">
         {chartData.length > 0 ? (
           <div className="w-20 h-14 flex-shrink-0">
@@ -71,10 +73,7 @@ function PipelineOverview({ onQuickCreate }) {
                 <Pie data={chartData} dataKey="value" cx="50%" cy="50%" innerRadius={18} outerRadius={30} strokeWidth={0}>
                   {chartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
-                <Tooltip
-                  contentStyle={{ background: '#1c2128', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 }}
-                  itemStyle={{ color: '#e5e7eb' }}
-                />
+                <Tooltip contentStyle={{ background: '#1c2128', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 }} itemStyle={{ color: '#e5e7eb' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
@@ -100,26 +99,15 @@ function PipelineOverview({ onQuickCreate }) {
           </div>
         </div>
       </div>
-
-      {/* Divider */}
       <div className="hidden sm:block w-px h-10 bg-white/8 flex-shrink-0" />
-
-      {/* Quick create */}
       <div className="flex-shrink-0">
         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Quick Start — New Stage</p>
         <div className="flex gap-2 items-center">
-          <input
-            value={quickId}
-            onChange={e => setQuickId(e.target.value)}
-            placeholder="Enter Corporate ID…"
+          <input value={quickId} onChange={e => setQuickId(e.target.value)} placeholder="Enter Corporate ID…"
             onKeyDown={e => e.key === 'Enter' && handleQuickCreate()}
-            className="bg-[#111318] border border-white/20 rounded-xl px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500 w-48"
-          />
-          <button
-            onClick={handleQuickCreate}
-            disabled={!quickId.trim()}
-            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold text-xs px-3 py-2 rounded-xl transition-all flex-shrink-0"
-          >
+            className="bg-[#111318] border border-white/20 rounded-xl px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500 w-48" />
+          <button onClick={handleQuickCreate} disabled={!quickId.trim()}
+            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold text-xs px-3 py-2 rounded-xl transition-all flex-shrink-0">
             <Zap className="w-3 h-3" /> Create
           </button>
         </div>
@@ -135,7 +123,6 @@ function CheckRow({ checked, onChange, color = 'amber', children }) {
     blue:   { checked: 'bg-blue-500 border-blue-500',     ring: 'border-blue-500/40 bg-blue-500/5' },
     purple: { checked: 'bg-purple-500 border-purple-500', ring: 'border-purple-500/40 bg-purple-500/5' },
   }[color];
-
   return (
     <label className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all ${checked ? colors.ring : 'border-white/10 hover:border-white/20'}`}>
       <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-all ${checked ? colors.checked : 'border-white/30'}`}>
@@ -252,16 +239,12 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
         <div className="flex-1 overflow-y-auto">
           <div className="px-6 pt-5 pb-4 border-b border-white/5">
             <label className={labelCls}>Stage Label (internal)</label>
-            <input value={label} onChange={e => setLabel(e.target.value)}
-              placeholder="e.g. Downtown Locations — Phase 1" className={inputCls} />
+            <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Downtown Locations — Phase 1" className={inputCls} />
           </div>
-
           <div className="flex border-b border-white/8 px-6 gap-1 pt-2">
             {tabs.map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 transition-all -mb-px ${
-                  activeTab === t.key ? 'border-amber-500 text-amber-400' : 'border-transparent text-gray-500 hover:text-gray-300'
-                }`}>
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 transition-all -mb-px ${activeTab === t.key ? 'border-amber-500 text-amber-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
                 <t.icon className="w-3.5 h-3.5" />
                 {t.label}
                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === t.key ? 'bg-amber-500/20 text-amber-400' : 'bg-white/8 text-gray-500'}`}>
@@ -270,7 +253,6 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
               </button>
             ))}
           </div>
-
           <div className="px-6 py-5 space-y-3">
             {activeTab === 'locations' && (
               <>
@@ -309,7 +291,6 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                 }
               </>
             )}
-
             {activeTab === 'signers' && (
               <>
                 <p className="text-[11px] text-gray-500">Only selected signers will be required to verify their identity.</p>
@@ -333,7 +314,6 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                 }
               </>
             )}
-
             {activeTab === 'prefill' && (
               <>
                 <p className="text-[11px] text-gray-500">These values will override the merchant's profile when they open the portal. Leave blank to use existing data.</p>
@@ -342,15 +322,12 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                     <div key={field.key}>
                       <label className={labelCls}>{field.label}</label>
                       {field.type === 'select' ? (
-                        <select value={prefill[field.key] || ''} onChange={e => setPrefillField(field.key, e.target.value)}
-                          className={inputCls} style={{ colorScheme: 'dark' }}>
+                        <select value={prefill[field.key] || ''} onChange={e => setPrefillField(field.key, e.target.value)} className={inputCls} style={{ colorScheme: 'dark' }}>
                           <option value="">(no override)</option>
                           {field.options.map(o => <option key={o} value={o}>{o}</option>)}
                         </select>
                       ) : (
-                        <input type="text" value={prefill[field.key] || ''}
-                          onChange={e => setPrefillField(field.key, e.target.value)}
-                          placeholder={field.placeholder || ''} className={inputCls} />
+                        <input type="text" value={prefill[field.key] || ''} onChange={e => setPrefillField(field.key, e.target.value)} placeholder={field.placeholder || ''} className={inputCls} />
                       )}
                     </div>
                   ))}
@@ -369,7 +346,6 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
               </>
             )}
           </div>
-
           {error && (
             <div className="mx-6 mb-4 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
@@ -431,9 +407,7 @@ function SendModal({ stage, publicUrl, onSent, onClose }) {
                 <button onClick={copyLink} className="flex-shrink-0 text-amber-400 hover:text-amber-300">
                   {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
-                <a href={link} target="_blank" rel="noreferrer" className="flex-shrink-0 text-gray-500 hover:text-white">
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
+                <a href={link} target="_blank" rel="noreferrer" className="flex-shrink-0 text-gray-500 hover:text-white"><ExternalLink className="w-3.5 h-3.5" /></a>
               </div>
             </div>
             <button onClick={onClose} className="w-full border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white">Done</button>
@@ -461,137 +435,179 @@ function SendModal({ stage, publicUrl, onSent, onClose }) {
   );
 }
 
-// ── Progress Track Card (auto-created for merchants who opened the portal) ─────
-const STEP_ORDER = ['agreement', 'locations', 'banking', 'verification', 'submitted'];
-const STEP_LABELS = { agreement: 'Agreement', locations: 'Locations', banking: 'Banking', verification: 'Signing', submitted: 'Submitted' };
-
-function ProgressTrackCard({ stage }) {
-  const p = stage.prefilledData || {};
-  const completed = p.completedSteps || {};
-  const currentStep = p.currentStep || 'agreement';
-  const lastSeen = p.lastSeenAt ? new Date(p.lastSeenAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
-
+// ── MID Status Badge ──────────────────────────────────────────────────────────
+function MidStatusBadge({ status }) {
+  const map = {
+    'Active':            'bg-green-500/15 text-green-400 border-green-500/30',
+    'Active (Existing)': 'bg-green-500/15 text-green-400 border-green-500/30',
+    'Pending MID':       'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    'Ready to Submit':   'bg-blue-500/15 text-blue-400 border-blue-500/30',
+    'In Review':         'bg-white/5 text-gray-400 border-white/10',
+    'Error':             'bg-red-500/15 text-red-400 border-red-500/30',
+  };
   return (
-    <div className="bg-[#1c2128] border border-blue-500/20 rounded-2xl p-4">
-      <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">In Progress</span>
-            {p.pricingTier && <span className="text-[10px] text-gray-500">{p.pricingTier}</span>}
-          </div>
-          {p.signerEmail && <p className="text-[11px] text-gray-400 truncate">{p.signerEmail}</p>}
-        </div>
-        {lastSeen && (
-          <p className="text-[10px] text-gray-600 flex items-center gap-1 flex-shrink-0">
-            <Clock className="w-2.5 h-2.5" /> {lastSeen}
-          </p>
-        )}
-      </div>
-      {/* Step progress dots */}
-      <div className="flex items-center gap-1">
-        {STEP_ORDER.map((step, i) => {
-          const done = completed[step] || p.applicationStatus === 'Submitted';
-          const active = currentStep === step;
-          return (
-            <div key={step} className="flex items-center gap-1 flex-1 min-w-0">
-              <div className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold border transition-all ${
-                done ? 'bg-green-500 border-green-500 text-white' :
-                active ? 'bg-blue-500 border-blue-500 text-white' :
-                'bg-transparent border-gray-600 text-gray-600'
-              }`}>
-                {done ? '✓' : i + 1}
-              </div>
-              {i < STEP_ORDER.length - 1 && <div className={`flex-1 h-px ${done ? 'bg-green-500/40' : 'bg-gray-700'}`} />}
-            </div>
-          );
-        })}
-      </div>
-      <div className="flex mt-1">
-        {STEP_ORDER.map((step) => (
-          <div key={step} className="flex-1 min-w-0">
-            <p className={`text-[8px] truncate ${currentStep === step ? 'text-blue-400 font-semibold' : 'text-gray-600'}`}>{STEP_LABELS[step]}</p>
-          </div>
-        ))}
-      </div>
-    </div>
+    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${map[status] || map['In Review']}`}>
+      {status || 'In Review'}
+    </span>
   );
 }
 
-// ── Stage Card ────────────────────────────────────────────────────────────────
-function StageCard({ stage, publicUrl, onEdit, onSend, onDelete }) {
-  const [copied, setCopied] = useState(false);
-  const link = `${publicUrl}/?stageId=${stage.id}&token=${stage.accessToken}`;
+// ── Application Row (expandable, shows MIDs) ──────────────────────────────────
+function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, publicUrl, onEdit, onSend, onDelete }) {
+  const [expanded, setExpanded]   = useState(false);
+  const [mids, setMids]           = useState([]);
+  const [loadingMids, setLoadingMids] = useState(false);
+  const [copied, setCopied]       = useState(null); // stageId or 'id'
 
-  const copyLink = (e) => {
-    e.stopPropagation();
-    navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const p = trackStage?.prefilledData || {};
+  const completed = p.completedSteps || {};
+  const currentStep = p.currentStep || 'agreement';
+  const lastSeen = p.lastSeenAt ? new Date(p.lastSeenAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
+
+  const handleExpand = async () => {
+    const next = !expanded;
+    setExpanded(next);
+    if (next && mids.length === 0) {
+      setLoadingMids(true);
+      try {
+        const res = await base44.functions.invoke('manageMerchantID', { action: 'list', corporateId });
+        setMids(res.data?.merchantIDs || []);
+      } catch (_) {}
+      finally { setLoadingMids(false); }
+    }
   };
 
-  // Auto-tracked progress records render differently
-  if (stage.label === '__auto_track__') {
-    return <ProgressTrackCard stage={stage} />;
-  }
+  const copyId = () => {
+    navigator.clipboard.writeText(corporateId);
+    setCopied('id');
+    setTimeout(() => setCopied(null), 2000);
+  };
 
   return (
-    <div className="bg-[#1c2128] border border-white/10 rounded-2xl p-4 hover:border-white/20 transition-all group">
-      <div className="flex items-start justify-between gap-3 mb-3">
+    <div className="bg-[#1c2128] border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-all">
+      {/* Header row */}
+      <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={handleExpand}>
+        <button className="text-gray-500 flex-shrink-0">
+          {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        </button>
+        <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+          <Building2 className="w-3.5 h-3.5 text-amber-400" />
+        </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${STATUS_STYLES[stage.status] || STATUS_STYLES.draft}`}>
-              {stage.status}
-            </span>
-            <h3 className="text-sm font-bold text-white truncate">{stage.label || 'Untitled Stage'}</h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="text-sm font-bold text-white truncate">{merchantName || corporateId}</p>
+            <button onClick={e => { e.stopPropagation(); copyId(); }}
+              className={`flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded transition-all ${copied === 'id' ? 'text-green-400' : 'text-gray-600 hover:text-gray-300'}`}>
+              {copied === 'id' ? <Check className="w-2.5 h-2.5" /> : <Copy className="w-2.5 h-2.5" />}
+              {corporateId}
+            </button>
           </div>
-          {stage.sentAt && (
-            <p className="text-[10px] text-green-400 flex items-center gap-1">
-              <Clock className="w-2.5 h-2.5" /> Sent {new Date(stage.sentAt).toLocaleDateString()} → {stage.sentToEmail}
-            </p>
+          <div className="flex items-center gap-3 mt-0.5">
+            {p.signerEmail && <p className="text-[10px] text-gray-500 truncate">{p.signerEmail}</p>}
+            {p.pricingTier && <span className="text-[10px] text-gray-600">{p.pricingTier}</span>}
+          </div>
+        </div>
+        {/* Progress steps — compact */}
+        {trackStage && (
+          <div className="hidden sm:flex items-center gap-0.5 flex-shrink-0">
+            {STEP_ORDER.map((step, i) => {
+              const done = completed[step] || p.applicationStatus === 'Submitted';
+              const active = currentStep === step;
+              return (
+                <div key={step} className="flex items-center">
+                  <div title={STEP_LABELS_MAP[step]} className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold border transition-all ${
+                    done ? 'bg-green-500 border-green-500 text-white' :
+                    active ? 'bg-blue-500 border-blue-500 text-white' :
+                    'bg-transparent border-gray-700 text-gray-700'
+                  }`}>
+                    {done ? '✓' : i + 1}
+                  </div>
+                  {i < STEP_ORDER.length - 1 && <div className={`w-2 h-px ${done ? 'bg-green-500/40' : 'bg-gray-700'}`} />}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {lastSeen && (
+          <p className="hidden sm:flex items-center gap-1 text-[10px] text-gray-600 flex-shrink-0">
+            <Clock className="w-2.5 h-2.5" /> {lastSeen}
+          </p>
+        )}
+        <div className="flex items-center gap-1 flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
+          <button onClick={() => onEdit(corporateId, merchantName)} title="New stage"
+            className="p-1.5 text-gray-600 hover:text-amber-400 rounded-lg transition-colors">
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Admin stages (non-auto-track) */}
+      {adminStages.length > 0 && (
+        <div className="border-t border-white/5 px-4 py-2 flex flex-wrap gap-2">
+          {adminStages.map(s => {
+            const link = `${publicUrl}/?stageId=${s.id}&token=${s.accessToken}`;
+            return (
+              <div key={s.id} className="flex items-center gap-1.5 bg-[#111318] border border-white/8 rounded-lg px-2.5 py-1.5">
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_STYLES[s.status] || STATUS_STYLES.draft}`}>{s.status}</span>
+                <span className="text-xs text-gray-300 font-medium truncate max-w-[120px]">{s.label}</span>
+                <button onClick={() => { navigator.clipboard.writeText(link); setCopied(s.id); setTimeout(() => setCopied(null), 2000); }}
+                  className={`ml-1 ${copied === s.id ? 'text-green-400' : 'text-gray-600 hover:text-blue-400'} transition-colors`}>
+                  {copied === s.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+                </button>
+                <a href={link} target="_blank" rel="noreferrer" className="text-gray-600 hover:text-gray-300"><Eye className="w-3 h-3" /></a>
+                <button onClick={() => onSend(s)} className="text-gray-600 hover:text-green-400 transition-colors"><Send className="w-3 h-3" /></button>
+                <button onClick={() => onDelete(s)} className="text-gray-600 hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Expanded MIDs */}
+      {expanded && (
+        <div className="border-t border-white/5 bg-[#111318]/60">
+          {loadingMids ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
+            </div>
+          ) : mids.length === 0 ? (
+            <p className="text-center text-xs text-gray-600 py-4">No MIDs found for this merchant.</p>
+          ) : (
+            <div className="divide-y divide-white/5">
+              {mids.map(mid => (
+                <div key={mid.id} className="flex items-center gap-3 px-5 py-2.5">
+                  <CreditCard className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-white truncate">{mid.dbaName || mid.merchantName || '—'}</p>
+                    <p className="text-[10px] text-gray-500">{mid.mccCode ? `MCC ${mid.mccCode}` : 'No MCC'}{mid.monthlyCardSales ? ` · $${Number(mid.monthlyCardSales).toLocaleString()}/mo` : ''}</p>
+                  </div>
+                  {mid.elavonMID && <p className="text-[10px] font-mono text-green-400 flex-shrink-0">{mid.elavonMID}</p>}
+                  {mid.mspApplicationNo && !mid.elavonMID && <p className="text-[10px] font-mono text-amber-400/70 flex-shrink-0 truncate max-w-[100px]">{mid.mspApplicationNo}</p>}
+                  <MidStatusBadge status={mid.applicationStepStatus} />
+                </div>
+              ))}
+            </div>
           )}
         </div>
-        <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => onEdit(stage)} title="Edit" className="p-1.5 text-gray-500 hover:text-amber-400 rounded-lg transition-colors"><Edit2 className="w-3.5 h-3.5" /></button>
-          <button onClick={copyLink} title="Copy application link"
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold transition-all ${copied ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/15 text-blue-400 hover:bg-blue-500/25'}`}>
-            {copied ? <><Check className="w-3 h-3" /> Copied!</> : <><Copy className="w-3 h-3" /> Copy Link</>}
-          </button>
-          <a href={link} target="_blank" rel="noreferrer" title="Preview" className="p-1.5 text-gray-500 hover:text-gray-200 rounded-lg transition-colors"><Eye className="w-3.5 h-3.5" /></a>
-          <button onClick={() => onSend(stage)} title="Send to merchant" className="p-1.5 text-gray-500 hover:text-green-400 rounded-lg transition-colors"><Send className="w-3.5 h-3.5" /></button>
-          <button onClick={() => onDelete(stage)} title="Delete" className="p-1.5 text-gray-500 hover:text-red-400 rounded-lg transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
-        </div>
-      </div>
-      <div className="flex items-center gap-4 text-[10px] text-gray-500">
-        <span className="flex items-center gap-1"><Store className="w-3 h-3" />{(stage.includedLocationIds || []).length} locations</span>
-        <span className="flex items-center gap-1"><CreditCard className="w-3 h-3" />{(stage.includedConceptIds || []).length} MIDs</span>
-        <span className="flex items-center gap-1"><Users className="w-3 h-3" />{(stage.includedSignerIds || []).length} signers</span>
-        {Object.keys(stage.prefilledData || {}).length > 0 && (
-          <span className="flex items-center gap-1"><FileText className="w-3 h-3" />{Object.keys(stage.prefilledData).length} overrides</span>
-        )}
-      </div>
+      )}
     </div>
   );
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function StagedApplicationManager() {
-  const [inputId, setInputId]               = useState('');
-  const [corporateId, setCorporateId]       = useState('');
-  const [merchantName, setMerchantName]     = useState('');
-  const [stages, setStages]                 = useState([]);
-  const [allStages, setAllStages]           = useState([]); // all stages across all merchants
-  const [merchantNames, setMerchantNames]   = useState({}); // corporateId → legalName
-  const [loadingAll, setLoadingAll]         = useState(true);
-  const [loading, setLoading]               = useState(false);
-  const [editing, setEditing]               = useState(null);
-  const [sending, setSending]               = useState(null);
-  const [deleteConfirm, setDeleteConfirm]   = useState(null);
-  const [filterStatus, setFilterStatus]     = useState('all');
-  const [searchText, setSearchText]         = useState('');
+  const [inputId, setInputId]             = useState('');
+  const [allStages, setAllStages]         = useState([]);
+  const [merchantNames, setMerchantNames] = useState({});
+  const [loadingAll, setLoadingAll]       = useState(true);
+  const [loading, setLoading]             = useState(false);
+  const [editing, setEditing]             = useState(null); // { corporateId, merchantName, stage|null }
+  const [sending, setSending]             = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [searchText, setSearchText]       = useState('');
 
   const publicUrl = (import.meta.env.VITE_PUBLIC_URL || window.location.origin).replace(/\/$/, '');
 
-  // Load all staged applications on mount
   useEffect(() => {
     (async () => {
       setLoadingAll(true);
@@ -600,7 +616,6 @@ export default function StagedApplicationManager() {
         const loaded = res.data?.stages || [];
         setAllStages(loaded);
 
-        // Fetch merchant names for each unique corporateId
         const uniqueIds = [...new Set(loaded.map(s => s.corporateId).filter(Boolean))];
         const nameMap = {};
         await Promise.all(uniqueIds.map(async (id) => {
@@ -615,41 +630,12 @@ export default function StagedApplicationManager() {
     })();
   }, []);
 
-  const loadMerchant = async (id) => {
-    if (!id.trim()) return;
-    setLoading(true);
-    setCorporateId('');
-    setMerchantName('');
-    setStages([]);
-    setEditing(null);
-    try {
-      const [profileRes, stagesRes] = await Promise.all([
-        base44.functions.invoke('getMerchantData', { corporateId: id.trim() }),
-        base44.functions.invoke('manageStagedApplication', { action: 'list', corporateId: id.trim() }),
-      ]);
-      setCorporateId(id.trim());
-      const name = profileRes.data?.profile?.legalName || id.trim();
-      setMerchantName(name);
-      setMerchantNames(prev => ({ ...prev, [id.trim()]: name }));
-      setStages(stagesRes.data?.stages || []);
-    } catch (_) {}
-    finally { setLoading(false); }
-  };
-
   const handleQuickCreate = async (id) => {
     setInputId(id);
-    await loadMerchant(id);
-    setEditing('new');
+    setEditing({ corporateId: id, merchantName: merchantNames[id] || id, stage: null });
   };
 
   const handleStageSaved = (stage) => {
-    // Update per-merchant list
-    setStages(prev => {
-      const idx = prev.findIndex(s => s.id === stage.id);
-      if (idx >= 0) { const next = [...prev]; next[idx] = stage; return next; }
-      return [stage, ...prev];
-    });
-    // Update global list
     setAllStages(prev => {
       const idx = prev.findIndex(s => s.id === stage.id);
       if (idx >= 0) { const next = [...prev]; next[idx] = stage; return next; }
@@ -662,150 +648,109 @@ export default function StagedApplicationManager() {
     setDeleteConfirm(null);
     try {
       await base44.functions.invoke('manageStagedApplication', { action: 'delete', stageId: stage.id });
-      setStages(prev => prev.filter(s => s.id !== stage.id));
       setAllStages(prev => prev.filter(s => s.id !== stage.id));
     } catch (_) {}
   };
 
-  const showEditor = editing !== null;
+  // Group all stages by corporateId
+  const grouped = allStages.reduce((acc, s) => {
+    const key = s.corporateId || 'unknown';
+    if (!acc[key]) acc[key] = { track: null, admin: [] };
+    if (s.label === '__auto_track__') acc[key].track = s;
+    else acc[key].admin.push(s);
+    return acc;
+  }, {});
 
-  // Determine what to show in the left panel: filtered per-merchant view or all-merchant view
-  const isFiltered = !!corporateId;
-  const displayStages = isFiltered ? stages : allStages;
-  const filtered = displayStages.filter(s => {
-    const matchStatus = filterStatus === 'all' || s.status === filterStatus;
-    const name = merchantNames[s.corporateId] || s.corporateId || '';
-    const matchSearch = !searchText || s.label?.toLowerCase().includes(searchText.toLowerCase()) || name.toLowerCase().includes(searchText.toLowerCase());
-    return matchStatus && matchSearch;
+  // Filter by search
+  const filteredEntries = Object.entries(grouped).filter(([cid, _]) => {
+    if (!searchText) return true;
+    const name = (merchantNames[cid] || cid).toLowerCase();
+    return name.includes(searchText.toLowerCase()) || cid.includes(searchText);
   });
 
-  // Separate auto-tracked "in progress" records from admin-created stages
-  const isAutoTrack = (s) => s.label === '__auto_track__';
+  // Jump-to lookup
+  const handleJump = async () => {
+    if (!inputId.trim()) return;
+    setLoading(true);
+    try {
+      const r = await base44.functions.invoke('getMerchantData', { corporateId: inputId.trim() });
+      const name = r.data?.profile?.legalName || inputId.trim();
+      setMerchantNames(prev => ({ ...prev, [inputId.trim()]: name }));
+      setSearchText(inputId.trim());
+    } catch (_) { setSearchText(inputId.trim()); }
+    finally { setLoading(false); }
+  };
 
-  // Group by corporateId when showing all
-  const grouped = isFiltered
-    ? { [corporateId]: filtered }
-    : filtered.reduce((acc, s) => {
-        const key = s.corporateId || 'unknown';
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(s);
-        return acc;
-      }, {});
+  const showEditor = editing !== null;
 
   return (
     <div className="min-h-screen bg-[#111318] flex flex-col">
-      {/* Pipeline overview bar */}
       <PipelineOverview onQuickCreate={handleQuickCreate} />
 
-      {/* Two-panel workspace */}
       <div className="flex flex-1 min-h-0">
         {/* Left panel */}
-        <div className={`flex flex-col transition-all duration-300 ${showEditor ? 'w-[420px] flex-shrink-0' : 'flex-1'} border-r border-white/8`}>
+        <div className={`flex flex-col transition-all duration-300 ${showEditor ? 'w-[440px] flex-shrink-0' : 'flex-1'} border-r border-white/8`}>
           <div className="px-6 py-5 border-b border-white/8 flex-shrink-0">
-            <div className="flex items-center justify-between mb-1">
-              <div>
-                <p className="text-[10px] font-mono text-amber-500 uppercase tracking-widest mb-1">Admin Tool</p>
-                <h1 className="text-xl font-bold text-white">Staged Applications</h1>
-              </div>
-              {isFiltered && (
-                <button onClick={() => { setCorporateId(''); setMerchantName(''); setStages([]); setInputId(''); setEditing(null); }}
-                  className="text-xs text-gray-400 hover:text-white border border-white/10 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1">
-                  <X className="w-3 h-3" /> Show All
-                </button>
-              )}
-            </div>
+            <p className="text-[10px] font-mono text-amber-500 uppercase tracking-widest mb-1">Admin Tool</p>
+            <h1 className="text-xl font-bold text-white">Application Pipeline</h1>
           </div>
 
           {/* Toolbar */}
-          <div className="px-6 py-3 border-b border-white/5 flex-shrink-0 space-y-2">
-            {/* Search */}
-            <div className="relative">
+          <div className="px-6 py-3 border-b border-white/5 flex-shrink-0 flex gap-2">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
               <input value={searchText} onChange={e => setSearchText(e.target.value)}
-                placeholder={isFiltered ? 'Search stages…' : 'Search by merchant or label…'}
+                placeholder="Search by merchant name or Corp ID…"
                 className={`${inputCls} pl-9 text-xs py-2`} />
             </div>
-            {/* Filter + jump-to-merchant */}
-            <div className="flex gap-2">
-              <div className="flex gap-1 flex-1">
-                {['all', 'draft', 'ready', 'sent'].map(s => (
-                  <button key={s} onClick={() => setFilterStatus(s)}
-                    className={`flex-1 text-[10px] font-bold px-2 py-1.5 rounded-lg capitalize transition-all ${filterStatus === s ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-gray-500 hover:text-gray-300 border border-white/8'}`}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-              <div className="flex gap-1">
-                <input value={inputId} onChange={e => setInputId(e.target.value)}
-                  placeholder="Corp ID…"
-                  className="bg-[#111318] border border-white/20 rounded-xl px-2.5 py-1.5 text-[11px] text-white placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-500 w-28"
-                  onKeyDown={e => e.key === 'Enter' && loadMerchant(inputId)} />
-                <button onClick={() => loadMerchant(inputId)} disabled={loading || !inputId.trim()}
-                  className="flex items-center gap-1 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 disabled:opacity-40 font-bold text-[11px] px-2.5 py-1.5 rounded-xl transition-all flex-shrink-0">
-                  {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Go'}
-                </button>
-              </div>
-            </div>
+            <input value={inputId} onChange={e => setInputId(e.target.value)}
+              placeholder="Corp ID…"
+              className="bg-[#111318] border border-white/20 rounded-xl px-2.5 py-1.5 text-[11px] text-white placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-500 w-28"
+              onKeyDown={e => e.key === 'Enter' && handleJump()} />
+            <button onClick={handleJump} disabled={loading || !inputId.trim()}
+              className="flex items-center gap-1 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 disabled:opacity-40 font-bold text-[11px] px-2.5 py-1.5 rounded-xl transition-all flex-shrink-0">
+              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Go'}
+            </button>
           </div>
 
-          {/* Stages list */}
+          {/* Application list */}
           <div className="flex-1 overflow-y-auto">
-            {(loadingAll && !isFiltered) ? (
+            {loadingAll ? (
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
               </div>
-            ) : Object.keys(grouped).length === 0 ? (
+            ) : filteredEntries.length === 0 ? (
               <div className="text-center py-16 px-8">
                 <FileText className="w-7 h-7 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-500 text-sm">{allStages.length === 0 ? 'No staged applications yet. Use Quick Start above to create one.' : 'No results match your filter.'}</p>
+                <p className="text-gray-500 text-sm">{allStages.length === 0 ? 'No applications yet. Use Quick Start above to create one.' : 'No results match your search.'}</p>
               </div>
             ) : (
-              <div className="px-4 py-4 space-y-5">
-                {Object.entries(grouped).map(([cid, cStages]) => (
-                  <div key={cid}>
-                    {/* Merchant group header */}
-                    <div className="flex items-center gap-2 mb-2 px-1">
-                      <Building2 className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                      <p className="text-xs font-bold text-amber-300 truncate flex-1">{merchantNames[cid] || cid}</p>
-                      <span className="text-[10px] text-gray-600 font-mono flex-shrink-0">{cid}</span>
-                      <button onClick={() => { setInputId(cid); loadMerchant(cid); setEditing('new'); }}
-                        title="New stage for this merchant"
-                        className="flex-shrink-0 flex items-center gap-0.5 text-[10px] text-amber-500/70 hover:text-amber-400 transition-colors">
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <div className="space-y-2">
-                      {cStages.map(s => (
-                        <StageCard key={s.id} stage={s} publicUrl={publicUrl}
-                          onEdit={(stage) => { setCorporateId(cid); setMerchantName(merchantNames[cid] || cid); setEditing(stage); }}
-                          onSend={setSending}
-                          onDelete={setDeleteConfirm} />
-                      ))}
-                    </div>
-                  </div>
+              <div className="px-4 py-4 space-y-2">
+                {filteredEntries.map(([cid, { track, admin }]) => (
+                  <ApplicationRow
+                    key={cid}
+                    corporateId={cid}
+                    merchantName={merchantNames[cid] || cid}
+                    trackStage={track}
+                    adminStages={admin}
+                    publicUrl={publicUrl}
+                    onEdit={(corpId, name) => setEditing({ corporateId: corpId, merchantName: name, stage: null })}
+                    onSend={setSending}
+                    onDelete={setDeleteConfirm}
+                  />
                 ))}
               </div>
             )}
           </div>
-
-          {/* Add new button when filtered to a merchant */}
-          {isFiltered && !loadingAll && (
-            <div className="px-4 py-3 border-t border-white/8 flex-shrink-0">
-              <button onClick={() => setEditing('new')}
-                className="w-full flex items-center justify-center gap-2 border border-dashed border-amber-500/30 hover:border-amber-500/60 text-amber-400 hover:text-amber-300 rounded-xl py-2.5 text-xs font-semibold transition-all">
-                <Plus className="w-3.5 h-3.5" /> New Stage for {merchantName}
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Right panel — editor */}
         {showEditor && (
           <div className="flex-1 flex flex-col bg-[#161b23] overflow-hidden">
             <StageEditor
-              stage={editing === 'new' ? null : editing}
-              corporateId={corporateId}
-              merchantName={merchantName}
+              stage={editing.stage}
+              corporateId={editing.corporateId}
+              merchantName={editing.merchantName}
               onSaved={handleStageSaved}
               onClose={() => setEditing(null)}
             />
@@ -813,14 +758,12 @@ export default function StagedApplicationManager() {
         )}
       </div>
 
-      {/* Send modal */}
       {sending && (
         <SendModal stage={sending} publicUrl={publicUrl}
-          onSent={s => setStages(prev => prev.map(x => x.id === s.id ? s : x))}
+          onSent={s => setAllStages(prev => prev.map(x => x.id === s.id ? s : x))}
           onClose={() => setSending(null)} />
       )}
 
-      {/* Delete confirm */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4" onClick={() => setDeleteConfirm(null)}>
           <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
