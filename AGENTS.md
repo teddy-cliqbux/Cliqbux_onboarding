@@ -118,6 +118,10 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 ### Other active functions
 `createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `verifyEIN`, `verifySignerToken`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `handleHubspotWebhook`, `debugEnv`
 
+
+### MID creation → auto MSPWare draft
+When a new `MerchantProcessingConcept` is created via `manageMerchantID` (action="add"), the function immediately calls `submitToMSP` with `{ corporateId, conceptIds: [concept.id] }` in the background. This ensures the MSPWare draft exists before the merchant reaches the signing page. Non-fatal — failure is logged but the concept record is still returned.
+
 ### Deleted / do not recreate
 - ~~`submitToElavon`~~ — replaced by `submitToMSP`
 - ~~`pollBoardingStatus`~~ — replaced by `pollMSPStatus`
@@ -150,6 +154,7 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 | Connect bank (Plaid) | `createPlaidLinkToken` → `exchangePlaidToken` |
 | Load merchant data | `getMerchantData` |
 | Add/edit signer | `manageSigner` |
+| Add MID (UI) | `manageMerchantID` (action=add) → auto-calls `submitToMSP` |
 | Add/edit legal entity | `manageLegalEntity` |
 | View/fetch signing documents | `listDocuments` → `getDocuments` |
 
