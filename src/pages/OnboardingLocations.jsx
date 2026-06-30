@@ -5,6 +5,7 @@ import {
   Plus, ArrowRight, Loader2, Store, Trash2, CheckCircle2,
   MapPin, Building2, CreditCard, ChevronDown, ChevronRight, X,
   AlertTriangle, Check, ArrowLeft, Pencil, GripVertical, Cloud, Mail, Lock
+
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { isLocked as getMidLocked, isImported as getMidImported } from '@/utils/statusUtils';
@@ -417,7 +418,6 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
   const isComplete = !!(entity.ownershipType && entity.taxClassType && entity.establishmentYear);
   const [expanded, setExpanded] = useState(!isComplete);
 
-  // Three separate state values — no object, no stale-closure risk
   const [ownershipType, setOwnershipType] = useState(entity.ownershipType || '');
   const [taxClassType, setTaxClassType]   = useState(entity.taxClassType  || '');
   const [estYear, setEstYear]             = useState(entity.establishmentYear || '');
@@ -426,63 +426,36 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
   const [savedAt, setSavedAt]   = useState(null);
   const [saveError, setSaveError] = useState(null);
 
-  // Refs — always current, never stale
-  const entityIdRef    = useRef(entity.entityId);
-  const onUpdatedRef   = useRef(onUpdated);
-  const timerRef       = useRef(null);
-  onUpdatedRef.current = onUpdated; // keep in sync each render
-
   // Sync if parent reloads different data into this entity slot
   useEffect(() => {
-    entityIdRef.current = entity.entityId;
     if (entity.ownershipType)     setOwnershipType(entity.ownershipType);
     if (entity.taxClassType)      setTaxClassType(entity.taxClassType);
     if (entity.establishmentYear) setEstYear(entity.establishmentYear);
   }, [entity.entityId, entity.ownershipType, entity.taxClassType, entity.establishmentYear]);
 
-  // Core save — uses refs so it's never stale
-  const executeSave = async (ot, tc, ey) => {
-    if (!ot || !tc || !ey) return;
-    console.log('[EntityDetailsPanel] executeSave →', { corporateId, entityId: entityIdRef.current, ot, tc, ey });
+  const handleSave = async () => {
+    if (!ownershipType || !taxClassType || !estYear) return;
     setSaving(true);
     setSaveError(null);
     try {
       const res = await base44.functions.invoke('manageLegalEntity', {
-        action: 'edit', corporateId, entityId: entityIdRef.current,
-        ownershipType: ot, taxClassType: tc, establishmentYear: ey,
+        action: 'edit', corporateId, entityId: entity.entityId,
+        ownershipType, taxClassType, establishmentYear: estYear,
       });
-      console.log('[EntityDetailsPanel] manageLegalEntity response →', res.data);
       if (res.data?.error) throw new Error(res.data.error);
-
-      const { years, months } = deriveOwnership(ey);
+      const { years, months } = deriveOwnership(estYear);
       await base44.functions.invoke('updateMerchantProfile', {
-        corporateId, ownershipType: ot, taxClassType: tc, establishmentYear: ey,
+        corporateId, ownershipType, taxClassType, establishmentYear: estYear,
         currentOwnershipYears: years, currentOwnershipMonths: months,
       });
       setSavedAt(Date.now());
-      onUpdatedRef.current({ ...entity, ownershipType: ot, taxClassType: tc, establishmentYear: ey });
-      console.log('[EntityDetailsPanel] save complete ✓');
+      onUpdated({ ...entity, ownershipType, taxClassType, establishmentYear: estYear });
     } catch (err) {
       setSaveError(err?.message || 'Save failed');
-      console.error('[EntityDetailsPanel] save failed:', err);
     } finally {
       setSaving(false);
     }
   };
-
-  // Debounced trigger — values passed explicitly, no closures
-  const scheduleSave = (ot, tc, ey) => {
-    clearTimeout(timerRef.current);
-    if (ot && tc && ey) {
-      timerRef.current = setTimeout(() => executeSave(ot, tc, ey), 600);
-    }
-  };
-
-  const handleOwnership = (v) => { setOwnershipType(v); scheduleSave(v, taxClassType, estYear); };
-  const handleTaxClass  = (v) => { setTaxClassType(v);  scheduleSave(ownershipType, v, estYear); };
-  const handleYear      = (v) => { setEstYear(v);        scheduleSave(ownershipType, taxClassType, v); };
-
-  useEffect(() => () => clearTimeout(timerRef.current), []);
 
   const canSave = !!(ownershipType && taxClassType && estYear);
 
@@ -499,10 +472,8 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
             : 'Business details required →'}
         </span>
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {saving && <Loader2 className="w-3 h-3 text-amber-400 animate-spin" />}
-          {!saving && savedAt && !saveError && <Cloud className="w-3 h-3 text-green-400" />}
           {!isComplete && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">Required</span>}
-          {isComplete && !saving && <Check className="w-3 h-3 text-green-400" />}
+          {isComplete && <Check className="w-3 h-3 text-green-400" />}
           {expanded ? <ChevronDown className="w-3 h-3 text-gray-500" /> : <ChevronRight className="w-3 h-3 text-gray-500" />}
         </div>
       </button>
@@ -512,7 +483,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <label className={labelCls}>Business Entity Type *</label>
-              <select value={ownershipType} onChange={e => handleOwnership(e.target.value)}
+              <select value={ownershipType} onChange={e => setOwnershipType(e.target.value)}
                 className={inputCls} style={{ colorScheme: 'dark' }}>
                 <option value="">Select…</option>
                 {OWNERSHIP_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -520,7 +491,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
             </div>
             <div>
               <label className={labelCls}>IRS Tax Classification *</label>
-              <select value={taxClassType} onChange={e => handleTaxClass(e.target.value)}
+              <select value={taxClassType} onChange={e => setTaxClassType(e.target.value)}
                 className={inputCls} style={{ colorScheme: 'dark' }}>
                 <option value="">Select…</option>
                 {TAX_CLASS_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -531,7 +502,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
             <div>
               <label className={labelCls}>Year Established *</label>
               <input type="number" value={estYear}
-                onChange={e => handleYear(e.target.value)}
+                onChange={e => setEstYear(e.target.value)}
                 placeholder="e.g. 2018" min="1900" max={new Date().getFullYear()} className={inputCls} />
               {estYear && (() => {
                 const { years, months } = deriveOwnership(estYear);
@@ -539,8 +510,18 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
               })()}
             </div>
           </div>
-          {!canSave && <p className="text-[10px] text-gray-600">Fill all fields above to save</p>}
-          {saveError && <p className="text-[10px] text-red-400">⚠ {saveError}</p>}
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              onClick={handleSave}
+              disabled={!canSave || saving}
+              className="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold px-4 py-2 rounded-lg transition-all"
+            >
+              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : savedAt ? <Check className="w-3 h-3" /> : null}
+              {saving ? 'Saving…' : savedAt ? 'Saved' : 'Save Details'}
+            </button>
+            {!canSave && <p className="text-[10px] text-gray-600">Fill all fields to save</p>}
+            {saveError && <p className="text-[10px] text-red-400">⚠ {saveError}</p>}
+          </div>
         </div>
       )}
     </div>
