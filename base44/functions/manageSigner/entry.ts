@@ -187,12 +187,7 @@ Deno.serve(async (req) => {
 
     // --- LIST ---
     if (action === 'list') {
-      let signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
-      signers = signers.map((s: any) =>
-        s.isPrimarySigner && s.identityStatus === 'Verified'
-          ? { ...s, identityStatus: 'Pending Invitation' }
-          : s
-      );
+      const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
       return Response.json({ success: true, signers });
     }
 

@@ -278,30 +278,28 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
         </div>
       </div>
 
-      {/* Fix button */}
+      {/* Fix buttons — one per affected step */}
       {!checking && (hasDetails || details?.signaturesError) && (
         <div className="border-t border-red-500/20 px-5 py-3 flex flex-wrap items-center gap-2">
-          {/* Only show "Fix in X" when navigating away makes sense (not for verify = current page) */}
-          {onNavigate && targetStep !== 'verify' && (
-            <button
-              onClick={() => onNavigate(targetStep)}
-              className="flex items-center gap-2 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 px-4 py-2 rounded-lg transition-all"
-            >
-              <Wrench className="w-3.5 h-3.5" />
-              Fix in {rawByStep[targetStep]?.stepLabel || byStep[targetStep]?.stepLabel || 'Locations & MIDs'}
-            </button>
-          )}
-          {/* For verify-step issues, scroll to the form above */}
-          {onNavigate && targetStep === 'verify' && (
-            <button
-              onClick={() => onNavigate('verify')}
-              className="flex items-center gap-2 text-xs font-bold text-black bg-purple-500 hover:bg-purple-400 px-4 py-2 rounded-lg transition-all"
-            >
-              <Wrench className="w-3.5 h-3.5" />
-              Update Identity Info Above
-            </button>
-          )}
-          {/* Retry signing after fixing */}
+          {onNavigate && STEP_ORDER.filter(s => rawByStep[s] || byStep[s]).map(step => (
+            step === 'verify' ? (
+              <button key={step}
+                onClick={() => onNavigate('verify')}
+                className="flex items-center gap-2 text-xs font-bold text-black bg-purple-500 hover:bg-purple-400 px-4 py-2 rounded-lg transition-all"
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                Update Identity Info Above
+              </button>
+            ) : (
+              <button key={step}
+                onClick={() => onNavigate(step)}
+                className="flex items-center gap-2 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 px-4 py-2 rounded-lg transition-all"
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                Fix in {rawByStep[step]?.stepLabel || byStep[step]?.stepLabel}
+              </button>
+            )
+          ))}
           {onRetry && (
             <button
               onClick={onRetry}
