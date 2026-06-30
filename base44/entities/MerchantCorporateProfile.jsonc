@@ -62,7 +62,8 @@
         "Premium",
         "Custom",
         "TRADITIONAL",
-        "CASH_DISCOUNT"
+        "CASH_DISCOUNT",
+        "STANDARD"
       ]
     },
     "customMarkupPercentage": {
@@ -87,7 +88,7 @@
     },
     "ownershipType": {
       "type": "string",
-      "description": "Legal structure of the business entity \u2014 maps to Elavon businessInfo.ownershipType",
+      "description": "Legal structure of the business entity",
       "enum": [
         "LIMITED_COMPANY",
         "CORPORATION",
@@ -99,7 +100,7 @@
     },
     "taxClassType": {
       "type": "string",
-      "description": "IRS tax classification \u2014 maps to Elavon businessInfo.taxClassType. LLC_CORPORATION\u2192CORPORATION, LLC_PARTNERSHIP\u2192PARTNERSHIP, SOLE_PROP\u2192DISREGARDED_ENTITY at submission time.",
+      "description": "IRS tax classification",
       "enum": [
         "CORPORATION",
         "LLC_CORPORATION",
@@ -111,7 +112,6 @@
     },
     "industryClass": {
       "type": "string",
-      "description": "Business industry category \u2014 maps to Elavon businessInfo.industryClass",
       "enum": [
         "RETAIL",
         "RESTAURANT",
@@ -130,28 +130,22 @@
       ]
     },
     "mccCode": {
-      "type": "string",
-      "description": "Merchant Category Code \u2014 4-digit code, auto-populated from industryClass"
+      "type": "string"
     },
     "productDescription": {
-      "type": "string",
-      "description": "Short description of goods or services sold \u2014 maps to Elavon businessInfo.productDescription"
+      "type": "string"
     },
     "establishmentYear": {
-      "type": "string",
-      "description": "Year the business was founded e.g. 2015"
+      "type": "string"
     },
     "currentOwnershipYears": {
-      "type": "string",
-      "description": "Years under current ownership"
+      "type": "string"
     },
     "currentOwnershipMonths": {
-      "type": "string",
-      "description": "Additional months under current ownership (0-11)"
+      "type": "string"
     },
     "titleType": {
       "type": "string",
-      "description": "Owner's title \u2014 maps to Elavon principal.titleType. OWNER\u2192PROPRIETOR_OR_OWNER, PARTNER\u2192PARTNER_OR_PRINCIPAL, MANAGER\u2192GENERAL_MANAGER at submission time.",
       "enum": [
         "CHIEF_EXECUTIVE_OFFICER",
         "CHIEF_FINANCIAL_OFFICER",
@@ -171,39 +165,31 @@
       ]
     },
     "avgSaleAmount": {
-      "type": "string",
-      "description": "Average single transaction amount in USD e.g. 50"
+      "type": "string"
     },
     "monthlyCardSales": {
-      "type": "string",
-      "description": "Expected monthly card volume in USD e.g. 10000"
+      "type": "string"
     },
     "annualRevenue": {
-      "type": "string",
-      "description": "Annual revenue in USD e.g. 120000"
+      "type": "string"
     },
     "highestTicketAmount": {
-      "type": "string",
-      "description": "Highest expected single transaction in USD"
+      "type": "string"
     },
     "highestTicketFrequency": {
       "type": "number",
-      "description": "How many high-ticket transactions per year (default 24)",
       "default": 24
     },
     "cardPresentPct": {
       "type": "string",
-      "description": "Percentage of sales that are card-present (in-person). Must sum to 100 with internetPct + motoPct",
       "default": "100"
     },
     "internetPct": {
       "type": "string",
-      "description": "Percentage of sales that are online/ecommerce",
       "default": "0"
     },
     "motoPct": {
       "type": "string",
-      "description": "Percentage of sales that are phone/mail order (MOTO)",
       "default": "0"
     },
     "legalEntities": {
@@ -226,8 +212,7 @@
             "type": "string"
           },
           "mailingStreet": {
-            "type": "string",
-            "description": "Mailing address street \u2014 overrides location address for MSPWare legal_address when set"
+            "type": "string"
           },
           "mailingCity": {
             "type": "string"
@@ -237,8 +222,22 @@
             "description": "2-letter state code e.g. TN"
           },
           "mailingZip": {
+            "type": "string"
+          },
+          "corporateMailingAddress": {
+            "type": "string"
+          },
+          "ownershipType": {
             "type": "string",
-            "description": "5-digit ZIP code"
+            "description": "Legal structure for this entity"
+          },
+          "taxClassType": {
+            "type": "string",
+            "description": "IRS tax classification for this entity"
+          },
+          "establishmentYear": {
+            "type": "string",
+            "description": "Year this entity was established"
           }
         }
       }

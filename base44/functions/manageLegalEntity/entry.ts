@@ -40,17 +40,22 @@ Deno.serve(async (req) => {
       if (idx === -1) {
         return Response.json({ error: 'Entity not found' }, { status: 404 });
       }
-      if (legalBusinessName !== undefined) entities[idx].legalBusinessName = legalBusinessName.trim();
-      if (tradeNameDBA !== undefined) entities[idx].tradeNameDBA = tradeNameDBA.trim();
-      if (federalEIN !== undefined) entities[idx].federalEIN = federalEIN.trim();
-      if (corporateMailingAddress !== undefined) entities[idx].corporateMailingAddress = (corporateMailingAddress || '').trim();
-      if (mailingStreet !== undefined) entities[idx].mailingStreet = (mailingStreet || '').trim();
-      if (mailingCity !== undefined) entities[idx].mailingCity = (mailingCity || '').trim();
-      if (mailingState !== undefined) entities[idx].mailingState = (mailingState || '').trim();
-      if (mailingZip !== undefined) entities[idx].mailingZip = (mailingZip || '').trim();
-      if (ownershipType !== undefined) entities[idx].ownershipType = ownershipType;
-      if (taxClassType !== undefined) entities[idx].taxClassType = taxClassType;
-      if (establishmentYear !== undefined) entities[idx].establishmentYear = establishmentYear;
+      // Build a clean replacement object with all known fields to avoid partial-update data loss
+      const existing = entities[idx];
+      entities[idx] = {
+        entityId: existing.entityId,
+        legalBusinessName: legalBusinessName !== undefined ? legalBusinessName.trim() : (existing.legalBusinessName || ''),
+        tradeNameDBA: tradeNameDBA !== undefined ? tradeNameDBA.trim() : (existing.tradeNameDBA || ''),
+        federalEIN: federalEIN !== undefined ? federalEIN.trim() : (existing.federalEIN || ''),
+        corporateMailingAddress: corporateMailingAddress !== undefined ? (corporateMailingAddress || '').trim() : (existing.corporateMailingAddress || ''),
+        mailingStreet: mailingStreet !== undefined ? (mailingStreet || '').trim() : (existing.mailingStreet || ''),
+        mailingCity: mailingCity !== undefined ? (mailingCity || '').trim() : (existing.mailingCity || ''),
+        mailingState: mailingState !== undefined ? (mailingState || '').trim() : (existing.mailingState || ''),
+        mailingZip: mailingZip !== undefined ? (mailingZip || '').trim() : (existing.mailingZip || ''),
+        ownershipType: ownershipType !== undefined ? ownershipType : (existing.ownershipType || ''),
+        taxClassType: taxClassType !== undefined ? taxClassType : (existing.taxClassType || ''),
+        establishmentYear: establishmentYear !== undefined ? establishmentYear : (existing.establishmentYear || ''),
+      };
       await base44.asServiceRole.entities.MerchantCorporateProfile.update(updateId, { legalEntities: entities });
       return Response.json({ success: true, entities });
     }
