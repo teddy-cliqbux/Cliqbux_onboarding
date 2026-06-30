@@ -415,23 +415,16 @@ function deriveOwnership(year) {
 }
 
 function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
-  const isComplete = !!(entity.ownershipType && entity.taxClassType && entity.establishmentYear);
-  const [expanded, setExpanded] = useState(!isComplete);
-
   const [ownershipType, setOwnershipType] = useState(entity.ownershipType || '');
   const [taxClassType, setTaxClassType]   = useState(entity.taxClassType  || '');
   const [estYear, setEstYear]             = useState(entity.establishmentYear || '');
+  const [saved, setSaved] = useState(!!(entity.ownershipType && entity.taxClassType && entity.establishmentYear));
+  const [expanded, setExpanded] = useState(!saved);
 
   const [saving, setSaving]     = useState(false);
-  const [savedAt, setSavedAt]   = useState(null);
   const [saveError, setSaveError] = useState(null);
 
-  // Sync if parent reloads different data into this entity slot
-  useEffect(() => {
-    if (entity.ownershipType)     setOwnershipType(entity.ownershipType);
-    if (entity.taxClassType)      setTaxClassType(entity.taxClassType);
-    if (entity.establishmentYear) setEstYear(entity.establishmentYear);
-  }, [entity.entityId, entity.ownershipType, entity.taxClassType, entity.establishmentYear]);
+  const isComplete = saved || !!(ownershipType && taxClassType && estYear && entity.ownershipType);
 
   const handleSave = async () => {
     if (!ownershipType || !taxClassType || !estYear) return;
@@ -448,7 +441,8 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
         corporateId, ownershipType, taxClassType, establishmentYear: estYear,
         currentOwnershipYears: years, currentOwnershipMonths: months,
       });
-      setSavedAt(Date.now());
+      setSaved(true);
+      // Only notify parent once on explicit save — no feedback loop
       onUpdated({ ...entity, ownershipType, taxClassType, establishmentYear: estYear });
     } catch (err) {
       setSaveError(err?.message || 'Save failed');
@@ -458,6 +452,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
   };
 
   const canSave = !!(ownershipType && taxClassType && estYear);
+  const showComplete = saved && canSave;
 
   return (
     <div className="border-t border-white/5 px-4 py-2">
@@ -465,15 +460,15 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
         onClick={() => setExpanded(e => !e)}
         className="flex items-center gap-2 text-[11px] font-semibold w-full text-left py-1 transition-colors"
       >
-        <Building2 className={`w-3 h-3 flex-shrink-0 ${isComplete ? 'text-green-400' : 'text-amber-400'}`} />
-        <span className={`flex-1 ${isComplete ? 'text-gray-400' : 'text-amber-400'}`}>
-          {isComplete
+        <Building2 className={`w-3 h-3 flex-shrink-0 ${showComplete ? 'text-green-400' : 'text-amber-400'}`} />
+        <span className={`flex-1 ${showComplete ? 'text-gray-400' : 'text-amber-400'}`}>
+          {showComplete
             ? <><span className="text-gray-300">{OWNERSHIP_TYPES.find(o => o.value === ownershipType)?.label || ownershipType}</span><span className="text-gray-600 font-normal ml-1.5">· Est. {estYear}</span></>
             : 'Business details required →'}
         </span>
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {!isComplete && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">Required</span>}
-          {isComplete && <Check className="w-3 h-3 text-green-400" />}
+          {!showComplete && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">Required</span>}
+          {showComplete && <Check className="w-3 h-3 text-green-400" />}
           {expanded ? <ChevronDown className="w-3 h-3 text-gray-500" /> : <ChevronRight className="w-3 h-3 text-gray-500" />}
         </div>
       </button>
@@ -516,8 +511,8 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
               disabled={!canSave || saving}
               className="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold px-4 py-2 rounded-lg transition-all"
             >
-              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : savedAt ? <Check className="w-3 h-3" /> : null}
-              {saving ? 'Saving…' : savedAt ? 'Saved' : 'Save Details'}
+              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : saved ? <Check className="w-3 h-3" /> : null}
+              {saving ? 'Saving…' : saved ? 'Saved' : 'Save Details'}
             </button>
             {!canSave && <p className="text-[10px] text-gray-600">Fill all fields to save</p>}
             {saveError && <p className="text-[10px] text-red-400">⚠ {saveError}</p>}
@@ -550,27 +545,31 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
     pendingSaveRef.current = true;
   });
 
+  const entityIdRef = useRef(entity.entityId);
+  const onUpdatedRef = useRef(onUpdated);
+  entityIdRef.current = entity.entityId;
+  onUpdatedRef.current = onUpdated;
+
   const handleSave = useCallback(async (addr) => {
     setSaving(true);
     try {
       await base44.functions.invoke('manageLegalEntity', {
-        action: 'edit', corporateId, entityId: entity.entityId,
+        action: 'edit', corporateId, entityId: entityIdRef.current,
         mailingStreet: addr.street, mailingCity: addr.city,
         mailingState: addr.state, mailingZip: addr.zip,
       });
       setSavedAt(Date.now());
-      onUpdated({ ...entity, mailingStreet: addr.street, mailingCity: addr.city, mailingState: addr.state, mailingZip: addr.zip });
     } catch (_) {}
     finally { setSaving(false); }
-  }, [corporateId, entity, onUpdated]);
+  }, [corporateId]);
 
-  // Auto-save when address is selected from autocomplete
+  // Auto-save when address is selected from autocomplete — only fires once per selection
   useEffect(() => {
-    if (parsedAddress && pendingSaveRef.current && !savedAt) {
+    if (parsedAddress && pendingSaveRef.current) {
       pendingSaveRef.current = false;
       handleSave(parsedAddress);
     }
-  }, [parsedAddress, savedAt, handleSave]);
+  }, [parsedAddress, handleSave]);
 
   const handleClear = async () => {
     setAddressDisplay(''); setParsedAddress(null); setSavedAt(null);
