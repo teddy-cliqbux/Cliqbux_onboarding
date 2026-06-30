@@ -42,6 +42,14 @@ Deno.serve(async (req) => {
         applicationStepStatus: 'In Review',
       };
       const concept = await base44.asServiceRole.entities.MerchantProcessingConcept.create(conceptData);
+
+      // Auto-create MSPWare draft immediately so signApplication doesn't have to do it lazily
+      try {
+        await base44.functions.invoke('submitToMSP', { corporateId, conceptIds: [concept.id] });
+      } catch (e) {
+        console.warn('[manageMerchantID] submitToMSP draft creation failed (non-fatal):', e.message);
+      }
+
       return Response.json({ merchantID: toMID(concept) });
     }
 
