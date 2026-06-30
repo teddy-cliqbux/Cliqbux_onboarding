@@ -388,11 +388,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── 2. Filter to signable concepts ────────────────────────────────────────
+    // ── 2. Filter to signable concepts, verifying MSP drafts still exist ─────
     const DONE_STATUSES = ['Active', 'Active (Existing)', 'Pending MID'];
-    let signable = (allConcepts || []).filter((c: any) =>
-      c.mspApplicationNo && !DONE_STATUSES.includes(c.applicationStepStatus)
+    const candidateConcepts = (allConcepts || []).filter((c: any) =>
+      !DONE_STATUSES.includes(c.applicationStepStatus)
     );
+
+    // For any concept with a stored mspApplicationNo, verify it still exists in MSP.
+    // Deleted drafts return { success: false } — clear the ID so we auto-recreate.
+    for (const concept of candidateConcepts) {
+      if (!concept.mspApplicationNo) continue;
+      try {
+        const checkRes = await fetch(`${mspBase}/applications/${concept.mspApplicationNo}`, { headers: mspHeaders });
+        const checkData = await checkRes.json();
+        if (!checkData?.success || checkData?.message?.toLowerCase().includes('not found')) {
+          console.warn(`[signApplication] App ${concept.mspApplicationNo} not found in MSP — clearing ID for "${concept.dbaName}"`);
+          concept.mspApplicationNo = null;
+          await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { mspApplicationNo: null });
+        }
+      } catch (_) {
+        // Non-fatal — if check fails leave the ID in place
+      }
+    }
+
+    let signable = candidateConcepts.filter((c: any) => c.mspApplicationNo);
 
     // ── 3. Auto-create MSPWare draft applications if none exist yet ───────────
     // This handles the case where the user navigated directly to the signing step

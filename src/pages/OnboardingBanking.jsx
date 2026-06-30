@@ -268,10 +268,8 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
       const res = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
       const data = res.data;
 
-      // Entities: use profile.legalEntities from the prop (already loaded), supplemented by getMerchantData
-      const loadedEntities = (profile.legalEntities || []).length > 0
-        ? profile.legalEntities
-        : (data?.profile?.legalEntities || []);
+      // Always use entities from the fresh getMerchantData call to avoid stale prop data
+      const loadedEntities = (data?.profile?.legalEntities || profile.legalEntities || []);
 
       const rawLocations = data?.locations || [];
       const loadedLocations = rawLocations.map(l => ({
@@ -372,9 +370,9 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
         </div>
       </div>
 
-      {/* Location rows, grouped by entity */}
+      {/* Location rows, grouped by entity (or flat if no entities loaded) */}
       <div className="px-8 py-6 space-y-6">
-        {entities.map(entity => {
+        {entities.length > 0 ? entities.map(entity => {
           const entityLocs = grouped[entity.entityId] || [];
           if (entityLocs.length === 0) return null;
           return (
@@ -406,7 +404,26 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
               </div>
             </div>
           );
-        })}
+        }) : (
+          /* Fallback: render all locations flat when entities failed to load */
+          <div className="space-y-2">
+            {locations.map(loc => (
+              <LocationBankingRow
+                key={loc.id}
+                location={loc}
+                corporateId={profile.corporateId}
+                merchantIDs={merchantIDs}
+                bankDetails={bankDetailsByLoc[loc.id] || null}
+                reuseDetails={null}
+                plaidAccounts={plaidAccounts}
+                onAccountsConnected={handleAccountsConnected}
+                onBankSaved={handleBankSaved}
+                isExpanded={expandedLocId === loc.id}
+                onToggleExpand={() => setExpandedLocId(prev => prev === loc.id ? null : loc.id)}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Unassigned */}
         {(grouped['unassigned'] || []).length > 0 && (
