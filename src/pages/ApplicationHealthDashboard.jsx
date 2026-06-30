@@ -566,7 +566,7 @@ export default function ApplicationHealthDashboard() {
     <div className="min-h-screen bg-[#111318] flex flex-col">
       {/* Top nav */}
       <div className="border-b border-white/8 bg-[#161b23] px-6 py-4 flex items-center gap-4">
-        <Link to="/admin/staged" className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm">
+        <Link to="/admin/applications" className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-sm">
           <ArrowLeft className="w-4 h-4" /> Pipeline
         </Link>
         <div className="w-px h-5 bg-white/10" />

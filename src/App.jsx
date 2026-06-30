@@ -9,7 +9,7 @@ import OnboardingPortal from './pages/OnboardingPortal';
 import VerifyIdentity from './pages/VerifyIdentity';
 import PostSubmissionDashboard from './pages/PostSubmissionDashboard';
 import SystemAdminHidden from './pages/SystemAdminHidden';
-import StagedApplicationManager from './pages/StagedApplicationManager';
+import ApplicationManager from './pages/ApplicationManager';
 import ApplicationHealthDashboard from './pages/ApplicationHealthDashboard';
 
 function App() {
@@ -23,7 +23,8 @@ function App() {
             <Route path="/verify" element={<VerifyIdentity />} />
             <Route path="/onboarding/dashboard" element={<PostSubmissionDashboard />} />
             <Route path="/admin/architecture" element={<SystemAdminHidden />} />
-            <Route path="/admin/staged" element={<StagedApplicationManager />} />
+            <Route path="/admin/applications" element={<ApplicationManager />} />
+            <Route path="/admin/staged" element={<ApplicationManager />} />
             <Route path="/admin/health" element={<ApplicationHealthDashboard />} />
             <Route path="*" element={<PageNotFound />} />
           </Routes>
