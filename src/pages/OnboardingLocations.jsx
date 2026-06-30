@@ -992,13 +992,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         applicationStepStatus: l.applicationStepStatus || 'In Review', elavonMID: l.elavonMID,
       }));
 
-      // Backfill entity-level business fields from profile only if the entity itself has none
-      const enrichedEntities = loadedEntities.map(e => ({
-        ...e,
-        ownershipType: e.ownershipType || profile.ownershipType || '',
-        taxClassType: e.taxClassType || profile.taxClassType || '',
-        establishmentYear: e.establishmentYear || profile.establishmentYear || '',
-      }));
+      const enrichedEntities = loadedEntities;
 
       // If no entities exist yet, auto-seed one from the corporate profile so locations have somewhere to live
       let finalEntities = enrichedEntities;
