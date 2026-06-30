@@ -10,6 +10,7 @@ import VerifyIdentity from './pages/VerifyIdentity';
 import PostSubmissionDashboard from './pages/PostSubmissionDashboard';
 import SystemAdminHidden from './pages/SystemAdminHidden';
 import StagedApplicationManager from './pages/StagedApplicationManager';
+import ApplicationHealthDashboard from './pages/ApplicationHealthDashboard';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
             <Route path="/onboarding/dashboard" element={<PostSubmissionDashboard />} />
             <Route path="/admin/architecture" element={<SystemAdminHidden />} />
             <Route path="/admin/staged" element={<StagedApplicationManager />} />
+            <Route path="/admin/health" element={<ApplicationHealthDashboard />} />
             <Route path="*" element={<PageNotFound />} />
           </Routes>
         </Router>

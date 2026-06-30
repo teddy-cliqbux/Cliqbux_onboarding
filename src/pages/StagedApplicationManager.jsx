@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
+import { Link } from 'react-router-dom';
 import {
   Plus, Loader2, Send, Trash2, Check, X, Copy, ExternalLink,
   Clock, Store, Users, FileText, Edit2, Search,
@@ -719,7 +720,13 @@ export default function StagedApplicationManager() {
         <div className={`flex flex-col transition-all duration-300 ${showEditor ? 'w-[440px] flex-shrink-0' : 'flex-1'} border-r border-white/8`}>
           <div className="px-6 py-5 border-b border-white/8 flex-shrink-0">
             <p className="text-[10px] font-mono text-amber-500 uppercase tracking-widest mb-1">Admin Tool</p>
-            <h1 className="text-xl font-bold text-white">Application Pipeline</h1>
+            <div className="flex items-center justify-between">
+              <h1 className="text-xl font-bold text-white">Application Pipeline</h1>
+              <Link to="/admin/health"
+                className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 px-2.5 py-1.5 rounded-lg transition-all">
+                <BarChart2 className="w-3 h-3" /> Health Dashboard
+              </Link>
+            </div>
           </div>
 
           {/* Toolbar */}
