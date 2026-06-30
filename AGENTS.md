@@ -52,6 +52,10 @@ Published function base URL: `https://cliqbux-onboard-prime.base44.app/functions
 | `mcc` | Elavon MCC codes e.g. `5812`, `5411A`, `5999` |
 | `pricing_category` | 1=Retail, 2=Lodging, 4=Supermarket, 5=ARU, 6=MOTO, 7=Restaurant, 13=Omni |
 | `auth_pricing_program` | `49999` (Cliqbux account constant) |
+| `is_firearm_verified` | **OMIT from PUT /form payload entirely.** MSPWare template #6 and #154 already have this field set to the correct internal value. Sending ANY value in the PUT (including `"yes"`, `false`, `"N"`, `"YES"`, etc.) overrides the template's value with something invalid, causing the form to DROP below 100% completion and blocking signing. The correct flow: `signApplication` GETs the form first — when the template default is in place the form is at 100%, the PUT is skipped entirely, and signing URLs are generated normally via the API with no manual MSP dashboard action required. The `"yes"` captured from the MSPWare network (2026-06-29) came from their internal `TestData.cfc` UI endpoint, which has different validation than the API's PUT /applications/{no}/form. |
+| `debit_auth_method` | `"PNL"` (pinless) — required when `has_pin_debit=true` (template default). Confirmed valid 2026-06-29. |
+| `debit_pricing_method` | `"ICPLS"` — confirmed valid 2026-06-29. |
+| `has_pin_debit` | Send `false` in payload to attempt suppressing conditional debit fields. Template may override. |
 
 ---
 
@@ -108,15 +112,22 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 ### Active boarding functions
 | Function | Purpose |
 |---|---|
-| `submitToMSP` | Creates MSPWare draft + fills form + optionally submits |
-| `signApplication` | Packages a filled MSPWare application for e-signing; returns iframe-embeddable signing URL per principal. Call after submitToMSP, before final Elavon submit. |
+| `submitToMSP` | Creates MSPWare draft + fills form + optionally submits. Idempotent: verifies existing `mspApplicationNo` via GET before reusing (only clears on explicit HTTP 404). |
+| `signApplication` | Re-fills form + creates BoldSign signing package per principal. Does GET first; skips re-fill if already at 100%. Only clears stale `mspApplicationNo` on explicit 404. |
+| `refillMSPForms` | Standalone re-fill of existing drafts by corporateId. Useful for patching stuck forms. |
 | `pollMSPStatus` | Polls MSPWare status for all Pending MID records (both Locations and MerchantIDs) |
 | `importExistingMIDs` | TIN-matches MSPWare approved apps to a corporateId; creates MerchantID records |
 | `importMSPPortfolio` | Bulk-imports entire MSPWare portfolio — creates Profile + Locations + MerchantIDs for all approved merchants. Groups by TIN. Admin-only, dryRun supported. |
 | `migrateLocationsToMerchantIDs` | One-time migration: lifts MerchantLocations boarding data into MerchantID records |
+| `manageMSPTemplate` | Reads/fills MSPWare templates. Actions: `read`, `fill_icpls`, `fill_cd`, `create_cd`. Template #6 = ICPLS, Template #154 = Cash Discount (pricing_method: `"CLEAR"`). |
+| `uploadSignerIDsToMSP` | Uploads signer ID document files to all pending MSPWare applications for a corporateId. Call after signers upload their IDs via the portal. |
+| `getMSPFormStatus` | Merchant-facing form status check (no admin required). Returns completion %, errors, and raw form fields for a given `mspApplicationNo`. |
 
 ### Other active functions
-`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `verifyEIN`, `verifySignerToken`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `handleHubspotWebhook`, `debugEnv`
+`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `handleHubspotWebhook`, `syncFromHubspot`, `pushStatusToHubspot`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`
+
+### Debug/admin-only functions (do not call from merchant portal)
+`checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`
 
 
 ### MID creation → auto MSPWare draft
@@ -220,8 +231,190 @@ MSPWare rolls back the entire form and returns `percent_complete: -1` when **any
 - Do not add new boarding fields to `MerchantLocations` — use `MerchantID` entity (now `MerchantProcessingConcept`)
 - Do not hardcode `86764` as salesperson ID — that is the old Elavon rep code; MSPWare ID is `76764`
 - Do not use `appkey`/`appid` as MSPWare header names — use `X-API-KEY` and `X-App-ID`
+<<<<<<< HEAD
 - Do not clear `mspApplicationNo` on non-404 errors (network failure, rate limit, auth error) — only clear on explicit HTTP 404
 - Do not add `is_firearm_verified: false` (boolean) or `"N"` — must be the string `"no"`
+=======
+- Do not send `is_firearm_verified` in the API payload at all — every value is rejected by MSPWare PUT /form. The "yes" captured from the MSPWare UI applies only to their internal TestData.cfc endpoint. Omit the field entirely.
+- Do not add `catch (_) {}` silent error swallowing — always log errors and surface them to the user
+- Do not call `manageLegalEntity` from `OnboardingBanking` on mount — use `getMerchantData` instead (3-in-1 safe call)
+- Do not call `syncFromHubspot` in `fetchMerchantData` — it is already called in `initMerchantData`
+- Do not call `getMerchantData` twice on portal load — `initMerchantData` now handles the full init flow
+- Do not call `manageLegalEntity` with `action: 'create'` — the action is `'add'`
+- Do not clear `mspApplicationNo` on any non-success from MSPWare GET — only clear on explicit HTTP 404. Other errors (rate limit, network) must not cause duplicate drafts.
+- Do not send `is_firearm_verified: false` (boolean) — causes `canSave: false`, blocking the entire form fill
+- Do not gate concept draft creation on bank details being present — create the draft even if banking hasn't been linked yet
+- Do not send `manageLegalEntity` from an authenticated-only path for portal (magic-link) users — they have no Base44 session. The function must use `asServiceRole`.
+
+---
+
+## Onboarding Portal Flow (current as of 2026-06-29)
+
+The merchant onboarding portal uses a 4-step flow:
+
+```
+Step 1: Agreement (Step1Agreement — pricing/quote signing)
+Step 2: Locations & Org Chart (OnboardingLocations)
+Step 3: Banking (OnboardingBanking — new dedicated page)
+Step 4: Identity Verification & Signing (OnboardingVerification)
+```
+
+The `STEP_SUMMARY` (review step) was removed — it was redundant.
+
+**OnboardingBanking** (`src/pages/OnboardingBanking.jsx`) is a dedicated banking step that:
+- Receives `initialLocations` from `OnboardingPortal` state (no blocking API call)
+- Calls `getMerchantData` as a background refresh for bank details
+- Uses `withToken()` helper on all backend calls (portal security)
+
+**OnboardingLocations** (`src/pages/OnboardingLocations.jsx`) is a 3-level org chart builder:
+- Legal Entity → Locations → MIDs (MerchantProcessingConcepts)
+- All draggable/reorganizable
+- Entity details (ownershipType, taxClassType, establishmentYear) are per-entity inline panels
+- BusinessDetailsPanel was removed from the top-level — now inline per entity
+
+**Progress tracker** (`src/components/onboarding/ProgressTracker.jsx`): 4-step clickable nav.
+
+---
+
+## New Entities (2026-06-29)
+
+### StagedApplication
+Admin-created or auto-tracked application staging records. Supports:
+- Admin staging: pre-fill fields, select which locations/MIDs/signers appear
+- Auto-tracking: `trackProgress` action upserts a record when merchant opens the portal
+- Admin dashboard at `/admin/staged` (StagedApplicationManager.jsx)
+- Labels: `__auto_track__` for auto-created tracking records; custom label for admin-created stages
+
+### MerchantCorporateProfile.legalEntities schema (updated)
+The `legalEntities` array items now include `ownershipType`, `taxClassType`, `establishmentYear` as schema fields. Without these in the schema, Base44 strips them on every save. The entity JSON file must declare them.
+
+---
+
+## Security: Portal Token (2026-06-29)
+
+Portal users authenticate via magic-link tokens, not Base44 sessions. A `withToken()` helper in `src/lib/portalToken.js` injects the `portalToken` from sessionStorage into every backend call. Backend functions verify the token against `corporateId` using `verifyPortalAccess()` before returning data.
+
+Key secured functions: `getMerchantData`, `listLocations`, `manageLegalEntity`, `manageMerchantID`, `addSelfServeLocation`.
+
+Admin calls (no token in payload) pass through unchanged — they're protected by Base44 workspace membership.
+
+---
+
+## Cash Discount Template
+
+Template #154 = Cash Discount template (created 2026-06-29).
+- `pricing_method`: `"CLEAR"` (NOT `"CASH_DISCOUNT"` — that value is rejected)
+- CD_TEMPLATE_NO = 154; ICPLS_TEMPLATE_NO = 6
+- Both `submitToMSP` and `signApplication` auto-select the correct template based on `pricingTier`
+
+---
+
+## MSPWare Form Fill: Known Valid / Invalid Values (2026-06-29)
+
+| Field | Correct value | Notes |
+|---|---|---|
+| `is_firearm_verified` | **OMIT** | Every API value rejected. Must be checked in MSPWare dashboard UI. Form stays at ~99% but `canSave: true`. |
+| `debit_auth_method` | `"PNL"` | Pinless. Required when `has_pin_debit=true` (template default). |
+| `debit_pricing_method` | `"ICPLS"` | Accepted without error. |
+| `has_pin_debit` | `false` | Sent to try to suppress debit required fields. Template may still assert true. |
+| `delayed_delivery` | `"1"` minimum | Must be ≥ 1; MSPWare rejects `"0"`. |
+| `cp_percent` + `cnp_percent` | Must sum to 100 | When `cardPresentPct` is null, default to 100/0 not 0/100. |
+| `avg_sale_amount`, `highest_ticket` | Must be < `monthly_card_sales` | Use Math.min(x, monthly − 1). |
+| `deposit_account_type` | `"CK"` (checking) or `"SA"` (savings) | Map from `bankDetails.accountType`. |
+| `owner_state_usa` | Valid US state only | Strip US territories (GU, PR, VI, AS, MP) — send business location's state as fallback. |
+| `owner_title` | `"CEO"`, `"OP"`, `"VP"`, etc. | Map from full enum (e.g., `CHIEF_EXECUTIVE_OFFICER` → `"CEO"`). |
+
+**Sequential test data warning:** MSPWare rejects any TIN or SSN that is fully sequential (e.g., `123456789`). These cause silent form rejection — all fields appear to save but nothing sticks. Real merchant data will work.
+
+**Duplicate MSP application prevention:** `signApplication` previously cleared `mspApplicationNo` on any non-success API response, causing duplicate drafts. Now only clears on explicit HTTP 404. Network errors, rate limits, and other transient failures must NOT clear the stored application number.
+
+---
+
+## manageMerchantID Function
+
+`manageMerchantID` is the frontend-facing function for MerchantProcessingConcept records. It replaces direct calls to `manageConcept` from the portal. Actions: `list`, `add`, `update`, `delete`. Field mapping: `merchantIDs` / `merchantIDId` / `merchantName` on the frontend map to `concepts` / `conceptId` / `conceptName` in the underlying entity.
+
+Status locking: `manageMerchantID` blocks `update` and `delete` when `applicationStepStatus` is in `LOCKED_STATUSES` (`['Pending MID', 'Active', 'Active (Existing)']`) with HTTP 403.
+
+---
+
+## Signer Verification Persistence
+
+`manageSigner` with `action: 'inlineVerify'` saves the signer's SSN, DOB, home address, and ID document URL. The `verifySignerToken` backend's `get` action now returns all previously saved fields so the form pre-populates on revisit. Once `identityStatus === 'Verified'`, `InlineVerifyForm` returns null (hidden) unless the signer explicitly clicks to re-verify.
+
+---
+
+## Email Sending (Resend)
+
+All transactional emails use Resend via `RESEND_API_KEY` env var. From address: `onboarding@onboarding.cliqbuxpos.com` (verified domain in Resend). Functions using Resend: `manageSigner` (KYC invite), `sendResumeLink` (portal resume), `manageStagedApplication` (staged app invite).
+
+Do NOT use Base44's built-in `SendEmail` — it only works for registered workspace users, not external merchants.
+
+---
+
+## Rate Limiting — Critical Warning
+
+Base44 enforces a per-account API rate limit on `asServiceRole` entity calls. This limit applies across ALL functions in the account.
+
+**Root cause of past outages (2026-06-29):** The old `EntityDetailsPanel` in `OnboardingLocations.jsx` had a stale closure bug that caused it to call `manageLegalEntity` hundreds of times per minute (runaway autosave timer). This saturated the rate limit, causing ALL `asServiceRole` calls — including `getMerchantData` in the merchant portal — to fail with `{"error":"Rate limit exceeded"}`.
+
+**Signs you've hit the rate limit:**
+- Functions return HTTP 500 with body `{"error":"Rate limit exceeded"}`
+- `getMerchantData` fails → merchant portal shows "Connection Error"
+- Both `manageLegalEntity` AND `updateMerchantProfile` fail simultaneously
+
+**Fix:** Stop whatever is spamming calls (usually a runaway frontend timer). The limit clears within a few minutes once the spam stops.
+
+**Prevention:** Never schedule repeated API calls inside a React `setForm` updater, `useEffect` without proper deps, or `setInterval`. Always debounce autosave with `setTimeout` + `clearTimeout` via `useRef`.
+
+---
+
+## Frontend Patterns — Known Fixes
+
+### EntityDetailsPanel (OnboardingLocations.jsx)
+The `ownershipType`, `taxClassType`, and `establishmentYear` fields use a ref-based autosave pattern to avoid stale closures. Key points:
+- Uses `useRef` for `entityIdRef`, `onUpdatedRef`, `timerRef` — NOT `useCallback` with `onUpdated` in deps
+- `scheduleSave` clears and resets a 600ms debounce timer
+- `executeSave` calls `manageLegalEntity` then `updateMerchantProfile` in sequence
+- Do NOT put `setTimeout` inside a `setForm` updater (React anti-pattern — causes runaway calls)
+
+### manageLegalEntity — legalEntities field
+Base44 sometimes returns `profile.legalEntities` as a JSON string instead of a parsed array. The function includes defensive parsing:
+```typescript
+let rawEntities = profile.legalEntities ?? [];
+if (typeof rawEntities === 'string') {
+  try { rawEntities = JSON.parse(rawEntities); } catch { rawEntities = []; }
+}
+```
+Do NOT remove this guard.
+
+### OnboardingBanking data loading
+The banking step uses `initialLocations` passed as a prop from `OnboardingPortal` (already loaded) as its primary data source. It calls `getMerchantData` only as a background refresh for bank details. This avoids a blocking dependency on `getMerchantData` succeeding before the step renders.
+
+### OnboardingPortal init flow
+`initMerchantData` calls `getMerchantData` exactly once (or twice if a HubSpot sync runs and we need fresh data). `fetchMerchantData` is a lightweight re-fetch used only after status changes. Do not add `syncFromHubspot` back to `fetchMerchantData`.
+
+### manageLegalEntity — auth fix
+`manageLegalEntity` previously called `base44.auth.me()` and returned 401 for portal (magic-link) users. The auth check was removed — the function uses `asServiceRole` throughout. Removing this was the root cause of legalEntities fields not persisting.
+
+### legalEntities schema — must declare ownershipType etc.
+`MerchantCorporateProfile.legalEntities` array items must have `ownershipType`, `taxClassType`, `establishmentYear` declared in the entity schema (`base44/entities/Merchant Corporate Profile.jsonc`). Without schema declarations, Base44's platform strips those keys on every save.
+
+### EntityDetailsPanel autosave — use explicit Save button
+Previous implementations used debounced autosave (800ms) for entity fields, which caused API call storms and rate limiting. The current implementation uses an explicit "Save Details" button. Do NOT revert to autosave for entity-level dropdowns.
+
+### removeSelfServeLocation — must use asServiceRole
+`removeSelfServeLocation` previously required `base44.auth.me()`. Fixed to use service role. Portal users can now delete their own locations.
+
+### addSelfServeLocation — entity creation is server-side
+Entity creation for new merchants happens inside `addSelfServeLocation` using service role. The frontend must NOT call `manageLegalEntity` to create entities (portal users have no auth session). Pass `newEntityName` and `newEntityEIN` to `addSelfServeLocation` instead.
+
+### withToken() / portalToken pattern
+All backend calls from the merchant portal should use `withToken()` from `src/lib/portalToken.js`. This injects the magic-link session token so backend functions can verify the caller is authorized for the requested `corporateId`. Admin-only calls (no token in payload) bypass the check.
+
+### StagedApplication auto-tracking
+`OnboardingPortal` calls `trackProgress` (action on `manageStagedApplication`) fire-and-forget on step transitions. Do NOT await it or let it block the UI. The label `__auto_track__` identifies these records. Do NOT merge `prefilledData` from auto-track records onto the profile — it contains tracking metadata (currentStep, lastSeenAt) not field data.
+>>>>>>> 874ea8a (fix: is_firearm_verified must be omitted — template sets it, any API value overrides and breaks completion)
 
 ---
 
