@@ -64,6 +64,8 @@ Deno.serve(async (req) => {
       if (!stageId) return Response.json({ error: 'stageId required' }, { status: 400 });
       const stage = await base44.asServiceRole.entities.StagedApplication.get(stageId);
       if (!stage) return Response.json({ error: 'Stage not found' }, { status: 404 });
+      // Never send __auto_track__ records as invite links — they are internal progress trackers
+      if (stage.label === '__auto_track__') return Response.json({ error: 'Cannot send an auto-tracking record as an invite link. Create a dedicated staged application for this merchant.' }, { status: 400 });
 
       const toEmail = data?.email || stage.sentToEmail;
       if (!toEmail) return Response.json({ error: 'email required' }, { status: 400 });

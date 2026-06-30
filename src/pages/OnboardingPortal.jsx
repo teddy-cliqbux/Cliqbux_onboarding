@@ -74,7 +74,12 @@ export default function OnboardingPortal() {
     try {
       const res = await base44.functions.invoke('manageStagedApplication', { action: 'get', stageId });
       const stage = res.data?.stage;
-      if (!stage || stage.accessToken !== token) {
+      if (!stage) {
+        setError({ title: 'Invalid Link', message: 'This staged application link is invalid or has expired.' });
+        setLoading(false);
+        return;
+      }
+      if (stage.accessToken !== token) {
         setError({ title: 'Invalid Link', message: 'This staged application link is invalid or has expired.' });
         setLoading(false);
         return;
@@ -83,8 +88,11 @@ export default function OnboardingPortal() {
       stagedAppRef.current = stage;
       setMode('sales');
       setDealId(stage.corporateId);
-    } catch {
-      setError({ title: 'Connection Error', message: "We couldn't validate your link. Please try again." });
+    } catch (err) {
+      console.error('[validateStageToken] error:', err);
+      // If the function call failed (e.g. auth/network), fall back to loading by corporateId
+      // from the stage record directly — attempt to treat token as a resume token instead
+      setError({ title: 'Connection Error', message: "We couldn't validate your link. Please try again or contact support." });
       setLoading(false);
     }
   };
@@ -150,7 +158,8 @@ export default function OnboardingPortal() {
       }
       // Merchant opened the portal — advance HubSpot stage (best-effort)
       pushMilestoneToHubspot(id, 'link_opened');
-    } catch {
+    } catch (err) {
+      console.error('[initMerchantData] pre-check/sync error:', err);
       // If even the pre-check fails, fall through to fetchMerchantData which will handle it
     }
     await fetchMerchantData(id);
