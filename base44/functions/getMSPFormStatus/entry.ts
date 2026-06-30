@@ -40,13 +40,30 @@ Deno.serve(async (req) => {
     const formRes = await fetch(`${mspBase}/applications/${applicationNo}/form`, { headers });
     const formData = await formRes.json();
 
+    // Also try to create signatures package to get the blocking error
+    let signaturesError = null;
+    const sigRes = await fetch(`${mspBase}/applications/${applicationNo}/signatures`, {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sendEmail: false }),
+    });
+    if (!sigRes.ok || !(await sigRes.clone().json().then((d: any) => d.success).catch(() => false))) {
+      const sigData = await sigRes.json().catch(() => ({})) as any;
+      signaturesError = sigData?.error || sigData?.message || `HTTP ${sigRes.status}`;
+    }
+
     return Response.json({
       success: formRes.ok,
       percent_complete: formData.percent_complete ?? null,
       canSave: formData.canSave ?? false,
+      canSubmit: formData.canSubmit ?? null,
       completion_errors: formData.completion_errors || [],
       data_errors:       formData.data_errors       || [],
       rule_violations:   formData.rule_violations   || [],
+      errors:            formData.errors            || [],
+      signaturesError,
+      // Full raw form for debugging — includes all fields currently on the application
+      rawForm: formData.form || formData,
     });
   } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });

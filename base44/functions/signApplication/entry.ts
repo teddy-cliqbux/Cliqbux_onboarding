@@ -549,11 +549,17 @@ Deno.serve(async (req) => {
         // percent_complete may be a string from MSPWare — parse it
         const rawPct = getData?.percent_complete ?? getData?.validation?.percent_complete ?? null;
         refillPercentComplete = rawPct !== null ? Math.round(parseFloat(String(rawPct))) : null;
+        // Log full form response to surface any hidden completion/rule errors
+        console.log(`[signApplication] Full GET form response for ${mspApplicationNo}:`, JSON.stringify(getData));
+
         const getErrors = [
-          ...(getData?.completion_errors || getData?.validation?.errors?.completion || []),
-          ...(getData?.data_errors       || getData?.validation?.errors?.data       || []),
-          ...(getData?.rule_violations   || getData?.validation?.errors?.rules      || []),
-        ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
+              ...(getData?.completion_errors || getData?.validation?.errors?.completion || []),
+              ...(getData?.data_errors       || getData?.validation?.errors?.data       || []),
+              ...(getData?.rule_violations   || getData?.validation?.errors?.rules      || []),
+              // Also look for errors nested in form.errors or top-level errors array
+              ...(getData?.errors            || []),
+              ...(getData?.form?.errors      || []),
+            ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
         console.log(`[signApplication] GET form status for ${mspApplicationNo}: ${refillPercentComplete ?? '?'}% complete, ${getErrors.length} errors`);
 
         // Only re-fill if the form is not already at 100%
@@ -571,10 +577,14 @@ Deno.serve(async (req) => {
             const getData2 = await getRes2.json();
             const rawPct2 = getData2?.percent_complete ?? getData2?.validation?.percent_complete ?? null;
             refillPercentComplete = rawPct2 !== null ? Math.round(parseFloat(String(rawPct2))) : null;
+        console.log(`[signApplication] Full GET form response AFTER refill for ${mspApplicationNo}:`, JSON.stringify(getData2));
+
             refillErrors = [
               ...(getData2?.completion_errors || getData2?.validation?.errors?.completion || []),
               ...(getData2?.data_errors       || getData2?.validation?.errors?.data       || []),
               ...(getData2?.rule_violations   || getData2?.validation?.errors?.rules      || []),
+              ...(getData2?.errors            || []),
+              ...(getData2?.form?.errors      || []),
             ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
             console.log(`[signApplication] After refill GET: ${refillPercentComplete ?? '?'}% complete, ${refillErrors.length} errors`);
             if (refillErrors.length) console.log(`[signApplication] Errors:`, JSON.stringify(refillErrors));

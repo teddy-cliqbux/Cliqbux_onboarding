@@ -1,54 +1,97 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, ArrowLeft, Loader2, ChevronDown, ChevronRight, Wrench } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Loader2, ChevronDown, ChevronRight, Wrench, ShieldAlert } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 // Maps MSPWare field names → human-readable labels + which onboarding step fixes them
 const FIELD_MAP = {
-  // Banking step
-  deposit_account_no:   { label: 'Bank Account Number',    step: 'banking',   stepLabel: 'Banking Setup' },
-  deposit_account_rtg:  { label: 'Bank Routing Number',    step: 'banking',   stepLabel: 'Banking Setup' },
-  deposit_account_type: { label: 'Account Type (checking/savings)', step: 'banking', stepLabel: 'Banking Setup' },
-  // Locations/MID step
-  mcc:                  { label: 'MCC Code',               step: 'locations', stepLabel: 'Locations & MIDs' },
-  monthly_sales:        { label: 'Monthly Card Volume',    step: 'locations', stepLabel: 'Locations & MIDs' },
-  average_sales:        { label: 'Average Transaction',    step: 'locations', stepLabel: 'Locations & MIDs' },
-  highest_ticket:       { label: 'Highest Ticket Amount',  step: 'locations', stepLabel: 'Locations & MIDs' },
-  cp_percent:           { label: 'Card-Present %',         step: 'locations', stepLabel: 'Locations & MIDs' },
-  cnp_percent:          { label: 'Card-Not-Present %',     step: 'locations', stepLabel: 'Locations & MIDs' },
-  pricing_method:       { label: 'Pricing Method',         step: 'locations', stepLabel: 'Locations & MIDs' },
-  pricing_category:     { label: 'Pricing Category',       step: 'locations', stepLabel: 'Locations & MIDs' },
-  full_dba_name:        { label: 'DBA / Store Name',       step: 'locations', stepLabel: 'Locations & MIDs' },
-  industry_type:        { label: 'Industry Type',          step: 'locations', stepLabel: 'Locations & MIDs' },
-  // Business details (also on locations page)
-  tin:                  { label: 'Federal EIN',            step: 'locations', stepLabel: 'Business Info' },
-  ownership_type:       { label: 'Business Entity Type',   step: 'locations', stepLabel: 'Business Info' },
-  year_business_established: { label: 'Year Established',  step: 'locations', stepLabel: 'Business Info' },
-  ownership_years:      { label: 'Years in Business',      step: 'locations', stepLabel: 'Business Info' },
-  // Verification step
-  owner_dob:            { label: 'Owner Date of Birth',    step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_id_number:      { label: 'Owner SSN',              step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_address:        { label: 'Owner Home Address',     step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_firstname:      { label: 'Owner First Name',       step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_lastname:       { label: 'Owner Last Name',        step: 'verify',    stepLabel: 'Identity Verification' },
-  // Address
-  business_address:     { label: 'Business Street Address', step: 'locations', stepLabel: 'Locations & MIDs' },
-  business_city:        { label: 'Business City',          step: 'locations', stepLabel: 'Locations & MIDs' },
-  business_state_usa:   { label: 'Business State',         step: 'locations', stepLabel: 'Locations & MIDs' },
-  business_zipcode:     { label: 'Business ZIP Code',      step: 'locations', stepLabel: 'Locations & MIDs' },
+  deposit_account_no:        { label: 'Bank Account Number',           step: 'banking',   stepLabel: 'Banking Setup' },
+  deposit_account_rtg:       { label: 'Bank Routing Number',           step: 'banking',   stepLabel: 'Banking Setup' },
+  deposit_account_type:      { label: 'Account Type (checking/savings)',step: 'banking',   stepLabel: 'Banking Setup' },
+  mcc:                       { label: 'MCC Code',                      step: 'locations', stepLabel: 'Locations & MIDs' },
+  monthly_sales:             { label: 'Monthly Card Volume',           step: 'locations', stepLabel: 'Locations & MIDs' },
+  average_sales:             { label: 'Average Transaction',           step: 'locations', stepLabel: 'Locations & MIDs' },
+  highest_ticket:            { label: 'Highest Ticket Amount',         step: 'locations', stepLabel: 'Locations & MIDs' },
+  cp_percent:                { label: 'Card-Present %',                step: 'locations', stepLabel: 'Locations & MIDs' },
+  pricing_method:            { label: 'Pricing Method',                step: 'locations', stepLabel: 'Locations & MIDs' },
+  pricing_category:          { label: 'Pricing Category',              step: 'locations', stepLabel: 'Locations & MIDs' },
+  full_dba_name:             { label: 'DBA / Store Name',              step: 'locations', stepLabel: 'Locations & MIDs' },
+  industry_type:             { label: 'Industry Type',                 step: 'locations', stepLabel: 'Locations & MIDs' },
+  tin:                       { label: 'Federal EIN',                   step: 'locations', stepLabel: 'Business Info' },
+  ownership_type:            { label: 'Business Entity Type',          step: 'locations', stepLabel: 'Business Info' },
+  year_business_established: { label: 'Year Established',              step: 'locations', stepLabel: 'Business Info' },
+  ownership_years:           { label: 'Years in Business',             step: 'locations', stepLabel: 'Business Info' },
+  owner_dob:                 { label: 'Owner Date of Birth',           step: 'verify',    stepLabel: 'Identity Verification' },
+  owner_id_number:           { label: 'Owner SSN',                     step: 'verify',    stepLabel: 'Identity Verification' },
+  owner_address:             { label: 'Owner Home Address',            step: 'verify',    stepLabel: 'Identity Verification' },
+  owner_firstname:           { label: 'Owner First Name',              step: 'verify',    stepLabel: 'Identity Verification' },
+  owner_lastname:            { label: 'Owner Last Name',               step: 'verify',    stepLabel: 'Identity Verification' },
+  business_address:          { label: 'Business Street Address',       step: 'locations', stepLabel: 'Locations & MIDs' },
+  business_city:             { label: 'Business City',                 step: 'locations', stepLabel: 'Locations & MIDs' },
+  business_state_usa:        { label: 'Business State',                step: 'locations', stepLabel: 'Locations & MIDs' },
+  business_zipcode:          { label: 'Business ZIP Code',             step: 'locations', stepLabel: 'Locations & MIDs' },
 };
 
-const STEP_ORDER = ['locations', 'banking', 'verify'];
+const STEP_ORDER = ['verify', 'locations', 'banking'];
+
+// Detect known bad data patterns from the raw form that MSPWare won't surface as field errors
+function detectRawFormIssues(rawForm) {
+  const issues = [];
+  if (!rawForm) return issues;
+
+  const owners = rawForm.owners || [];
+  for (const owner of owners) {
+    // Detect sequential SSN (e.g. 123456789, 987654321, 111111111)
+    const ssn = String(owner.owner_id_number || '').replace(/\D/g, '');
+    if (ssn.length === 9) {
+      const isSequential = /^(012345678|123456789|234567890|987654321|876543210|111111111|222222222|333333333|444444444|555555555|666666666|777777777|888888888|999999999|000000000|123123123|000000001)$/.test(ssn);
+      if (isSequential) {
+        issues.push({
+          field: 'owner_id_number',
+          label: 'Owner SSN appears to be test/sequential data',
+          detail: 'The SSN on file is not valid. Please re-enter your real Social Security Number in Identity Verification.',
+          step: 'verify',
+          stepLabel: 'Identity Verification',
+          severity: 'critical',
+        });
+      }
+    }
+    // Detect missing DOB
+    if (!owner.owner_dob) {
+      issues.push({ field: 'owner_dob', label: 'Owner Date of Birth is missing', step: 'verify', stepLabel: 'Identity Verification', severity: 'error' });
+    }
+    // Detect missing SSN
+    if (!ssn) {
+      issues.push({ field: 'owner_id_number', label: 'Owner SSN is missing', step: 'verify', stepLabel: 'Identity Verification', severity: 'error' });
+    }
+  }
+
+  // Detect business address missing house number (just a street name)
+  const addr = rawForm.business_address || '';
+  if (addr && !/^\d/.test(addr.trim())) {
+    issues.push({
+      field: 'business_address',
+      label: 'Business address is missing street number',
+      detail: `"${addr}" does not start with a house/building number. Please re-enter the full address.`,
+      step: 'locations',
+      stepLabel: 'Locations & MIDs',
+      severity: 'error',
+    });
+  }
+
+  // Detect missing bank account
+  if (!rawForm.deposit_account_no || !rawForm.deposit_account_rtg) {
+    issues.push({ field: 'deposit_account_no', label: 'Bank account not linked', step: 'banking', stepLabel: 'Banking Setup', severity: 'error' });
+  }
+
+  return issues;
+}
 
 function categorize(errors) {
   const byStep = {};
   const unknown = [];
-
   for (const err of errors) {
-    // Try to match a field in the error string
     const raw = typeof err === 'string' ? err : (err?.message || err?.description || JSON.stringify(err));
-    const matched = Object.entries(FIELD_MAP).find(([key]) =>
-      raw.toLowerCase().includes(key.toLowerCase())
-    );
+    const matched = Object.entries(FIELD_MAP).find(([key]) => raw.toLowerCase().includes(key.toLowerCase()));
     if (matched) {
       const [, meta] = matched;
       if (!byStep[meta.step]) byStep[meta.step] = { stepLabel: meta.stepLabel, fields: [] };
@@ -60,13 +103,25 @@ function categorize(errors) {
   return { byStep, unknown };
 }
 
-// Resolve which step to navigate to (earliest in flow that has issues)
-function primaryStep(byStep) {
+function primaryStep(byStep, rawIssues) {
+  // Prioritize steps with raw issues first
   for (const s of STEP_ORDER) {
+    if (rawIssues?.some(i => i.step === s)) return s;
     if (byStep[s]) return s;
   }
   return 'locations';
 }
+
+const STEP_COLORS = {
+  locations: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
+  banking:   'text-blue-400 bg-blue-500/10 border-blue-500/30',
+  verify:    'text-purple-400 bg-purple-500/10 border-purple-500/30',
+};
+
+const SEVERITY_COLORS = {
+  critical: 'text-red-300 bg-red-500/10 border-red-500/30',
+  error:    'text-amber-300 bg-amber-500/10 border-amber-500/30',
+};
 
 export default function SigningErrorGuide({ app, onNavigate }) {
   const [checking, setChecking] = useState(false);
@@ -92,8 +147,15 @@ export default function SigningErrorGuide({ app, onNavigate }) {
           ...(data.completion_errors || []),
           ...(data.data_errors || []),
           ...(data.rule_violations || []),
+          ...(data.errors || []),
         ];
-        setDetails({ allErrors, percentComplete: data.percent_complete ?? null });
+        const rawIssues = detectRawFormIssues(data.rawForm);
+        setDetails({
+          allErrors,
+          rawIssues,
+          percentComplete: data.percent_complete ?? null,
+          signaturesError: data.signaturesError || null,
+        });
       }
     } catch (_) {
       // non-fatal
@@ -103,14 +165,16 @@ export default function SigningErrorGuide({ app, onNavigate }) {
   };
 
   const { byStep, unknown } = details ? categorize(details.allErrors) : { byStep: {}, unknown: [] };
-  const targetStep = primaryStep(byStep);
-  const hasDetails = details && (Object.keys(byStep).length > 0 || unknown.length > 0);
+  const rawIssues = details?.rawIssues || [];
+  const targetStep = primaryStep(byStep, rawIssues);
+  const hasDetails = details && (Object.keys(byStep).length > 0 || unknown.length > 0 || rawIssues.length > 0);
 
-  const STEP_COLORS = {
-    locations: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-    banking:   'text-blue-400 bg-blue-500/10 border-blue-500/30',
-    verify:    'text-purple-400 bg-purple-500/10 border-purple-500/30',
-  };
+  // Group raw issues by step
+  const rawByStep = {};
+  for (const issue of rawIssues) {
+    if (!rawByStep[issue.step]) rawByStep[issue.step] = { stepLabel: issue.stepLabel, issues: [] };
+    rawByStep[issue.step].issues.push(issue);
+  }
 
   return (
     <div className="border border-red-500/30 bg-red-500/8 rounded-xl overflow-hidden">
@@ -125,7 +189,6 @@ export default function SigningErrorGuide({ app, onNavigate }) {
             {app.error || 'Unable to prepare signing package: Merchant application is not complete.'}
           </p>
 
-          {/* Loading details */}
           {checking && (
             <div className="flex items-center gap-1.5 mt-2">
               <Loader2 className="w-3 h-3 text-gray-400 animate-spin" />
@@ -133,10 +196,29 @@ export default function SigningErrorGuide({ app, onNavigate }) {
             </div>
           )}
 
-          {/* Guidance once we have details */}
           {!checking && hasDetails && (
             <div className="mt-3 space-y-2">
-              {/* Step-grouped missing fields */}
+              {/* Raw issues detected from form data — most actionable, shown first */}
+              {Object.entries(rawByStep).map(([step, { stepLabel, issues }]) => (
+                <div key={`raw-${step}`} className={`rounded-lg border px-3 py-2 ${STEP_COLORS[step] || 'text-gray-400 bg-white/5 border-white/10'}`}>
+                  <p className="text-[11px] font-bold uppercase tracking-wider mb-1.5">{stepLabel}</p>
+                  <ul className="space-y-1.5">
+                    {issues.map((issue, i) => (
+                      <li key={i}>
+                        <div className="flex items-start gap-1.5">
+                          <ShieldAlert className="w-3 h-3 flex-shrink-0 mt-0.5 text-current" />
+                          <div>
+                            <p className="text-[11px] font-semibold">{issue.label}</p>
+                            {issue.detail && <p className="text-[10px] opacity-80 mt-0.5">{issue.detail}</p>}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+
+              {/* MSPWare field errors (when surfaced) */}
               {Object.entries(byStep).map(([step, { stepLabel, fields }]) => (
                 <div key={step} className={`rounded-lg border px-3 py-2 ${STEP_COLORS[step] || 'text-gray-400 bg-white/5 border-white/10'}`}>
                   <p className="text-[11px] font-bold uppercase tracking-wider mb-1">{stepLabel}</p>
@@ -169,17 +251,26 @@ export default function SigningErrorGuide({ app, onNavigate }) {
                 </div>
               )}
 
-              {/* Completion % */}
               {details.percentComplete !== null && (
                 <p className="text-[11px] text-gray-500">
-                  Form {Math.round(details.percentComplete)}% complete
+                  Form {Math.round(details.percentComplete)}% complete — fix the issues above, then retry signing.
                 </p>
               )}
             </div>
           )}
 
-          {/* No details — generic guidance */}
-          {!checking && !hasDetails && (
+          {/* No field errors but MSPWare still blocked signing */}
+          {!checking && !hasDetails && details?.signaturesError && (
+            <div className="mt-2 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              <p className="text-[11px] text-red-300 font-semibold">MSPWare validation error:</p>
+              <p className="text-[11px] text-red-400/80 mt-0.5">{details.signaturesError}</p>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Contact Cliqbux support if this persists after verifying all fields are correct.
+              </p>
+            </div>
+          )}
+
+          {!checking && !hasDetails && !details?.signaturesError && (
             <p className="text-xs text-red-400/70 mt-1">
               Some required fields are missing. Go back to Locations &amp; MIDs or Banking to complete them.
             </p>
@@ -195,9 +286,9 @@ export default function SigningErrorGuide({ app, onNavigate }) {
             className="flex items-center gap-2 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 px-4 py-2 rounded-lg transition-all"
           >
             <Wrench className="w-3.5 h-3.5" />
-            Fix in {byStep[targetStep]?.stepLabel || 'Locations & MIDs'}
+            Fix in {rawByStep[targetStep]?.stepLabel || byStep[targetStep]?.stepLabel || 'Locations & MIDs'}
           </button>
-          <span className="text-[11px] text-gray-500">Fill in the missing fields, then return here to sign.</span>
+          <span className="text-[11px] text-gray-500">Fix the issues above, then return here to sign.</span>
         </div>
       )}
     </div>
