@@ -63,8 +63,11 @@ const emptyForm = () => ({
 });
 
 export default function InlineVerifyForm({ signer, onVerified, corporateId, profileTitleType }) {
-  const [expanded, setExpanded] = useState(false);
-  const [phase, setPhase] = useState('upload'); // 'upload' | 'fields'
+  // If the signer already has data filled in, pre-expand and skip the upload phase
+  const alreadyHasDoc = !!(signer.idDocumentUrl);
+  const alreadyHasData = !!(signer.dobYear && signer.ssn && signer.homeStreet);
+  const [expanded, setExpanded] = useState(alreadyHasDoc || alreadyHasData);
+  const [phase, setPhase] = useState(alreadyHasDoc ? 'fields' : 'upload'); // 'upload' | 'fields'
   const [showSsn, setShowSsn] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
