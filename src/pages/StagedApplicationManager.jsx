@@ -454,15 +454,23 @@ function MidStatusBadge({ status }) {
 
 // ── Application Row (expandable, shows MIDs) ──────────────────────────────────
 function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, publicUrl, onEdit, onSend, onDelete }) {
-  const [expanded, setExpanded]   = useState(false);
-  const [mids, setMids]           = useState([]);
+  const [expanded, setExpanded]       = useState(false);
+  const [mids, setMids]               = useState([]);
   const [loadingMids, setLoadingMids] = useState(false);
-  const [copied, setCopied]       = useState(null); // stageId or 'id'
+  const [copied, setCopied]           = useState(null);
+  const [resending, setResending]     = useState(false);
+  const [resendDone, setResendDone]   = useState(false);
 
   const p = trackStage?.prefilledData || {};
   const completed = p.completedSteps || {};
   const currentStep = p.currentStep || 'agreement';
   const lastSeen = p.lastSeenAt ? new Date(p.lastSeenAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
+
+  // Build the portal link: prefer the first admin stage (has a real stageId+token), fall back to trackStage
+  const linkStage = adminStages[0] || trackStage;
+  const portalLink = linkStage
+    ? `${publicUrl}/?stageId=${linkStage.id}&token=${linkStage.accessToken}`
+    : `${publicUrl}/?corporateId=${corporateId}`;
 
   const handleExpand = async () => {
     const next = !expanded;
@@ -477,11 +485,31 @@ function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, pu
     }
   };
 
-  const copyId = () => {
-    navigator.clipboard.writeText(corporateId);
-    setCopied('id');
+  const copyLink = (e) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(portalLink);
+    setCopied('link');
     setTimeout(() => setCopied(null), 2000);
   };
+
+  const handleResend = async (e) => {
+    e.stopPropagation();
+    const email = p.signerEmail;
+    if (!email || !linkStage) return;
+    setResending(true);
+    try {
+      await base44.functions.invoke('manageStagedApplication', {
+        action: 'send',
+        stageId: linkStage.id,
+        data: { email },
+      });
+      setResendDone(true);
+      setTimeout(() => setResendDone(false), 3000);
+    } catch (_) {}
+    finally { setResending(false); }
+  };
+
+  const canResend = !!(p.signerEmail && linkStage);
 
   return (
     <div className="bg-[#1c2128] border border-white/10 rounded-2xl overflow-hidden hover:border-white/20 transition-all">
@@ -496,11 +524,7 @@ function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, pu
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-bold text-white truncate">{merchantName || corporateId}</p>
-            <button onClick={e => { e.stopPropagation(); copyId(); }}
-              className={`flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded transition-all ${copied === 'id' ? 'text-green-400' : 'text-gray-600 hover:text-gray-300'}`}>
-              {copied === 'id' ? <Check className="w-2.5 h-2.5" /> : <Copy className="w-2.5 h-2.5" />}
-              {corporateId}
-            </button>
+            <span className="text-[10px] font-mono text-gray-600">{corporateId}</span>
           </div>
           <div className="flex items-center gap-3 mt-0.5">
             {p.signerEmail && <p className="text-[10px] text-gray-500 truncate">{p.signerEmail}</p>}
@@ -534,6 +558,29 @@ function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, pu
           </p>
         )}
         <div className="flex items-center gap-1 flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
+          {/* Copy portal link */}
+          <button onClick={copyLink} title="Copy merchant portal link"
+            className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all ${
+              copied === 'link'
+                ? 'bg-green-500/15 text-green-400 border-green-500/30'
+                : 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20'
+            }`}>
+            {copied === 'link' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {copied === 'link' ? 'Copied!' : 'Copy Link'}
+          </button>
+          {/* Resend to merchant email */}
+          {canResend && (
+            <button onClick={handleResend} disabled={resending}
+              title={`Resend portal link to ${p.signerEmail}`}
+              className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all ${
+                resendDone
+                  ? 'bg-green-500/15 text-green-400 border-green-500/30'
+                  : 'bg-white/5 text-gray-400 border-white/10 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/20'
+              }`}>
+              {resending ? <Loader2 className="w-3 h-3 animate-spin" /> : resendDone ? <Check className="w-3 h-3" /> : <Send className="w-3 h-3" />}
+              {resendDone ? 'Sent!' : 'Resend'}
+            </button>
+          )}
           <button onClick={() => onEdit(corporateId, merchantName)} title="New stage"
             className="p-1.5 text-gray-600 hover:text-amber-400 rounded-lg transition-colors">
             <Plus className="w-3.5 h-3.5" />
