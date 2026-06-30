@@ -280,12 +280,12 @@ export default function OnboardingVerification({ profile, locations, initialSign
             </div>
           )}
 
-          {/* Error on a specific concept — guided fix */}
-          {allVerified && activeApp?.error && !loadingSigning && (
+          {/* Error guides — one per errored app, always visible */}
+          {allVerified && !loadingSigning && applications.filter(a => a.error).map(app => (
             <SigningErrorGuide
-              app={activeApp}
+              key={app.mspApplicationNo}
+              app={app}
               onNavigate={(step) => {
-                // 'verify' means fix is on THIS page (SSN/identity) — just scroll up, don't navigate away
                 if (step === 'verify') {
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 } else {
@@ -294,7 +294,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
               }}
               onRetry={fetchSigningState}
             />
-          )}
+          ))}
 
           {/* Submit button — only after all signed */}
           {allVerified && allSigned && (
