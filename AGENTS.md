@@ -417,10 +417,50 @@ Admin calls (no token in payload) pass through unchanged — they're protected b
 
 ## Cash Discount Template
 
-Template #154 = Cash Discount template (created 2026-06-29).
+Template #154 = Cash Discount template (created 2026-06-29, last updated 2026-06-30).
 - `pricing_method`: `"CLEAR"` (NOT `"CASH_DISCOUNT"` — that value is rejected)
 - CD_TEMPLATE_NO = 154; ICPLS_TEMPLATE_NO = 6
 - Both `submitToMSP` and `signApplication` auto-select the correct template based on `pricingTier`
+
+### Template #154 pre-set fields (read via GET /applications/154/form on 2026-06-30)
+These fields are owned by the template and must NOT be sent in any PUT /form payload:
+
+| Field | Template value | Notes |
+|---|---|---|
+| `pricing_method` | `"CLEAR"` | Cash Discount surcharge method |
+| `card_acceptance_split` | `"CP"` | Card-present only by default |
+| `pricing_category` | `"1"` | Retail — merchant value should override per concept |
+| `billing_method` | `"N"` | Net settlement |
+| `billing_frequency` | `"M"` | Monthly |
+| `funding_type` | `14` | Elavon funding type |
+| `monetary_code` | `"D"` | USD |
+| `statement_type` | `"A"` | Combined statement |
+| `statement_delivery_method` | `"E"` | Email delivery |
+| `monthly_minimum_fee` | `40` | $40/mo minimum |
+| `chargeback_fee` | `35` | $35 per chargeback |
+| `account_maintenance_fee` | `20` | $20/mo account fee |
+| `rtp_monthly_fee` | `10` | $10/mo RTP fee |
+| `touch_tone_auth` | `0.65` | Voice auth fee |
+| `avs_service_auth` | `2.20` | AVS fee |
+| `bank_referral_auth` | `4` | Bank referral fee |
+| `op_assisted_auth` | `0.95` | Operator-assisted auth |
+| `C4_surcharging_cardholder_surcharge` | `3` | 3% CD surcharge rate |
+| `tokenization` | `"token"` | Tokenization enabled |
+| `tokenization_service_fee` | `"0.0000"` | No per-token fee |
+| `tokenization_sharing_indicator` | `"N"` | No token sharing |
+| `fixed_individual_tiers_pricing` | `false` | No tiered pricing |
+| `multi_currency_conversion` | `false` | No DCC |
+| `secure3d` | `false` | No 3DS |
+| `cards_accepted` | VISA, VISA_DEBIT, MC, MC_DEBIT, DISC, AMEX | All major cards |
+| `beneficial_ownership_exemption` | `"NON"` | Standard — non-exempt |
+| `has_intermediary_businesses` | `false` | |
+| `owner_confirmed` | `true` | |
+| `country_formation` | `"USA"` | |
+| `country_operations` | `"USA"` | |
+| `has_legal_address` | `"business"` | Overridden when entity has separate mailing address |
+
+**Fields we DO send (merchant-specific):**
+`full_dba_name`, `legal_dba_name`, `products_or_services`, `year_business_established`, `ownership_years/months`, `ownership_type`, `tin`/`ssn`, `llc_class`, `industry_type`, `contact_first/last_name`, `business_phone/email/address/city/state/zip`, `owners[]`, `annual_revenue`, `monthly_sales`, `average_sales`, `highest_ticket`, `freq_highest_average_ticket`, `cp_percent`, `cnp_percent`, `int_percent`, `moto_percent`, `delayed_delivery`, `mcc`, `pricing_method`, `pricing_category`, `deposit_account_no/rtg/type`, `chargebacks_retrievals_format/email`, `state_of_formation`, `currently_processing`, `seasonal_business`, `refund_policy`
 
 ---
 
