@@ -421,6 +421,16 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
   const [saved, setSaved] = useState(!!(entity.ownershipType && entity.taxClassType && entity.establishmentYear));
   const [expanded, setExpanded] = useState(!saved);
 
+  // Re-sync when parent reloads entity data (e.g. after navigating away and back)
+  useEffect(() => {
+    setOwnershipType(entity.ownershipType || '');
+    setTaxClassType(entity.taxClassType || '');
+    setEstYear(entity.establishmentYear || '');
+    const complete = !!(entity.ownershipType && entity.taxClassType && entity.establishmentYear);
+    setSaved(complete);
+    setExpanded(!complete);
+  }, [entity.entityId, entity.ownershipType, entity.taxClassType, entity.establishmentYear]);
+
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveError] = useState(null);
 
