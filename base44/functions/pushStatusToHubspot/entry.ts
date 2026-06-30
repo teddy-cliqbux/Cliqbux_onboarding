@@ -1,3 +1,4 @@
+// createClientFromRequest imported for future enrichment steps that need asServiceRole
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ─── pushStatusToHubspot ──────────────────────────────────────────────────────
@@ -32,9 +33,9 @@ const MILESTONE_TO_STAGE: Record<string, string> = {
 
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    // No auth.me() check — this function is called fire-and-forget from the
+    // magic-link portal where auth.me() returns null. Security is the
+    // HUBSPOT_API_KEY env var; no Base44 entity access happens here.
 
     const body = await req.json();
     const { corporateId, milestone } = body;

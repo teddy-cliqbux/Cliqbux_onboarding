@@ -41,6 +41,56 @@ Message body here.
 
 ---
 **[CLAUDE]** · 2026-06-29
+**Type:** Action Taken + Architecture Decisions
+**Re:** HubSpot integration audit + pushStatusToHubspot fix
+
+### Bug fixed: `pushStatusToHubspot` was silently broken for all portal users
+
+`pushStatusToHubspot` had `base44.auth.me()` as an auth gate. Magic-link portal users have no Base44 session, so `auth.me()` returns null → 401. The call site in `OnboardingPortal.jsx` uses `.catch(() => {})` (intentional fire-and-forget), so the 401 was silently swallowed.
+
+**Result:** HubSpot deal stages have never advanced for self-serve portal merchants. Every milestone (agreement_signed, locations_added, application_submitted, etc.) was a no-op.
+
+**Fix:** Removed the `auth.me()` check. The function only calls the HubSpot API using `HUBSPOT_API_KEY` from env vars — no Base44 entity access — so no user session is needed. The `createClientFromRequest` import is kept for the upcoming enrichment step.
+
+**→ Base44: publish the updated `pushStatusToHubspot` function after Teddy pushes.**
+
+---
+
+### HubSpot data structure decisions (2026-06-29)
+
+**3-tier hierarchy: Corporation → Brand → Location** using HubSpot parent-child Company associations.
+- Tailwind and BAD BAKERS already use this correctly (Brand/Corp as parent, Location as child)
+- Island Pacific needs Company records created for the corporation and its brands (San Honore, Phil House, Boba Opa); currently only exists as a Deal
+
+**Critical constraint:** We never know the legal entity structure until onboarding begins. Don't pre-build the hierarchy during sales. Build it retroactively when the merchant submits their application.
+
+**What the portal writes to HubSpot today:**
+- `createHubspotDeal`: Contact + Company + Deal created at self-serve sign-up. `dealId` becomes `corporateId` in Base44 — this is the bidirectional link.
+- `pushStatusToHubspot`: deal stage updates only (now working after fix above)
+
+**What's missing (not yet implemented):**
+- On `application_submitted`, enrich the HubSpot Company with: `ein`, `ownership_type`, `state_of_formation`, `mcc_code`, `dba_name`, `monthly_card_sales`, `avg_ticket`, `card_present_pct`, `pricing_tier`. These custom properties already exist on HubSpot (created by `setupHubspotProperties`) but are never written to. Claude will add this to `pushStatusToHubspot` as the next step.
+- `hubspotQuoteId` field on `MerchantLocations` — needed to enable the post-signing equipment order panel
+
+---
+
+### Post-signing dashboard architecture decision
+
+The merchant portal's `PostSubmissionDashboard` will gain an equipment order panel after signing. It pulls HubSpot quote line items live via the API — not via iframe (HubSpot blocks iframing).
+
+**Confirmed line item fields** (from real quote 305636118240, $1,400 total, 4 items: UDM PRO, Cliqpos SW1, LTE Modem, Cliqbux POS Services):
+`name`, `quantity`, `price`, `amount`, `hs_total_discount`, `hs_discount_percentage`, `hs_sku`, `description`
+
+**What Base44 needs to build (when Claude has the backend ready):**
+1. `hubspotQuoteId` field on `MerchantLocations` entity — add to schema
+2. `PostSubmissionDashboard` equipment panel — fetch from `getHubspotQuote` function (to be written by Claude), render line items natively
+
+**→ Waiting on:** Base44 (publish pushStatusToHubspot), then Claude (write enrichment step + getHubspotQuote function)
+
+---
+
+---
+**[CLAUDE]** · 2026-06-29
 **Type:** Critical Lesson — Read Before Touching submitToMSP or signApplication
 **Re:** is_firearm_verified field — three sessions of repeated mistakes
 

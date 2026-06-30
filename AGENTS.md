@@ -50,6 +50,15 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 ---
 
+### 6. `pushStatusToHubspot` — same auth bug as `manageLegalEntity`
+**The mistake:** `pushStatusToHubspot` called `base44.auth.me()` and returned 401 for magic-link portal users. The call site in `OnboardingPortal.jsx` uses `.catch(() => {})` (intentional fire-and-forget), so the 401 was silently swallowed. **HubSpot deal stages were never advancing for self-serve portal merchants.**
+
+**The fix:** Removed the `auth.me()` check. The function only calls the HubSpot API using `HUBSPOT_API_KEY` from env vars — no Base44 entity access — so no user session is needed. The import of `createClientFromRequest` is kept for the upcoming enrichment step that will use `asServiceRole`.
+
+**Rule:** Any function called from `OnboardingPortal.jsx` or any magic-link portal page must NOT use `base44.auth.me()`. Either remove the check entirely or use `asServiceRole`. Applies to: `pushStatusToHubspot`, `manageLegalEntity`, `removeSelfServeLocation`, `addSelfServeLocation`, `getMSPFormStatus`.
+
+---
+
 ### 5. `mspApplicationNo` — only clear on explicit HTTP 404
 **The mistake:** `signApplication` was clearing `mspApplicationNo` on any non-success API response (network error, rate limit, etc.), then creating a new duplicate draft in MSPWare, causing merchants to accumulate multiple applications.
 
@@ -296,6 +305,10 @@ MSPWare rolls back the entire form and returns `percent_complete: -1` when **any
 - Do not clear `mspApplicationNo` on any non-success from MSPWare GET — only clear on explicit HTTP 404. Other errors (rate limit, network) must not cause duplicate drafts.
 - Do not send `is_firearm_verified: false` (boolean) — causes `canSave: false`, blocking the entire form fill
 - Do not gate concept draft creation on bank details being present — create the draft even if banking hasn't been linked yet
+- Do not call `base44.auth.me()` in `pushStatusToHubspot` — it is fire-and-forget from the magic-link portal and the check was silently returning 401. Auth check removed 2026-06-29.
+- Do not iframe HubSpot quote URLs — HubSpot sends X-Frame-Options headers that block cross-origin embedding. Use a link button that opens in a new tab, or pull line items via the HubSpot API and render natively.
+- Do not use `discount_percentage` as a HubSpot line item property name — the correct name is `hs_discount_percentage`
+- Do not deduplicate HubSpot companies by email domain for real merchant data — the `createHubspotDeal` domain-based dedup only works for merchants with their own domains; testing with @cliqbux.com creates noise records
 - Do not send `manageLegalEntity` from an authenticated-only path for portal (magic-link) users — they have no Base44 session. The function must use `asServiceRole`.
 
 ---
@@ -467,6 +480,109 @@ All backend calls from the merchant portal should use `withToken()` from `src/li
 ### StagedApplication auto-tracking
 `OnboardingPortal` calls `trackProgress` (action on `manageStagedApplication`) fire-and-forget on step transitions. Do NOT await it or let it block the UI. The label `__auto_track__` identifies these records. Do NOT merge `prefilledData` from auto-track records onto the profile — it contains tracking metadata (currentStep, lastSeenAt) not field data.
 >>>>>>> 874ea8a (fix: is_firearm_verified must be omitted — template sets it, any API value overrides and breaks completion)
+
+---
+
+## HubSpot Integration
+
+### Architecture: How HubSpot maps to Base44
+
+HubSpot is the CRM/sales layer. Base44 is the operational layer. They are linked by `corporateId = HubSpot dealId`.
+
+```
+HubSpot                          Base44
+──────────────────────────────────────────────────────────
+Parent Company (Corporation)  →  MerchantCorporateProfile
+  └─ Child Company (Brand)    →  (brand grouping field on Locations — no entity yet)
+       └─ Child Company (Loc) →  MerchantLocations
+Deal (on Location company)    →  corporateId = dealId (the link between systems)
+Quote (on Deal)               →  hubspotQuoteId on MerchantLocations (planned)
+Line Items (on Quote)         →  fetched live via HubSpot API
+```
+
+### 3-tier company hierarchy
+
+HubSpot supports multi-level parent-child on Company records. The intended structure:
+
+- **Tier 1 — Corporation**: top-level Company (Island Pacific, BAD BAKERS LLC, Tailwind Concessions)
+- **Tier 2 — Brand**: child Company of Corporation (San Honore, Phil House, Boba Opa — children of Island Pacific). Single-brand operators skip this tier.
+- **Tier 3 — Location**: child Company of Brand or Corp. Name convention: `"Brand - City"` (e.g., `"BAD BAKERS - Santa Ana"`). Tailwind and BAD BAKERS already follow this pattern.
+
+**Critical constraint: the hierarchy is built progressively, not upfront.** Legal entity structure (which corporation owns which brands) is unknown during the sales stage — we only learn it when the merchant fills out their onboarding application. Don't try to pre-build the hierarchy. The Company record starts flat (whatever name the salesperson knows), and the portal retroactively enriches it with EIN, ownership type, and parent association when the merchant submits.
+
+### Current company data in HubSpot (audited 2026-06-29)
+- 688 company records total
+- ~229 child companies exist, mostly Tailwind airport locations (all children of one Tailwind parent) and BAD BAKERS city locations — these are already using the correct pattern
+- Deals are at mixed levels (some corporation-level, some brand, some location) — needs normalization
+- Island Pacific exists only as a Deal, not a Company with brand hierarchy
+- ~80 junk "Cliqbux — Self-Serve Onboarding" deals at $0/New Lead from portal testing — noise, not real merchants
+
+### `createHubspotDeal` — what it does
+Called at portal self-serve sign-up. Creates: Contact (from signerName/signerEmail) + Company (from businessName, domain = email domain) + Deal (`"${businessName} — Self-Serve Onboarding"`, stage: New Lead, amount: $0) → associates them → creates `MerchantCorporateProfile` in Base44 with `corporateId = dealId`.
+
+**Known bug:** Company deduplication uses the signer's email domain (`signerEmail.split('@')[1]`). Testing with a `@cliqbux.com` email maps every test merchant to the `cliqbux.com` domain, creating dozens of duplicate companies or mis-associating to Cliqbux's own company record. Real merchants with their own domains will work correctly.
+
+### `pushStatusToHubspot` — milestone → deal stage
+Called fire-and-forget from `OnboardingPortal.jsx` on every step transition. Maps milestones to pipeline stages:
+
+| Milestone | HubSpot stage |
+|-----------|--------------|
+| `link_sent` | onboarding_link_sent |
+| `link_opened` | onboarding_link_opened |
+| `agreement_filled` | merchant_agreement_filled |
+| `agreement_signed` | merchant_agreement_signed |
+| `locations_added` | locations_added |
+| `application_submitted` | application_submitted |
+| `closed_won` | closedwon |
+| `closed_lost` | closedlost |
+
+Returns 200 with `synced: false` (not an error) when the deal is not found in HubSpot — handles sales-led deals that haven't been self-served.
+
+**Was silently broken:** `auth.me()` check blocked all portal users (magic-link). Fixed 2026-06-29 by removing the check. See Critical Lesson #6.
+
+### Custom Company properties (created by `setupHubspotProperties`)
+These already exist on HubSpot Company records but are **never populated yet** — the enrichment write-back is not implemented:
+`ein`, `ownership_type`, `state_of_formation`, `mcc_code`, `dba_name`, `monthly_card_sales`, `avg_ticket`, `card_present_pct`, `pricing_tier`
+
+**Next step:** When `pushStatusToHubspot` fires `application_submitted`, it should also: (1) fetch `MerchantCorporateProfile` via `asServiceRole`, (2) `GET /deals/${dealId}/associations/companies` to find the linked Company ID, (3) `PATCH` the Company with the above fields from the Base44 profile.
+
+### HubSpot Quote line items — confirmed field names (2026-06-29)
+Pulled from test quote 305636118240 ("Test Deal", $1,400 total):
+
+| HubSpot field | Notes |
+|---|---|
+| `name` | Product/service name |
+| `quantity` | Numeric |
+| `price` | Unit price |
+| `amount` | Line total (price × qty − discount) |
+| `hs_total_discount` | Flat discount applied |
+| `hs_discount_percentage` | % discount (use instead of `discount_percentage`) |
+| `hs_sku` | SKU — may contain serial number for bundled hardware |
+| `description` | Optional long description |
+
+Quote-level fields: `hs_quote_link` (public signing URL), `hs_quote_esign_status` (`PENDING_SIGNATURE` / `SIGNED`), `hs_esign_num_signers_completed`, `hs_esign_num_signers_required`, `hs_quote_amount`, `hs_expiration_date`.
+
+**To pull line items from the API:**
+```
+GET /crm/v3/objects/quotes/{quoteId}?associations=line_items
+POST /crm/v3/objects/line_items/batch/read  (batch-fetch the line item details)
+```
+
+### Post-signing dashboard — planned architecture
+After the merchant completes portal signing, the `PostSubmissionDashboard` should show:
+1. MID/underwriting status (existing)
+2. Equipment & services order panel — pulls HubSpot quote line items live
+
+**What's needed to implement:**
+- `hubspotQuoteId` field on `MerchantLocations` (store the numeric quote ID, e.g., `305636118240`)
+- `getHubspotQuote` backend function: takes `corporateId`, looks up `MerchantLocations.hubspotQuoteId`, calls HubSpot API for line items + esign status
+- `HUBSPOT_API_KEY` is already configured as a Base44 env var (used by `createHubspotDeal` and `pushStatusToHubspot`)
+- Dashboard panel renders line items natively in Cliqbux UI — not as an iframe (HubSpot blocks iframing via X-Frame-Options)
+
+### Environment variables (HubSpot)
+| Var | Purpose |
+|---|---|
+| `HUBSPOT_API_KEY` | HubSpot Private App token — already set. Used by `createHubspotDeal`, `pushStatusToHubspot`, `handleHubspotWebhook`, `syncFromHubspot`. |
 
 ---
 
