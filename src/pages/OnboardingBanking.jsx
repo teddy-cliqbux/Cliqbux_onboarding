@@ -263,14 +263,18 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [entRes, locRes, conRes] = await Promise.all([
-        base44.functions.invoke('manageLegalEntity', { action: 'list', corporateId: profile.corporateId }),
-        base44.functions.invoke('listLocations', { corporateId: profile.corporateId }),
-        base44.functions.invoke('manageMerchantID', { action: 'list', corporateId: profile.corporateId }),
-      ]);
+      // Use getMerchantData (single call) instead of manageLegalEntity + listLocations + manageMerchantID
+      // to avoid hitting rate limits on the banking step mount.
+      const res = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
+      const data = res.data;
 
-      const loadedEntities = entRes.data?.entities || [];
-      const loadedLocations = (locRes.data?.locations || []).map(l => ({
+      // Entities: use profile.legalEntities from the prop (already loaded), supplemented by getMerchantData
+      const loadedEntities = (profile.legalEntities || []).length > 0
+        ? profile.legalEntities
+        : (data?.profile?.legalEntities || []);
+
+      const rawLocations = data?.locations || [];
+      const loadedLocations = rawLocations.map(l => ({
         id: l.id || l.locationId, entityId: l.entityId || '',
         dbaName: l.dbaName, businessAddress: l.businessAddress,
         applicationStepStatus: l.applicationStepStatus || 'In Review',
@@ -278,7 +282,7 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
 
       // Build bankDetails map
       const bdMap = {};
-      (locRes.data?.locations || []).forEach(l => {
+      rawLocations.forEach(l => {
         const id = l.id || l.locationId;
         if (l.bankDetails?.routingNumber) bdMap[id] = l.bankDetails;
         else if (l.routingNumber) bdMap[id] = { routingNumber: l.routingNumber, accountNumber: l.accountNumber, authMethod: 'Manual', accountNumberMasked: `••••${(l.accountNumber || '').slice(-4)}` };
@@ -286,22 +290,23 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
 
       // Build manual-bank-by-entity for reuse
       const manualByEntity = {};
-      (locRes.data?.locations || []).forEach(l => {
+      rawLocations.forEach(l => {
         const bd = l.bankDetails?.routingNumber ? l.bankDetails : (l.routingNumber ? { routingNumber: l.routingNumber, accountNumber: l.accountNumber, authMethod: 'Manual', accountNumberMasked: `••••${(l.accountNumber || '').slice(-4)}` } : null);
         if (bd?.authMethod === 'Manual' && l.entityId) manualByEntity[l.entityId] = bd;
       });
 
       setEntities(loadedEntities);
       setLocations(loadedLocations);
-      setMerchantIDs(conRes.data?.merchantIDs || []);
+      setMerchantIDs(data?.concepts || []);
       setBankDetailsByLoc(bdMap);
       setManualBankByEntity(manualByEntity);
 
       // Auto-expand first location needing banking
       const needsBank = loadedLocations.find(l => !bdMap[l.id]?.routingNumber);
       if (needsBank) setExpandedLocId(needsBank.id);
-    } catch (_) {}
-    finally { setLoading(false); }
+    } catch (err) {
+      console.error('[OnboardingBanking] loadAll failed:', err?.message || err);
+    } finally { setLoading(false); }
   };
 
   const handleBankSaved = (locId, details, entityId) => {
