@@ -359,8 +359,8 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
 }
 
 // ── Send Modal ────────────────────────────────────────────────────────────────
-function SendModal({ stage, publicUrl, onSent, onClose }) {
-  const [email, setEmail]     = useState(stage.sentToEmail || stage.prefilledData?.signerEmail || '');
+function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClose }) {
+  const [email, setEmail]     = useState(stage?.sentToEmail || stage?.prefilledData?.signerEmail || prefillEmail || '');
   const [sending, setSending] = useState(false);
   const [sent, setSent]       = useState(false);
   const [link, setLink]       = useState('');
@@ -371,11 +371,20 @@ function SendModal({ stage, publicUrl, onSent, onClose }) {
     if (!email.trim()) { setError('Email is required'); return; }
     setSending(true); setError('');
     try {
-      const res = await base44.functions.invoke('manageStagedApplication', { action: 'send', stageId: stage.id, data: { email } });
-      if (res.data?.error) throw new Error(res.data.error);
-      setLink(res.data.link || `${publicUrl}/?stageId=${stage.id}&token=${stage.accessToken}`);
+      if (stage) {
+        // Admin staged application — use the managed send flow
+        const res = await base44.functions.invoke('manageStagedApplication', { action: 'send', stageId: stage.id, data: { email } });
+        if (res.data?.error) throw new Error(res.data.error);
+        setLink(res.data.link || `${publicUrl}/?stageId=${stage.id}&token=${stage.accessToken}`);
+        onSent(res.data.stage);
+      } else {
+        // No admin stage — send a direct resume link for this corporateId
+        const directLink = `${publicUrl}/?corporateId=${corporateId}`;
+        const res = await base44.functions.invoke('sendResumeLink', { email, corporateId, link: directLink });
+        if (res.data?.error) throw new Error(res.data.error);
+        setLink(directLink);
+      }
       setSent(true);
-      onSent(res.data.stage);
     } catch (err) { setError(err.message || 'Failed to send'); }
     finally { setSending(false); }
   };
@@ -454,7 +463,7 @@ function MidStatusBadge({ status }) {
 }
 
 // ── Application Row (expandable, shows MIDs) ──────────────────────────────────
-function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, publicUrl, onEdit, onSend, onDelete }) {
+function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, publicUrl, onEdit, onSend, onDelete, signerEmail }) {
   const [expanded, setExpanded]       = useState(false);
   const [mids, setMids]               = useState([]);
   const [loadingMids, setLoadingMids] = useState(false);
@@ -465,12 +474,10 @@ function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, pu
   const currentStep = p.currentStep || 'agreement';
   const lastSeen = p.lastSeenAt ? new Date(p.lastSeenAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : null;
 
-  // Build the portal link: only use admin stages (not auto-track records) for sending
+  // Prefer admin stages for sending; fall back to direct corporateId link for HubSpot/self-serve merchants
   const linkStage = adminStages[0] || null;
   const portalLink = linkStage
     ? `${publicUrl}/?stageId=${linkStage.id}&token=${linkStage.accessToken}`
-    : trackStage
-    ? `${publicUrl}/?stageId=${trackStage.id}&token=${trackStage.accessToken}`
     : `${publicUrl}/?corporateId=${corporateId}`;
 
   const handleExpand = async () => {
@@ -550,14 +557,12 @@ function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, pu
             {copied === 'link' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
             {copied === 'link' ? 'Copied!' : 'Copy Link'}
           </button>
-          {/* Send/Resend — always shown when there's a linkStage */}
-          {linkStage && (
-            <button onClick={(e) => { e.stopPropagation(); onSend(linkStage); }}
-              title="Send portal link to merchant"
-              className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all bg-white/5 text-gray-400 border-white/10 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/20">
-              <Send className="w-3 h-3" /> Send
-            </button>
-          )}
+          {/* Send/Resend — always shown; uses admin stage if available, otherwise direct corporateId link */}
+          <button onClick={(e) => { e.stopPropagation(); onSend(linkStage, corporateId, p.signerEmail || signerEmail || ''); }}
+            title="Send portal link to merchant"
+            className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all bg-white/5 text-gray-400 border-white/10 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/20">
+            <Send className="w-3 h-3" /> Send
+          </button>
           <button onClick={() => onEdit(corporateId, merchantName)} title="New stage"
             className="p-1.5 text-gray-600 hover:text-amber-400 rounded-lg transition-colors">
             <Plus className="w-3.5 h-3.5" />
@@ -771,7 +776,7 @@ export default function StagedApplicationManager() {
                     adminStages={admin}
                     publicUrl={publicUrl}
                     onEdit={(corpId, name) => setEditing({ corporateId: corpId, merchantName: name, stage: null })}
-                    onSend={setSending}
+                    onSend={(stage, corpId, email) => setSending({ stage, corporateId: corpId, prefillEmail: email })}
                     onDelete={setDeleteConfirm}
                   />
                 ))}
@@ -795,8 +800,12 @@ export default function StagedApplicationManager() {
       </div>
 
       {sending && (
-        <SendModal stage={sending} publicUrl={publicUrl}
-          onSent={s => setAllStages(prev => prev.map(x => x.id === s.id ? s : x))}
+        <SendModal
+          stage={sending.stage}
+          corporateId={sending.corporateId}
+          prefillEmail={sending.prefillEmail}
+          publicUrl={publicUrl}
+          onSent={s => s && setAllStages(prev => prev.map(x => x.id === s.id ? s : x))}
           onClose={() => setSending(null)} />
       )}
 
