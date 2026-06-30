@@ -107,48 +107,27 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
   });
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
-  const saveTimerRef = useRef(null);
-  const latestFormRef = useRef(form);
 
   const pctSum = (parseInt(form.cardPresentPct) || 0) + (parseInt(form.internetPct) || 0) + (parseInt(form.motoPct) || 0);
   const canSave = form.mccCode && pctSum === 100;
-  const isComplete = !!(mid.mccCode && mid.monthlyCardSales);
+  // isComplete reads from form state (not stale mid prop) so the header updates immediately after save
+  const isComplete = !!(form.mccCode && form.monthlyCardSales);
 
-  const doSave = useCallback(async (f) => {
-    const sum = (parseInt(f.cardPresentPct) || 0) + (parseInt(f.internetPct) || 0) + (parseInt(f.motoPct) || 0);
-    if (!f.mccCode || sum !== 100) return;
+  const doSave = async () => {
+    if (!canSave) return;
     setSaving(true);
     try {
       const res = await base44.functions.invoke('manageMerchantID', {
         action: 'update', locationId, corporateId, merchantIDId: mid.id,
-        data: { ...f, merchantName: f.merchantName || dbaName },
+        data: { ...form, merchantName: form.merchantName || dbaName },
       });
       const saved = res.data?.updatedMerchantID || res.data?.merchantID;
       if (saved) { onUpdated(saved); setSavedAt(Date.now()); }
     } catch (_) {}
     finally { setSaving(false); }
-  }, [locationId, corporateId, mid.id, dbaName, onUpdated]);
-
-  const setField = (k, v) => {
-    setForm(prev => {
-      const next = { ...prev, [k]: v };
-      latestFormRef.current = next;
-      clearTimeout(saveTimerRef.current);
-      const sum = (parseInt(next.cardPresentPct) || 0) + (parseInt(next.internetPct) || 0) + (parseInt(next.motoPct) || 0);
-      if (next.mccCode && sum === 100) {
-        saveTimerRef.current = setTimeout(() => doSave(latestFormRef.current), 800);
-      }
-      return next;
-    });
   };
 
-  // Flush on unmount
-  useEffect(() => {
-    return () => {
-      clearTimeout(saveTimerRef.current);
-      if (latestFormRef.current) doSave(latestFormRef.current);
-    };
-  }, [doSave]);
+  const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
   return (
     <Draggable draggableId={`mid-${mid.id}`} index={index}>
@@ -252,15 +231,20 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
                 </div>
                 {pctSum !== 100 && <p className="text-[11px] text-amber-400 mt-1">Total: {pctSum}% (must be 100%)</p>}
               </div>
-              {/* Auto-save status + collapse */}
+              {/* Save button + collapse */}
               <div className="flex items-center justify-between pt-1">
-                <div className="flex items-center gap-1.5">
-                  {saving && <><Loader2 className="w-3 h-3 text-amber-400 animate-spin" /><span className="text-[11px] text-amber-400">Saving…</span></>}
-                  {!saving && savedAt && <><Cloud className="w-3 h-3 text-green-400" /><span className="text-[11px] text-green-400">Saved</span></>}
-                  {!saving && !savedAt && canSave && <span className="text-[11px] text-gray-600">Auto-saves as you type</span>}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => { await doSave(); setEditing(false); }}
+                    disabled={saving || !canSave}
+                    className="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold px-4 py-1.5 rounded-lg transition-all"
+                  >
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : savedAt ? <Cloud className="w-3 h-3" /> : null}
+                    {saving ? 'Saving…' : savedAt ? 'Saved' : 'Save'}
+                  </button>
                   {!canSave && <span className="text-[11px] text-gray-600">Fill MCC &amp; card split to save</span>}
                 </div>
-                <button onClick={() => setEditing(false)} className="text-xs text-gray-500 hover:text-white transition-colors">Done</button>
+                <button onClick={() => setEditing(false)} className="text-xs text-gray-500 hover:text-white transition-colors">Cancel</button>
               </div>
             </div>
           )}
