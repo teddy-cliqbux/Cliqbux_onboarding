@@ -345,7 +345,11 @@ function buildFormPayload(
     has_pin_debit: false,       // attempt to disable debit fields; template may override
     debit_auth_method: 'PNL',  // pinless — required when has_pin_debit=true (template default)
     debit_pricing_method: 'ICPLS',
-    is_firearm_verified: 'yes',
+    // ⚠️  CRITICAL — DO NOT CHANGE THIS VALUE ⚠️
+    // MSPWare expects the STRING "no" (not boolean false, not "N", not "yes").
+    // Sending "yes" triggers the firearms MCC validation rule and blocks signing for ALL merchants.
+    // Sending a boolean or "N" is also rejected silently. The only correct value is the string "no".
+    is_firearm_verified: 'no',
     // Per-network debit interchange fees required by template
     ACCL_per_auth: '0.00', ACCL_percent_fee: '0.0000', ACCL_transaction_fee: '0.00',
     AFFN_per_auth: '0.00', AFFN_percent_fee: '0.0000', AFFN_transaction_fee: '0.00',

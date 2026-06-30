@@ -292,7 +292,11 @@ function buildFormPayload(
     has_pin_debit: false,       // attempt to disable debit fields; template may override
     debit_auth_method: 'PNL',  // pinless — required when has_pin_debit=true (template default)
     debit_pricing_method: 'ICPLS',
-    is_firearm_verified: 'yes',
+    // ⚠️  CRITICAL — DO NOT CHANGE THIS VALUE ⚠️
+    // MSPWare expects the STRING "no" (not boolean false, not "N", not "yes").
+    // Sending "yes" triggers the firearms MCC validation rule and blocks signing for ALL merchants.
+    // Sending a boolean or "N" is also rejected silently. The only correct value is the string "no".
+    is_firearm_verified: 'no',
     // Per-network debit interchange fees required by template
     ACCL_per_auth: '0.00', ACCL_percent_fee: '0.0000', ACCL_transaction_fee: '0.00',
     AFFN_per_auth: '0.00', AFFN_percent_fee: '0.0000', AFFN_transaction_fee: '0.00',
@@ -395,16 +399,18 @@ Deno.serve(async (req) => {
     );
 
     // For any concept with a stored mspApplicationNo, verify it still exists in MSP.
-    // Deleted drafts return { success: false } — clear the ID so we auto-recreate.
+    // ONLY clear the ID on an explicit 404 — any other failure (auth, network, rate limit)
+    // means we can't be sure it's gone, so we leave it in place to avoid creating duplicates.
     for (const concept of candidateConcepts) {
       if (!concept.mspApplicationNo) continue;
       try {
         const checkRes = await fetch(`${mspBase}/applications/${concept.mspApplicationNo}`, { headers: mspHeaders });
-        const checkData = await checkRes.json();
-        if (!checkData?.success || checkData?.message?.toLowerCase().includes('not found')) {
-          console.warn(`[signApplication] App ${concept.mspApplicationNo} not found in MSP — clearing ID for "${concept.dbaName}"`);
+        if (checkRes.status === 404) {
+          console.warn(`[signApplication] App ${concept.mspApplicationNo} returned 404 — clearing ID for "${concept.dbaName}"`);
           concept.mspApplicationNo = null;
           await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { mspApplicationNo: null });
+        } else {
+          console.log(`[signApplication] Verified app ${concept.mspApplicationNo} exists (HTTP ${checkRes.status}) for "${concept.dbaName}"`);
         }
       } catch (_) {
         // Non-fatal — if check fails leave the ID in place
