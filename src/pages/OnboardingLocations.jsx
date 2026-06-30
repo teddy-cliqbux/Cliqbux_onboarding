@@ -272,13 +272,19 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
 
 // ─── Location Card (nested inside Entity, draggable) ──────────────────────────
 
-function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, index }) {
+function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, index, showValidation }) {
   const locMids = merchantIDs.filter(c => c.locationId === location.id);
   const [expanded, setExpanded] = useState(locMids.length === 0 || locMids.some(m => !m.mccCode));
   const [addingMid, setAddingMid] = useState(false);
   const [addMidName, setAddMidName] = useState('');
   const [addMidSaving, setAddMidSaving] = useState(false);
   const allMidsComplete = locMids.length > 0 && locMids.every(m => m.mccCode && m.monthlyCardSales);
+  const locationError = showValidation && !allMidsComplete;
+
+  // Auto-expand when validation fires and this location is incomplete
+  useEffect(() => {
+    if (locationError) setExpanded(true);
+  }, [locationError]);
 
   const handleAddMid = async () => {
     setAddMidSaving(true);
@@ -299,7 +305,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
-          className={`rounded-2xl border transition-all ${snapshot.isDragging ? 'border-amber-500/70 shadow-2xl' : allMidsComplete ? 'border-green-500/25 bg-[#161b23]' : 'border-white/10 bg-[#161b23] hover:border-white/20'}`}
+          className={`rounded-2xl border transition-all ${snapshot.isDragging ? 'border-amber-500/70 shadow-2xl' : allMidsComplete ? 'border-green-500/25 bg-[#161b23]' : locationError ? 'border-red-500/40 bg-[#161b23]' : 'border-white/10 bg-[#161b23] hover:border-white/20'}`}
         >
           {/* Location header */}
           <div className="flex items-center gap-2.5 px-4 py-3">
@@ -310,7 +316,10 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
               <Store className={`w-3.5 h-3.5 ${allMidsComplete ? 'text-green-400' : 'text-amber-400'}`} />
             </div>
             <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(e => !e)}>
-              <p className="text-sm font-bold text-white truncate">{location.dbaName}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-bold text-white truncate">{location.dbaName}</p>
+                {locationError && <span className="text-[9px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded-full whitespace-nowrap">Needs info</span>}
+              </div>
               <p className="text-[11px] text-gray-400 truncate flex items-center gap-1">
                 <MapPin className="w-3 h-3 flex-shrink-0" />{location.businessAddress}
               </p>
@@ -642,15 +651,17 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
 
 // ─── Entity Section (top-level group) ────────────────────────────────────────
 
-function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onAddLocation, isOnly, onEntityUpdated }) {
+function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onAddLocation, isOnly, onEntityUpdated, showValidation }) {
   const entityLocs = locations.filter(l => l.entityId === entity.entityId);
   const entityMids = merchantIDs.filter(m => entityLocs.some(l => l.id === m.locationId));
   const allComplete = entityLocs.length > 0 && entityLocs.every(l =>
     merchantIDs.some(m => m.locationId === l.id && m.mccCode && m.monthlyCardSales)
   );
+  const entityDetailsComplete = !!(entity.ownershipType && entity.taxClassType && entity.establishmentYear);
+  const highlightError = showValidation && !allComplete;
 
   return (
-    <div className={`rounded-2xl border overflow-hidden ${allComplete ? 'border-green-500/20' : 'border-white/10'} bg-[#1c2128]`}>
+    <div className={`rounded-2xl border overflow-hidden ${allComplete ? 'border-green-500/20' : highlightError ? 'border-red-500/40' : 'border-white/10'} bg-[#1c2128]`}>
       {/* Entity header bar */}
       <div className="flex items-center gap-3 px-5 py-3 bg-white/[0.03] border-b border-white/8">
         <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center flex-shrink-0">
@@ -693,6 +704,7 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
                 onMerchantIDAdded={onMerchantIDAdded}
                 onMerchantIDUpdated={onMerchantIDUpdated}
                 onMerchantIDDeleted={onMerchantIDDeleted}
+                showValidation={showValidation}
               />
             ))}
             {drop.placeholder}
@@ -1073,6 +1085,8 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     }
   };
 
+  const [showValidation, setShowValidation] = useState(false);
+
   const businessComplete = entities.length > 0 && entities.every(e =>
     e.ownershipType && e.taxClassType && e.establishmentYear
   );
@@ -1083,6 +1097,26 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const allMidsComplete = businessComplete && locations.length > 0 && locations.every(l =>
     merchantIDs.some(c => c.locationId === l.id && c.mccCode && c.monthlyCardSales)
   );
+
+  // Build a list of specific validation issues for user feedback
+  const validationIssues = [];
+  if (!businessComplete) {
+    entities.forEach(e => {
+      const missing = [];
+      if (!e.ownershipType) missing.push('Business Entity Type');
+      if (!e.taxClassType) missing.push('IRS Tax Classification');
+      if (!e.establishmentYear) missing.push('Year Established');
+      if (missing.length) validationIssues.push(`${e.legalBusinessName || 'Legal Entity'}: missing ${missing.join(', ')}`);
+    });
+  }
+  if (locations.length === 0) {
+    validationIssues.push('At least one location is required');
+  } else {
+    locations.forEach(l => {
+      const mid = merchantIDs.find(c => c.locationId === l.id && c.mccCode && c.monthlyCardSales);
+      if (!mid) validationIssues.push(`${l.dbaName}: MCC code and monthly volume are required`);
+    });
+  }
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center py-24 gap-3">
@@ -1149,6 +1183,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                 onAddLocation={entityId => setAddFormEntityId(entityId)}
                 isOnly={entities.length === 1}
                 onEntityUpdated={handleEntityUpdated}
+                showValidation={showValidation}
               />
             ))}
           </div>
@@ -1170,18 +1205,47 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
       {/* Footer */}
       <div className="px-8 pt-2 pb-8 border-t border-white/10 space-y-3">
-        <button onClick={() => onContinue({ locations, legalEntities: entities, profile: currentProfile })}
-          disabled={!allMidsComplete}
-          className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-black font-bold py-4 px-6 rounded-xl text-base transition-all shadow-lg shadow-amber-900/20">
+        {/* Validation error banner — shown only after user attempts to continue */}
+        {showValidation && !allMidsComplete && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-bold text-red-300 mb-2">Please fix the following before continuing:</p>
+                <ul className="space-y-1">
+                  {validationIssues.map((issue, i) => (
+                    <li key={i} className="text-xs text-red-400 flex items-start gap-1.5">
+                      <span className="mt-0.5 w-1 h-1 rounded-full bg-red-400 flex-shrink-0" />
+                      {issue}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+        <button
+          onClick={() => {
+            if (!allMidsComplete) { setShowValidation(true); return; }
+            onContinue({ locations, legalEntities: entities, profile: currentProfile });
+          }}
+          className={`w-full flex items-center justify-center gap-3 font-bold py-4 px-6 rounded-xl text-base transition-all shadow-lg ${
+            allMidsComplete
+              ? 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black shadow-amber-900/20'
+              : showValidation
+              ? 'bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/25'
+              : 'bg-gray-700 text-gray-500'
+          }`}
+        >
           Continue to Banking <ArrowRight className="w-5 h-5" />
         </button>
-        {!businessComplete && <p className="text-center text-xs text-amber-500/80">Complete the business details for each legal entity to continue.</p>}
-        {businessComplete && locations.length === 0 && <p className="text-center text-xs text-gray-600">Add at least one location to continue.</p>}
-        {businessComplete && locations.length > 0 && !allMidsComplete && (
-          <p className="text-center text-xs text-amber-600/80">
-            {completeMids < totalMids
-              ? `${totalMids - completeMids} MID${totalMids - completeMids > 1 ? 's' : ''} still need MCC code and volume info.`
-              : 'Each location needs at least one MID with MCC and monthly volume filled in.'}
+        {!showValidation && !allMidsComplete && (
+          <p className="text-center text-xs text-gray-600">
+            {!businessComplete
+              ? 'Complete business details for each entity to continue.'
+              : locations.length === 0
+              ? 'Add at least one location to continue.'
+              : `${totalMids - completeMids} MID${totalMids - completeMids !== 1 ? 's' : ''} still need MCC code and volume info.`}
           </p>
         )}
       </div>
