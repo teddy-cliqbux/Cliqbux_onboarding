@@ -590,7 +590,7 @@ function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, pu
                   {copied === s.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
                 </button>
                 <a href={link} target="_blank" rel="noreferrer" className="text-gray-600 hover:text-gray-300"><Eye className="w-3 h-3" /></a>
-                <button onClick={() => onSend(s)} className="text-gray-600 hover:text-green-400 transition-colors"><Send className="w-3 h-3" /></button>
+                <button onClick={() => onSend(s, corporateId, s.sentToEmail || p.signerEmail || '')} className="text-gray-600 hover:text-green-400 transition-colors"><Send className="w-3 h-3" /></button>
                 <button onClick={() => onDelete(s)} className="text-gray-600 hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
               </div>
             );
