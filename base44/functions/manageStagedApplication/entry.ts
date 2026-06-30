@@ -70,10 +70,10 @@ Deno.serve(async (req) => {
 
       const link = `${publicUrl}/?stageId=${stage.id}&token=${stage.accessToken}`;
 
-      await base44.asServiceRole.integrations.Core.SendEmail({
-        to: toEmail,
-        subject: 'Your Cliqbux Merchant Application',
-        body: `
+      const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+      if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured');
+
+      const emailHtml = `
 <div style="font-family: Inter, sans-serif; background: #111318; color: #e5e7eb; padding: 40px; max-width: 600px; margin: 0 auto; border-radius: 16px;">
   <div style="margin-bottom: 24px;">
     <span style="font-size: 24px; font-weight: 800; color: #f0ad4e;">cliqbux</span>
@@ -84,9 +84,26 @@ Deno.serve(async (req) => {
     Complete My Application →
   </a>
   <p style="color: #6b7280; font-size: 12px; margin-top: 32px;">If you did not expect this email, you can ignore it. Questions? Reply to this email.</p>
-</div>
-        `.trim(),
+</div>`.trim();
+
+      const emailRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'Cliqbux Onboarding <onboarding@resend.dev>',
+          to: [toEmail],
+          subject: 'Your Cliqbux Merchant Application',
+          html: emailHtml,
+        }),
       });
+      if (!emailRes.ok) {
+        const errBody = await emailRes.json().catch(() => ({})) as any;
+        // Provide a clear actionable message for domain verification issues
+        if (errBody?.statusCode === 403) {
+          throw new Error('Email domain not verified. Please verify cliqbux.com at resend.com/domains before sending to external recipients.');
+        }
+        throw new Error(`Email send failed: ${errBody?.message || JSON.stringify(errBody)}`);
+      }
 
       const updated = await base44.asServiceRole.entities.StagedApplication.update(stageId, {
         status: 'sent',
