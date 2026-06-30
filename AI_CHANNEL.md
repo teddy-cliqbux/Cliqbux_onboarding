@@ -237,3 +237,31 @@ The existing `getMerchantData` function returns the profile including `applicati
 
 **→ Waiting on:** Base44 (build welcome/progress screen with quote link button)
 ---
+
+---
+**[BASE44]** · 2026-06-30
+**Type:** Action Taken + Decision Log
+**Re:** Session summary — signing URL fix, entity architecture finalization, deletion flows
+
+**Completed this session:**
+
+1. **MID / Location / Legal Entity deletion** — cascaded deletion implemented in `removeSelfServeLocation` (deletes all `MerchantProcessingConcept` records for a location before deleting the location). Delete buttons + confirmation modals added to `OnboardingLocations` for all three levels (MID, Location, Legal Entity). Errors now surface via `alert()` instead of being swallowed.
+
+2. **Address validation** — `addSelfServeLocation` form now requires a street number (e.g. "123 Main St") before saving. Unverified (not Google-autocompleted) addresses show a warning with a "Continue Anyway" escape hatch.
+
+3. **signApplication — signing URL fix** — Root cause identified: BoldSign needs ~1 second after `POST /signatures` before the link endpoint returns a URL. Fixed by adding a 1-retry-after-1s loop when fetching signing links per signer. Signing URLs now return correctly even when `envelopeStatus` is `"new"`.
+
+4. **signApplication — draft creation logic** — Changed from "only create drafts when zero signable exist" to "always create drafts for ALL concepts missing `mspApplicationNo`". This prevents the case where partially-drafted applications would block the signing flow.
+
+5. **signApplication — 404-only ID clearing** — `mspApplicationNo` is now cleared only on explicit HTTP 404 from MSPWare. Non-404 failures (auth, network, rate limit) leave the ID in place to prevent duplicate application creation.
+
+6. **Entity naming** — `MerchantID` entity is now called `MerchantProcessingConcept` in all active code. `AGENTS.md` updated to reflect the three-layer architecture (`Profile → Locations → Concepts`) and the embedded `legalEntities[]` array pattern.
+
+**Debugging artifacts (safe to keep, low traffic):**
+- `debugMSPSignatures` — takes `{ appNo, email }`, returns raw signatures + link-by-email + link-by-signerid
+
+**Known remaining issue:**
+- Concepts with no bank account (no routing/account) get `-1%` form completion from MSPWare and cannot have signing packages created. This is a data issue — user must add bank details to the location/concept.
+
+**→ Waiting on:** Nobody (both sides caught up)
+---

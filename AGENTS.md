@@ -61,28 +61,45 @@ Published function base URL: `https://cliqbux-onboard-prime.base44.app/functions
 - **MerchantCorporateProfile** — legal entity, TIN, ownership type, signers
 - **MerchantSigners** — individual owners/signers with SSN, DOB, address
 - **MerchantLocations** — physical storefronts (address + bank details)
-- **MerchantID** — one per Elavon MID; links to a location (NEW — in migration)
+- **MerchantProcessingConcept** — one per Elavon MID; links to a location (replaces the old `MerchantID` entity name — same concept, renamed for clarity)
+- **MerchantAccessTokens** — magic-link tokens for merchant portal access
+- **StagedApplication** — admin-built targeted application invites for merchants
 - **MerchantInventoryAssets** — equipment/inventory tracking
+- **MerchantSigners** — individual owners/signers with SSN, DOB, address
 - **User** — portal users
 
-### Architecture direction: MerchantID
-We are migrating from a flat `MerchantLocations`-centric model to a two-layer model:
+### Architecture: MerchantProcessingConcept (was MerchantID)
+Three-layer model (migration complete):
 
 ```
 MerchantCorporateProfile
-  └── MerchantLocations (physical address + bank account)
-        └── MerchantID (one per MID — mcc, dba, status, elavonMID)
+  └── legalEntities[] (embedded array — each has EIN, ownershipType, taxClassType, mailingAddress)
+  └── MerchantLocations (physical address + bank account, FK corporateId)
+        └── MerchantProcessingConcept (one per MID — mcc, dba, status, elavonMID, FK locationId + corporateId)
 ```
 
-A single physical location can have multiple Merchant IDs (e.g. a grocery store with a Bakery MID and a Cafe MID). Each Merchant ID maps to exactly one MSPWare application and one Elavon MID.
+A single physical location can have multiple Concepts (e.g. a grocery store with a Bakery MID and a Cafe MID). Each Concept maps to exactly one MSPWare application and one Elavon MID.
 
-**Do NOT build new features against the flat `MerchantLocations` boarding fields.** Use `MerchantID` for anything MID-related going forward.
+**Do NOT build new features against the flat `MerchantLocations` boarding fields.** Use `MerchantProcessingConcept` for anything MID-related.
 
-### Fields moving OFF MerchantLocations → ONTO MerchantID
-- `mspApplicationNo` (still on Locations for legacy; primary home is now MerchantID)
+### legalEntities embedded array on MerchantCorporateProfile
+Legal entities (EIN groups) are stored as an embedded array on the profile, NOT as a separate entity. Managed via `manageLegalEntity` function. Each entry has: `entityId` (UUID), `legalBusinessName`, `federalEIN`, `mailingStreet/City/State/Zip`, `ownershipType`, `taxClassType`, `establishmentYear`.
+
+### MerchantLocations.entityId
+Each location links to a `legalEntity.entityId` in the profile's embedded array. This determines which EIN group the location belongs to for MSPWare submission.
+
+### Fields ON MerchantProcessingConcept (not MerchantLocations)
+- `mspApplicationNo` — MSPWare draft application number
 - `elavonMID`
-- `applicationStepStatus`
+- `applicationStepStatus` — `In Review | Ready to Submit | Pending MID | Active | Active (Existing) | Error`
+- `isExistingAccount` — true for pre-imported MIDs (skip boarding flow)
+- `existingAccountSource` — `mspware_import | manual_claim | migration`
+- `mccCode`, `industryType`, `pricingCategory`, `pricingMethod`, `monthlyCardSales`, `avgSaleAmount`, `highestTicketAmount`, `cardPresentPct`, `deliveryDelayDays`
+- `bankDetails` — per-concept bank override (null = inherit from parent location)
+
+### Fields DEPRECATED on MerchantLocations (do not use)
 - `awb` / `boardingId` — DEPRECATED, no longer written
+- `mspApplicationNo`, `elavonMID` — legacy copies only; primary home is `MerchantProcessingConcept`
 
 ---
 
@@ -138,14 +155,44 @@ A single physical location can have multiple Merchant IDs (e.g. a grocery store 
 
 ---
 
+## Signing Flow (signApplication)
+
+`signApplication` packages MSPWare applications for BoldSign e-signature and returns iframe-embeddable signing URLs.
+
+### Flow
+1. Load profile, signers, concepts, locations
+2. For all non-done concepts (`Active`, `Active (Existing)`, `Pending MID` are skipped), verify their `mspApplicationNo` still exists in MSP — clear it **only on explicit 404** (not on network errors)
+3. Auto-create MSPWare drafts for **all concepts missing `mspApplicationNo`** (not just when zero signable exist)
+4. Fill form via `PUT /applications/{no}/form`; re-check completion via GET after PUT
+5. Create signature package via `POST /applications/{no}/signatures` with `sendEmail: false`
+6. Fetch signing link per signer via `GET /applications/{no}/signatures/link?emailAddress=<email>`
+
+### Critical signing link behavior
+- The `POST /signatures` response body does NOT contain the signing URL — only the endpoint path
+- The link endpoint (`/signatures/link?emailAddress=`) DOES return the BoldSign URL, but only after a brief delay after package creation
+- **Always retry the link endpoint once after 1 second** if it returns null — BoldSign needs a moment after package creation
+- When `envelopeStatus` is `"new"` and signer `status` is `"new"`, the link IS available — do not skip it
+- Response `link` field is a full `https://app.boldsign.com/document/sign/?documentId=...` URL
+
+### Signing URL debugging
+- Use `debugMSPSignatures` function: `{ appNo: 165, email: "user@example.com" }` — returns raw signatures response + link by email + link by signerid
+- A `-1%` form completion means the concept has no bank details (no routing/account number) — fix the data, not the code
+
+### is_firearm_verified
+⚠️ **CRITICAL — DO NOT CHANGE:** Must always be the string `"no"` — not boolean `false`, not `"N"`, not `"yes"`. Any other value triggers the firearms MCC validation rule and blocks signing for ALL merchants in that application.
+
+---
+
 ## What NOT to Do
 
 - Do not call Elavon eBanking API directly (no `uat-buynow-na.elavon.net`, no `PAPI_USA_CLIQBUX1`, no AWB-based polling)
 - Do not use `submitToElavon` — it is deleted
 - Do not set `MSP_SUBMIT_ENABLED=true` in any automated test or dry-run context
-- Do not add new boarding fields to `MerchantLocations` — use `MerchantID` entity
+- Do not add new boarding fields to `MerchantLocations` — use `MerchantID` entity (now `MerchantProcessingConcept`)
 - Do not hardcode `86764` as salesperson ID — that is the old Elavon rep code; MSPWare ID is `76764`
 - Do not use `appkey`/`appid` as MSPWare header names — use `X-API-KEY` and `X-App-ID`
+- Do not clear `mspApplicationNo` on non-404 errors (network failure, rate limit, auth error) — only clear on explicit HTTP 404
+- Do not add `is_firearm_verified: false` (boolean) or `"N"` — must be the string `"no"`
 
 ---
 
