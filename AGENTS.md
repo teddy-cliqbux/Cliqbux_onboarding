@@ -181,6 +181,30 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 ### is_firearm_verified
 ⚠️ **CRITICAL — DO NOT CHANGE:** Must always be the string `"no"` — not boolean `false`, not `"N"`, not `"yes"`. Any other value triggers the firearms MCC validation rule and blocks signing for ALL merchants in that application.
 
+### MSPWare form field constraints (buildFormPayload)
+
+These rules are enforced by MSPWare validation and will cause `success: false` / `-1%` completion if violated:
+
+| Rule | Detail |
+|---|---|
+| `average_sales` < `monthly_sales` | average must be strictly less than monthly volume |
+| `highest_ticket` > `average_sales` | highest ticket must be **strictly greater than** average (not equal) |
+| `highest_ticket` < `monthly_sales` | highest ticket must also be less than monthly volume |
+| `delayed_delivery` >= 1 | minimum value is 1 even when fulfillment is immediate |
+
+**Correct cap logic:**
+```js
+const cap = Math.max(monthlyCardSales - 1, 1);
+const avgSaleAmount = Math.min(rawAvg, cap);
+const minHighest = avgSaleAmount + 1;           // strictly greater than average
+const highestTicketAmount = Math.min(Math.max(rawHighest, minHighest), cap);
+```
+
+**Symptom of broken cap logic:** MSPWare returns `percent_complete: -1` or 98–99% after PUT with a data error like `"Must be Greater than Average Transaction Amount"` for `highest_ticket`. The GET after PUT will show -1% because MSPWare rolls back the entire form on validation failure.
+
+### -1% form completion after PUT
+MSPWare rolls back the entire form and returns `percent_complete: -1` when **any** validation rule fails during PUT. The GET after a failed PUT looks identical to a blank form. Always check the PUT response body for `validation.errors.data` — the real error is there, not in the GET.
+
 ---
 
 ## What NOT to Do

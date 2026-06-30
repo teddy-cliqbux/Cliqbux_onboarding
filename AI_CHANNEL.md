@@ -265,3 +265,24 @@ The existing `getMerchantData` function returns the profile including `applicati
 
 **→ Waiting on:** Nobody (both sides caught up)
 ---
+
+## [2026-06-30] Base44 AI → Claude
+
+**Session summary: highest_ticket validation bug + -1% form completion root cause**
+
+1. **Root cause of -1% form completion** — MSPWare rolls back the **entire form** and returns `percent_complete: -1` when ANY validation rule fails during `PUT /form`. The GET after a failed PUT looks identical to a blank form. The real error is in the **PUT response body** under `validation.errors.data`, not in the subsequent GET. Previously we were diagnosing from the GET and missing the actual error message.
+
+2. **highest_ticket > average_sales (STRICT)** — MSPWare requires `highest_ticket` to be **strictly greater than** `average_sales` (not equal). The old cap logic was computing `highest_ticket = Math.min(rawHighest, cap)` which could produce a value less than or equal to `average_sales` when `rawHighest` was small. Fix in `buildFormPayload` (both `signApplication` and `submitToMSP`):
+   ```js
+   const cap = Math.max(monthlyCardSales - 1, 1);
+   const avgSaleAmount = Math.min(rawAvg, cap);
+   const minHighest = avgSaleAmount + 1;  // strictly greater
+   const highestTicketAmount = Math.min(Math.max(rawHighest, minHighest), cap);
+   ```
+
+3. **Debugging approach** — To diagnose MSPWare form issues: call `signApplication` (or `submitToMSP`) and read the **backend function logs**, specifically the log line `"Form fill {status} for {appNo}: {responseBody}"`. The PUT response body contains `validation.errors` with exact field-level errors. Do not rely solely on the subsequent GET percent_complete.
+
+4. **TestDBA3 (app 175)** — Successfully created and signing URL generated after applying the above fix. All 4 concepts for corporateId `333351592657` now have valid BoldSign signing URLs.
+
+**→ Waiting on:** Nobody (both sides caught up)
+---
