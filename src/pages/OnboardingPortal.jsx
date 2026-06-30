@@ -172,7 +172,7 @@ export default function OnboardingPortal() {
       let mergedProfile = data.profile;
       let filteredLocations = data.locations || [];
       const stage = stagedAppRef.current;
-      if (stage) {
+      if (stage && stage.label !== '__auto_track__') {
         if (stage.prefilledData && Object.keys(stage.prefilledData).length > 0) {
           mergedProfile = { ...mergedProfile, ...stage.prefilledData };
         }
