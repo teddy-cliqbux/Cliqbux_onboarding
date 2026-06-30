@@ -1050,10 +1050,14 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const handleDeleteLocation = async (loc) => {
     setDeleteConfirm(null);
     try {
-      await base44.functions.invoke('removeSelfServeLocation', { locationId: loc.id });
+      const res = await base44.functions.invoke('removeSelfServeLocation', { locationId: loc.id });
+      if (res.data?.error) throw new Error(res.data.error);
       setLocations(prev => prev.filter(l => l.id !== loc.id));
       setMerchantIDs(prev => prev.filter(c => c.locationId !== loc.id));
-    } catch (_) {}
+    } catch (err) {
+      console.error('[handleDeleteLocation]', err);
+      alert('Failed to delete location: ' + (err.message || 'Unknown error'));
+    }
   };
 
   const handleDeleteMid = async (mid) => {
