@@ -417,46 +417,24 @@ Deno.serve(async (req) => {
       }
     }
 
-    let signable = candidateConcepts.filter((c: any) => c.mspApplicationNo);
+    // ── 3. Auto-create MSPWare drafts for ANY concept missing one (not just when signable=0) ──
+    if ((allConcepts || []).length === 0) {
+      return Response.json({
+        success: false,
+        error: 'No processing concepts found.',
+        hint: 'Please complete the locations and banking setup steps first.',
+      });
+    }
 
-    // ── 3. Auto-create MSPWare draft applications if none exist yet ───────────
-    // This handles the case where the user navigated directly to the signing step
-    // without going through the banking step (where submitToMSP is normally called).
-    if (signable.length === 0) {
-      const needsDraft = (allConcepts || []).filter((c: any) =>
-        !c.mspApplicationNo && !DONE_STATUSES.includes(c.applicationStepStatus)
-      );
-
-      if (needsDraft.length === 0 && (allConcepts || []).length === 0) {
-        return Response.json({
-          success: false,
-          error: 'No processing concepts found.',
-          hint: 'Please complete the locations and banking setup steps first.',
-        });
-      }
-
-      if (needsDraft.length === 0) {
-        // All concepts are already active/pending
-        return Response.json({
-          success: false,
-          error: 'All applications are already active or pending.',
-          hint: 'Your applications have already been submitted and are being processed.',
-        });
-      }
-
-      console.log(`[signApplication] No signable concepts — auto-creating drafts for ${needsDraft.length} concept(s)`);
-
-      const autoCreateErrors: string[] = [];
-
+    const needsDraft = candidateConcepts.filter((c: any) => !c.mspApplicationNo);
+    if (needsDraft.length > 0) {
+      console.log(`[signApplication] Auto-creating drafts for ${needsDraft.length} concept(s) missing mspApplicationNo`);
       for (const concept of needsDraft) {
         const location = locationMap[concept.locationId];
         if (!location) {
-          const msg = `Concept "${concept.dbaName || concept.id}" has no matching location (locationId=${concept.locationId})`;
-          console.warn(`[signApplication] ${msg}`);
-          autoCreateErrors.push(msg);
+          console.warn(`[signApplication] Concept "${concept.dbaName}" has no matching location (locationId=${concept.locationId}) — skipping`);
           continue;
         }
-
         try {
           const isCashDiscount = (concept.pricingMethod || profile.pricingMethod || '').toUpperCase() === 'CASH_DISCOUNT';
           const templateNo = concept.mspTemplateNo || profile.mspTemplateNo || (isCashDiscount ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
@@ -466,65 +444,40 @@ Deno.serve(async (req) => {
             salespersonid: salespersonId,
             templatemerchantapplicationno: templateNo,
           };
-
-          console.log(`[signApplication] POST /applications for "${concept.dbaName}":`, JSON.stringify(createBody));
-
           const createRes = await fetch(`${mspBase}/applications`, {
-            method: 'POST',
-            headers: mspHeaders,
-            body: JSON.stringify(createBody),
+            method: 'POST', headers: mspHeaders, body: JSON.stringify(createBody),
           });
           const createData = await createRes.json();
-          console.log(`[signApplication] POST /applications response ${createRes.status}:`, JSON.stringify(createData));
-
+          console.log(`[signApplication] POST /applications response ${createRes.status} for "${concept.dbaName}":`, JSON.stringify(createData));
           if (!createRes.ok || !createData.success) {
-            const errMsg = createData?.error || createData?.message || `HTTP ${createRes.status}: ${JSON.stringify(createData)}`;
-            console.error(`[signApplication] Failed to create draft for "${concept.dbaName}":`, errMsg);
-            autoCreateErrors.push(`"${concept.dbaName}": ${errMsg}`);
+            console.error(`[signApplication] Failed to create draft for "${concept.dbaName}":`, createData?.error || createData?.message);
             continue;
           }
-
           const mspApplicationNo = String(createData.merchantapplicationno);
-          console.log(`[signApplication] Auto-created draft ${mspApplicationNo} for "${concept.dbaName}"`);
-
-          // Persist immediately
-          await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, {
-            mspApplicationNo,
-            applicationStepStatus: 'In Review',
-          });
+          await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { mspApplicationNo, applicationStepStatus: 'In Review' });
           concept.mspApplicationNo = mspApplicationNo;
-          concept.applicationStepStatus = 'In Review';
-
           // Fill form
           const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
           const formPayload = buildFormPayload(profile, resolveLocationAddress(location), concept, primarySigner, additionalSigners, entityMailing);
           const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
-            method: 'PUT',
-            headers: mspHeaders,
-            body: JSON.stringify(formPayload),
+            method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
           });
           const formData = await formRes.json();
           console.log(`[signApplication] Form fill ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(formData));
         } catch (err: any) {
-          console.error(`[signApplication] Exception auto-creating draft for concept ${concept.id}:`, err.message);
+          console.error(`[signApplication] Exception creating draft for "${concept.dbaName}":`, err.message);
         }
       }
+    }
 
-      // Re-filter after auto-creation
-      signable = (allConcepts || []).filter((c: any) =>
-        c.mspApplicationNo && !DONE_STATUSES.includes(c.applicationStepStatus)
-      );
+    let signable = candidateConcepts.filter((c: any) => c.mspApplicationNo);
 
-      if (signable.length === 0) {
-        return Response.json({
-          success: false,
-          error: 'Unable to prepare signing documents.',
-          hint: autoCreateErrors.length > 0
-            ? `MSPWare errors: ${autoCreateErrors.join(' | ')}`
-            : 'Could not create MSPWare draft applications. Check MSPWare API status and try again.',
-          autoCreateErrors,
-        });
-      }
+    if (signable.length === 0) {
+      return Response.json({
+        success: false,
+        error: 'Unable to prepare signing documents.',
+        hint: 'Could not create MSPWare draft applications. Check MSPWare API status and try again.',
+      });
     }
 
     console.log(`[signApplication] corporateId=${corporateId} signable concepts: ${signable.length}`);
@@ -648,12 +601,18 @@ Deno.serve(async (req) => {
         const email = s.emailAddress || s.email || '';
         if (!email) continue;
 
-        const linkRes = await fetch(
-          `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(email)}`,
-          { headers: mspHeaders }
-        );
-        const linkData = await linkRes.json();
-        const link = linkData?.link || null;
+        // Fetch link — retry once after 1s if not yet available (BoldSign may need a moment after package creation)
+        let link: string | null = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 1000));
+          const linkRes = await fetch(
+            `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(email)}`,
+            { headers: mspHeaders }
+          );
+          const linkData = await linkRes.json();
+          link = linkData?.link || null;
+          if (link) break;
+        }
 
         signerLinks.push({
           email,
