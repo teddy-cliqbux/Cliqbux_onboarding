@@ -538,6 +538,12 @@ function ApplicationRow({ corporateId, merchantName, trackStage, adminStages, pu
             className="p-1.5 text-gray-600 hover:text-amber-400 rounded-lg transition-colors">
             <Plus className="w-3.5 h-3.5" />
           </button>
+          {trackStage && (
+            <button onClick={() => onDelete(trackStage)} title="Delete tracking record"
+              className="p-1.5 text-gray-600 hover:text-red-400 rounded-lg transition-colors">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
