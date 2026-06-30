@@ -846,6 +846,12 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSa
   const doSave = async (addr) => {
     setSaving(true); setError('');
     try {
+      // Validate street number if we have a parsed address
+      if (addr && !addr.street.match(/^\d/)) {
+        setError('Address must include a street number (e.g. "123 Main St"). Please select a more specific address.');
+        setSaving(false);
+        return;
+      }
       const businessAddress = addr ? `${addr.street}, ${addr.city}, ${addr.state} ${addr.zip}` : addressDisplay.trim();
       const locRes = await base44.functions.invoke('addSelfServeLocation', {
         corporateId, dbaName: dbaName.trim(),
@@ -1056,11 +1062,13 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
   const handleDeleteLocation = async (loc) => {
     setDeleteConfirm(null);
+    const idToDelete = loc.id || loc.locationId;
+    if (!idToDelete) { alert('Cannot delete: location has no ID.'); return; }
     try {
-      const res = await base44.functions.invoke('removeSelfServeLocation', { locationId: loc.id });
+      const res = await base44.functions.invoke('removeSelfServeLocation', { locationId: idToDelete });
       if (res.data?.error) throw new Error(res.data.error);
-      setLocations(prev => prev.filter(l => l.id !== loc.id));
-      setMerchantIDs(prev => prev.filter(c => c.locationId !== loc.id));
+      setLocations(prev => prev.filter(l => (l.id || l.locationId) !== idToDelete));
+      setMerchantIDs(prev => prev.filter(c => c.locationId !== idToDelete));
     } catch (err) {
       console.error('[handleDeleteLocation]', err);
       alert('Failed to delete location: ' + (err.message || 'Unknown error'));
