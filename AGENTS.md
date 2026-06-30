@@ -113,7 +113,7 @@ Published function base URL: `https://cliqbux-onboard-prime.base44.app/functions
 | `mcc` | Elavon MCC codes e.g. `5812`, `5411A`, `5999` |
 | `pricing_category` | 1=Retail, 2=Lodging, 4=Supermarket, 5=ARU, 6=MOTO, 7=Restaurant, 13=Omni |
 | `auth_pricing_program` | `49999` (Cliqbux account constant) |
-| `is_firearm_verified` | **OMIT from PUT /form payload entirely.** MSPWare template #6 and #154 already have this field set to the correct internal value. Sending ANY value in the PUT (including `"yes"`, `false`, `"N"`, `"YES"`, etc.) overrides the template's value with something invalid, causing the form to DROP below 100% completion and blocking signing. The correct flow: `signApplication` GETs the form first — when the template default is in place the form is at 100%, the PUT is skipped entirely, and signing URLs are generated normally via the API with no manual MSP dashboard action required. The `"yes"` captured from the MSPWare network (2026-06-29) came from their internal `TestData.cfc` UI endpoint, which has different validation than the API's PUT /applications/{no}/form. |
+| `is_firearm_verified` | **OMIT from PUT /form payload entirely.** MSPWare template #6 and #154 already have this field set to the correct internal value. Sending ANY value in the PUT (including `"yes"`, `"no"`, `false`, `"N"`, `"YES"`, `true`) overrides the template's value with something invalid, causing the form to DROP below 100% completion and blocking signing. The correct flow: `signApplication` GETs the form first — when the template default is in place the form is at 100%, the PUT is skipped entirely, and signing URLs are generated normally via the API with no manual MSP dashboard action required. The `"yes"` captured from the MSPWare network (2026-06-29) came from their internal `TestData.cfc` UI endpoint, which has different validation than the API's PUT /applications/{no}/form. `"no"` was tried on 2026-06-30 and also drops completion. There is no valid string — omit the field entirely. `debugMSPFormRaw` previously had `"yes"` hardcoded — removed 2026-06-30. |
 | `debit_auth_method` | `"PNL"` (pinless) — required when `has_pin_debit=true` (template default). Confirmed valid 2026-06-29. |
 | `debit_pricing_method` | `"ICPLS"` — confirmed valid 2026-06-29. |
 | `has_pin_debit` | Send `false` in payload to attempt suppressing conditional debit fields. Template may override. |
@@ -188,7 +188,7 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 `createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `handleHubspotWebhook`, `syncFromHubspot`, `pushStatusToHubspot`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`
 
 ### Debug/admin-only functions (do not call from merchant portal)
-`checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`
+`checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`, `cleanupTestHubspot`
 
 
 ### MID creation → auto MSPWare draft
@@ -212,8 +212,58 @@ When a new `MerchantProcessingConcept` is created via `manageMerchantID` (action
 | `MSP_SALESPERSON_ID` | `76764` |
 | `MSP_SUBMIT_ENABLED` | `true` to actually submit to Elavon; omit for safe draft-only mode |
 | `ELAVON_USERNAME` / `ELAVON_PASSWORD` | Only used by `getDocuments`/`listDocuments` (direct Elavon doc API) |
+| `HUBSPOT_API_KEY` | HubSpot Private App token — used by `createHubspotDeal`, `pushStatusToHubspot`, `handleHubspotWebhook`, `syncFromHubspot`, `cleanupTestHubspot` |
 
 **Production credentials live in Base44 env vars only — never in code or committed files.**
+
+---
+
+## HubSpot Integration
+
+### How HubSpot maps to Base44
+
+HubSpot is the CRM/sales layer. Base44 is the operational layer. They are linked by `corporateId = HubSpot dealId`.
+
+```
+HubSpot                          Base44
+──────────────────────────────────────────────────────────
+Parent Company (Corporation)  →  MerchantCorporateProfile
+  └─ Child Company (Brand)    →  (brand grouping — no entity yet)
+       └─ Child Company (Loc) →  MerchantLocations
+Deal (on Location company)    →  corporateId = dealId (the link)
+Quote (on Deal)               →  hubspotQuoteId on MerchantLocations (planned)
+Line Items (on Quote)         →  fetched live via HubSpot API
+```
+
+### 3-tier company hierarchy
+HubSpot supports multi-level parent-child on Company records:
+- **Tier 1 — Corporation**: top-level Company (Island Pacific, BAD BAKERS LLC, Tailwind Concessions)
+- **Tier 2 — Brand**: child Company of Corporation (San Honore, Phil House, Boba Opa). Single-brand operators skip this tier.
+- **Tier 3 — Location**: child Company of Brand or Corp. Convention: `"Brand - City"`. Tailwind and BAD BAKERS already follow this pattern (~229 child companies as of 2026-06-29).
+
+**Critical constraint:** Legal entity structure is unknown until the merchant fills out the onboarding application. Don't pre-build the hierarchy during sales — build it retroactively when the merchant submits.
+
+### `createHubspotDeal` — what it does
+Called at portal self-serve sign-up. Creates: Contact + Company (dedups by email domain) + Deal (`"${businessName} — Self-Serve Onboarding"`) → associates them → creates `MerchantCorporateProfile` in Base44 with `corporateId = dealId`.
+
+**Known bug:** Company dedup uses signer email domain. Testing with `@cliqbux.com` created 112 junk deals + orphan companies. `cleanupTestHubspot` admin function deletes these.
+
+### `pushStatusToHubspot` — milestone → deal stage
+Fire-and-forget from `OnboardingPortal.jsx`. Was silently broken (auth.me() check, fixed 2026-06-29). Now correctly advances deal stages on portal milestone events.
+
+### Custom Company properties (already created by `setupHubspotProperties`, not yet written to)
+`ein`, `ownership_type`, `state_of_formation`, `mcc_code`, `dba_name`, `monthly_card_sales`, `avg_ticket`, `card_present_pct`, `pricing_tier`
+**Next step:** Enrich these on `application_submitted` milestone inside `pushStatusToHubspot`.
+
+### HubSpot Quote line items — confirmed field names (from quote 305636118240)
+`name`, `quantity`, `price`, `amount`, `hs_total_discount`, `hs_discount_percentage`, `hs_sku`, `description`
+Quote-level: `hs_quote_link`, `hs_quote_esign_status`, `hs_esign_num_signers_completed/required`, `hs_quote_amount`, `hs_expiration_date`
+
+**To pull line items:** `GET /crm/v3/objects/quotes/{quoteId}?associations=line_items` then `POST /crm/v3/objects/line_items/batch/read`
+
+### Post-signing dashboard (planned)
+After MSP signing, `PostSubmissionDashboard` gains an equipment order panel pulling HubSpot quote line items natively (not via iframe — HubSpot blocks iframing via X-Frame-Options).
+Needs: `hubspotQuoteId` field on `MerchantLocations` + `getHubspotQuote` backend function.
 
 ---
 
@@ -256,7 +306,7 @@ When a new `MerchantProcessingConcept` is created via `manageMerchantID` (action
 - A `-1%` form completion means the concept has no bank details (no routing/account number) — fix the data, not the code
 
 ### is_firearm_verified
-⚠️ **CRITICAL — DO NOT CHANGE:** Must always be the string `"no"` — not boolean `false`, not `"N"`, not `"yes"`. Any other value triggers the firearms MCC validation rule and blocks signing for ALL merchants in that application.
+⚠️ **CRITICAL — DO NOT CHANGE:** 
 
 ### MSPWare form field constraints (buildFormPayload)
 
@@ -294,7 +344,7 @@ MSPWare rolls back the entire form and returns `percent_complete: -1` when **any
 - Do not use `appkey`/`appid` as MSPWare header names — use `X-API-KEY` and `X-App-ID`
 <<<<<<< HEAD
 - Do not clear `mspApplicationNo` on non-404 errors (network failure, rate limit, auth error) — only clear on explicit HTTP 404
-- Do not add `is_firearm_verified: false` (boolean) or `"N"` — must be the string `"no"`
+- Do not add `is_firearm_verified: false` 
 =======
 - Do not send `is_firearm_verified` in the API payload at all — every value is rejected by MSPWare PUT /form. The "yes" captured from the MSPWare UI applies only to their internal TestData.cfc endpoint. Omit the field entirely.
 - Do not add `catch (_) {}` silent error swallowing — always log errors and surface them to the user

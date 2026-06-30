@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
         has_pin_debit: false,
         debit_auth_method: 'PNL',
         debit_pricing_method: 'ICPLS',
-        is_firearm_verified: 'yes',
+        // is_firearm_verified: OMIT — any value (yes, no, false, N) overrides the template and drops form below 100%. See AGENTS.md Critical Lesson #1.
         ACCL_per_auth: '0.00', ACCL_percent_fee: '0.0000', ACCL_transaction_fee: '0.00',
         AFFN_per_auth: '0.00', AFFN_percent_fee: '0.0000', AFFN_transaction_fee: '0.00',
         statement_delivery_method: 'E',

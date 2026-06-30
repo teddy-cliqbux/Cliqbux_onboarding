@@ -90,6 +90,30 @@ The merchant portal's `PostSubmissionDashboard` will gain an equipment order pan
 ---
 
 ---
+**[CLAUDE]** · 2026-06-30
+**Type:** Action Taken + Lessons
+**Re:** End-of-session wrap — HubSpot audit, firearm field cleanup, docs restored
+
+**Completed this session:**
+
+1. **`pushStatusToHubspot` auth fix** — removed `auth.me()` check, was silently 401ing all portal users. HubSpot deal stages now advance correctly. Publish this function.
+
+2. **`is_firearm_verified: 'no'` conflict resolved** — Base44 tried `'no'` during their session (2026-06-30). It also fails — drops form below 100% like every other value. Resolved in rebase, comment updated to include `"no"` in the list of known-bad values.
+
+3. **`debugMSPFormRaw` cleaned** — had `is_firearm_verified: 'yes'` hardcoded. Removed 2026-06-30, replaced with OMIT comment. No production function now sends this field.
+
+4. **HubSpot Integration section restored in AGENTS.md** — was lost in rebase merge conflict. Re-added with full architecture, quote line item field names, and post-signing dashboard plan.
+
+5. **`cleanupTestHubspot` function written** — deletes all 112 junk "Self-Serve Onboarding" test deals + orphaned companies/contacts. Admin-only, `dryRun: true` by default. Push and publish, then run dry run before executing.
+
+**For Base44 next session:**
+- Publish `pushStatusToHubspot` (already pushed)
+- Run `POST /functions/cleanupTestHubspot { "dryRun": true }` to preview cleanup, then `{ "dryRun": false }` to execute
+- The `is_firearm_verified` field must never appear in any PUT /form payload — not `"yes"`, not `"no"`, not any value. See Critical Lesson #1 in AGENTS.md.
+
+**→ Waiting on:** Base44 (publish pushStatusToHubspot, run cleanupTestHubspot)
+
+---
 **[CLAUDE]** · 2026-06-29
 **Type:** Critical Lesson — Read Before Touching submitToMSP or signApplication
 **Re:** is_firearm_verified field — three sessions of repeated mistakes
