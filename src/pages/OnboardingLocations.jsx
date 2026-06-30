@@ -123,7 +123,9 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
       });
       const saved = res.data?.updatedMerchantID || res.data?.merchantID;
       if (saved) { onUpdated(saved); setSavedAt(Date.now()); }
-    } catch (_) {}
+    } catch (err) {
+      console.error('[MidCard.doSave]', err);
+    }
     finally { setSaving(false); }
   };
 
@@ -279,7 +281,9 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
       });
       const saved = res.data?.merchantID;
       if (saved) { onMerchantIDAdded(saved); setAddingMid(false); setAddMidName(''); }
-    } catch (_) {}
+    } catch (err) {
+      console.error('[LocationCard.handleAddMid]', err);
+    }
     finally { setAddMidSaving(false); }
   };
 
@@ -562,7 +566,9 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
         mailingState: addr.state, mailingZip: addr.zip,
       });
       setSavedAt(Date.now());
-    } catch (_) {}
+    } catch (err) {
+      console.error('[EntityMailingAddress.handleSave]', err);
+    }
     finally { setSaving(false); }
   }, [corporateId]);
 
@@ -582,7 +588,9 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
         mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '',
       });
       onUpdated({ ...entity, mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '' });
-    } catch (_) {}
+    } catch (err) {
+      console.error('[EntityMailingAddress.handleClear]', err);
+    }
   };
 
   return (
@@ -796,36 +804,11 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSa
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const addrRef = usePlacesCallbackRef((parsed) => { setAddressDisplay(parsed.display); setParsedAddress(parsed); setUnverifiedWarning(false); });
-  // Add Entity inline
+  // Add Entity inline — entity is created server-side inside addSelfServeLocation
   const [showAddEntity, setShowAddEntity] = useState(false);
   const [newEntityName, setNewEntityName] = useState('');
   const [newEntityEIN, setNewEntityEIN] = useState('');
-  const [addingEntity, setAddingEntity] = useState(false);
-  const [addEntityError, setAddEntityError] = useState('');
-
-  const handleAddEntity = async () => {
-    const einDigits = newEntityEIN.replace(/\D/g, '');
-    if (!newEntityName.trim() || einDigits.length !== 9) return;
-    setAddingEntity(true); setAddEntityError('');
-    try {
-      const res = await base44.functions.invoke('manageLegalEntity', {
-        action: 'add', corporateId,
-        legalBusinessName: newEntityName.trim(), federalEIN: einDigits,
-      });
-      if (res.data?.error) throw new Error(res.data.error);
-      const newEntities = res.data?.entities || [];
-      const created = newEntities[newEntities.length - 1];
-      if (created) {
-        onEntityAdded(created);
-        setSelectedEntityId(created.entityId);
-        setShowAddEntity(false);
-        setNewEntityName(''); setNewEntityEIN('');
-      }
-    } catch (err) { setAddEntityError(err.message || 'Failed to create entity.'); }
-    finally { setAddingEntity(false); }
-  };
-
-
+  const newEntityEinDigits = newEntityEIN.replace(/\D/g, '');
 
   const doSave = async (addr) => {
     setSaving(true); setError('');
@@ -841,11 +824,16 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSa
         corporateId, dbaName: dbaName.trim(),
         businessAddress, businessStreet: addr?.street || '', businessCity: addr?.city || '',
         businessState: addr?.state || '', businessZip: addr?.zip || '',
-        entityId: selectedEntityId || undefined,
+        entityId: showAddEntity ? undefined : (selectedEntityId || undefined),
+        newEntityName: showAddEntity ? newEntityName.trim() : undefined,
+        newEntityEIN: showAddEntity ? newEntityEinDigits : undefined,
       });
       if (locRes.data?.error) throw new Error(locRes.data.error);
       onSaved({ location: locRes.data.location, merchantID: locRes.data.merchantID, entityId: selectedEntityId });
-    } catch (err) { setError(err.message || 'Failed to save.'); }
+    } catch (err) {
+      console.error('[AddLocationForm.doSave]', err);
+      setError(err.message || 'Failed to save.');
+    }
     finally { setSaving(false); }
   };
 
@@ -853,6 +841,10 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSa
     e.preventDefault(); setError('');
     if (!dbaName.trim()) { setError('Store name is required.'); return; }
     if (!addressDisplay.trim()) { setError('Address is required.'); return; }
+    if (showAddEntity && (!newEntityName.trim() || newEntityEinDigits.length !== 9)) {
+      setError('Legal business name and a valid 9-digit EIN are required for the new entity.');
+      return;
+    }
     if (!parsedAddress) { setUnverifiedWarning(true); return; }
     await doSave(parsedAddress);
   };
@@ -919,19 +911,12 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSa
                 placeholder="Legal Business Name" className={inputCls} autoFocus />
               <input value={newEntityEIN} onChange={e => setNewEntityEIN(e.target.value.replace(/\D/g,'').slice(0,9))}
                 placeholder="Federal EIN (9 digits)" className={`${inputCls} font-mono`} />
-              {newEntityEIN.length > 0 && newEntityEIN.replace(/\D/g,'').length !== 9 && (
-                <p className="text-[10px] text-amber-400">{newEntityEIN.replace(/\D/g,'').length}/9 digits</p>
+              {newEntityEIN.length > 0 && newEntityEinDigits.length !== 9 && (
+                <p className="text-[10px] text-amber-400">{newEntityEinDigits.length}/9 digits</p>
               )}
-              {addEntityError && <p className="text-[11px] text-red-400">{addEntityError}</p>}
-              <div className="flex gap-2">
-                <button type="button" onClick={handleAddEntity} disabled={addingEntity || !newEntityName.trim() || newEntityEIN.replace(/\D/g,'').length !== 9}
-                  className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold text-xs px-3 py-2 rounded-lg transition-all">
-                  {addingEntity ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
-                  {addingEntity ? 'Creating…' : 'Create Entity'}
-                </button>
-                <button type="button" onClick={() => { setShowAddEntity(false); setAddEntityError(''); }}
-                  className="text-xs text-gray-500 hover:text-white border border-white/10 px-3 py-2 rounded-lg transition-colors">Cancel</button>
-              </div>
+              <p className="text-[10px] text-gray-500">This entity will be created when you submit the location below.</p>
+              <button type="button" onClick={() => { setShowAddEntity(false); setNewEntityName(''); setNewEntityEIN(''); }}
+                className="text-xs text-gray-500 hover:text-white border border-white/10 px-3 py-2 rounded-lg transition-colors">Cancel</button>
             </div>
           ) : (
             <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)}
@@ -984,7 +969,6 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         base44.functions.invoke('listLocations', { corporateId: profile.corporateId }),
         base44.functions.invoke('manageMerchantID', { action: 'list', corporateId: profile.corporateId }),
       ]);
-      console.log('[loadAll] raw entities from DB →', entRes.data?.entities);
       const loadedEntities = (entRes.data?.entities || []).map(e => ({
         ...e,
         mailingStreet: e.mailingStreet || '',
@@ -1013,7 +997,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             federalEIN: (profile.taxId || '').replace(/\D/g, ''),
           });
           if (seedRes.data?.entities?.length) finalEntities = seedRes.data.entities.map(e => ({ ...e, mailingStreet: e.mailingStreet || '', mailingCity: e.mailingCity || '', mailingState: e.mailingState || '', mailingZip: e.mailingZip || '', ownershipType: e.ownershipType || '', taxClassType: e.taxClassType || '', establishmentYear: e.establishmentYear || '' }));
-        } catch (_) {}
+        } catch (err) {
+          console.error('[loadAll] failed to seed primary entity', err);
+        }
       }
 
       // For locations missing entityId, assign to first entity
@@ -1027,7 +1013,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       setLocations(normalizedLocs);
       setMerchantIDs(conRes.data?.merchantIDs || []);
       if (normalizedLocs.length === 0) setAddFormEntityId(firstEntityId);
-    } catch (_) {}
+    } catch (err) {
+      console.error('[loadAll]', err);
+    }
     finally { setLoading(false); }
   };
 
@@ -1095,14 +1083,20 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       setLocations(prev => prev.map(l => l.id === locId ? { ...l, entityId: targetEntityId } : l));
       try {
         await base44.functions.invoke('batchUpdateStatus', { corporateId: profile.corporateId, action: 'moveToEntity', locationIds: [locId], targetEntityId });
-      } catch (_) { await loadAll(); }
+      } catch (err) {
+        console.error('[onDragEnd] moveToEntity failed', err);
+        await loadAll();
+      }
     } else if (type === 'MID') {
       const midId = draggableId.replace('mid-', '');
       const targetLocId = destination.droppableId.replace('mids-', '');
       setMerchantIDs(prev => prev.map(c => c.id === midId ? { ...c, locationId: targetLocId } : c));
       try {
         await base44.functions.invoke('manageMerchantID', { action: 'update', corporateId: profile.corporateId, merchantIDId: midId, locationId: targetLocId, data: { locationId: targetLocId } });
-      } catch (_) { await loadAll(); }
+      } catch (err) {
+        console.error('[onDragEnd] MID move failed', err);
+        await loadAll();
+      }
     }
   };
 
@@ -1152,7 +1146,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       <div className="px-8 pt-8 pb-6 border-b border-white/10">
         <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
           <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-          STEP 2 OF 3 — LOCATIONS &amp; MIDS
+          STEP 2 OF 4 — LOCATIONS &amp; MIDS
         </div>
         <div className="flex items-start justify-between gap-4">
           <div>

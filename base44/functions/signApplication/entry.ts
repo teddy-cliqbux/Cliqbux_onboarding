@@ -88,6 +88,21 @@ function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
+// Strips SSN and bank account/routing numbers before logging — recurses into
+// arrays (e.g. owners[]) so additional-owner SSNs are caught too.
+const SENSITIVE_LOG_KEYS = new Set(['owner_id_number', 'ssn', 'deposit_account_no', 'deposit_account_rtg']);
+function redactSensitive(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(redactSensitive);
+  if (obj && typeof obj === 'object') {
+    const out: Record<string, any> = {};
+    for (const [k, v] of Object.entries(obj as Record<string, any>)) {
+      out[k] = SENSITIVE_LOG_KEYS.has(k) ? '[REDACTED]' : redactSensitive(v);
+    }
+    return out;
+  }
+  return obj;
+}
+
 function resolveLocationAddress(location: Record<string, any>): Record<string, any> {
   if (location.businessStreet && location.businessCity && location.businessState) return location;
   const flat = location.businessAddress || '';
@@ -468,7 +483,7 @@ Deno.serve(async (req) => {
             method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
           });
           const formData = await formRes.json();
-          console.log(`[signApplication] Form fill ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(formData));
+          console.log(`[signApplication] Form fill ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(formData)));
         } catch (err: any) {
           console.error(`[signApplication] Exception creating draft for "${concept.dbaName}":`, err.message);
         }
@@ -514,7 +529,7 @@ Deno.serve(async (req) => {
         const rawPct = getData?.percent_complete ?? getData?.validation?.percent_complete ?? null;
         refillPercentComplete = rawPct !== null ? Math.round(parseFloat(String(rawPct))) : null;
         // Log full form response to surface any hidden completion/rule errors
-        console.log(`[signApplication] Full GET form response for ${mspApplicationNo}:`, JSON.stringify(getData));
+        console.log(`[signApplication] Full GET form response for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(getData)));
 
         const getErrors = [
               ...(getData?.completion_errors || getData?.validation?.errors?.completion || []),
@@ -541,7 +556,7 @@ Deno.serve(async (req) => {
             const getData2 = await getRes2.json();
             const rawPct2 = getData2?.percent_complete ?? getData2?.validation?.percent_complete ?? null;
             refillPercentComplete = rawPct2 !== null ? Math.round(parseFloat(String(rawPct2))) : null;
-        console.log(`[signApplication] Full GET form response AFTER refill for ${mspApplicationNo}:`, JSON.stringify(getData2));
+        console.log(`[signApplication] Full GET form response AFTER refill for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(getData2)));
 
             refillErrors = [
               ...(getData2?.completion_errors || getData2?.validation?.errors?.completion || []),

@@ -355,10 +355,6 @@ MSPWare rolls back the entire form and returns `percent_complete: -1` when **any
 - Do not add new boarding fields to `MerchantLocations` — use `MerchantID` entity (now `MerchantProcessingConcept`)
 - Do not hardcode `86764` as salesperson ID — that is the old Elavon rep code; MSPWare ID is `76764`
 - Do not use `appkey`/`appid` as MSPWare header names — use `X-API-KEY` and `X-App-ID`
-<<<<<<< HEAD
-- Do not clear `mspApplicationNo` on non-404 errors (network failure, rate limit, auth error) — only clear on explicit HTTP 404
-- Do not add `is_firearm_verified: false` 
-=======
 - Do not send `is_firearm_verified` in the API payload at all — every value is rejected by MSPWare PUT /form. The "yes" captured from the MSPWare UI applies only to their internal TestData.cfc endpoint. Omit the field entirely.
 - Do not add `catch (_) {}` silent error swallowing — always log errors and surface them to the user
 - Do not call `manageLegalEntity` from `OnboardingBanking` on mount — use `getMerchantData` instead (3-in-1 safe call)
@@ -392,7 +388,7 @@ The `STEP_SUMMARY` (review step) was removed — it was redundant.
 **OnboardingBanking** (`src/pages/OnboardingBanking.jsx`) is a dedicated banking step that:
 - Receives `initialLocations` from `OnboardingPortal` state (no blocking API call)
 - Calls `getMerchantData` as a background refresh for bank details
-- Uses `withToken()` helper on all backend calls (portal security)
+- Passes `corporateId` directly in backend call payloads (see "Security: Portal Auth")
 
 **OnboardingLocations** (`src/pages/OnboardingLocations.jsx`) is a 3-level org chart builder:
 - Legal Entity → Locations → MIDs (MerchantProcessingConcepts)
@@ -418,13 +414,18 @@ The `legalEntities` array items now include `ownershipType`, `taxClassType`, `es
 
 ---
 
-## Security: Portal Token (2026-06-29)
+## Security: Portal Auth (corrected 2026-06-30)
 
-Portal users authenticate via magic-link tokens, not Base44 sessions. A `withToken()` helper in `src/lib/portalToken.js` injects the `portalToken` from sessionStorage into every backend call. Backend functions verify the token against `corporateId` using `verifyPortalAccess()` before returning data.
+**Correction:** this section previously described a `withToken()` helper in `src/lib/portalToken.js` injecting a `portalToken` into every backend call, verified server-side via `verifyPortalAccess()`. That was an aspirational note that was never implemented. Neither the helper, the file, nor any `portalToken` sessionStorage key exist anywhere in the codebase. **Do not build against the old description.**
 
-Key secured functions: `getMerchantData`, `listLocations`, `manageLegalEntity`, `manageMerchantID`, `addSelfServeLocation`.
+**What actually happens:** Portal users authenticate via magic-link tokens, not Base44 sessions, but validation is one-time, not per-request:
 
-Admin calls (no token in payload) pass through unchanged — they're protected by Base44 workspace membership.
+1. `OnboardingPortal.jsx`'s `validateResumeToken(token)` calls the `validateResumeToken` backend function once, on portal entry, with `{ token }`.
+2. On success, the resolved `corporateId` is cached in `sessionStorage` under the key `resume_corp_${token}` (per-token, not a generic key).
+3. Every subsequent backend call (`getMerchantData`, `listLocations`, `manageLegalEntity`, `manageMerchantID`, `addSelfServeLocation`, etc.) passes `corporateId` directly in its payload — there is no request-level token wrapper.
+4. Backend functions trust `corporateId` as the identity boundary per request; they do not re-verify a token on each call.
+
+Admin calls (issued from the Base44 dashboard, not the magic-link portal) pass through unchanged — they're protected by Base44 workspace membership, not this flow.
 
 ---
 
@@ -577,12 +578,8 @@ Previous implementations used debounced autosave (800ms) for entity fields, whic
 ### addSelfServeLocation — entity creation is server-side
 Entity creation for new merchants happens inside `addSelfServeLocation` using service role. The frontend must NOT call `manageLegalEntity` to create entities (portal users have no auth session). Pass `newEntityName` and `newEntityEIN` to `addSelfServeLocation` instead.
 
-### withToken() / portalToken pattern
-All backend calls from the merchant portal should use `withToken()` from `src/lib/portalToken.js`. This injects the magic-link session token so backend functions can verify the caller is authorized for the requested `corporateId`. Admin-only calls (no token in payload) bypass the check.
-
 ### StagedApplication auto-tracking
 `OnboardingPortal` calls `trackProgress` (action on `manageStagedApplication`) fire-and-forget on step transitions. Do NOT await it or let it block the UI. The label `__auto_track__` identifies these records. Do NOT merge `prefilledData` from auto-track records onto the profile — it contains tracking metadata (currentStep, lastSeenAt) not field data.
->>>>>>> 874ea8a (fix: is_firearm_verified must be omitted — template sets it, any API value overrides and breaks completion)
 
 ---
 

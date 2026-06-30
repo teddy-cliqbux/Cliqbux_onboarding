@@ -157,8 +157,9 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
           signaturesError: data.signaturesError || null,
         });
       }
-    } catch (_) {
-      // non-fatal
+    } catch (err) {
+      // non-fatal — message only, never log raw form data (may contain SSN/bank values)
+      console.error('[SigningErrorGuide.loadDetails]', err?.message || 'Unknown error');
     } finally {
       setChecking(false);
     }
