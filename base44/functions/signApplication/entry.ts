@@ -113,6 +113,35 @@ function formatDob(year: string, month: string, day: string): string {
   return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
+// ─── Form Payload Builder ─────────────────────────────────────────────────────
+//
+// STRICT TEMPLATE PRESERVATION RULE — READ BEFORE EDITING
+// =========================================================
+// MSPWare templates (#6 ICPLS, #154 Cash Discount) pre-fill a large set of
+// fee schedule, equipment, and account configuration fields. Sending ANY of
+// those fields in a PUT /form payload OVERWRITES the template value — even
+// if you send the same value the template already has. This causes form
+// completion to drop below 100%, blocking signing.
+//
+// This function sends ONLY merchant-specific fields. The following are
+// intentionally OMITTED because the template owns them:
+//
+//   billing_method, billing_frequency, funding_type, monetary_code, statement_type,
+//   monthly_minimum_fee, chargeback_fee, account_maintenance_fee, rtp_monthly_fee,
+//   touch_tone_auth, avs_service_auth, bank_referral_auth, op_assisted_auth,
+//   C4_surcharging_cardholder_surcharge, tokenization, tokenization_service_fee,
+//   tokenization_platform_fee, tokenization_sharing_indicator,
+//   has_pin_debit, debit_auth_method, debit_pricing_method,
+//   all per-network debit interchange fee fields (ACCL_*, AFFN_*, ALAS_*, CU24_*,
+//   INKL_*, MSTO_*, NETS_*, NYCE_*, POSD_*, PULSE_*, ITS_*, STAR_*, UPDBT_*),
+//   fixed_individual_tiers_pricing, multi_currency_conversion, secure3d,
+//   all_markup_discount, all_markup_per_item, all_card_auth_per_item,
+//   intl_card_handling_fee, auth_pricing_program, annual_fee_start_date,
+//   is_firearm_verified (CRITICAL: every value is rejected by the API; omit always)
+//
+// If you need to add a new field, verify it is NOT in the template by reading
+// GET /applications/154/form before adding it here.
+
 function buildFormPayload(
   profile: Record<string, any>,
   location: Record<string, any>,

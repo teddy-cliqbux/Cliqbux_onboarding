@@ -329,6 +329,19 @@ const highestTicketAmount = Math.min(Math.max(rawHighest, minHighest), cap);
 
 **Symptom of broken cap logic:** MSPWare returns `percent_complete: -1` or 98–99% after PUT with a data error like `"Must be Greater than Average Transaction Amount"` for `highest_ticket`. The GET after PUT will show -1% because MSPWare rolls back the entire form on validation failure.
 
+### buildFormPayload — Strict Template Preservation Rule
+
+**This is the most important rule governing MSPWare form fills. Violating it causes silent form corruption.**
+
+MSPWare templates (#6 ICPLS, #154 Cash Discount) pre-fill a large set of fee schedule, equipment, and account configuration fields when a draft application is created. Sending ANY of those fields in a subsequent `PUT /form` payload **OVERWRITES the template value** — even if you send the exact same value the template already has. The overwrite corrupts internal template state, causing form completion to drop below 100% and blocking signing.
+
+**The fix:** `buildFormPayload` in both `submitToMSP` and `signApplication` must send ONLY the merchant-specific fields listed in its header comment. Any field owned by the template must be completely absent from the PUT payload.
+
+**Fields that must NEVER be sent in PUT /form (template-owned, confirmed 2026-06-30):**
+`billing_method`, `billing_frequency`, `funding_type`, `monetary_code`, `statement_type`, `monthly_minimum_fee`, `chargeback_fee`, `account_maintenance_fee`, `rtp_monthly_fee`, `touch_tone_auth`, `avs_service_auth`, `bank_referral_auth`, `op_assisted_auth`, `C4_surcharging_cardholder_surcharge`, `tokenization`, `tokenization_service_fee`, `tokenization_platform_fee`, `tokenization_sharing_indicator`, `has_pin_debit`, `debit_auth_method`, `debit_pricing_method`, all `ACCL_*`/`AFFN_*`/`ALAS_*`/`CU24_*`/`INKL_*`/`MSTO_*`/`NETS_*`/`NYCE_*`/`POSD_*`/`PULSE_*`/`ITS_*`/`STAR_*`/`UPDBT_*` per-network debit fields, `fixed_individual_tiers_pricing`, `multi_currency_conversion`, `secure3d`, `all_markup_discount`, `all_markup_per_item`, `all_card_auth_per_item`, `intl_card_handling_fee`, `auth_pricing_program`, `annual_fee_start_date`, `is_firearm_verified`.
+
+**How to verify before adding a new field:** `GET /applications/154/form` — if the field appears in the response with a non-null value, it is template-owned. Do not send it.
+
 ### -1% form completion after PUT
 MSPWare rolls back the entire form and returns `percent_complete: -1` when **any** validation rule fails during PUT. The GET after a failed PUT looks identical to a blank form. Always check the PUT response body for `validation.errors.data` — the real error is there, not in the GET.
 
