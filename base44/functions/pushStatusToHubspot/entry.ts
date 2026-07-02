@@ -31,7 +31,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //
 // Banking verified is intentionally NOT a stage transition.
 
-const ONBOARDING_PIPELINE_ID = 'merchant_onboarding'; // must match the id setupHubspotPipeline reports back
+const ONBOARDING_PIPELINE_ID = '2400387772'; // real HubSpot-assigned ID for "Merchant Onboarding" — HubSpot did not honor the requested custom slug
 
 const ONBOARDING_MILESTONES = new Set([
   'link_sent', 'link_opened', 'agreement_filled', 'agreement_signed',
@@ -39,15 +39,15 @@ const ONBOARDING_MILESTONES = new Set([
 ]);
 
 const MILESTONE_TO_STAGE: Record<string, string> = {
-  'link_sent':              'onboarding_link_sent',
-  'link_opened':            'onboarding_link_opened',
-  'agreement_filled':       'merchant_agreement_filled',
-  'agreement_signed':       'merchant_agreement_signed',
-  'locations_added':        'locations_added',
-  'application_submitted':  'application_submitted',
-  'ready_for_deployment':   'ready_for_deployment',
-  'closed_won':             'closedwon',
-  'closed_lost':            'closedlost',
+  'link_sent': '3936638691',
+  'link_opened': '3936638692',
+  'agreement_filled': '3936638693',
+  'agreement_signed': '3936638694',
+  'locations_added': '3936638695',
+  'application_submitted': '3936638696',
+  'ready_for_deployment': '3936638697',
+  'closed_won': 'closedwon',
+  'closed_lost': 'closedlost',
 };
 
 Deno.serve(async (req) => {
