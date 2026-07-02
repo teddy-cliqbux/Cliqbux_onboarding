@@ -39,15 +39,15 @@ const ONBOARDING_MILESTONES = new Set([
 ]);
 
 const MILESTONE_TO_STAGE: Record<string, string> = {
-  'link_sent': 'Onboarding Link Sent',
-  'link_opened': 'Portal Opened',
-  'agreement_filled': 'Forms In Progress',
-  'agreement_signed': 'Quote & Agreement Executed',
-  'locations_added': 'Structure & MIDs Configured',
-  'application_submitted': 'Submitted to Underwriting',
-  'ready_for_deployment': 'Ready for Deployment / Fulfillment',
-  'closed_won': 'Closed Won',
-  'closed_lost': 'Closed Lost',
+  'link_sent': '3936638691',
+  'link_opened': '3936638692',
+  'agreement_filled': '3936638693',
+  'agreement_signed': '3936638694',
+  'locations_added': '3936638695',
+  'application_submitted': '3936638696',
+  'ready_for_deployment': '3936638697',
+  'closed_won': 'closedwon',
+  'closed_lost': 'closedlost',
 };
 
 Deno.serve(async (req) => {
