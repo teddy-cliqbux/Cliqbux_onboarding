@@ -126,26 +126,26 @@ Published function base URL: `https://cliqbux-onboard-prime.base44.app/functions
 - **MerchantCorporateProfile** — legal entity, TIN, ownership type, signers
 - **MerchantSigners** — individual owners/signers with SSN, DOB, address
 - **MerchantLocations** — physical storefronts (address + bank details)
-- **MerchantProcessingConcept** — one per Elavon MID; links to a location (replaces the old `MerchantID` entity name — same concept, renamed for clarity)
+- **MerchantMID** — one per Elavon MID; links to a location
 - **MerchantAccessTokens** — magic-link tokens for merchant portal access
 - **StagedApplication** — admin-built targeted application invites for merchants
 - **MerchantInventoryAssets** — equipment/inventory tracking
 - **MerchantSigners** — individual owners/signers with SSN, DOB, address
 - **User** — portal users
 
-### Architecture: MerchantProcessingConcept (was MerchantID)
-Three-layer model (migration complete):
+### Architecture: MerchantMID
+Clean three-layer model: Profile ➔ Locations ➔ MerchantMIDs.
 
 ```
 MerchantCorporateProfile
   └── legalEntities[] (embedded array — each has EIN, ownershipType, taxClassType, mailingAddress)
   └── MerchantLocations (physical address + bank account, FK corporateId)
-        └── MerchantProcessingConcept (one per MID — mcc, dba, status, elavonMID, FK locationId + corporateId)
+        └── MerchantMID (one per MID — mcc, dba, status, elavonMID, FK locationId + corporateId)
 ```
 
-A single physical location can have multiple Concepts (e.g. a grocery store with a Bakery MID and a Cafe MID). Each Concept maps to exactly one MSPWare application and one Elavon MID.
+A single physical location can have multiple MIDs (e.g. a grocery store with a Bakery MID and a Cafe MID). Each MerchantMID record maps to exactly one MSPWare application and one Elavon MID.
 
-**Do NOT build new features against the flat `MerchantLocations` boarding fields.** Use `MerchantProcessingConcept` for anything MID-related.
+**Do NOT build new features against the flat `MerchantLocations` boarding fields.** Use `MerchantMID` for anything MID-related.
 
 ### legalEntities embedded array on MerchantCorporateProfile
 Legal entities (EIN groups) are stored as an embedded array on the profile, NOT as a separate entity. Managed via `manageLegalEntity` function. Each entry has: `entityId` (UUID), `legalBusinessName`, `federalEIN`, `mailingStreet/City/State/Zip`, `ownershipType`, `taxClassType`, `establishmentYear`.
@@ -153,18 +153,18 @@ Legal entities (EIN groups) are stored as an embedded array on the profile, NOT 
 ### MerchantLocations.entityId
 Each location links to a `legalEntity.entityId` in the profile's embedded array. This determines which EIN group the location belongs to for MSPWare submission.
 
-### Fields ON MerchantProcessingConcept (not MerchantLocations)
+### Fields ON MerchantMID (not MerchantLocations)
 - `mspApplicationNo` — MSPWare draft application number
 - `elavonMID`
 - `applicationStepStatus` — `In Review | Ready to Submit | Pending MID | Active | Active (Existing) | Error`
 - `isExistingAccount` — true for pre-imported MIDs (skip boarding flow)
 - `existingAccountSource` — `mspware_import | manual_claim | migration`
 - `mccCode`, `industryType`, `pricingCategory`, `pricingMethod`, `monthlyCardSales`, `avgSaleAmount`, `highestTicketAmount`, `cardPresentPct`, `deliveryDelayDays`
-- `bankDetails` — per-concept bank override (null = inherit from parent location)
+- `bankDetails` — per-MID bank override (null = inherit from parent location)
 
 ### Fields DEPRECATED on MerchantLocations (do not use)
 - `awb` / `boardingId` — DEPRECATED, no longer written
-- `mspApplicationNo`, `elavonMID` — legacy copies only; primary home is `MerchantProcessingConcept`
+- `mspApplicationNo`, `elavonMID` — legacy copies only; primary home is `MerchantMID`
 
 ---
 
@@ -176,10 +176,10 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 | `submitToMSP` | Creates MSPWare draft + fills form + optionally submits. Idempotent: verifies existing `mspApplicationNo` via GET before reusing (only clears on explicit HTTP 404). |
 | `signApplication` | Re-fills form + creates BoldSign signing package per principal. Does GET first; skips re-fill if already at 100%. Only clears stale `mspApplicationNo` on explicit 404. |
 | `refillMSPForms` | Standalone re-fill of existing drafts by corporateId. Useful for patching stuck forms. |
-| `pollMSPStatus` | Polls MSPWare status for all Pending MID records (both Locations and MerchantIDs) |
-| `importExistingMIDs` | TIN-matches MSPWare approved apps to a corporateId; creates MerchantID records |
-| `importMSPPortfolio` | Bulk-imports entire MSPWare portfolio — creates Profile + Locations + MerchantIDs for all approved merchants. Groups by TIN. Admin-only, dryRun supported. |
-| `migrateLocationsToMerchantIDs` | One-time migration: lifts MerchantLocations boarding data into MerchantID records |
+| `pollMSPStatus` | Polls MSPWare status for all Pending MID records (both Locations and MerchantMIDs) |
+| `importExistingMIDs` | TIN-matches MSPWare approved apps to a corporateId; creates MerchantMID records |
+| `importMSPPortfolio` | Bulk-imports entire MSPWare portfolio — creates Profile + Locations + MerchantMIDs for all approved merchants. Groups by TIN. Admin-only, dryRun supported. |
+| `migrateToMerchantMIDs` | One-time migration: copies any records left in the legacy MerchantProcessingConcept table into MerchantMID, and derives MerchantMID records from MerchantLocations boarding data for locations that still don't have one |
 | `manageMSPTemplate` | Reads/fills MSPWare templates. Actions: `read`, `fill_icpls`, `fill_cd`, `create_cd`. Template #6 = ICPLS, Template #154 = Cash Discount (pricing_method: `"CLEAR"`). |
 | `uploadSignerIDsToMSP` | Uploads signer ID document files to all pending MSPWare applications for a corporateId. Call after signers upload their IDs via the portal. |
 | `getMSPFormStatus` | Merchant-facing form status check (no admin required). Returns completion %, errors, and raw form fields for a given `mspApplicationNo`. |
@@ -192,13 +192,16 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 
 
 ### MID creation → auto MSPWare draft
-When a new `MerchantProcessingConcept` is created via `manageMerchantID` (action="add"), the function immediately calls `submitToMSP` with `{ corporateId, conceptIds: [concept.id] }` in the background. This ensures the MSPWare draft exists before the merchant reaches the signing page. Non-fatal — failure is logged but the concept record is still returned.
+When a new `MerchantMID` is created via `manageMerchantID` (action="add"), the function immediately calls `submitToMSP` with `{ corporateId, midIds: [merchantMID.id] }` in the background. This ensures the MSPWare draft exists before the merchant reaches the signing page. Non-fatal — failure is logged but the MID record is still returned.
 
 ### Deleted / do not recreate
 - ~~`submitToElavon`~~ — replaced by `submitToMSP`
 - ~~`pollBoardingStatus`~~ — replaced by `pollMSPStatus`
 - ~~`elavonWebhook`~~ — MSPWare uses polling, no webhooks
 - ~~`mspGetSchema`~~ — debug artifact, wrong base URL and auth headers
+- ~~`manageConcept`~~ — unused duplicate of `manageMerchantID` with raw `concept`/`conceptId` naming, deleted 2026-07-01
+- ~~`AddConceptModal.jsx`~~ — unused frontend component, not imported anywhere, deleted 2026-07-01
+- ~~`migrateLocationsToConcepts`~~ — renamed to `migrateToMerchantMIDs` 2026-07-01, now also copies legacy MerchantProcessingConcept rows
 
 ---
 
@@ -287,9 +290,9 @@ Needs: `hubspotQuoteId` field on `MerchantLocations` + `getHubspotQuote` backend
 `signApplication` packages MSPWare applications for BoldSign e-signature and returns iframe-embeddable signing URLs.
 
 ### Flow
-1. Load profile, signers, concepts, locations
-2. For all non-done concepts (`Active`, `Active (Existing)`, `Pending MID` are skipped), verify their `mspApplicationNo` still exists in MSP — clear it **only on explicit 404** (not on network errors)
-3. Auto-create MSPWare drafts for **all concepts missing `mspApplicationNo`** (not just when zero signable exist)
+1. Load profile, signers, MIDs, locations
+2. For all non-done MIDs (`Active`, `Active (Existing)`, `Pending MID` are skipped), verify their `mspApplicationNo` still exists in MSP — clear it **only on explicit 404** (not on network errors)
+3. Auto-create MSPWare drafts for **all MIDs missing `mspApplicationNo`** (not just when zero signable exist)
 4. Fill form via `PUT /applications/{no}/form`; re-check completion via GET after PUT
 5. Create signature package via `POST /applications/{no}/signatures` with `sendEmail: false`
 6. Fetch signing link per signer via `GET /applications/{no}/signatures/link?emailAddress=<email>`
@@ -303,7 +306,7 @@ Needs: `hubspotQuoteId` field on `MerchantLocations` + `getHubspotQuote` backend
 
 ### Signing URL debugging
 - Use `debugMSPSignatures` function: `{ appNo: 165, email: "user@example.com" }` — returns raw signatures response + link by email + link by signerid
-- A `-1%` form completion means the concept has no bank details (no routing/account number) — fix the data, not the code
+- A `-1%` form completion means the MID has no bank details (no routing/account number) — fix the data, not the code
 
 ### is_firearm_verified
 ⚠️ **CRITICAL — DO NOT CHANGE:** 
@@ -352,7 +355,7 @@ MSPWare rolls back the entire form and returns `percent_complete: -1` when **any
 - Do not call Elavon eBanking API directly (no `uat-buynow-na.elavon.net`, no `PAPI_USA_CLIQBUX1`, no AWB-based polling)
 - Do not use `submitToElavon` — it is deleted
 - Do not set `MSP_SUBMIT_ENABLED=true` in any automated test or dry-run context
-- Do not add new boarding fields to `MerchantLocations` — use `MerchantID` entity (now `MerchantProcessingConcept`)
+- Do not add new boarding fields to `MerchantLocations` — use the `MerchantMID` entity
 - Do not hardcode `86764` as salesperson ID — that is the old Elavon rep code; MSPWare ID is `76764`
 - Do not use `appkey`/`appid` as MSPWare header names — use `X-API-KEY` and `X-App-ID`
 - Do not send `is_firearm_verified` in the API payload at all — every value is rejected by MSPWare PUT /form. The "yes" captured from the MSPWare UI applies only to their internal TestData.cfc endpoint. Omit the field entirely.
@@ -363,7 +366,7 @@ MSPWare rolls back the entire form and returns `percent_complete: -1` when **any
 - Do not call `manageLegalEntity` with `action: 'create'` — the action is `'add'`
 - Do not clear `mspApplicationNo` on any non-success from MSPWare GET — only clear on explicit HTTP 404. Other errors (rate limit, network) must not cause duplicate drafts.
 - Do not send `is_firearm_verified: false` (boolean) — causes `canSave: false`, blocking the entire form fill
-- Do not gate concept draft creation on bank details being present — create the draft even if banking hasn't been linked yet
+- Do not gate MID draft creation on bank details being present — create the draft even if banking hasn't been linked yet
 - Do not call `base44.auth.me()` in `pushStatusToHubspot` — it is fire-and-forget from the magic-link portal and the check was silently returning 401. Auth check removed 2026-06-29.
 - Do not iframe HubSpot quote URLs — HubSpot sends X-Frame-Options headers that block cross-origin embedding. Use a link button that opens in a new tab, or pull line items via the HubSpot API and render natively.
 - Do not use `discount_percentage` as a HubSpot line item property name — the correct name is `hs_discount_percentage`
@@ -391,7 +394,7 @@ The `STEP_SUMMARY` (review step) was removed — it was redundant.
 - Passes `corporateId` directly in backend call payloads (see "Security: Portal Auth")
 
 **OnboardingLocations** (`src/pages/OnboardingLocations.jsx`) is a 3-level org chart builder:
-- Legal Entity → Locations → MIDs (MerchantProcessingConcepts)
+- Legal Entity → Locations → MIDs (MerchantMID records)
 - All draggable/reorganizable
 - Entity details (ownershipType, taxClassType, establishmentYear) are per-entity inline panels
 - BusinessDetailsPanel was removed from the top-level — now inline per entity
@@ -443,7 +446,7 @@ These fields are owned by the template and must NOT be sent in any PUT /form pay
 |---|---|---|
 | `pricing_method` | `"CLEAR"` | Cash Discount surcharge method |
 | `card_acceptance_split` | `"CP"` | Card-present only by default |
-| `pricing_category` | `"1"` | Retail — merchant value should override per concept |
+| `pricing_category` | `"1"` | Retail — merchant value should override per MID |
 | `billing_method` | `"N"` | Net settlement |
 | `billing_frequency` | `"M"` | Monthly |
 | `funding_type` | `14` | Elavon funding type |
@@ -501,7 +504,7 @@ These fields are owned by the template and must NOT be sent in any PUT /form pay
 
 ## manageMerchantID Function
 
-`manageMerchantID` is the frontend-facing function for MerchantProcessingConcept records. It replaces direct calls to `manageConcept` from the portal. Actions: `list`, `add`, `update`, `delete`. Field mapping: `merchantIDs` / `merchantIDId` / `merchantName` on the frontend map to `concepts` / `conceptId` / `conceptName` in the underlying entity.
+`manageMerchantID` is the frontend-facing function for `MerchantMID` records. Actions: `list`, `add`, `update`, `delete`. The entity's own field names (`merchantName`, `dbaName`, etc.) are used directly — there is no translation layer between the frontend and the entity.
 
 Status locking: `manageMerchantID` blocks `update` and `delete` when `applicationStepStatus` is in `LOCKED_STATUSES` (`['Pending MID', 'Active', 'Active (Existing)']`) with HTTP 403.
 

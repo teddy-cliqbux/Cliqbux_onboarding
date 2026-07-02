@@ -118,10 +118,10 @@ Deno.serve(async (req) => {
 
     // ── 4. Gather existing (already-imported) tracking per corporateId ────────
     const matchedCorporateIds = [...new Set(matched.map(m => m.corporateId))];
-    const existingConcepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({});
+    const existingMerchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({});
     const trackedPerCorporate = new Map();
     for (const corpId of matchedCorporateIds) {
-      const tracked = existingConcepts.filter(c => c.corporateId === corpId);
+      const tracked = existingMerchantMIDs.filter(c => c.corporateId === corpId);
       trackedPerCorporate.set(corpId, new Set(tracked.map(c => String(c.mspApplicationNo)).filter(Boolean)));
     }
 
@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
           legalName: m.profile.legalName, taxId: m.profile.taxId,
           address: form.business_address,
           result: 'would_import',
-          conceptData: {
+          merchantMIDData: {
             dbaName: form.full_dba_name || m.dba, mccCode: form.mcc,
             industryType: form.industry_type, pricingCategory: form.pricing_category,
             elavonMID: m.mid,
@@ -186,10 +186,10 @@ Deno.serve(async (req) => {
           existingLocs.push(location);
         }
 
-        await base44.asServiceRole.entities.MerchantProcessingConcept.create({
+        await base44.asServiceRole.entities.MerchantMID.create({
           locationId: location.id,
           corporateId: corpId,
-          conceptName: m.dba,
+          merchantName: m.dba,
           dbaName: form.full_dba_name || m.dba,
           mccCode: form.mcc || '',
           industryType: form.industry_type || 'RE',

@@ -32,9 +32,9 @@ Deno.serve(async (req) => {
         { $set: { applicationStepStatus: newStatus } }
       );
 
-      // Also update all concepts under those locations
+      // Also update all merchantMIDs under those locations
       for (const locId of locationIds) {
-        await base44.asServiceRole.entities.MerchantProcessingConcept.updateMany(
+        await base44.asServiceRole.entities.MerchantMID.updateMany(
           { corporateId, locationId: locId },
           { $set: { applicationStepStatus: newStatus } }
         );
@@ -104,17 +104,17 @@ Deno.serve(async (req) => {
           applicationStepStatus: 'In Review',
         });
 
-        // Copy concepts too
-        const concepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({
+        // Copy merchantMIDs too
+        const merchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({
           corporateId, locationId: loc.id
         });
 
-        if (concepts?.length) {
-          await base44.asServiceRole.entities.MerchantProcessingConcept.bulkCreate(
-            concepts.map(c => ({
+        if (merchantMIDs?.length) {
+          await base44.asServiceRole.entities.MerchantMID.bulkCreate(
+            merchantMIDs.map(c => ({
               locationId: newLoc.id,
               corporateId,
-              conceptName: c.conceptName || '',
+              merchantName: c.merchantName || '',
               dbaName: c.dbaName || '',
               mccCode: c.mccCode || '',
               industryType: c.industryType || '',
@@ -162,17 +162,17 @@ Deno.serve(async (req) => {
           applicationStepStatus: 'In Review',
         });
 
-        // Clone its concepts
-        const concepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({
+        // Clone its merchantMIDs
+        const merchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({
           corporateId, locationId: loc.id
         });
 
-        if (concepts?.length) {
-          await base44.asServiceRole.entities.MerchantProcessingConcept.bulkCreate(
-            concepts.map(c => ({
+        if (merchantMIDs?.length) {
+          await base44.asServiceRole.entities.MerchantMID.bulkCreate(
+            merchantMIDs.map(c => ({
               locationId: newLoc.id,
               corporateId,
-              conceptName: c.conceptName || '',
+              merchantName: c.merchantName || '',
               dbaName: c.dbaName || '',
               mccCode: c.mccCode || '',
               industryType: c.industryType || '',

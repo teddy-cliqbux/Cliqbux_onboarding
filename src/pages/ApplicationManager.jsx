@@ -286,10 +286,10 @@ function CheckRow({ checked, onChange, color = 'amber', children }) {
 function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
   const [label, setLabel]             = useState(stage?.label || '');
   const [locations, setLocations]     = useState([]);
-  const [concepts, setConcepts]       = useState([]);
+  const [mids, setMids]               = useState([]);
   const [signers, setSigners]         = useState([]);
   const [selLocs, setSelLocs]         = useState(new Set(stage?.includedLocationIds || []));
-  const [selConcepts, setSelConcepts] = useState(new Set(stage?.includedConceptIds || []));
+  const [selMids, setSelMids]         = useState(new Set(stage?.includedMidIds || []));
   const [selSigners, setSelSigners]   = useState(new Set(stage?.includedSignerIds || []));
   const [prefill, setPrefill]         = useState(stage?.prefilledData || {});
   const [loading, setLoading]         = useState(true);
@@ -308,11 +308,11 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
         base44.functions.invoke('manageSigner', { action: 'list', corporateId }),
       ]);
       setLocations(locRes.data?.locations || []);
-      setConcepts(conRes.data?.merchantIDs || []);
+      setMids(conRes.data?.merchantIDs || []);
       setSigners(sigRes.data?.signers || []);
       if (!stage) {
         setSelLocs(new Set((locRes.data?.locations || []).map(l => l.id || l.locationId)));
-        setSelConcepts(new Set((conRes.data?.merchantIDs || []).map(c => c.id)));
+        setSelMids(new Set((conRes.data?.merchantIDs || []).map(c => c.id)));
         setSelSigners(new Set((sigRes.data?.signers || []).map(s => s.id)));
       }
     } catch (_) {}
@@ -335,7 +335,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
       const payload = {
         label: label || 'Staged Application',
         includedLocationIds: [...selLocs],
-        includedConceptIds: [...selConcepts],
+        includedMidIds: [...selMids],
         includedSignerIds: [...selSigners],
         prefilledData: prefill,
         status: 'ready',
@@ -402,7 +402,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                   ? <p className="text-xs text-gray-600 italic py-4 text-center">No locations found.</p>
                   : locations.map(loc => {
                     const id = loc.id || loc.locationId;
-                    const locConcepts = concepts.filter(c => c.locationId === id);
+                    const locMids = mids.filter(c => c.locationId === id);
                     return (
                       <div key={id}>
                         <CheckRow checked={selLocs.has(id)} onChange={() => toggle(id, setSelLocs)} color="amber">
@@ -411,12 +411,12 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                             <p className="text-sm font-semibold text-white truncate">{loc.dbaName}</p>
                             <p className="text-[10px] text-gray-500 truncate">{loc.businessAddress}</p>
                           </div>
-                          <span className="text-[9px] text-gray-600 flex-shrink-0">{locConcepts.length} MID{locConcepts.length !== 1 ? 's' : ''}</span>
+                          <span className="text-[9px] text-gray-600 flex-shrink-0">{locMids.length} MID{locMids.length !== 1 ? 's' : ''}</span>
                         </CheckRow>
-                        {selLocs.has(id) && locConcepts.length > 0 && (
+                        {selLocs.has(id) && locMids.length > 0 && (
                           <div className="ml-8 mt-1 space-y-1">
-                            {locConcepts.map(c => (
-                              <CheckRow key={c.id} checked={selConcepts.has(c.id)} onChange={() => toggle(c.id, setSelConcepts)} color="blue">
+                            {locMids.map(c => (
+                              <CheckRow key={c.id} checked={selMids.has(c.id)} onChange={() => toggle(c.id, setSelMids)} color="blue">
                                 <CreditCard className="w-3 h-3 text-blue-400 flex-shrink-0" />
                                 <div className="flex-1 min-w-0">
                                   <p className="text-xs font-semibold text-white truncate">{c.dbaName || c.merchantName}</p>

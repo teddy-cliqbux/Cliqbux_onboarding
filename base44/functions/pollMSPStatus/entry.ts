@@ -2,7 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ─── MSPWare Boarding Status Poller ──────────────────────────────────────────
 // Polls GET /applications/{mspApplicationNo}/status for all pending records in
-// both MerchantLocations (legacy) and MerchantProcessingConcept (new).
+// both MerchantLocations (legacy) and MerchantMID (new).
 // When MSPWare reports Approved/Complete, extracts the MID and transitions
 // the record to Active.
 //
@@ -27,11 +27,11 @@ Deno.serve(async (req) => {
 
     // ── Collect pending records from both entities ────────────────────────────
     // Legacy: MerchantLocations with Pending MID
-    // New: MerchantProcessingConcept with Pending MID
-    const [pendingLocations, pendingConcepts] = await Promise.all([
+    // New: MerchantMID with Pending MID
+    const [pendingLocations, pendingMerchantMIDs] = await Promise.all([
       base44.asServiceRole.entities.MerchantLocations.filter({ applicationStepStatus: 'Pending MID' }),
-      base44.asServiceRole.entities.MerchantProcessingConcept
-        ? base44.asServiceRole.entities.MerchantProcessingConcept.filter({ applicationStepStatus: 'Pending MID' })
+      base44.asServiceRole.entities.MerchantMID
+        ? base44.asServiceRole.entities.MerchantMID.filter({ applicationStepStatus: 'Pending MID' })
         : Promise.resolve([]),
     ]);
 
@@ -40,8 +40,8 @@ Deno.serve(async (req) => {
       ...(pendingLocations || []).map((l: any) => ({
         id: l.id, dbaName: l.dbaName, mspApplicationNo: l.mspApplicationNo, entityType: 'location',
       })),
-      ...(pendingConcepts || []).map((c: any) => ({
-        id: c.id, dbaName: c.dbaName, mspApplicationNo: c.mspApplicationNo, entityType: 'concept',
+      ...(pendingMerchantMIDs || []).map((c: any) => ({
+        id: c.id, dbaName: c.dbaName, mspApplicationNo: c.mspApplicationNo, entityType: 'merchantMID',
       })),
     ];
 
@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, message: 'No pending records', checked: 0 });
     }
 
-    console.log(`[pollMSPStatus] Checking ${queue.length} pending record(s) (${pendingLocations?.length ?? 0} locations, ${pendingConcepts?.length ?? 0} concepts)`);
+    console.log(`[pollMSPStatus] Checking ${queue.length} pending record(s) (${pendingLocations?.length ?? 0} locations, ${pendingMerchantMIDs?.length ?? 0} merchantMIDs)`);
 
     const results: any[] = [];
 
@@ -73,8 +73,8 @@ Deno.serve(async (req) => {
         }
 
         const currentState = (statusData?.currentState || '').toUpperCase();
-        const entity = entityType === 'concept'
-          ? base44.asServiceRole.entities.MerchantProcessingConcept
+        const entity = entityType === 'merchantMID'
+          ? base44.asServiceRole.entities.MerchantMID
           : base44.asServiceRole.entities.MerchantLocations;
 
         if (currentState === 'APPROVED' || currentState === 'COMPLETE') {

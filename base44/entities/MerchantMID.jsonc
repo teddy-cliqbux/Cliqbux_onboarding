@@ -1,22 +1,22 @@
 {
-  "name": "MerchantProcessingConcept",
+  "name": "MerchantMID",
   "type": "object",
   "properties": {
     "locationId": {
       "type": "string",
-      "description": "FK \u2192 MerchantLocations.id \u2014 the physical storefront this concept processes under"
+      "description": "FK → MerchantLocations.id — the physical storefront this MID processes under"
     },
     "corporateId": {
       "type": "string",
-      "description": "FK \u2192 MerchantCorporateProfile.corporateId \u2014 denormalized for direct queries without joining through location"
+      "description": "FK → MerchantCorporateProfile.corporateId — denormalized for direct queries without joining through location"
     },
-    "conceptName": {
+    "merchantName": {
       "type": "string",
       "description": "Human label shown in the UI e.g. Cafe, Bakery, Floral. Merchant can rename."
     },
     "dbaName": {
       "type": "string",
-      "description": "Full DBA sent to Elavon e.g. Store 101 \u2013 Cafe. May differ from conceptName."
+      "description": "Full DBA sent to Elavon e.g. Store 101 – Cafe. May differ from merchantName."
     },
     "mccCode": {
       "type": "string",
@@ -37,7 +37,7 @@
     },
     "monthlyCardSales": {
       "type": "number",
-      "description": "Expected monthly card volume for this concept in dollars"
+      "description": "Expected monthly card volume for this MID in dollars"
     },
     "avgSaleAmount": {
       "type": "number",
@@ -59,7 +59,7 @@
     },
     "bankDetails": {
       "type": "object",
-      "description": "Per-concept bank account. null = inherit from parent MerchantLocations. Only set when this concept funds to a different account than the location default.",
+      "description": "Per-MID bank account. null = inherit from parent MerchantLocations. Only set when this MID funds to a different account than the location default.",
       "properties": {
         "routingNumber": {
           "type": "string"
@@ -82,11 +82,11 @@
     },
     "mspApplicationNo": {
       "type": "string",
-      "description": "MSPWare/PulsePoint application number \u2014 assigned when draft is created via submitToMSP"
+      "description": "MSPWare/PulsePoint application number — assigned when draft is created via submitToMSP"
     },
     "elavonMID": {
       "type": "string",
-      "description": "Merchant ID assigned by Elavon after approval \u2014 populated asynchronously by pollMSPStatus"
+      "description": "Merchant ID assigned by Elavon after approval — populated asynchronously by pollMSPStatus"
     },
     "applicationStepStatus": {
       "type": "string",
@@ -104,7 +104,7 @@
     "isExistingAccount": {
       "type": "boolean",
       "default": false,
-      "description": "true = this MID was active before Cliqbux onboarding. Skips the boarding flow \u2014 record is for visibility only."
+      "description": "true = this MID was active before Cliqbux onboarding. Skips the boarding flow — record is for visibility only."
     },
     "existingAccountSource": {
       "type": "string",
@@ -113,7 +113,7 @@
         "manual_claim",
         "migration"
       ],
-      "description": "How this existing account was linked. mspware_import = auto-matched by TIN via importExistingMIDs. manual_claim = merchant entered MID manually. migration = created by migrateLocationsToConcepts."
+      "description": "How this existing account was linked. mspware_import = auto-matched by TIN via importExistingMIDs. manual_claim = merchant entered MID manually. migration = created by migrateToMerchantMIDs."
     },
     "processingStartDate": {
       "type": "string",

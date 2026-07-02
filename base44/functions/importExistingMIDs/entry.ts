@@ -2,7 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ─── importExistingMIDs ────────────────────────────────────────────────────────
 // Queries MSPWare for all Approved applications in the Cliqbux portfolio,
-// matches them against a merchant's TIN, and creates MerchantProcessingConcept
+// matches them against a merchant's TIN, and creates MerchantMID
 // records (with isExistingAccount: true) for any that aren't already tracked.
 //
 // Also creates MerchantLocations records for addresses not yet in Base44.
@@ -70,8 +70,8 @@ Deno.serve(async (req) => {
     }
 
     // ── 3. Already-tracked applications in Base44 ────────────────────────────
-    const existingConcepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({ corporateId });
-    const trackedAppNos = new Set(existingConcepts.map((c: any) => String(c.mspApplicationNo)).filter(Boolean));
+    const existingMerchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId });
+    const trackedAppNos = new Set(existingMerchantMIDs.map((c: any) => String(c.mspApplicationNo)).filter(Boolean));
 
     // ── 4. Match each approved app to this merchant by TIN ───────────────────
     const results: any[] = [];
@@ -138,17 +138,17 @@ Deno.serve(async (req) => {
           console.log(`[importExistingMIDs] Created location for "${app.dba}" (${form.business_address})`);
         }
 
-        // Derive concept fields from form data
+        // Derive merchantMID fields from form data
         const mcc           = form.mcc || '';
         const industryType  = form.industry_type || 'RE';
         const pricingCat    = form.pricing_category || '1';
         const pricingMethod = form.pricing_method || 'ICPLS';
 
-        // Create the MerchantProcessingConcept record
-        await base44.asServiceRole.entities.MerchantProcessingConcept.create({
+        // Create the MerchantMID record
+        await base44.asServiceRole.entities.MerchantMID.create({
           locationId:          location.id,
           corporateId,
-          conceptName:         app.dba,   // use DBA as concept name; merchant can rename
+          merchantName:         app.dba,   // use DBA as merchantMID name; merchant can rename
           dbaName:             form.full_dba_name || app.dba,
           mccCode:             mcc,
           industryType,

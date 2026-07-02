@@ -198,7 +198,7 @@ function formatDob(year: string, month: string, day: string): string {
 function buildFormPayload(
   profile: Record<string, any>,
   location: Record<string, any>,
-  concept: Record<string, any>,
+  merchantMID: Record<string, any>,
   primarySigner: Record<string, any>,
   additionalSigners: Record<string, any>[],
   entityMailing?: { street: string; city: string; state: string; zip: string } | null
@@ -206,8 +206,8 @@ function buildFormPayload(
 
   const signer = primarySigner || {};
 
-  // Bank: concept-level account overrides location (e.g. bakery settles to different account)
-  const bank = concept.bankDetails || location.bankDetails || {};
+  // Bank: merchantMID-level account overrides location (e.g. bakery settles to different account)
+  const bank = merchantMID.bankDetails || location.bankDetails || {};
   const routing = bank.routingNumber || location.routingNumber || '';
   const account = bank.accountNumber || location.accountNumber || '';
 
@@ -215,26 +215,26 @@ function buildFormPayload(
   const ssn = cleanDigits(signer.ssn || profile.ssn || '');
   const phone = cleanDigits(signer.corporatePhone || profile.corporatePhone || '');
 
-  // Concept-level fields override profile-level for per-MID differentiation
-  const pricingCategory = String(concept.pricingCategory || profile.pricingCategory || '1');
+  // MerchantMID-level fields override profile-level for per-MID differentiation
+  const pricingCategory = String(merchantMID.pricingCategory || profile.pricingCategory || '1');
   const TIER_TO_METHOD: Record<string, string> = {
     'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
     'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
     'CASH_DISCOUNT': 'CLEAR', 'SELF_CASH_DISCOUNT': 'CLEAR',
   };
-  const rawPricingMethod = concept.pricingMethod || profile.pricingMethod
-    || TIER_TO_METHOD[(concept.pricingTier || profile.pricingTier || '').toUpperCase()]
+  const rawPricingMethod = merchantMID.pricingMethod || profile.pricingMethod
+    || TIER_TO_METHOD[(merchantMID.pricingTier || profile.pricingTier || '').toUpperCase()]
     || 'ICPLS';
   const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'CLEAR' : rawPricingMethod;
-  // Derive industryType from pricingCategory; only use concept.industryType if pricingCategory is also set
-  const industryType = (concept.pricingCategory && concept.industryType)
-    ? concept.industryType
+  // Derive industryType from pricingCategory; only use merchantMID.industryType if pricingCategory is also set
+  const industryType = (merchantMID.pricingCategory && merchantMID.industryType)
+    ? merchantMID.industryType
     : mapIndustryType(pricingCategory);
-  const mcc = concept.mccCode || profile.mccCode || '5999';
-  const dbaName = concept.dbaName || location.dbaName || profile.legalName || '';
-  const monthlyCardSales = Math.max(1, parseFloat(String(concept.monthlyCardSales || profile.monthlyCardSales || '6000')) || 6000);
-  const rawAvg = parseFloat(String(concept.avgSaleAmount || profile.avgSaleAmount || '100')) || 100;
-  const rawHighest = parseFloat(String(concept.highestTicketAmount || profile.highestTicketAmount || '200')) || 200;
+  const mcc = merchantMID.mccCode || profile.mccCode || '5999';
+  const dbaName = merchantMID.dbaName || location.dbaName || profile.legalName || '';
+  const monthlyCardSales = Math.max(1, parseFloat(String(merchantMID.monthlyCardSales || profile.monthlyCardSales || '6000')) || 6000);
+  const rawAvg = parseFloat(String(merchantMID.avgSaleAmount || profile.avgSaleAmount || '100')) || 100;
+  const rawHighest = parseFloat(String(merchantMID.highestTicketAmount || profile.highestTicketAmount || '200')) || 200;
   // MSPWare rules:
   // 1. average_sales must be LESS THAN monthly_sales
   // 2. highest_ticket must be STRICTLY GREATER THAN average_sales AND less than monthly_sales
@@ -243,10 +243,10 @@ function buildFormPayload(
   const minHighest = Math.min(rawAvg, cap) + 1; // at least 1 more than average
   const highestTicketAmount = String(Math.min(Math.max(rawHighest, minHighest), cap));
   // MSPWare rule: delayed_delivery must be >= 1
-  const rawDelay = parseInt(String(concept.deliveryDelayDays ?? profile.deliveryDelayDays ?? '0'), 10);
+  const rawDelay = parseInt(String(merchantMID.deliveryDelayDays ?? profile.deliveryDelayDays ?? '0'), 10);
   const deliveryDelayDays = String(Math.max(rawDelay, 1));
   // cardPresentPct: treat null/undefined as 100 (in-person default), NOT 0
-  const rawCpPct = concept.cardPresentPct != null ? concept.cardPresentPct : (profile.cardPresentPct != null ? profile.cardPresentPct : 100);
+  const rawCpPct = merchantMID.cardPresentPct != null ? merchantMID.cardPresentPct : (profile.cardPresentPct != null ? profile.cardPresentPct : 100);
   const cardPresentPct = Math.max(0, Math.min(100, parseInt(String(rawCpPct), 10) || 100));
   const cnpPct = 100 - cardPresentPct;
   // internetPct and motoPct are collected separately on Step 2.
@@ -413,7 +413,7 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
-    const { corporateId, conceptIds, locationIds } = body;
+    const { corporateId, midIds, locationIds } = body;
 
     if (!corporateId) return Response.json({ error: 'corporateId is required' }, { status: 400 });
 
@@ -433,9 +433,9 @@ Deno.serve(async (req) => {
     };
 
     // ── Fetch merchant data ────────────────────────────────────────────────────
-    const [profiles, allConcepts, allLocs, signers] = await Promise.all([
+    const [profiles, allMerchantMIDs, allLocs, signers] = await Promise.all([
       base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId }),
-      base44.asServiceRole.entities.MerchantProcessingConcept.filter({ corporateId }),
+      base44.asServiceRole.entities.MerchantMID.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }),
     ]);
@@ -443,18 +443,18 @@ Deno.serve(async (req) => {
     const profile = profiles?.[0];
     if (!profile) return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
 
-    // ── Auto-create concepts for new merchants who have locations but no concepts yet ──
+    // ── Auto-create merchantMIDs for new merchants who have locations but no merchantMIDs yet ──
     // This covers the standard onboarding flow: merchant adds location(s) via the UI,
-    // then clicks Submit on the verification page before the tree UI / migration creates concepts.
-    let concepts_created_auto = 0;
-    if (!allConcepts?.length && allLocs?.length) {
-      console.log(`[submitToMSP] No concepts found — auto-creating from ${allLocs.length} location(s)`);
+    // then clicks Submit on the verification page before the tree UI / migration creates merchantMIDs.
+    let merchantMIDsCreatedAuto = 0;
+    if (!allMerchantMIDs?.length && allLocs?.length) {
+      console.log(`[submitToMSP] No merchantMIDs found — auto-creating from ${allLocs.length} location(s)`);
       for (const loc of allLocs) {
         try {
-          await base44.asServiceRole.entities.MerchantProcessingConcept.create({
+          await base44.asServiceRole.entities.MerchantMID.create({
             locationId:      loc.id,
             corporateId,
-            conceptName:     loc.dbaName || profile.legalName,
+            merchantName:     loc.dbaName || profile.legalName,
             dbaName:         loc.dbaName || profile.legalName,
             mccCode:         profile.mccCode || profile.mcc || '5999',
             industryType:    profile.industryClass ? industryClassToMSP(profile.industryClass) : 'RE',
@@ -466,17 +466,17 @@ Deno.serve(async (req) => {
             cardPresentPct:      parseFloat(String(profile.cardPresentPct || '100')) || 100,
             applicationStepStatus: 'In Review',
           });
-          concepts_created_auto++;
+          merchantMIDsCreatedAuto++;
         } catch (err: any) {
-          console.warn(`[submitToMSP] Could not auto-create concept for location ${loc.id}: ${err.message}`);
+          console.warn(`[submitToMSP] Could not auto-create merchantMID for location ${loc.id}: ${err.message}`);
         }
       }
-      // Re-fetch concepts now that we've created them
-      const freshConcepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({ corporateId });
-      allConcepts.push(...(freshConcepts || []));
+      // Re-fetch merchantMIDs now that we've created them
+      const freshMerchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId });
+      allMerchantMIDs.push(...(freshMerchantMIDs || []));
     }
 
-    if (!allConcepts?.length) return Response.json({ error: 'No processing concepts found and no locations to derive them from' }, { status: 404 });
+    if (!allMerchantMIDs?.length) return Response.json({ error: 'No processing merchantMIDs found and no locations to derive them from' }, { status: 404 });
 
     // Build a locationId → location lookup for fast joins
     const locationMap: Record<string, any> = {};
@@ -492,13 +492,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Filter concepts if caller specified specific IDs
-    let concepts = allConcepts;
-    if (conceptIds?.length) {
-      concepts = concepts.filter((c: any) => conceptIds.includes(c.id));
+    // Filter merchantMIDs if caller specified specific IDs
+    let merchantMIDs = allMerchantMIDs;
+    if (midIds?.length) {
+      merchantMIDs = merchantMIDs.filter((c: any) => midIds.includes(c.id));
     } else if (locationIds?.length) {
-      // Backward-compat: callers that pass locationIds get concepts for those locations
-      concepts = concepts.filter((c: any) => locationIds.includes(c.locationId));
+      // Backward-compat: callers that pass locationIds get merchantMIDs for those locations
+      merchantMIDs = merchantMIDs.filter((c: any) => locationIds.includes(c.locationId));
     }
 
     const primarySigner = signers?.find((s: any) => s.isPrimarySigner) || signers?.[0] || {};
@@ -507,27 +507,27 @@ Deno.serve(async (req) => {
     const results = [];
     let allSuccessful = true;
 
-    for (const concept of concepts) {
-      // ── Skip already-boarded concepts ────────────────────────────────────────
-      if (['Pending MID', 'Active', 'Active (Existing)'].includes(concept.applicationStepStatus)) {
+    for (const merchantMID of merchantMIDs) {
+      // ── Skip already-boarded merchantMIDs ────────────────────────────────────────
+      if (['Pending MID', 'Active', 'Active (Existing)'].includes(merchantMID.applicationStepStatus)) {
         results.push({
-          conceptId: concept.id,
-          locationId: concept.locationId,
-          dbaName: concept.dbaName,
+          midId: merchantMID.id,
+          locationId: merchantMID.locationId,
+          dbaName: merchantMID.dbaName,
           status: 'skipped',
-          reason: `Already ${concept.applicationStepStatus}`,
+          reason: `Already ${merchantMID.applicationStepStatus}`,
         });
         continue;
       }
 
       // ── Join to location for address + fallback bank ──────────────────────
-      const location = resolveLocationAddress(locationMap[concept.locationId]);
+      const location = resolveLocationAddress(locationMap[merchantMID.locationId]);
       if (!location) {
         results.push({
-          conceptId: concept.id,
-          dbaName: concept.dbaName,
+          midId: merchantMID.id,
+          dbaName: merchantMID.dbaName,
           status: 'error',
-          error: `Location ${concept.locationId} not found`,
+          error: `Location ${merchantMID.locationId} not found`,
         });
         allSuccessful = false;
         continue;
@@ -535,29 +535,29 @@ Deno.serve(async (req) => {
 
       try {
         // ── Step 1: Create draft application (skip if already has one, unless it was deleted) ────────
-        let mspApplicationNo = concept.mspApplicationNo;
+        let mspApplicationNo = merchantMID.mspApplicationNo;
 
         // If we have a stored application number, verify it still exists in MSP.
         // If it was deleted from the MSP dashboard, clear it so we create a fresh draft.
         if (mspApplicationNo) {
           const checkRes = await fetch(`${mspBase}/applications/${mspApplicationNo}`, { headers: mspHeaders });
           if (checkRes.status === 404) {
-            console.warn(`[submitToMSP] Application ${mspApplicationNo} not found in MSP (deleted?) — will create a new draft for "${concept.dbaName}"`);
+            console.warn(`[submitToMSP] Application ${mspApplicationNo} not found in MSP (deleted?) — will create a new draft for "${merchantMID.dbaName}"`);
             mspApplicationNo = null;
-            await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { mspApplicationNo: null });
+            await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, { mspApplicationNo: null });
           } else {
-            console.log(`[submitToMSP] Reusing existing draft ${mspApplicationNo} for "${concept.dbaName}"`);
+            console.log(`[submitToMSP] Reusing existing draft ${mspApplicationNo} for "${merchantMID.dbaName}"`);
           }
         }
 
         if (!mspApplicationNo) {
           // Detect cash discount via pricingMethod (wire value "CLEAR") OR pricingTier (UI value "CASH_DISCOUNT")
           const isCashDiscount =
-            ['CLEAR', 'CASH_DISCOUNT'].includes((concept.pricingMethod || '').toUpperCase()) ||
-            ['CASH_DISCOUNT', 'SELF_CASH_DISCOUNT'].includes((concept.pricingTier || profile.pricingTier || '').toUpperCase());
-          const templateNo = concept.mspTemplateNo || profile.mspTemplateNo || (isCashDiscount ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
+            ['CLEAR', 'CASH_DISCOUNT'].includes((merchantMID.pricingMethod || '').toUpperCase()) ||
+            ['CASH_DISCOUNT', 'SELF_CASH_DISCOUNT'].includes((merchantMID.pricingTier || profile.pricingTier || '').toUpperCase());
+          const templateNo = merchantMID.mspTemplateNo || profile.mspTemplateNo || (isCashDiscount ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
           const createBody = {
-            dba: concept.dbaName || location.dbaName || profile.legalName,
+            dba: merchantMID.dbaName || location.dbaName || profile.legalName,
             merchantapplicationtypeno: MSP_APP_TYPE,
             salespersonid: salespersonId,
             templatemerchantapplicationno: templateNo,
@@ -571,12 +571,12 @@ Deno.serve(async (req) => {
           const createData = await createRes.json();
 
           if (!createRes.ok || !createData.success) {
-            console.error(`[submitToMSP] Failed to create application for "${concept.dbaName}":`, JSON.stringify(createData));
-            await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { applicationStepStatus: 'Error' });
+            console.error(`[submitToMSP] Failed to create application for "${merchantMID.dbaName}":`, JSON.stringify(createData));
+            await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, { applicationStepStatus: 'Error' });
             results.push({
-              conceptId: concept.id,
-              locationId: concept.locationId,
-              dbaName: concept.dbaName,
+              midId: merchantMID.id,
+              locationId: merchantMID.locationId,
+              dbaName: merchantMID.dbaName,
               status: 'error',
               error: createData.error || createData.message || `HTTP ${createRes.status}`,
             });
@@ -585,10 +585,10 @@ Deno.serve(async (req) => {
           }
 
           mspApplicationNo = createData.merchantapplicationno;
-          console.log(`[submitToMSP] Created application ${mspApplicationNo} for "${concept.dbaName}"`);
+          console.log(`[submitToMSP] Created application ${mspApplicationNo} for "${merchantMID.dbaName}"`);
 
           // Persist application number immediately so it's trackable even if form fill fails
-          await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, {
+          await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, {
             mspApplicationNo: String(mspApplicationNo),
             applicationStepStatus: 'In Review',
           });
@@ -596,7 +596,7 @@ Deno.serve(async (req) => {
 
         // ── Step 2: Fill form ─────────────────────────────────────────────────
         const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
-        const formPayload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners, entityMailing);
+        const formPayload = buildFormPayload(profile, location, merchantMID, primarySigner, additionalSigners, entityMailing);
         console.log(`[submitToMSP] Filling form for application ${mspApplicationNo}:`, JSON.stringify(redactSensitive(formPayload), null, 2));
 
         const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
@@ -625,9 +625,9 @@ Deno.serve(async (req) => {
         // ── Step 3: Submit (only if MSP_SUBMIT_ENABLED=true) ──────────────────
         if (!submitEnabled) {
           results.push({
-            conceptId: concept.id,
-            locationId: concept.locationId,
-            dbaName: concept.dbaName,
+            midId: merchantMID.id,
+            locationId: merchantMID.locationId,
+            dbaName: merchantMID.dbaName,
             status: 'draft_created',
             mspApplicationNo,
             percentComplete,
@@ -646,23 +646,23 @@ Deno.serve(async (req) => {
         console.log(`[submitToMSP] Submit response ${submitRes.status}:`, JSON.stringify(redactSensitive(submitData), null, 2));
 
         if (submitRes.ok && submitData?.success) {
-          await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, {
+          await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, {
             applicationStepStatus: 'Pending MID',
           });
           results.push({
-            conceptId: concept.id,
-            locationId: concept.locationId,
-            dbaName: concept.dbaName,
+            midId: merchantMID.id,
+            locationId: merchantMID.locationId,
+            dbaName: merchantMID.dbaName,
             status: 'submitted',
             mspApplicationNo,
             percentComplete,
           });
         } else {
-          await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { applicationStepStatus: 'Error' });
+          await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, { applicationStepStatus: 'Error' });
           results.push({
-            conceptId: concept.id,
-            locationId: concept.locationId,
-            dbaName: concept.dbaName,
+            midId: merchantMID.id,
+            locationId: merchantMID.locationId,
+            dbaName: merchantMID.dbaName,
             status: 'submit_error',
             mspApplicationNo,
             error: submitData?.error || submitData?.message || `HTTP ${submitRes.status}`,
@@ -672,12 +672,12 @@ Deno.serve(async (req) => {
         }
 
       } catch (err: any) {
-        console.error(`[submitToMSP] Exception for "${concept.dbaName}":`, err.message);
-        await base44.asServiceRole.entities.MerchantProcessingConcept.update(concept.id, { applicationStepStatus: 'Error' });
+        console.error(`[submitToMSP] Exception for "${merchantMID.dbaName}":`, err.message);
+        await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, { applicationStepStatus: 'Error' });
         results.push({
-          conceptId: concept.id,
-          locationId: concept.locationId,
-          dbaName: concept.dbaName,
+          midId: merchantMID.id,
+          locationId: merchantMID.locationId,
+          dbaName: merchantMID.dbaName,
           status: 'error',
           error: err.message,
         });
@@ -690,7 +690,7 @@ Deno.serve(async (req) => {
       allSubmitted: allSuccessful && results.every(r => ['submitted', 'skipped', 'draft_created'].includes(r.status)),
       submitEnabled,
       corporateId,
-      conceptsAutoCreated: concepts_created_auto,
+      merchantMIDsAutoCreated: merchantMIDsCreatedAuto,
       results,
     });
 

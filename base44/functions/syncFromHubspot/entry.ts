@@ -7,7 +7,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //   Deal                     → identifies the merchant (corporateId = dealId)
 //   Parent Company           → MerchantCorporateProfile (legal entity, EIN, ownership)
 //   Child Companies          → MerchantLocations (one per physical location)
-//   Child Company (1:1)      → MerchantProcessingConcept (one MID per location)
+//   Child Company (1:1)      → MerchantMID (one MID per location)
 //   Associated Contact(s)    → MerchantSigners (primary signer)
 //
 // Idempotent — safe to run multiple times. Won't overwrite fields that already
@@ -265,7 +265,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── 6. Fetch child companies → locations + concepts ───────────────────────
+    // ── 6. Fetch child companies → locations + merchantMIDs ───────────────────────
     // HubSpot: child companies are returned in the parent company's associations
     const childCompanyAssocs = parentCompany.associations?.companies?.results || [];
     console.log(`[syncFromHubspot] Found ${childCompanyAssocs.length} child company associations for parent ${primaryCompanyId}`);
@@ -323,13 +323,13 @@ Deno.serve(async (req) => {
           result.locations.push({ dbaName, action: 'created', locationId });
         }
 
-        // Upsert MerchantProcessingConcept (one MID per location)
-        const existingConcepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({
+        // Upsert MerchantMID (one MID per location)
+        const existingMerchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({
           corporateId, locationId,
         });
 
-        if (!existingConcepts?.length) {
-          await base44.asServiceRole.entities.MerchantProcessingConcept.create({
+        if (!existingMerchantMIDs?.length) {
+          await base44.asServiceRole.entities.MerchantMID.create({
             corporateId,
             locationId,
             dbaName,
@@ -340,9 +340,9 @@ Deno.serve(async (req) => {
             cardPresentPct:   cpPct,
             applicationStepStatus: 'In Review',
           });
-          result.locations[result.locations.length - 1].conceptAction = 'created';
+          result.locations[result.locations.length - 1].midAction = 'created';
         } else {
-          result.locations[result.locations.length - 1].conceptAction = 'exists';
+          result.locations[result.locations.length - 1].midAction = 'exists';
         }
 
       } catch (locErr: any) {

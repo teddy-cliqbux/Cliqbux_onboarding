@@ -27,12 +27,12 @@
       },
       "description": "IDs of MerchantLocations to show in this staged application"
     },
-    "includedConceptIds": {
+    "includedMidIds": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "description": "IDs of MerchantProcessingConcept records to include"
+      "description": "IDs of MerchantMID records to include"
     },
     "includedSignerIds": {
       "type": "array",

@@ -20,9 +20,9 @@ Deno.serve(async (req) => {
       const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
       const profile = profiles?.[0];
       if (!profile) return Response.json({ error: 'Merchant not found' }, { status: 404 });
-      // Verify the application number is associated with this merchant's concepts
-      const concepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({ corporateId });
-      const owned = (concepts || []).some((c: any) => String(c.mspApplicationNo) === String(applicationNo));
+      // Verify the application number is associated with this merchant's merchantMIDs
+      const merchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId });
+      const owned = (merchantMIDs || []).some((c: any) => String(c.mspApplicationNo) === String(applicationNo));
       if (!owned) return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
 

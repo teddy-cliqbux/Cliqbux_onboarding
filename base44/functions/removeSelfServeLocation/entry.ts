@@ -11,13 +11,13 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'locationId is required' }, { status: 400 });
     }
 
-    // Delete all MIDs (MerchantProcessingConcept) for this location first
-    const concepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({ locationId });
-    for (const c of concepts) {
-      await base44.asServiceRole.entities.MerchantProcessingConcept.delete(c.id);
+    // Delete all MIDs (MerchantMID) for this location first
+    const merchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({ locationId });
+    for (const c of merchantMIDs) {
+      await base44.asServiceRole.entities.MerchantMID.delete(c.id);
     }
     await base44.asServiceRole.entities.MerchantLocations.delete(locationId);
-    return Response.json({ success: true, deletedMIDs: concepts.length });
+    return Response.json({ success: true, deletedMIDs: merchantMIDs.length });
 
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

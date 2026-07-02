@@ -316,7 +316,7 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
 
       setEntities(loadedEntities);
       setLocations(loadedLocations);
-      setMerchantIDs(data?.concepts || []);
+      setMerchantIDs(data?.merchantMIDs || []);
       setBankDetailsByLoc(bdMap);
       setManualBankByEntity(manualByEntity);
 

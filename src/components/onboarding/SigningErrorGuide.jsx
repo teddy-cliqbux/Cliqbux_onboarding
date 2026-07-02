@@ -184,7 +184,7 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
         <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-red-300">
-            {app.conceptName} — Form Incomplete
+            {app.merchantName} — Form Incomplete
           </p>
           <p className="text-xs text-red-400/80 mt-0.5">
             {app.error || 'Unable to prepare signing package: Merchant application is not complete.'}

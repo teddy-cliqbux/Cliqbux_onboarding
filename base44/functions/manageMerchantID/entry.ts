@@ -10,27 +10,20 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'corporateId is required' }, { status: 400 });
     }
 
-    // Helper: map a concept record to merchantID shape
-    const toMID = (c) => ({
-      ...c,
-      merchantName: c.merchantName || c.conceptName || c.dbaName || '',
-    });
-
     // — LIST —
     if (action === 'list') {
-      const concepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({ corporateId });
-      return Response.json({ merchantIDs: (concepts || []).map(toMID) });
+      const merchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId });
+      return Response.json({ merchantIDs: merchantMIDs || [] });
     }
 
     // — ADD —
     if (action === 'add') {
       if (!locationId) return Response.json({ error: 'locationId is required' }, { status: 400 });
-      const conceptData = {
+      const merchantMIDData = {
         locationId,
         corporateId,
-        conceptName: data?.merchantName || data?.conceptName || locationId,
+        merchantName: data?.merchantName || locationId,
         dbaName: data?.merchantName || data?.dbaName || '',
-        merchantName: data?.merchantName || '',
         mccCode: data?.mccCode || '',
         industryType: data?.industryType || '',
         monthlyCardSales: data?.monthlyCardSales ? Number(data.monthlyCardSales) : 0,
@@ -41,29 +34,30 @@ Deno.serve(async (req) => {
         motoPct: data?.motoPct != null ? Number(data.motoPct) : 0,
         applicationStepStatus: 'In Review',
       };
-      const concept = await base44.asServiceRole.entities.MerchantProcessingConcept.create(conceptData);
+      const merchantMID = await base44.asServiceRole.entities.MerchantMID.create(merchantMIDData);
 
       // Auto-create MSPWare draft immediately so signApplication doesn't have to do it lazily
       try {
-        await base44.functions.invoke('submitToMSP', { corporateId, conceptIds: [concept.id] });
+        await base44.functions.invoke('submitToMSP', { corporateId, midIds: [merchantMID.id] });
       } catch (e) {
         console.warn('[manageMerchantID] submitToMSP draft creation failed (non-fatal):', e.message);
       }
 
-      return Response.json({ merchantID: toMID(concept) });
+      return Response.json({ merchantID: merchantMID });
     }
 
     // — UPDATE —
     if (action === 'update') {
       if (!merchantIDId) return Response.json({ error: 'merchantIDId is required for update' }, { status: 400 });
-      const existing = await base44.asServiceRole.entities.MerchantProcessingConcept.get(merchantIDId);
+      const existing = await base44.asServiceRole.entities.MerchantMID.get(merchantIDId);
       const LOCKED = ['Pending MID', 'Active', 'Active (Existing)'];
       if (existing && LOCKED.includes(existing.applicationStepStatus) && !(data?.applicationStepStatus !== undefined && Object.keys(data).length === 1)) {
         return Response.json({ error: 'Cannot edit: Application is in a locked status' }, { status: 403 });
       }
       const updateFields = {};
       const d = data || {};
-      if (d.merchantName !== undefined) { updateFields.merchantName = d.merchantName; updateFields.conceptName = d.merchantName; updateFields.dbaName = d.merchantName; }
+      // Renaming the merchant name also updates the DBA sent to Elavon, mirroring the prior behavior.
+      if (d.merchantName !== undefined) { updateFields.merchantName = d.merchantName; updateFields.dbaName = d.merchantName; }
       if (d.mccCode !== undefined) updateFields.mccCode = d.mccCode;
       if (d.industryType !== undefined) updateFields.industryType = d.industryType;
       if (d.monthlyCardSales !== undefined) updateFields.monthlyCardSales = Number(d.monthlyCardSales);
@@ -74,19 +68,19 @@ Deno.serve(async (req) => {
       if (d.motoPct !== undefined) updateFields.motoPct = Number(d.motoPct);
       if (d.locationId !== undefined) updateFields.locationId = d.locationId;
       if (d.applicationStepStatus !== undefined) updateFields.applicationStepStatus = d.applicationStepStatus;
-      const updated = await base44.asServiceRole.entities.MerchantProcessingConcept.update(merchantIDId, updateFields);
-      return Response.json({ updatedMerchantID: toMID(updated), merchantID: toMID(updated) });
+      const updated = await base44.asServiceRole.entities.MerchantMID.update(merchantIDId, updateFields);
+      return Response.json({ updatedMerchantID: updated, merchantID: updated });
     }
 
     // — DELETE —
     if (action === 'delete') {
       if (!merchantIDId) return Response.json({ error: 'merchantIDId is required for delete' }, { status: 400 });
-      const toDelete = await base44.asServiceRole.entities.MerchantProcessingConcept.get(merchantIDId);
+      const toDelete = await base44.asServiceRole.entities.MerchantMID.get(merchantIDId);
       const LOCKED = ['Pending MID', 'Active', 'Active (Existing)'];
       if (toDelete && LOCKED.includes(toDelete.applicationStepStatus)) {
         return Response.json({ error: 'Cannot delete: Application is in a locked status' }, { status: 403 });
       }
-      await base44.asServiceRole.entities.MerchantProcessingConcept.delete(merchantIDId);
+      await base44.asServiceRole.entities.MerchantMID.delete(merchantIDId);
       return Response.json({ success: true });
     }
 

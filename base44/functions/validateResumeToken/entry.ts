@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { signMerchantToken } from '../helpers/auth.ts';
 
 // ─── validateResumeToken ──────────────────────────────────────────────────────
 // Validates a magic link token and returns the associated corporateId.
@@ -44,12 +45,17 @@ Deno.serve(async (req) => {
       }, { status: 401 });
     }
 
+    // Sign a merchant-portal token bound to this corporateId — expires at the
+    // same instant the magic link itself does, so no separate TTL to manage.
+    const merchantToken = await signMerchantToken(record.corporateId, record.email, record.expiresAt);
+
     console.log(`[validateResumeToken] Token validated for corporateId=${record.corporateId}, email=${record.email}`);
 
     return Response.json({
       success: true,
       corporateId: record.corporateId,
       email: record.email,
+      merchantToken,
     });
 
   } catch (error: any) {

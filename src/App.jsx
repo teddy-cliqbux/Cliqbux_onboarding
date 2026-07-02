@@ -10,6 +10,7 @@ import VerifyIdentity from './pages/VerifyIdentity';
 import PostSubmissionDashboard from './pages/PostSubmissionDashboard';
 import SystemAdminHidden from './pages/SystemAdminHidden';
 import ApplicationManager from './pages/ApplicationManager';
+import DevTrackerPreview from './pages/DevTrackerPreview';
 
 function App() {
   return (
@@ -23,6 +24,9 @@ function App() {
             <Route path="/onboarding/dashboard" element={<PostSubmissionDashboard />} />
             <Route path="/admin/architecture" element={<SystemAdminHidden />} />
             <Route path="/admin/applications" element={<ApplicationManager />} />
+            {import.meta.env.DEV && (
+              <Route path="/dev/tracker-preview" element={<DevTrackerPreview />} />
+            )}
             <Route path="*" element={<PageNotFound />} />
           </Routes>
         </Router>

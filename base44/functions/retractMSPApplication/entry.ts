@@ -15,7 +15,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // Body: { merchantIDId }
 //
 // What it does:
-//   1. Fetches the MerchantProcessingConcept record
+//   1. Fetches the MerchantMID record
 //   2. Calls DELETE /applications/{mspApplicationNo} on MSPWare (best-effort)
 //   3. Resets applicationStepStatus → 'Ready to Submit'
 //   4. Clears mspApplicationNo so signApplication will create a fresh draft
@@ -47,13 +47,13 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'merchantIDId required' }, { status: 400 });
     }
 
-    // 1. Fetch the concept record
-    const concept = await base44.asServiceRole.entities.MerchantProcessingConcept.get(merchantIDId);
-    if (!concept) {
-      return Response.json({ error: 'MerchantProcessingConcept not found' }, { status: 404 });
+    // 1. Fetch the merchantMID record
+    const merchantMID = await base44.asServiceRole.entities.MerchantMID.get(merchantIDId);
+    if (!merchantMID) {
+      return Response.json({ error: 'MerchantMID not found' }, { status: 404 });
     }
 
-    const { mspApplicationNo, dbaName, applicationStepStatus } = concept;
+    const { mspApplicationNo, dbaName, applicationStepStatus } = merchantMID;
 
     const result: Record<string, any> = {
       merchantIDId,
@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
     }
 
     // 3. Reset our record regardless of MSPWare result
-    await base44.asServiceRole.entities.MerchantProcessingConcept.update(merchantIDId, {
+    await base44.asServiceRole.entities.MerchantMID.update(merchantIDId, {
       applicationStepStatus: 'Ready to Submit',
       mspApplicationNo:       null,
     });

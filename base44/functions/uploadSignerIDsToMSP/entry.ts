@@ -23,10 +23,10 @@ Deno.serve(async (req) => {
 
     const mspHeaders = { 'X-API-KEY': apiKey, 'X-App-ID': appId, 'Accept': 'application/json' };
 
-    // Load signers and concepts
-    const [signers, concepts] = await Promise.all([
+    // Load signers and merchantMIDs
+    const [signers, merchantMIDs] = await Promise.all([
       base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }),
-      base44.asServiceRole.entities.MerchantProcessingConcept.filter({ corporateId }),
+      base44.asServiceRole.entities.MerchantMID.filter({ corporateId }),
     ]);
 
     // Filter signers that have an uploaded ID document
@@ -38,8 +38,8 @@ Deno.serve(async (req) => {
     // Determine which application numbers to upload to
     let targetApps: string[] = applicationNos || [];
     if (targetApps.length === 0) {
-      // Default: all concepts that have an MSP application number and are not yet Active
-      targetApps = (concepts || [])
+      // Default: all merchantMIDs that have an MSP application number and are not yet Active
+      targetApps = (merchantMIDs || [])
         .filter((c: any) => c.mspApplicationNo && !['Active', 'Active (Existing)'].includes(c.applicationStepStatus))
         .map((c: any) => String(c.mspApplicationNo));
     }

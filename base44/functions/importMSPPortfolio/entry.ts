@@ -8,7 +8,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //   2. Groups apps by TIN (= one corporate entity). Falls back to legal name if no TIN.
 //   3. Creates MerchantCorporateProfile (one per corporate entity)
 //   4. Creates MerchantLocations (one per unique physical address under that entity)
-//   5. Creates MerchantProcessingConcept (one per MID)
+//   5. Creates MerchantMID (one per MID)
 //
 // Safe to re-run — fully idempotent at all three levels.
 // Admin-only.
@@ -184,15 +184,15 @@ Deno.serve(async (req) => {
       if (p.legalName) profileByName.set(p.legalName.trim().toUpperCase(), p);
     }
 
-    // Load all existing concepts to check mspApplicationNo idempotency
-    const allConcepts = await base44.asServiceRole.entities.MerchantProcessingConcept.filter({});
-    const trackedAppNos = new Set((allConcepts || []).map((c: any) => String(c.mspApplicationNo)).filter(Boolean));
+    // Load all existing merchantMIDs to check mspApplicationNo idempotency
+    const allMerchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({});
+    const trackedAppNos = new Set((allMerchantMIDs || []).map((c: any) => String(c.mspApplicationNo)).filter(Boolean));
 
     // ── 5. Process each corporate group ──────────────────────────────────────
     const summary = {
       corporateEntities: { found: 0, created: 0, skipped: 0 },
       locations:         { created: 0, skipped: 0 },
-      concepts:          { created: 0, skipped: 0, errors: 0 },
+      merchantMIDs:          { created: 0, skipped: 0, errors: 0 },
     };
     const entityResults: any[] = [];
 
@@ -266,16 +266,16 @@ Deno.serve(async (req) => {
       const existingLocations: any[] = dryRun ? [] :
         await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId });
 
-      // ── 5b–c. Location + Concept per app ─────────────────────────────────
+      // ── 5b–c. Location + MerchantMID per app ─────────────────────────────────
       const appResults: any[] = [];
 
       for (const { app, form: f } of items) {
         const appNo = String(app.merchantapplicationno);
 
-        // Concept idempotency
+        // MerchantMID idempotency
         if (trackedAppNos.has(appNo)) {
-          summary.concepts.skipped++;
-          appResults.push({ appNo, dba: app.dba, mid: app.mid, result: 'concept_already_tracked' });
+          summary.merchantMIDs.skipped++;
+          appResults.push({ appNo, dba: app.dba, mid: app.mid, result: 'mid_already_tracked' });
           continue;
         }
 
@@ -314,11 +314,11 @@ Deno.serve(async (req) => {
           summary.locations.skipped++;
         }
 
-        // Create concept
-        const conceptPayload = {
+        // Create merchantMID
+        const merchantMIDPayload = {
           locationId:            location.id,
           corporateId,
-          conceptName:           f.full_dba_name || app.dba,
+          merchantName:           f.full_dba_name || app.dba,
           dbaName:               f.full_dba_name || app.dba,
           mccCode:               f.mcc           || '',
           industryType:          f.industry_type  || 'RE',
@@ -337,18 +337,18 @@ Deno.serve(async (req) => {
 
         try {
           if (!dryRun) {
-            await base44.asServiceRole.entities.MerchantProcessingConcept.create(conceptPayload);
+            await base44.asServiceRole.entities.MerchantMID.create(merchantMIDPayload);
             trackedAppNos.add(appNo);
           }
-          summary.concepts.created++;
+          summary.merchantMIDs.created++;
           appResults.push({
           appNo,
           dba:             app.dba,
           result:          dryRun ? 'would_create' : 'created',
           });
-          console.log(`[importMSPPortfolio] ${dryRun ? '[DRY] ' : ''}Concept "${app.dba}" MID ${app.mid} → corporateId ${corporateId}`);
+          console.log(`[importMSPPortfolio] ${dryRun ? '[DRY] ' : ''}MerchantMID "${app.dba}" MID ${app.mid} → corporateId ${corporateId}`);
         } catch (err: any) {
-          summary.concepts.errors++;
+          summary.merchantMIDs.errors++;
           appResults.push({ appNo, dba: app.dba, mid: app.mid, result: 'error', error: err.message });
         }
       }

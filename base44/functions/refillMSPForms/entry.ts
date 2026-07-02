@@ -50,26 +50,26 @@ function resolveLocationAddress(location: Record<string, any>): Record<string, a
   return { ...location, businessStreet: m[1].trim(), businessCity: m[2].trim(), businessState: m[3].toUpperCase(), businessZip: m[4].trim() };
 }
 
-function buildFormPayload(profile: any, location: any, concept: any, signer: any, additionalSigners: any[], entityMailing?: any): Record<string, unknown> {
-  const bank = concept.bankDetails || location.bankDetails || {};
+function buildFormPayload(profile: any, location: any, merchantMID: any, signer: any, additionalSigners: any[], entityMailing?: any): Record<string, unknown> {
+  const bank = merchantMID.bankDetails || location.bankDetails || {};
   const routing = bank.routingNumber || location.routingNumber || '';
   const account = bank.accountNumber || location.accountNumber || '';
   const taxId = cleanDigits(profile.taxId || '');
   const ssn = cleanDigits(signer?.ssn || profile.ssn || '');
   const phone = cleanDigits(signer?.corporatePhone || profile.corporatePhone || '');
-  const pricingCategory = String(concept.pricingCategory || '1');
+  const pricingCategory = String(merchantMID.pricingCategory || '1');
   const TIER_TO_METHOD: Record<string, string> = { 'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS', 'CASH_DISCOUNT': 'CLEAR' };
-  const rawPricingMethod = concept.pricingMethod || profile.pricingMethod || TIER_TO_METHOD[(profile.pricingTier||'').toUpperCase()] || 'ICPLS';
+  const rawPricingMethod = merchantMID.pricingMethod || profile.pricingMethod || TIER_TO_METHOD[(profile.pricingTier||'').toUpperCase()] || 'ICPLS';
   const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'CLEAR' : rawPricingMethod;
-  const industryType = (concept.pricingCategory && concept.industryType) ? concept.industryType : mapIndustryType(pricingCategory);
-  const mcc = concept.mccCode || profile.mccCode || '5999';
-  const dbaName = concept.dbaName || location.dbaName || profile.legalName || '';
-  const monthlyCardSales = Math.max(1, parseFloat(String(concept.monthlyCardSales || profile.monthlyCardSales || '6000')) || 6000);
+  const industryType = (merchantMID.pricingCategory && merchantMID.industryType) ? merchantMID.industryType : mapIndustryType(pricingCategory);
+  const mcc = merchantMID.mccCode || profile.mccCode || '5999';
+  const dbaName = merchantMID.dbaName || location.dbaName || profile.legalName || '';
+  const monthlyCardSales = Math.max(1, parseFloat(String(merchantMID.monthlyCardSales || profile.monthlyCardSales || '6000')) || 6000);
   const cap = Math.max(monthlyCardSales - 1, 1);
-  const avgSaleAmount = String(Math.min(parseFloat(String(concept.avgSaleAmount || profile.avgSaleAmount || '100')) || 100, cap));
-  const highestTicketAmount = String(Math.min(parseFloat(String(concept.highestTicketAmount || profile.highestTicketAmount || '200')) || 200, cap));
-  const deliveryDelayDays = String(Math.max(parseInt(String(concept.deliveryDelayDays ?? '0'), 10), 1));
-  const rawCpPct = concept.cardPresentPct != null ? concept.cardPresentPct : 100;
+  const avgSaleAmount = String(Math.min(parseFloat(String(merchantMID.avgSaleAmount || profile.avgSaleAmount || '100')) || 100, cap));
+  const highestTicketAmount = String(Math.min(parseFloat(String(merchantMID.highestTicketAmount || profile.highestTicketAmount || '200')) || 200, cap));
+  const deliveryDelayDays = String(Math.max(parseInt(String(merchantMID.deliveryDelayDays ?? '0'), 10), 1));
+  const rawCpPct = merchantMID.cardPresentPct != null ? merchantMID.cardPresentPct : 100;
   const cardPresentPct = Math.max(0, Math.min(100, parseInt(String(rawCpPct), 10) || 100));
   const cnpPct = 100 - cardPresentPct;
   const intPct = cnpPct > 0 ? String(profile.internetPct ?? 0) : '0';
@@ -228,10 +228,10 @@ Deno.serve(async (req) => {
     const appId   = Deno.env.get('MSP_APP_ID') || 'cliqbux';
     const headers = { 'X-API-KEY': apiKey, 'X-App-ID': appId, 'Accept': 'application/json', 'Content-Type': 'application/json' };
 
-    const [profiles, signers, allConcepts, allLocs] = await Promise.all([
+    const [profiles, signers, allMerchantMIDs, allLocs] = await Promise.all([
       base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }),
-      base44.asServiceRole.entities.MerchantProcessingConcept.filter({ corporateId }),
+      base44.asServiceRole.entities.MerchantMID.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }),
     ]);
 
@@ -249,11 +249,11 @@ Deno.serve(async (req) => {
 
     const results: any[] = [];
     for (const appNo of applicationNos) {
-      const concept = allConcepts?.find((c: any) => String(c.mspApplicationNo) === String(appNo));
-      if (!concept) { results.push({ appNo, error: 'Concept not found' }); continue; }
-      const location = resolveLocationAddress(locationMap[concept.locationId] || {});
+      const merchantMID = allMerchantMIDs?.find((c: any) => String(c.mspApplicationNo) === String(appNo));
+      if (!merchantMID) { results.push({ appNo, error: 'MerchantMID not found' }); continue; }
+      const location = resolveLocationAddress(locationMap[merchantMID.locationId] || {});
       const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
-      const payload = buildFormPayload(profile, location, concept, primarySigner, additionalSigners, entityMailing);
+      const payload = buildFormPayload(profile, location, merchantMID, primarySigner, additionalSigners, entityMailing);
 
       console.log(`[refillMSPForms] PUT form for app ${appNo}:`, JSON.stringify(payload, null, 2));
 
@@ -266,7 +266,7 @@ Deno.serve(async (req) => {
 
       results.push({
         appNo,
-        dba: concept.dbaName,
+        dba: merchantMID.dbaName,
         putStatus: putRes.status,
         putSuccess: putData.success,
         putErrors: [...(putData.data_errors||[]), ...(putData.completion_errors||[]), ...(putData.rule_violations||[])],

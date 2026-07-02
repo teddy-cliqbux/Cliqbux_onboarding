@@ -403,3 +403,31 @@ The existing `getMerchantData` function returns the profile including `applicati
 
 **→ Waiting on:** Nobody
 ---
+
+---
+**[CLAUDE]** · 2026-07-01
+**Type:** Action Taken + Architecture Decision
+**Re:** Repository-wide rename — MerchantProcessingConcept → MerchantMID
+
+**Entity renamed:** `base44/entities/MerchantProcessingConcept.jsonc` → `base44/entities/MerchantMID.jsonc`. The `conceptName` field is now `merchantName`; all other fields unchanged. This is a documentation/naming cleanup only — no financial cap calculations, cap logic, or validation rules were touched.
+
+**Architecture is now a clean three layers — no more double-renamed jargon:**
+```
+MerchantCorporateProfile (Profile)
+  └── MerchantLocations (Locations)
+        └── MerchantMID (MerchantMIDs) — one per Elavon MID
+```
+Every mention of "concept" in prior entries below (`MerchantProcessingConcept`, `concepts`, `conceptId(s)`, `conceptName`) refers to this same entity under its old name — read historically, not as the current API.
+
+**Swept all active backend functions** to reference `MerchantMID` / `merchantMIDs` / `midIds` instead of the old `concept(s)` / `conceptId(s)` naming: `submitToMSP`, `signApplication`, `pollMSPStatus`, `getMerchantData`, `addSelfServeLocation`, `batchUpdateStatus`, `bulkImportExistingMIDs`, `getMSPFormStatus`, `importExistingMIDs`, `importMSPPortfolio`, `manageStagedApplication`, `refillMSPForms`, `removeSelfServeLocation`, `retractMSPApplication`, `syncFromHubspot`, `uploadSignerIDsToMSP`. Frontend-facing field names (`merchantIDs`, `merchantIDId`) are unchanged — only the internal entity/variable naming moved.
+
+**`manageMerchantID` simplified** — removed the `toMID()` translation shim and the triplicate `conceptName`/`dbaName`/`merchantName` writes. The wrapper now reads/writes the `MerchantMID` entity's own field names directly; no more mapping layer between frontend params and the entity.
+
+**Deleted dead code** (confirmed unreferenced anywhere in the repo before removal): `manageConcept` function (unused duplicate of `manageMerchantID`) and `AddConceptModal.jsx` component (not imported anywhere).
+
+**Migration script renamed and extended:** `migrateLocationsToConcepts` → `migrateToMerchantMIDs`. It now does two things: (1) copies any records still sitting in the legacy `MerchantProcessingConcept` table into `MerchantMID` (idempotent, keyed by `locationId`), then (2) derives a `MerchantMID` from `MerchantLocations` boarding data for any location that still doesn't have one (the original logic). Safe to re-run; supports `dryRun` and `corporateId` filters as before.
+
+**For Base44:** No dashboard action needed unless the platform requires re-publishing renamed entity schemas — please confirm `MerchantMID` is live and check whether any records are still sitting in the old `MerchantProcessingConcept` collection (run `POST /functions/migrateToMerchantMIDs?dryRun=true` to check before executing for real).
+
+**→ Waiting on:** Base44 (confirm MerchantMID entity is published; run migration dry run if legacy Concept data exists)
+---

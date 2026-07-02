@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
         status: 'draft',
         label: data?.label || 'New Staged Application',
         includedLocationIds: data?.includedLocationIds || [],
-        includedConceptIds: data?.includedConceptIds || [],
+        includedMidIds: data?.includedMidIds || [],
         includedSignerIds: data?.includedSignerIds || [],
         prefilledData: data?.prefilledData || {},
         accessToken: token,

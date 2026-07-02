@@ -72,10 +72,10 @@ Deno.serve(async (req) => {
     const location = await base44.asServiceRole.entities.MerchantLocations.create(locationFields);
 
     // Auto-create a stub primary MID for this location
-    const concept = await base44.asServiceRole.entities.MerchantProcessingConcept.create({
+    const merchantMID = await base44.asServiceRole.entities.MerchantMID.create({
       locationId: location.id,
       corporateId,
-      conceptName: dbaName,
+      merchantName: dbaName,
       dbaName,
       mccCode: '',
       industryType: '',
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       applicationStepStatus: 'In Review',
     });
 
-    return Response.json({ success: true, location, concept });
+    return Response.json({ success: true, location, merchantMID });
 
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
