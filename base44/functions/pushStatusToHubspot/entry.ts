@@ -9,16 +9,34 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // Body: { corporateId, milestone }
 //
 // Milestones and their HubSpot stage mappings:
-//   link_sent           → onboarding_link_sent       (Onboarding Link Sent)
-//   link_opened         → onboarding_link_opened      (Onboarding Link Opened)
-//   agreement_filled    → merchant_agreement_filled   (Merchant Agreement Filled)
-//   agreement_signed    → merchant_agreement_signed   (Merchant Agreement Signed)
-//   locations_added     → locations_added             (Locations Added)
-//   application_submitted → application_submitted     (Application Submitted)
-//   closed_won          → closedwon                  (Closed Won and Installed)
-//   closed_lost         → closedlost                 (Closed Lost)
+//   link_sent              → onboarding_link_sent       (Onboarding Link Sent)
+//   link_opened            → onboarding_link_opened     (Portal Opened)
+//   agreement_filled       → merchant_agreement_filled  (Forms In Progress)
+//   agreement_signed       → merchant_agreement_signed  (Quote & Agreement Executed)
+//   locations_added        → locations_added            (Structure & MIDs Configured)
+//   application_submitted  → application_submitted      (Submitted to Underwriting)
+//   ready_for_deployment   → ready_for_deployment        (Ready for Deployment / Fulfillment)
+//   closed_won             → closedwon                  (Closed Won and Installed — Cliqbux Merchant Pipeline)
+//   closed_lost            → closedlost                 (Closed Lost — Cliqbux Merchant Pipeline)
+//
+// The first seven milestones live in the dedicated "Merchant Onboarding" pipeline
+// (id below — must match whatever setupHubspotPipeline actually created; HubSpot
+// may not honor a requested custom pipeline ID). Every PATCH for those milestones
+// also sets `pipeline` so the deal moves in immediately, since HubSpot requires a
+// deal's dealstage to belong to its current pipeline — sending it every time is
+// idempotent and avoids needing to track "is this the first milestone" state.
+//
+// closed_won / closed_lost intentionally act on whatever pipeline the deal is
+// currently in (unchanged behavior) — they are not part of the onboarding pipeline.
 //
 // Banking verified is intentionally NOT a stage transition.
+
+const ONBOARDING_PIPELINE_ID = 'merchant_onboarding'; // must match the id setupHubspotPipeline reports back
+
+const ONBOARDING_MILESTONES = new Set([
+  'link_sent', 'link_opened', 'agreement_filled', 'agreement_signed',
+  'locations_added', 'application_submitted', 'ready_for_deployment',
+]);
 
 const MILESTONE_TO_STAGE: Record<string, string> = {
   'link_sent':              'onboarding_link_sent',
@@ -27,6 +45,7 @@ const MILESTONE_TO_STAGE: Record<string, string> = {
   'agreement_signed':       'merchant_agreement_signed',
   'locations_added':        'locations_added',
   'application_submitted':  'application_submitted',
+  'ready_for_deployment':   'ready_for_deployment',
   'closed_won':             'closedwon',
   'closed_lost':            'closedlost',
 };
@@ -62,8 +81,15 @@ Deno.serve(async (req) => {
 
     const patchBody: Record<string, any> = { dealstage: dealStage };
 
-    // Set close date when deal is won
-    if (milestone === 'closed_won' || milestone === 'application_submitted') {
+    // Onboarding milestones live in the dedicated pipeline — move the deal in
+    // on every onboarding PATCH (idempotent; HubSpot requires dealstage to
+    // belong to the deal's current pipeline or the PATCH is rejected).
+    if (ONBOARDING_MILESTONES.has(milestone)) {
+      patchBody.pipeline = ONBOARDING_PIPELINE_ID;
+    }
+
+    // Set close date when the deal reaches its terminal/won state
+    if (milestone === 'closed_won' || milestone === 'ready_for_deployment') {
       patchBody.closedate = new Date().toISOString().split('T')[0];
     }
 
