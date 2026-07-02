@@ -31,7 +31,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //
 // Banking verified is intentionally NOT a stage transition.
 
-const ONBOARDING_PIPELINE_ID = 'merchant_onboarding'; // must match the id setupHubspotPipeline reports back
+const ONBOARDING_PIPELINE_ID = '2400387772'; // real HubSpot-assigned ID for "Merchant Onboarding" — HubSpot did not honor the requested custom slug
 
 const ONBOARDING_MILESTONES = new Set([
   'link_sent', 'link_opened', 'agreement_filled', 'agreement_signed',
