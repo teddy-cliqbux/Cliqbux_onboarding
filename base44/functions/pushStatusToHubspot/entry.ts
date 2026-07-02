@@ -39,7 +39,7 @@ const ONBOARDING_MILESTONES = new Set([
 ]);
 
 const MILESTONE_TO_STAGE: Record<string, string> = {
- 'link_sent': 'Onboarding Link Sent',
+  'link_sent': 'Onboarding Link Sent',
   'link_opened': 'Portal Opened',
   'agreement_filled': 'Forms In Progress',
   'agreement_signed': 'Quote & Agreement Executed',
