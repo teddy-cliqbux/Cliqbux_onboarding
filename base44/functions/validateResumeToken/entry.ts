@@ -1,5 +1,53 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
-import { signMerchantToken } from '../helpers/auth.ts';
+
+// ─── Merchant Portal Auth Helper (inlined) ────────────────────────────────────
+// Base44 bundles each function in isolation — relative imports can't reach
+// outside functions/{name}/, so this is duplicated from base44/functions/helpers/auth.ts
+// rather than imported. Keep both copies in sync if the signing logic changes.
+// See that file for verifyMerchantToken and full documentation.
+
+interface MerchantTokenPayload {
+  corporateId: string;
+  email?: string;
+  exp: number; // unix seconds
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function getHmacKey(usage: 'sign' | 'verify'): Promise<CryptoKey> {
+  const secret = Deno.env.get('MERCHANT_JWT_SECRET');
+  if (!secret) throw new Error('MERCHANT_JWT_SECRET env var not set');
+  const keyData = new TextEncoder().encode(secret);
+  return crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, [usage]);
+}
+
+// Signs { corporateId, email, exp } into a compact HMAC-SHA256 token.
+// expiresAt should be the same ISO 8601 timestamp as the MerchantAccessTokens
+// record's expiresAt, so the signed token expires exactly when the magic
+// link itself would have — no separate TTL policy to keep in sync.
+async function signMerchantToken(
+  corporateId: string,
+  email: string | undefined,
+  expiresAt: string
+): Promise<string> {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const exp = Math.floor(new Date(expiresAt).getTime() / 1000);
+  const payload: MerchantTokenPayload = { corporateId, email, exp };
+
+  const encodedHeader = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
+  const encodedPayload = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
+  const signingInput = `${encodedHeader}.${encodedPayload}`;
+
+  const key = await getHmacKey('sign');
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signingInput));
+  const encodedSignature = base64UrlEncode(new Uint8Array(signature));
+
+  return `${signingInput}.${encodedSignature}`;
+}
 
 // ─── validateResumeToken ──────────────────────────────────────────────────────
 // Validates a magic link token and returns the associated corporateId.
