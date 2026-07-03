@@ -276,7 +276,7 @@ function buildFormPayload(
     ...(entityMailing?.street ? {
       has_legal_address: 'new',
       legal_country: 'USA',
-      legal_address_type: 'LGA',
+      legal_address_type: 'BSA',
       legal_address: entityMailing.street,
       legal_city: entityMailing.city,
       legal_state_usa: sanitizeState(entityMailing.state),
