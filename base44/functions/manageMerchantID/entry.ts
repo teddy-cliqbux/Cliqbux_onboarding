@@ -1,5 +1,15 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
+// Maps the merchant's chosen pricingTier to the correct MSPWare pricing_method.
+// MerchantMID.pricingMethod has a schema-level default of 'ICPLS', which will
+// silently mask this derivation if the field is left unset at create time —
+// always set it explicitly here rather than relying on the schema default.
+const TIER_TO_METHOD: Record<string, string> = {
+  'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
+  'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
+  'CASH_DISCOUNT': 'CLEAR', 'SELF_CASH_DISCOUNT': 'CLEAR',
+};
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -19,6 +29,14 @@ Deno.serve(async (req) => {
     // — ADD —
     if (action === 'add') {
       if (!locationId) return Response.json({ error: 'locationId is required' }, { status: 400 });
+
+      // Derive pricingMethod from the merchant's chosen pricingTier — must be set
+      // explicitly, since MerchantMID.pricingMethod's schema default ('ICPLS')
+      // would otherwise silently override a Cash Discount merchant's real method.
+      const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
+      const profile = profiles?.[0];
+      const pricingMethod = data?.pricingMethod || TIER_TO_METHOD[(profile?.pricingTier || '').toUpperCase()] || 'ICPLS';
+
       const merchantMIDData = {
         locationId,
         corporateId,
@@ -26,6 +44,7 @@ Deno.serve(async (req) => {
         dbaName: data?.merchantName || data?.dbaName || '',
         mccCode: data?.mccCode || '',
         industryType: data?.industryType || '',
+        pricingMethod,
         monthlyCardSales: data?.monthlyCardSales ? Number(data.monthlyCardSales) : 0,
         avgSaleAmount: data?.avgSaleAmount ? Number(data.avgSaleAmount) : 0,
         highestTicketAmount: data?.highestTicketAmount ? Number(data.highestTicketAmount) : 0,

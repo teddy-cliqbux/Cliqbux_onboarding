@@ -1,5 +1,15 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
+// Maps the merchant's chosen pricingTier to the correct MSPWare pricing_method.
+// MerchantMID.pricingMethod has a schema-level default of 'ICPLS', which will
+// silently mask this derivation if the field is left unset at create time —
+// always set it explicitly here rather than relying on the schema default.
+const TIER_TO_METHOD: Record<string, string> = {
+  'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
+  'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
+  'CASH_DISCOUNT': 'CLEAR', 'SELF_CASH_DISCOUNT': 'CLEAR',
+};
+
 // ─── syncFromHubspot ──────────────────────────────────────────────────────────
 // Pulls a merchant's full HubSpot hierarchy into the onboarding portal entities.
 //
@@ -329,12 +339,17 @@ Deno.serve(async (req) => {
         });
 
         if (!existingMerchantMIDs?.length) {
+          // Note: MerchantMID has no `pricingTier` field — that was a bug (silently
+          // dropped by the schema). Derive the real `pricingMethod` field instead,
+          // since MerchantMID.pricingMethod's schema default ('ICPLS') would
+          // otherwise mask a Cash Discount merchant's actual pricing method.
+          const pricingMethod = TIER_TO_METHOD[(locPricing || '').toUpperCase()] || 'ICPLS';
           await base44.asServiceRole.entities.MerchantMID.create({
             corporateId,
             locationId,
             dbaName,
             mccCode:          locMcc,
-            pricingTier:      locPricing,
+            pricingMethod,
             monthlyCardSales: monthlyVol,
             avgSaleAmount:    avgTicket,
             cardPresentPct:   cpPct,
