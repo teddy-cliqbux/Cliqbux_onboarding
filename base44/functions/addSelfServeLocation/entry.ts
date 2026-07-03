@@ -1,5 +1,15 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
+// Maps the merchant's chosen pricingTier to the correct MSPWare pricing_method.
+// MerchantMID.pricingMethod has a schema-level default of 'ICPLS', which will
+// silently mask this derivation if the field is left unset at create time —
+// always set it explicitly here rather than relying on the schema default.
+const TIER_TO_METHOD: Record<string, string> = {
+  'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
+  'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
+  'CASH_DISCOUNT': 'CLEAR', 'SELF_CASH_DISCOUNT': 'CLEAR',
+};
+
 function randomUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = Math.random() * 16 | 0;
@@ -71,6 +81,11 @@ Deno.serve(async (req) => {
 
     const location = await base44.asServiceRole.entities.MerchantLocations.create(locationFields);
 
+    // Derive pricingMethod from the merchant's chosen pricingTier — must be set
+    // explicitly, since MerchantMID.pricingMethod's schema default ('ICPLS')
+    // would otherwise silently override a Cash Discount merchant's real method.
+    const pricingMethod = TIER_TO_METHOD[(profile[0]?.pricingTier || '').toUpperCase()] || 'ICPLS';
+
     // Auto-create a stub primary MID for this location
     const merchantMID = await base44.asServiceRole.entities.MerchantMID.create({
       locationId: location.id,
@@ -79,6 +94,7 @@ Deno.serve(async (req) => {
       dbaName,
       mccCode: '',
       industryType: '',
+      pricingMethod,
       monthlyCardSales: 0,
       avgSaleAmount: 0,
       highestTicketAmount: 0,
