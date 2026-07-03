@@ -636,3 +636,95 @@ Deno.serve(async (req) => {
           });
           continue;
         }
+
+        packageExists = true;
+      }
+
+      // Re-fetch to get current signer list with statuses
+      const freshRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/signatures`, {
+        headers: mspHeaders,
+      });
+      const freshData = await freshRes.json();
+      const signerList: any[] = freshData?.signers || [];
+      const overallSigned = freshData?.signed === true || freshData?.status === 'complete';
+
+      // Get signing link for each signer; track primary
+      let primarySigningUrl: string | null = null;
+      const signerLinks: any[] = [];
+
+      for (const s of signerList) {
+        const email = s.emailAddress || s.email || '';
+        if (!email) continue;
+
+        // Fetch link — retry once after 1s if not yet available (BoldSign may need a moment after package creation)
+        let link: string | null = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 1000));
+          const linkRes = await fetch(
+            `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(email)}`,
+            { headers: mspHeaders }
+          );
+          const linkData = await linkRes.json();
+          link = linkData?.link || null;
+          if (link) break;
+        }
+
+        signerLinks.push({
+          email,
+          name: s.name || '',
+          status: s.localstatus || s.status || 'unknown',
+          signed: ['signed', 'complete', 'completed'].includes((s.localstatus || s.status || '').toLowerCase()),
+          signingUrl: link,
+        });
+
+        if (email.toLowerCase() === primaryEmail.toLowerCase() && link) {
+          primarySigningUrl = link;
+        }
+      }
+
+      // Fallback: try primaryEmail directly if not found in signer list
+      if (!primarySigningUrl) {
+        const fallbackRes = await fetch(
+          `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(primaryEmail)}`,
+          { headers: mspHeaders }
+        );
+        const fallbackData = await fallbackRes.json();
+        primarySigningUrl = fallbackData?.link || null;
+      }
+
+      const appAllSigned = signerList.length > 0 && signerList.every((s: any) =>
+        ['signed', 'complete', 'completed'].includes((s.localstatus || s.status || '').toLowerCase())
+      );
+
+      applications.push({
+        mspApplicationNo,
+        merchantName,
+        signingUrl: primarySigningUrl,
+        signers: signerLinks,
+        allSigned: appAllSigned || overallSigned,
+        error: null,
+      });
+    }
+
+    const totalCount  = applications.length;
+    const totalSigned = applications.filter((a: any) => a.allSigned).length;
+    const allSigned   = totalCount > 0 && totalSigned === totalCount;
+
+    console.log(`[signApplication] Done. ${totalSigned}/${totalCount} signed.`);
+
+    return Response.json({
+      success: true,
+      primaryEmail,
+      applications,
+      totalCount,
+      totalSigned,
+      allSigned,
+    });
+
+  } catch (error: any) {
+    return Response.json({
+      error: error.message,
+      stack: error.stack?.split('\n').slice(0, 3).join(' | '),
+    }, { status: 500 });
+  }
+});

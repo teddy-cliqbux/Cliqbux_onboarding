@@ -646,4 +646,111 @@ Deno.serve(async (req) => {
         console.log(`[submitToMSP] Filling form for application ${mspApplicationNo}:`, JSON.stringify(redactSensitive(formPayload), null, 2));
 
         const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
-          
+          method: 'PUT',
+          headers: mspHeaders,
+          body: JSON.stringify(formPayload),
+        });
+        const formData = await formRes.json();
+        console.log(`[submitToMSP] Form fill response ${formRes.status}:`, JSON.stringify(redactSensitive(formData), null, 2));
+
+        // Per the actual MSPWare API spec (mspware-swagger.json), the PUT /form
+        // response nests everything under `validation` — { validation: { errors:
+        // { data, completion, rules }, percent_complete, messages, canSave, form } }.
+        // This file previously read these off the top level of formData directly,
+        // which meant percentComplete/validationErrors/messages were ALWAYS empty
+        // regardless of what MSPWare actually reported — masking real validation
+        // errors and silent field-clearing messages this whole time.
+        const validation = formData?.validation || {};
+        const percentComplete = validation?.percent_complete ?? null;
+        const validationErrors = [
+          ...(validation?.errors?.data || []),
+          ...(validation?.errors?.completion || []),
+          ...(validation?.errors?.rules || []),
+        ];
+        const mspMessages = validation?.messages || [];
+
+        // Log form fill issues but don't abort — template defaults may cover remaining fields,
+        // and signApplication will re-fill + verify completion before creating the signing package.
+        if (!formRes.ok) {
+          console.error(`[submitToMSP] Form PUT HTTP error ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(formData)));
+        } else {
+          console.log(`[submitToMSP] Form fill ${mspApplicationNo}: ${percentComplete ?? '?'}% complete, canSave=${formData?.canSave}, errors=${validationErrors.length}`);
+        }
+
+        // ── Step 3: Submit (only if MSP_SUBMIT_ENABLED=true) ──────────────────
+        if (!submitEnabled) {
+          results.push({
+            midId: merchantMID.id,
+            locationId: merchantMID.locationId,
+            dbaName: merchantMID.dbaName,
+            status: 'draft_created',
+            mspApplicationNo,
+            percentComplete,
+            validationErrors,
+            mspMessages, // TEMP DIAGNOSTIC — see comment above
+            note: 'Set MSP_SUBMIT_ENABLED=true to submit to Elavon',
+          });
+          continue;
+        }
+
+        const submitRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/submit`, {
+          method: 'PUT',
+          headers: mspHeaders,
+          body: JSON.stringify({}),
+        });
+        const submitData = await submitRes.json();
+        console.log(`[submitToMSP] Submit response ${submitRes.status}:`, JSON.stringify(redactSensitive(submitData), null, 2));
+
+        if (submitRes.ok && submitData?.success) {
+          await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, {
+            applicationStepStatus: 'Pending MID',
+          });
+          results.push({
+            midId: merchantMID.id,
+            locationId: merchantMID.locationId,
+            dbaName: merchantMID.dbaName,
+            status: 'submitted',
+            mspApplicationNo,
+            percentComplete,
+          });
+        } else {
+          await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, { applicationStepStatus: 'Error' });
+          results.push({
+            midId: merchantMID.id,
+            locationId: merchantMID.locationId,
+            dbaName: merchantMID.dbaName,
+            status: 'submit_error',
+            mspApplicationNo,
+            error: submitData?.error || submitData?.message || `HTTP ${submitRes.status}`,
+            rawSubmitResponse: submitData,
+          });
+          allSuccessful = false;
+        }
+
+      } catch (err: any) {
+        console.error(`[submitToMSP] Exception for "${merchantMID.dbaName}":`, err.message);
+        await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, { applicationStepStatus: 'Error' });
+        results.push({
+          midId: merchantMID.id,
+          locationId: merchantMID.locationId,
+          dbaName: merchantMID.dbaName,
+          status: 'error',
+          error: err.message,
+        });
+        allSuccessful = false;
+      }
+    }
+
+    return Response.json({
+      success: allSuccessful,
+      allSubmitted: allSuccessful && results.every(r => ['submitted', 'skipped', 'draft_created'].includes(r.status)),
+      submitEnabled,
+      corporateId,
+      merchantMIDsAutoCreated: merchantMIDsCreatedAuto,
+      results,
+    });
+
+  } catch (error: any) {
+    return Response.json({ error: error.message, stack: error.stack?.split('\n').slice(0, 3).join(' | ') }, { status: 500 });
+  }
+});
