@@ -9,6 +9,17 @@ const MSP_APP_TYPE = 24;
 const DEFAULT_TEMPLATE_NO = 6;
 const CD_TEMPLATE_NO = 154;
 
+// Maps the merchant's chosen pricingTier to the correct MSPWare pricing_method.
+// MerchantMID.pricingMethod has a schema-level default of 'ICPLS', which will
+// silently mask this derivation if the field is left unset at create time —
+// always set it explicitly at every MerchantMID creation site rather than
+// relying on the schema default.
+const TIER_TO_METHOD: Record<string, string> = {
+  'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
+  'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
+  'CASH_DISCOUNT': 'CLEAR', 'SELF_CASH_DISCOUNT': 'CLEAR',
+};
+
 // ─── Value Mappings ───────────────────────────────────────────────────────────
 
 function mapOwnershipType(t: string): string {
@@ -217,11 +228,8 @@ function buildFormPayload(
 
   // MerchantMID-level fields override profile-level for per-MID differentiation
   const pricingCategory = String(merchantMID.pricingCategory || profile.pricingCategory || '1');
-  const TIER_TO_METHOD: Record<string, string> = {
-    'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
-    'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
-    'CASH_DISCOUNT': 'CLEAR', 'SELF_CASH_DISCOUNT': 'CLEAR',
-  };
+  // TIER_TO_METHOD is declared once at module scope above — used here and by
+  // every MerchantMID creation site in this file.
   const rawPricingMethod = merchantMID.pricingMethod || profile.pricingMethod
     || TIER_TO_METHOD[(merchantMID.pricingTier || profile.pricingTier || '').toUpperCase()]
     || 'ICPLS';
@@ -459,7 +467,10 @@ Deno.serve(async (req) => {
             mccCode:         profile.mccCode || profile.mcc || '5999',
             industryType:    profile.industryClass ? industryClassToMSP(profile.industryClass) : 'RE',
             pricingCategory: '1',
-            pricingMethod:   'ICPLS',
+            // Derived from profile.pricingTier — was previously hardcoded 'ICPLS'
+            // regardless of tier, which silently broke Cash Discount merchants
+            // whose applications get auto-created via this fallback path.
+            pricingMethod:   TIER_TO_METHOD[(profile.pricingTier || '').toUpperCase()] || 'ICPLS',
             monthlyCardSales:    parseFloat(String(profile.monthlyCardSales || '0')) || null,
             avgSaleAmount:       parseFloat(String(profile.avgSaleAmount || '0')) || null,
             highestTicketAmount: parseFloat(String(profile.highestTicketAmount || '0')) || null,
