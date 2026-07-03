@@ -58,9 +58,10 @@ function buildFormPayload(profile: any, location: any, merchantMID: any, signer:
   const ssn = cleanDigits(signer?.ssn || profile.ssn || '');
   const phone = cleanDigits(signer?.corporatePhone || profile.corporatePhone || '');
   const pricingCategory = String(merchantMID.pricingCategory || '1');
-  const TIER_TO_METHOD: Record<string, string> = { 'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS', 'CASH_DISCOUNT': 'CLEAR' };
+  // 2026-07-03: never use Clear and Simple; Cash Discount uses Tiered (TIERD).
+  const TIER_TO_METHOD: Record<string, string> = { 'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS', 'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS', 'CASH_DISCOUNT': 'TIERD', 'SELF_CASH_DISCOUNT': 'TIERD' };
   const rawPricingMethod = merchantMID.pricingMethod || profile.pricingMethod || TIER_TO_METHOD[(profile.pricingTier||'').toUpperCase()] || 'ICPLS';
-  const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'CLEAR' : rawPricingMethod;
+  const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'TIERD' : rawPricingMethod;
   const industryType = (merchantMID.pricingCategory && merchantMID.industryType) ? merchantMID.industryType : mapIndustryType(pricingCategory);
   const mcc = merchantMID.mccCode || profile.mccCode || '5999';
   const dbaName = merchantMID.dbaName || location.dbaName || profile.legalName || '';
