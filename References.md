@@ -1,0 +1,7 @@
+#References
+## Examples of good work. Stripe payments, Square POS, and Toast POS onboarding. They allow for self serve to setup and account first and then begin the application for a merchant account using the details required to sign up. They give plenty of sign in options too. It feels like you're signing up for just one company, not clicking links and chasing emails.
+## Relevant Links
+1. https://pos.toasttab.com/shop/starter-kits
+2. https://toast.pos-offers.com/?utm_source=google&gclid=CjwKCAjwmJjSBhB-EiwAkZgxi56PCmgEkk2NCsJUt1VcYRc4kHcdaBx4DmGTGUDKsNGs3VdK180z8RoCdpoQAvD_BwE&CampaignId=21134698511&AdGroupId=157131083741&feeditemid=&targetid=kwd-351136923260&loc_interest_ms=&loc_physical_ms=9061250&matchtype=b&network=g&device=c&devicemodel=&creative=694877166878&keyword=toast%20pos%20systems&placement=&target=&adposition=&utm_medium=search&AdId=694877166878&gad_source=1&gad_campaignid=21134698511&gbraid=0AAAAADHWdTwanFq0kgyg4qDX_CZTOTCBA&gclid=CjwKCAjwmJjSBhB-EiwAkZgxi56PCmgEkk2NCsJUt1VcYRc4kHcdaBx4DmGTGUDKsNGs3VdK180z8RoCdpoQAvD_BwE
+3. https://dashboard.stripe.com/register
+4. https://squareup.com/us/en/campaigns/cross-product-center?device=c&gad_campaignid=10029202684&gad_source=1&gbraid=0AAAAADuhHxpWCdfqcW0js0TeK2riJ6Px7&gclid=CjwKCAjwmJjSBhB-EiwAkZgxiwf_ntIHwUn9iJ6E-W-XH5JLMzGwIOsGscSi4vRH65_felGGKwkteRoCS8gQAvD_BwE&gclsrc=aw.ds&kw=square+sign+up&kwid=52327379857&matchtype=e&pcrid=606059996337&pdv=c&pkw=square+sign+up&pmt=e&pub=GOOGLE
