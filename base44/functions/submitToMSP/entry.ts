@@ -461,6 +461,7 @@ function buildFormPayload(
       all_networks_transaction_fee: '0',
       pin_debit_monthly_fee: '0',
       intl_card_handling_fee: '0',
+      all_card_auth_per_item: '0',
       touch_tone_auth: '0',
       avs_service_auth: '0',
       bank_referral_auth: '0',
