@@ -7,7 +7,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 const TIER_TO_METHOD: Record<string, string> = {
   'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
   'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
-  'CASH_DISCOUNT': 'CLEAR', 'SELF_CASH_DISCOUNT': 'CLEAR',
+  'CASH_DISCOUNT': 'TIERD', 'SELF_CASH_DISCOUNT': 'TIERD', // 2026-07-03: never use Clear and Simple
 };
 
 // ─── syncFromHubspot ──────────────────────────────────────────────────────────
