@@ -624,6 +624,11 @@ Deno.serve(async (req) => {
           ...(formData?.completion_errors || []),
           ...(formData?.rule_violations || []),
         ];
+        // TEMP DIAGNOSTIC: MSPWare can silently clear fields via form rules and
+        // reports this via a top-level `messages` array (e.g. "N fields were
+        // cleared because they were hidden by form rules") that nothing in this
+        // file previously surfaced. Included in the response below for debugging.
+        const mspMessages = formData?.messages || [];
 
         // Log form fill issues but don't abort — template defaults may cover remaining fields,
         // and signApplication will re-fill + verify completion before creating the signing package.
@@ -643,6 +648,7 @@ Deno.serve(async (req) => {
             mspApplicationNo,
             percentComplete,
             validationErrors,
+            mspMessages, // TEMP DIAGNOSTIC — see comment above
             note: 'Set MSP_SUBMIT_ENABLED=true to submit to Elavon',
           });
           continue;
