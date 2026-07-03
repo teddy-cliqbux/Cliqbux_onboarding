@@ -187,10 +187,17 @@ function formatDob(year: string, month: string, day: string): string {
 //   fixed_individual_tiers_pricing, multi_currency_conversion, secure3d,
 //   all_markup_discount, all_markup_per_item, all_card_auth_per_item,
 //   intl_card_handling_fee, auth_pricing_program, annual_fee_start_date,
-//   is_firearm_verified (CRITICAL: every value is rejected by the API; omit always)
+//   is_firearm_verified (CRITICAL: every value is rejected by the API; omit always
+//   — this is a template-level default that needs fixing directly on templates
+//   #6/#154 in MSPWare, not something this function can send. See AGENTS.md.)
 //
 // If you need to add a new field, verify it is NOT in the template by reading
 // the template via GET /applications/154/form before adding it here.
+//
+// EXCEPTION — Cliqbux Program Configuration fields (entity_number, safet_service,
+// safet_fee): these look like template-owned config but are actually Cliqbux
+// business/reseller settings that no template can supply per-merchant. See the
+// "Cliqbux Program Configuration" block below for the confirmed values and why.
 //
 // Merchant-supplied fields sent here:
 //   full_dba_name, legal_dba_name, products_or_services, year_business_established,
@@ -222,7 +229,11 @@ function buildFormPayload(
   const routing = bank.routingNumber || location.routingNumber || '';
   const account = bank.accountNumber || location.accountNumber || '';
 
-  const taxId = cleanDigits(profile.taxId || '');
+  // profile.taxId is a flat field the self-serve flow never actually populates —
+  // the merchant's EIN is instead captured per-entity under profile.legalEntities[].federalEIN.
+  // Match the entity tied to this location; fall back to the first entity if unmatched.
+  const matchedEntity = (profile.legalEntities || []).find((e: any) => e.entityId === location.entityId) || profile.legalEntities?.[0];
+  const taxId = cleanDigits(profile.taxId || matchedEntity?.federalEIN || '');
   const ssn = cleanDigits(signer.ssn || profile.ssn || '');
   const phone = cleanDigits(signer.corporatePhone || profile.corporatePhone || '');
 
@@ -322,14 +333,20 @@ function buildFormPayload(
     business_city: location.businessCity || '',
     business_state_usa: location.businessState || '',
     business_zipcode: location.businessZip || '',
-    // If entity has a separate mailing address, send it as the legal address
+    // If entity has a separate mailing address, send it as the legal address.
+    // Confirmed via live resubmit: has_legal_address: 'new' is the correct value
+    // (was 'mailing', rejected as invalid). Once corrected, MSPWare required a
+    // distinct legal_* field block (legal_country/legal_address_type/legal_address/
+    // legal_city/legal_state_usa/legal_zipcode) — NOT the mailing_* names this
+    // code previously sent, which were silently dropped as unrecognized fields.
     ...(entityMailing?.street ? {
-      has_legal_address: 'mailing',
-      mailing_address_type: 'LGA',
-      mailing_address: entityMailing.street,
-      mailing_city: entityMailing.city,
-      mailing_state_usa: sanitizeState(entityMailing.state),
-      mailing_zipcode: entityMailing.zip,
+      has_legal_address: 'new',
+      legal_country: 'USA',
+      legal_address_type: 'BSA',
+      legal_address: entityMailing.street,
+      legal_city: entityMailing.city,
+      legal_state_usa: sanitizeState(entityMailing.state),
+      legal_zipcode: entityMailing.zip,
     } : {
       has_legal_address: 'business',
     }),
@@ -394,6 +411,24 @@ function buildFormPayload(
     // intl_card_handling_fee, tokenization_*, has_pin_debit, debit_*, all ACCL_*/AFFN_*/etc
     // per-network debit fields, and is_firearm_verified are all intentionally omitted.
     // See the STRICT TEMPLATE PRESERVATION RULE comment above buildFormPayload.
+
+    // ── Cliqbux Program Configuration ──────────────────────────────────────────
+    // These are NOT merchant-derived — they're fixed Cliqbux business/reseller
+    // settings in MSPWare that were incorrectly assumed to be template-owned.
+    // Confirmed with Teddy 2026-07-03:
+    //   - entity_number: Cliqbux's MSPWare reseller/compensation-model record.
+    //     "48603 - Buy rate" is the correct entity for all merchants (not the
+    //     "48605 - Clear & simple" entity a first guess might reach for).
+    //   - safet_service / safet_fee: PCI compliance program. Fee is a junk fee —
+    //     always send $0. Program tier defaulted to PCI Basic ('pci'); confirm
+    //     with Teddy if PCI Plus ('pciplus') should be used instead.
+    //   - CLEAR_plan is intentionally NOT sent: Teddy confirmed it's a legacy
+    //     rate-plan picklist Cliqbux no longer offers. If MSPWare still marks it
+    //     required after these other fixes, that needs a Fidano/MSPWare support
+    //     ticket rather than a guessed value here.
+    entity_number: '48603',
+    safet_service: 'pci',
+    safet_fee: '0',
 
     // ── Bank Accounts (only when both routing + account are present) ──────────
     ...(routing && account ? {
