@@ -188,12 +188,13 @@ function buildFormPayload(
   const TIER_TO_METHOD: Record<string, string> = {
     'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
     'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
-    'CASH_DISCOUNT': 'CLEAR', 'SELF_CASH_DISCOUNT': 'CLEAR',
+    // 2026-07-03: never use Clear and Simple; Cash Discount uses Tiered (TIERD).
+    'CASH_DISCOUNT': 'TIERD', 'SELF_CASH_DISCOUNT': 'TIERD',
   };
   const rawPricingMethod = merchantMID.pricingMethod || profile.pricingMethod
     || TIER_TO_METHOD[(merchantMID.pricingTier || profile.pricingTier || '').toUpperCase()]
     || 'ICPLS';
-  const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'CLEAR' : rawPricingMethod;
+  const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'TIERD' : rawPricingMethod;
   // Derive industryType from pricingCategory; only use merchantMID.industryType if pricingCategory is also set
   // (prevents mismatches like industryType=HT with pricingCategory=1/Retail)
   const industryType = (merchantMID.pricingCategory && merchantMID.industryType)
@@ -369,6 +370,35 @@ function buildFormPayload(
     entity_number: '48603-17',
     safet_service: 'pci',
     safet_fee: '0',
+    tokenization: 'none',   // 2026-07-03: "No tokenization is available to us now" (Teddy) — sent for ALL merchants, overrides template's stale 'token' default
+
+    // ── Cliqbux Cash Discount Fee Schedule (Tiered pricing only) ───────────
+    // Never use Clear and Simple (Teddy, 2026-07-03). Cash Discount = pricing_method
+    // 'TIERD', with its own explicit fee schedule since template #154 was built
+    // around Clear and Simple. Confirmed live by Teddy 2026-07-03. ICPLS unaffected.
+    ...(pricingMethod === 'TIERD' ? {
+      billing_method: 'N',
+      monetary_pricing_program: '09828',
+      auth_pricing_program: '49999',
+      all_qualified_discount: '3.3816',     all_qualified_per_item: '0.000',
+      all_mid_qualified_discount: '3.3816', all_mid_qualified_per_item: '0.000',
+      all_non_qualified_discount: '3.3816', all_non_qualified_per_item: '0.000',
+      all_standard_discount: '3.3816',      all_standard_per_item: '0.000',
+      all_rewards_discount: '3.3816',       all_rewards_per_item: '0.000',
+      has_pin_debit: true,
+      debit_auth_method: 'FIXED',
+      debit_pricing_method: 'SURCH',
+      apply_all_pin_debit: true,
+      all_networks_percent_fee: '3.3816',
+      all_networks_per_auth: '0',
+      all_networks_transaction_fee: '0',
+      pin_debit_monthly_fee: '0',
+      intl_card_handling_fee: '0',
+      touch_tone_auth: '0',
+      avs_service_auth: '0',
+      bank_referral_auth: '0',
+      op_assisted_auth: '0',
+    } : {}),
 
     // ── Cliqbux Standard Equipment Configuration ───────────────────────────────────
     // Cliqbux ships and manages equipment deployment separately from the MSPWare
@@ -540,7 +570,7 @@ Deno.serve(async (req) => {
         try {
           // Detect cash discount via pricingMethod (wire value "CLEAR") OR pricingTier (UI value "CASH_DISCOUNT")
           const isCashDiscount =
-            ['CLEAR', 'CASH_DISCOUNT'].includes((merchantMID.pricingMethod || '').toUpperCase()) ||
+            ['TIERD', 'CLEAR', 'CASH_DISCOUNT'].includes((merchantMID.pricingMethod || '').toUpperCase()) ||
             ['CASH_DISCOUNT', 'SELF_CASH_DISCOUNT'].includes((merchantMID.pricingTier || profile.pricingTier || '').toUpperCase());
           const templateNo = merchantMID.mspTemplateNo || profile.mspTemplateNo || (isCashDiscount ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
           const createBody = {
