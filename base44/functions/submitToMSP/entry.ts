@@ -426,7 +426,14 @@ function buildFormPayload(
     //     rate-plan picklist Cliqbux no longer offers. If MSPWare still marks it
     //     required after these other fixes, that needs a Fidano/MSPWare support
     //     ticket rather than a guessed value here.
-    entity_number: '48603',
+    //   - entity_number CORRECTED 2026-07-03: the real wire value is '48603-17',
+    //     not '48603'. The "-17" is Cliqbux's MSPWare Client Group ID — MSPWare's
+    //     search box only displays "48603 - Buy rate" but silently combines it
+    //     with the Client Group behind the scenes. Confirmed via raw GET
+    //     /applications/133/form (Teddy's reference "Cash Discount Template"
+    //     with Entity actually selected in the live UI) — see
+    //     docs/mspware-field-reference.md.
+    entity_number: '48603-17',
     safet_service: 'pci',
     safet_fee: '0',
 
