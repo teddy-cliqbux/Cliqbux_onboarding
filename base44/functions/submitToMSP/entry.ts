@@ -437,6 +437,49 @@ function buildFormPayload(
     safet_service: 'pci',
     safet_fee: '0',
 
+    // ── Cliqbux Standard Equipment Configuration ───────────────────────────────────
+    // Cliqbux ships and manages equipment deployment separately from the MSPWare
+    // application — every merchant gets the SAME static hardware/VAR config here.
+    // This is NOT merchant-configurable; do not expose it in the UI or derive it
+    // from location/profile data. Confirmed with Teddy 2026-07-03 by reading the
+    // raw form of MSPWare's "Cash Discount Template" (app #133) via
+    // debugMSPFormRaw — these are exact wire values, not guesses. See
+    // docs/mspware-field-reference.md for the full breakdown and how to update
+    // this if the equipment lineup ever changes.
+    foreign_network: 'NOVA',        // Network Type = "Elavon" in the UI
+    equipment_rush_request: 'XX',   // POS Delivery = "Shipping Not Needed"
+    eqp_hardware_section: [{
+      hardware_type: 'CNVNG',            // Converge New Generation
+      hardware_ownership: 'P',           // Purchase
+      hardware_qty: '1',
+      hardware_price_per: '0',
+      hardware_connection_type: 'IP',
+      hardware_capture_method: 'HYBRD',  // Hybrid
+      hardware_close_method: 'AUTO',
+      hardware_training_method: 'NO',    // No Training
+    }],
+    eqp_var_section: [
+      {
+        var_type: 'vendor_distributed',
+        var_vendor: 'V7080',    // PAX Technology Inc
+        var_product: '13231',   // Broad POS Elavon v1.0
+        var_gateway: 'NONE',
+        var_qty: '4',
+        var_price: '0.00',
+        var_capture_method: 'HOST',
+        var_close_method: 'AUTO',
+      },
+      {
+        var_type: 'service_provider',
+        var_provider: 'V6273',  // Network Merchants, Inc
+        var_product: '11198',   // Gateway Processing Services 10.04
+        var_qty: 1,
+        var_price: '0.00',
+        var_capture_method: 'HOST',
+        var_close_method: 'AUTO',
+      },
+    ],
+
     // ── Bank Accounts (only when both routing + account are present) ──────────
     ...(routing && account ? {
       deposit_account_no: account,
