@@ -84,6 +84,7 @@ export default function SelfServePricing({ onComplete }) {
         signerEmail: basic.signerEmail,
         pricingTier: selectedTier,
         applicationStatus: 'Pricing Selected',
+        merchantToken: data.merchantToken,
       });
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.');
