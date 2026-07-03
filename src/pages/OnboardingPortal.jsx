@@ -359,6 +359,16 @@ export default function OnboardingPortal() {
     setProfile(newProfile);
     setLocations([]);
     setMode('sales');
+    // Persist the merchant session token issued by createHubspotDeal, and put
+    // corporateId in the URL — without both of these, a page refresh had no
+    // way to recognize this merchant and fell all the way back to the
+    // pricing/entry screen, even though their data was already saved server-side.
+    if (newProfile.merchantToken) setMerchantToken(newProfile.merchantToken);
+    if (newProfile.corporateId) {
+      const params = new URLSearchParams(window.location.search);
+      params.set('dealId', newProfile.corporateId);
+      navigate(`${window.location.pathname}?${params.toString()}`, { replace: true });
+    }
   };
 
   const handleLocationsContinue = ({ locations: updatedLocations, legalEntities }) => {
@@ -425,8 +435,14 @@ export default function OnboardingPortal() {
     // secure entry, before diving into the deep data-entry grids.
     if (step === STEP_WELCOME) {
       const m1Done = agreementDone; // quote reviewed & signed (or pricing selected for self-serve)
-      const m2Done = !!allCompletedSteps.locations;
-      const m3Done = !!allCompletedSteps.banking;
+      // Fall back to deriving completion from actual saved data, not just this
+      // browser tab's in-memory completedSteps — otherwise resuming after a
+      // refresh (or in a new tab via a resume link) re-locks milestones the
+      // merchant already finished, even though the data is safely on the server.
+      const hasLocations = (locations?.length ?? 0) > 0;
+      const hasBanking = hasLocations && locations.every(l => l.bankDetails?.routingNumber);
+      const m2Done = !!allCompletedSteps.locations || hasLocations;
+      const m3Done = !!allCompletedSteps.banking || hasBanking;
       const m2Unlocked = m1Done;
       const m3Unlocked = locations && locations.length > 0;
       const m4Unlocked = m1Done && m2Done && m3Done;
