@@ -17,7 +17,8 @@ const CD_TEMPLATE_NO = 154;
 const TIER_TO_METHOD: Record<string, string> = {
   'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
   'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
-  'CASH_DISCOUNT': 'CLEAR', 'SELF_CASH_DISCOUNT': 'CLEAR',
+  // 2026-07-03: never use Clear and Simple; Cash Discount uses Tiered (TIERD).
+  'CASH_DISCOUNT': 'TIERD', 'SELF_CASH_DISCOUNT': 'TIERD',
 };
 
 // ─── Value Mappings ───────────────────────────────────────────────────────────
@@ -244,7 +245,7 @@ function buildFormPayload(
   const rawPricingMethod = merchantMID.pricingMethod || profile.pricingMethod
     || TIER_TO_METHOD[(merchantMID.pricingTier || profile.pricingTier || '').toUpperCase()]
     || 'ICPLS';
-  const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'CLEAR' : rawPricingMethod;
+  const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'TIERD' : rawPricingMethod;
   // Derive industryType from pricingCategory; only use merchantMID.industryType if pricingCategory is also set
   const industryType = (merchantMID.pricingCategory && merchantMID.industryType)
     ? merchantMID.industryType
@@ -649,7 +650,7 @@ Deno.serve(async (req) => {
         if (!mspApplicationNo) {
           // Detect cash discount via pricingMethod (wire value "CLEAR") OR pricingTier (UI value "CASH_DISCOUNT")
           const isCashDiscount =
-            ['CLEAR', 'CASH_DISCOUNT'].includes((merchantMID.pricingMethod || '').toUpperCase()) ||
+            ['TIERD', 'CLEAR', 'CASH_DISCOUNT'].includes((merchantMID.pricingMethod || '').toUpperCase()) ||
             ['CASH_DISCOUNT', 'SELF_CASH_DISCOUNT'].includes((merchantMID.pricingTier || profile.pricingTier || '').toUpperCase());
           const templateNo = merchantMID.mspTemplateNo || profile.mspTemplateNo || (isCashDiscount ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
           const createBody = {
