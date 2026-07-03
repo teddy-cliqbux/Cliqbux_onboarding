@@ -61,6 +61,7 @@ export default function MobilePricing({ onComplete }) {
         signerEmail: info.signerEmail,
         pricingTier: selectedTier,
         applicationStatus: 'Pricing Selected',
+        merchantToken: data.merchantToken,
       });
     } catch (err) {
       setError(err.message || 'Something went wrong.');
