@@ -169,7 +169,11 @@ function buildFormPayload(
   const bank = merchantMID.bankDetails || location.bankDetails || {};
   const routing = bank.routingNumber || location.routingNumber || '';
   const account = bank.accountNumber || location.accountNumber || '';
-  const taxId = cleanDigits(profile.taxId || '');
+  // profile.taxId is a flat field the self-serve flow never actually populates —
+  // the merchant's EIN is instead captured per-entity under profile.legalEntities[].federalEIN.
+  // Match the entity tied to this location; fall back to the first entity if unmatched.
+  const matchedEntity = (profile.legalEntities || []).find((e: any) => e.entityId === location.entityId) || profile.legalEntities?.[0];
+  const taxId = cleanDigits(profile.taxId || matchedEntity?.federalEIN || '');
   const ssn = cleanDigits(signer.ssn || profile.ssn || '');
   const phone = cleanDigits(signer.corporatePhone || profile.corporatePhone || '');
   const pricingCategory = String(merchantMID.pricingCategory || profile.pricingCategory || '1');
@@ -263,9 +267,14 @@ function buildFormPayload(
     business_city: location.businessCity || '',
     business_state_usa: location.businessState || '',
     business_zipcode: location.businessZip || '',
-    // If entity has a separate mailing address, send it as the legal address
+    // If entity has a separate mailing address, send it as the legal address.
+    // NOTE: MSPWare rejected 'mailing' as an invalid option for has_legal_address
+    // ("mailing is not a valid option"). Its own UI only exposes two choices for
+    // this field — "Same as Business Address" and "New Address" — so 'new' is
+    // the best-evidence value for the non-business-address case; verify against
+    // a resubmit and adjust if MSPWare still rejects it.
     ...(entityMailing?.street ? {
-      has_legal_address: 'mailing',
+      has_legal_address: 'new',
       mailing_address_type: 'LGA',
       mailing_address: entityMailing.street,
       mailing_city: entityMailing.city,
