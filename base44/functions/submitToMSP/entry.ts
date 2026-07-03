@@ -334,11 +334,12 @@ function buildFormPayload(
     // a resubmit and adjust if MSPWare still rejects it.
     ...(entityMailing?.street ? {
       has_legal_address: 'new',
-      mailing_address_type: 'LGA',
-      mailing_address: entityMailing.street,
-      mailing_city: entityMailing.city,
-      mailing_state_usa: sanitizeState(entityMailing.state),
-      mailing_zipcode: entityMailing.zip,
+      legal_country: 'USA',
+      legal_address_type: 'LGA',
+      legal_address: entityMailing.street,
+      legal_city: entityMailing.city,
+      legal_state_usa: sanitizeState(entityMailing.state),
+      legal_zipcode: entityMailing.zip,
     } : {
       has_legal_address: 'business',
     }),
