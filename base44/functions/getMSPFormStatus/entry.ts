@@ -8,15 +8,28 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // base44.auth.me() throws (rather than resolving to null) when there is no
+    // logged-in staff session — which is the normal case for self-serve merchants
+    // using the magic-link portal. Treat that as "no user" instead of letting it
+    // crash the function (previously caused a 500 here, masking the real MSPWare
+    // validation errors this endpoint exists to surface).
+    let user: any = null;
+    try {
+      user = await base44.auth.me();
+    } catch (_e) {
+      user = null;
+    }
 
     const body = await req.json();
     const { corporateId, applicationNo } = body;
     if (!applicationNo) return Response.json({ error: 'applicationNo required' }, { status: 400 });
 
-    // Verify the application belongs to this merchant (or user is admin)
-    if (corporateId && user.role !== 'admin') {
+    // Verify the application belongs to this merchant (or user is admin).
+    // Self-serve merchants have no `user` at all, so they must prove ownership
+    // via corporateId; staff/admin sessions skip this check.
+    if (user?.role !== 'admin') {
+      if (!corporateId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
       const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
       const profile = profiles?.[0];
       if (!profile) return Response.json({ error: 'Merchant not found' }, { status: 404 });
