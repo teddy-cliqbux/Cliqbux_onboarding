@@ -1,5 +1,50 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
+// ─── Merchant Portal Auth Helper (inlined) ────────────────────────────────────
+// Base44 bundles each function in isolation — relative imports can't reach
+// outside functions/{name}/, so this is duplicated from base44/functions/helpers/auth.ts
+// rather than imported. Keep both copies in sync if the signing logic changes.
+// See that file for verifyMerchantToken and full documentation.
+
+interface MerchantTokenPayload {
+  corporateId: string;
+  email?: string;
+  exp: number; // unix seconds
+}
+
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function getHmacKey(usage: 'sign' | 'verify'): Promise<CryptoKey> {
+  const secret = Deno.env.get('MERCHANT_JWT_SECRET');
+  if (!secret) throw new Error('MERCHANT_JWT_SECRET env var not set');
+  const keyData = new TextEncoder().encode(secret);
+  return crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, [usage]);
+}
+
+async function signMerchantToken(
+  corporateId: string,
+  email: string | undefined,
+  expiresAt: string
+): Promise<string> {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const exp = Math.floor(new Date(expiresAt).getTime() / 1000);
+  const payload: MerchantTokenPayload = { corporateId, email, exp };
+
+  const encodedHeader = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
+  const encodedPayload = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
+  const signingInput = `${encodedHeader}.${encodedPayload}`;
+
+  const key = await getHmacKey('sign');
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signingInput));
+  const encodedSignature = base64UrlEncode(new Uint8Array(signature));
+
+  return `${signingInput}.${encodedSignature}`;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -137,7 +182,15 @@ Deno.serve(async (req) => {
       await base44.asServiceRole.entities.MerchantCorporateProfile.create(profileFields);
     }
 
-    return Response.json({ success: true, corporateId, dealId, companyId, contactId });
+    // Mint a merchant-portal session token for this self-serve signup, same as
+    // validateResumeToken does for magic-link resumes. Without this, self-serve
+    // merchants have no way to prove ownership of their own corporateId after
+    // a page refresh — they'd need to request a resume-by-email link every time.
+    // 7-day TTL matches the resume-link TTL (sendResumeLink's TOKEN_TTL_DAYS).
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    const merchantToken = await signMerchantToken(corporateId, signerEmail, expiresAt);
+
+    return Response.json({ success: true, corporateId, dealId, companyId, contactId, merchantToken });
 
   } catch (error) {
     return Response.json({ error: error.message, stack: error.stack?.split('\n').slice(0, 3).join(' | ') }, { status: 500 });
