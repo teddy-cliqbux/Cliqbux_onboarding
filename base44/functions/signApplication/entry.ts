@@ -647,4 +647,196 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`[signApplication] corporateId=$
+    console.log(`[signApplication] corporateId=${corporateId} signable merchantMIDs: ${signable.length}`);
+
+    // ── 4. Process each merchantMID ───────────────────────────────────────────────
+    const applications: any[] = [];
+
+    for (const merchantMID of signable) {
+      const mspApplicationNo = merchantMID.mspApplicationNo;
+      const merchantName = merchantMID.dbaName || merchantMID.merchantName || `MerchantMID ${mspApplicationNo}`;
+
+      console.log(`[signApplication] Processing app ${mspApplicationNo} (${merchantName})`);
+
+      // Check existing signing package
+      const statusRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/signatures`, {
+        headers: mspHeaders,
+      });
+      const statusData = await statusRes.json();
+
+      let packageExists = statusRes.ok && statusData?.success && statusData?.signers?.length > 0;
+
+      // Check current form completion via GET first — template defaults may already satisfy all fields
+      let refillPercentComplete: number | null = null;
+      let refillErrors: string[] = [];
+      if (!packageExists) {
+        const getRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
+        const getData = await getRes.json();
+        // percent_complete may be a string from MSPWare — parse it
+        const rawPct = getData?.percent_complete ?? getData?.validation?.percent_complete ?? null;
+        refillPercentComplete = rawPct !== null ? Math.round(parseFloat(String(rawPct))) : null;
+        // Log full form response to surface any hidden completion/rule errors
+        console.log(`[signApplication] Full GET form response for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(getData)));
+
+        const getErrors = [
+              ...(getData?.completion_errors || getData?.validation?.errors?.completion || []),
+              ...(getData?.data_errors       || getData?.validation?.errors?.data       || []),
+              ...(getData?.rule_violations   || getData?.validation?.errors?.rules      || []),
+              // Also look for errors nested in form.errors or top-level errors array
+              ...(getData?.errors            || []),
+              ...(getData?.form?.errors      || []),
+            ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
+        console.log(`[signApplication] GET form status for ${mspApplicationNo}: ${refillPercentComplete ?? '?'}% complete, ${getErrors.length} errors`);
+
+        // Only re-fill if the form is not already at 100%
+        if (refillPercentComplete !== 100) {
+          const location = locationMap[merchantMID.locationId];
+          if (location) {
+            const refillEntityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
+          const formPayload = buildFormPayload(profile, resolveLocationAddress(location), merchantMID, primarySigner, additionalSigners, refillEntityMailing);
+            const refillRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
+              method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
+            });
+            const refillData = await refillRes.json();
+            // After PUT, always re-check via GET for true completion (PUT response can be misleading)
+            const getRes2 = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
+            const getData2 = await getRes2.json();
+            const rawPct2 = getData2?.percent_complete ?? getData2?.validation?.percent_complete ?? null;
+            refillPercentComplete = rawPct2 !== null ? Math.round(parseFloat(String(rawPct2))) : null;
+        console.log(`[signApplication] Full GET form response AFTER refill for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(getData2)));
+
+            refillErrors = [
+              ...(getData2?.completion_errors || getData2?.validation?.errors?.completion || []),
+              ...(getData2?.data_errors       || getData2?.validation?.errors?.data       || []),
+              ...(getData2?.rule_violations   || getData2?.validation?.errors?.rules      || []),
+              ...(getData2?.errors            || []),
+              ...(getData2?.form?.errors      || []),
+            ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
+            console.log(`[signApplication] After refill GET: ${refillPercentComplete ?? '?'}% complete, ${refillErrors.length} errors`);
+            if (refillErrors.length) console.log(`[signApplication] Errors:`, JSON.stringify(refillErrors));
+          }
+        } else {
+          console.log(`[signApplication] Form already at 100% — skipping re-fill`);
+        }
+      }
+
+      // Create package if not yet done
+      if (!packageExists) {
+        console.log(`[signApplication] Creating signature package for app ${mspApplicationNo}`);
+        const packageRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/signatures`, {
+          method: 'POST',
+          headers: mspHeaders,
+          body: JSON.stringify({ sendEmail: false }),
+        });
+        const packageData = await packageRes.json();
+        console.log(`[signApplication] POST /signatures ${packageRes.status}:`, JSON.stringify(packageData));
+
+        if (!packageRes.ok || !packageData?.success) {
+          const errMsg = packageData?.error || packageData?.message || `HTTP ${packageRes.status}`;
+          applications.push({
+            mspApplicationNo,
+            merchantName,
+            signingUrl: null,
+            signers: [],
+            allSigned: false,
+            error: `Unable to prepare signing package: ${errMsg}`,
+            hint: refillPercentComplete !== null && refillPercentComplete < 100
+              ? `Form is ${refillPercentComplete}% complete. ${refillErrors.join('; ')}`
+              : 'Contact support if this persists.',
+            percentComplete: refillPercentComplete,
+            formErrors: refillErrors,
+          });
+          continue;
+        }
+
+        packageExists = true;
+      }
+
+      // Re-fetch to get current signer list with statuses
+      const freshRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/signatures`, {
+        headers: mspHeaders,
+      });
+      const freshData = await freshRes.json();
+      const signerList: any[] = freshData?.signers || [];
+      const overallSigned = freshData?.signed === true || freshData?.status === 'complete';
+
+      // Get signing link for each signer; track primary
+      let primarySigningUrl: string | null = null;
+      const signerLinks: any[] = [];
+
+      for (const s of signerList) {
+        const email = s.emailAddress || s.email || '';
+        if (!email) continue;
+
+        // Fetch link — retry once after 1s if not yet available (BoldSign may need a moment after package creation)
+        let link: string | null = null;
+        for (let attempt = 0; attempt < 2; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 1000));
+          const linkRes = await fetch(
+            `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(email)}`,
+            { headers: mspHeaders }
+          );
+          const linkData = await linkRes.json();
+          link = linkData?.link || null;
+          if (link) break;
+        }
+
+        signerLinks.push({
+          email,
+          name: s.name || '',
+          status: s.localstatus || s.status || 'unknown',
+          signed: ['signed', 'complete', 'completed'].includes((s.localstatus || s.status || '').toLowerCase()),
+          signingUrl: link,
+        });
+
+        if (email.toLowerCase() === primaryEmail.toLowerCase() && link) {
+          primarySigningUrl = link;
+        }
+      }
+
+      // Fallback: try primaryEmail directly if not found in signer list
+      if (!primarySigningUrl) {
+        const fallbackRes = await fetch(
+          `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(primaryEmail)}`,
+          { headers: mspHeaders }
+        );
+        const fallbackData = await fallbackRes.json();
+        primarySigningUrl = fallbackData?.link || null;
+      }
+
+      const appAllSigned = signerList.length > 0 && signerList.every((s: any) =>
+        ['signed', 'complete', 'completed'].includes((s.localstatus || s.status || '').toLowerCase())
+      );
+
+      applications.push({
+        mspApplicationNo,
+        merchantName,
+        signingUrl: primarySigningUrl,
+        signers: signerLinks,
+        allSigned: appAllSigned || overallSigned,
+        error: null,
+      });
+    }
+
+    const totalCount  = applications.length;
+    const totalSigned = applications.filter((a: any) => a.allSigned).length;
+    const allSigned   = totalCount > 0 && totalSigned === totalCount;
+
+    console.log(`[signApplication] Done. ${totalSigned}/${totalCount} signed.`);
+
+    return Response.json({
+      success: true,
+      primaryEmail,
+      applications,
+      totalCount,
+      totalSigned,
+      allSigned,
+    });
+
+  } catch (error: any) {
+    return Response.json({
+      error: error.message,
+      stack: error.stack?.split('\n').slice(0, 3).join(' | '),
+    }, { status: 500 });
+  }
+});

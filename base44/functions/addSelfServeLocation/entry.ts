@@ -78,4 +78,37 @@ Deno.serve(async (req) => {
     };
 
     if (resolvedEntityId) locationFields.entityId = resolvedEntityId;
-    if (parsedStreet) loc
+    if (parsedStreet) locationFields.businessStreet = parsedStreet;
+    if (parsedCity)   locationFields.businessCity   = parsedCity;
+    if (parsedState)  locationFields.businessState  = parsedState;
+    if (parsedZip)    locationFields.businessZip    = parsedZip;
+
+    const location = await base44.asServiceRole.entities.MerchantLocations.create(locationFields);
+
+    // Derive pricingMethod from the merchant's chosen pricingTier — must be set
+    // explicitly, since MerchantMID.pricingMethod's schema default ('ICPLS')
+    // would otherwise silently override a Cash Discount merchant's real method.
+    const pricingMethod = TIER_TO_METHOD[(profile[0]?.pricingTier || '').toUpperCase()] || 'ICPLS';
+
+    // Auto-create a stub primary MID for this location
+    const merchantMID = await base44.asServiceRole.entities.MerchantMID.create({
+      locationId: location.id,
+      corporateId,
+      merchantName: dbaName,
+      dbaName,
+      mccCode: '',
+      industryType: '',
+      pricingMethod,
+      monthlyCardSales: 0,
+      avgSaleAmount: 0,
+      highestTicketAmount: 0,
+      cardPresentPct: 100,
+      applicationStepStatus: 'In Review',
+    });
+
+    return Response.json({ success: true, location, merchantMID });
+
+  } catch (error) {
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+});
