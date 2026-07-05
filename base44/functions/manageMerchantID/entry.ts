@@ -90,26 +90,4 @@ Deno.serve(async (req) => {
       if (d.internetPct !== undefined) updateFields.internetPct = Number(d.internetPct);
       if (d.motoPct !== undefined) updateFields.motoPct = Number(d.motoPct);
       if (d.locationId !== undefined) updateFields.locationId = d.locationId;
-      if (d.applicationStepStatus !== undefined) updateFields.applicationStepStatus = d.applicationStepStatus;
-      const updated = await base44.asServiceRole.entities.MerchantMID.update(merchantIDId, updateFields);
-      return Response.json({ updatedMerchantID: updated, merchantID: updated });
-    }
-
-    // — DELETE —
-    if (action === 'delete') {
-      if (!merchantIDId) return Response.json({ error: 'merchantIDId is required for delete' }, { status: 400 });
-      const toDelete = await base44.asServiceRole.entities.MerchantMID.get(merchantIDId);
-      const LOCKED = ['Pending MID', 'Active', 'Active (Existing)'];
-      if (toDelete && LOCKED.includes(toDelete.applicationStepStatus)) {
-        return Response.json({ error: 'Cannot delete: Application is in a locked status' }, { status: 403 });
-      }
-      await base44.asServiceRole.entities.MerchantMID.delete(merchantIDId);
-      return Response.json({ success: true });
-    }
-
-    return Response.json({ error: 'Unknown action. Use list, add, update, or delete.' }, { status: 400 });
-
-  } catch (error) {
-    return Response.json({ error: error.message }, { status: 500 });
-  }
-});
+      if (d.applicationStepStatus !== u

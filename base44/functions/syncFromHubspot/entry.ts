@@ -360,46 +360,4 @@ Deno.serve(async (req) => {
             applicationStepStatus: 'In Review',
           });
           result.locations[result.locations.length - 1].midAction = 'created';
-        } else {
-          result.locations[result.locations.length - 1].midAction = 'exists';
-        }
-
-      } catch (locErr: any) {
-        console.error(`[syncFromHubspot] Error processing location ${assoc.id}:`, locErr.message);
-        result.locations.push({ id: assoc.id, action: 'error', error: locErr.message });
-      }
-    }
-
-    result.success = true;
-    result.portalUrl = `${Deno.env.get('PORTAL_BASE_URL') || 'https://cliqbux-onboard-prime.base44.app'}?dealId=${corporateId}`;
-    result.summary = `${result.profileAction} profile, ${result.locations.filter((l: any) => l.action !== 'error').length} location(s) synced`;
-
-    // ── 7. Write portal URL back to HubSpot deal + advance stage ─────────────
-    try {
-      await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${corporateId}`, {
-        method: 'PATCH',
-        headers: hsHeaders,
-        body: JSON.stringify({
-          properties: {
-            portal_url: result.portalUrl,
-            dealstage:  'onboarding_link_sent',
-          },
-        }),
-      });
-      result.portalUrlWrittenBack = true;
-      result.hubspotStage = 'onboarding_link_sent';
-    } catch (e: any) {
-      console.warn(`[syncFromHubspot] Could not write portal_url/stage back to deal: ${e.message}`);
-      result.portalUrlWrittenBack = false;
-    }
-
-    console.log(`[syncFromHubspot] deal=${corporateId}: ${result.summary}`);
-    return Response.json(result);
-
-  } catch (error: any) {
-    return Response.json({
-      error: error.message,
-      stack: error.stack?.split('\n').slice(0, 3).join(' | '),
-    }, { status: 500 });
-  }
-});
+     

@@ -266,24 +266,4 @@ Deno.serve(async (req) => {
       const putData = await putRes.json();
 
       // GET after PUT for true completion status
-      const getRes = await fetch(`${mspBase}/applications/${appNo}/form`, { headers });
-      const getData = await getRes.json();
-
-      results.push({
-        appNo,
-        dba: merchantMID.dbaName,
-        putStatus: putRes.status,
-        putSuccess: putData.success,
-        putErrors: [...(putData.data_errors||[]), ...(putData.completion_errors||[]), ...(putData.rule_violations||[])],
-        putRaw: putData,
-        percentComplete: getData.percent_complete,
-        canSave: getData.canSave,
-        getErrors: [...(getData.data_errors||[]), ...(getData.completion_errors||[]), ...(getData.rule_violations||[])],
-      });
-    }
-
-    return Response.json({ success: true, results });
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 });
-  }
-});
+      const getRes = await fetch(`${mspBase}/applications/${
