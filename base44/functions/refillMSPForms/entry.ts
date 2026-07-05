@@ -58,9 +58,14 @@ function buildFormPayload(profile: any, location: any, merchantMID: any, signer:
   const ssn = cleanDigits(signer?.ssn || profile.ssn || '');
   const phone = cleanDigits(signer?.corporatePhone || profile.corporatePhone || '');
   const pricingCategory = String(merchantMID.pricingCategory || '1');
-  const TIER_TO_METHOD: Record<string, string> = { 'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS', 'CASH_DISCOUNT': 'CLEAR' };
+  // 2026-07-03: Cliqbux never uses MSPWare's "Clear and Simple" pricing method —
+  // Cash Discount uses "Tiered" (TIERD). See docs/mspware-field-reference.md.
+  // NOTE: this function is stale relative to submitToMSP/signApplication (still
+  // has the old has_legal_address:'mailing'/'LGA' bug below) — patched the
+  // pricing method mapping only; full parity fix not yet done here.
+  const TIER_TO_METHOD: Record<string, string> = { 'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS', 'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS', 'CASH_DISCOUNT': 'TIERD', 'SELF_CASH_DISCOUNT': 'TIERD' };
   const rawPricingMethod = merchantMID.pricingMethod || profile.pricingMethod || TIER_TO_METHOD[(profile.pricingTier||'').toUpperCase()] || 'ICPLS';
-  const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'CLEAR' : rawPricingMethod;
+  const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'TIERD' : rawPricingMethod;
   const industryType = (merchantMID.pricingCategory && merchantMID.industryType) ? merchantMID.industryType : mapIndustryType(pricingCategory);
   const mcc = merchantMID.mccCode || profile.mccCode || '5999';
   const dbaName = merchantMID.dbaName || location.dbaName || profile.legalName || '';

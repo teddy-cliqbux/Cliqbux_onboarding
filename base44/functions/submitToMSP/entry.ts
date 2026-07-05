@@ -17,7 +17,11 @@ const CD_TEMPLATE_NO = 154;
 const TIER_TO_METHOD: Record<string, string> = {
   'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
   'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
-  'CASH_DISCOUNT': 'CLEAR', 'SELF_CASH_DISCOUNT': 'CLEAR',
+  // 2026-07-03: Teddy confirmed Cliqbux never uses MSPWare's "Clear and Simple"
+  // pricing method — every Cash Discount plan uses "Tiered" (wire value TIERD)
+  // instead, with a flat-rate fee schedule sent explicitly in buildFormPayload.
+  // See docs/mspware-field-reference.md.
+  'CASH_DISCOUNT': 'TIERD', 'SELF_CASH_DISCOUNT': 'TIERD',
 };
 
 // ─── Value Mappings ───────────────────────────────────────────────────────────
@@ -174,12 +178,13 @@ function formatDob(year: string, month: string, day: string): string {
 // completion to drop below 100%, blocking signing.
 //
 // buildFormPayload sends ONLY the merchant-specific fields listed below.
-// The following are intentionally OMITTED because the template owns them:
+// The following are intentionally OMITTED for ICPLS (non-Cash-Discount) merchants
+// because the template owns them:
 //
 //   billing_method, billing_frequency, funding_type, monetary_code, statement_type,
 //   monthly_minimum_fee, chargeback_fee, account_maintenance_fee, rtp_monthly_fee,
 //   touch_tone_auth, avs_service_auth, bank_referral_auth, op_assisted_auth,
-//   C4_surcharging_cardholder_surcharge, tokenization, tokenization_service_fee,
+//   C4_surcharging_cardholder_surcharge, tokenization_service_fee,
 //   tokenization_platform_fee, tokenization_sharing_indicator,
 //   has_pin_debit, debit_auth_method, debit_pricing_method,
 //   all per-network debit interchange fee fields (ACCL_*, AFFN_*, ALAS_*, CU24_*,
@@ -189,15 +194,35 @@ function formatDob(year: string, month: string, day: string): string {
 //   intl_card_handling_fee, auth_pricing_program, annual_fee_start_date,
 //   is_firearm_verified (CRITICAL: every value is rejected by the API; omit always
 //   — this is a template-level default that needs fixing directly on templates
-//   #6/#154 in MSPWare, not something this function can send. See AGENTS.md.)
+//   #6/#154 in MSPWare, not something this function can send. See AGENTS.md.
+//   2026-07-03: Teddy confirmed this field only appears/is required for certain
+//   business address states; when it appears the correct answer is "No", but it
+//   must be fixed on the template, never sent via payload.)
 //
 // If you need to add a new field, verify it is NOT in the template by reading
 // the template via GET /applications/154/form before adding it here.
 //
-// EXCEPTION — Cliqbux Program Configuration fields (entity_number, safet_service,
-// safet_fee): these look like template-owned config but are actually Cliqbux
-// business/reseller settings that no template can supply per-merchant. See the
-// "Cliqbux Program Configuration" block below for the confirmed values and why.
+// EXCEPTION 1 — Cliqbux Program Configuration fields (entity_number, safet_service,
+// safet_fee, tokenization): these look like template-owned config but are actually
+// Cliqbux business/reseller settings that no template can supply per-merchant. See
+// the "Cliqbux Program Configuration" block below for the confirmed values and why.
+// `tokenization: 'none'` is sent for ALL merchants (not just Cash Discount) —
+// confirmed by Teddy 2026-07-03: "No tokenization is available to us now." This
+// also means `tokenization_platform_fee`/`tokenization_service_fee` are moot and
+// stay omitted.
+//
+// EXCEPTION 2 — Cash Discount (pricing_method: 'TIERD') fee schedule: Cliqbux
+// NEVER uses MSPWare's "Clear and Simple" pricing method (confirmed by Teddy
+// 2026-07-03 — "We do not use clear and simple for pricing method ever. Tiered
+// only."). Because template #154 was built around Clear and Simple, its Tiered-
+// method fields aren't reliable, so for Cash Discount merchants ONLY,
+// buildFormPayload explicitly sends the flat-rate fee schedule (billing_method,
+// auth_pricing_program, monetary_pricing_program, all_*_discount/per_item tiers,
+// debit fields, touch_tone_auth/avs_service_auth/bank_referral_auth/op_assisted_auth,
+// intl_card_handling_fee) instead of omitting them. ICPLS merchants are NOT
+// affected — those fields remain omitted/template-owned for ICPLS as before. See
+// the "Cliqbux Cash Discount Fee Schedule" block below and
+// docs/mspware-field-reference.md.
 //
 // Merchant-supplied fields sent here:
 //   full_dba_name, legal_dba_name, products_or_services, year_business_established,
@@ -244,7 +269,7 @@ function buildFormPayload(
   const rawPricingMethod = merchantMID.pricingMethod || profile.pricingMethod
     || TIER_TO_METHOD[(merchantMID.pricingTier || profile.pricingTier || '').toUpperCase()]
     || 'ICPLS';
-  const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'CLEAR' : rawPricingMethod;
+  const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'TIERD' : rawPricingMethod;
   // Derive industryType from pricingCategory; only use merchantMID.industryType if pricingCategory is also set
   const industryType = (merchantMID.pricingCategory && merchantMID.industryType)
     ? merchantMID.industryType
@@ -426,9 +451,97 @@ function buildFormPayload(
     //     rate-plan picklist Cliqbux no longer offers. If MSPWare still marks it
     //     required after these other fixes, that needs a Fidano/MSPWare support
     //     ticket rather than a guessed value here.
-    entity_number: '48603',
+    //   - entity_number CORRECTED 2026-07-03: the real wire value is '48603-17',
+    //     not '48603'. The "-17" is Cliqbux's MSPWare Client Group ID — MSPWare's
+    //     search box only displays "48603 - Buy rate" but silently combines it
+    //     with the Client Group behind the scenes. Confirmed via raw GET
+    //     /applications/133/form (Teddy's reference "Cash Discount Template"
+    //     with Entity actually selected in the live UI) — see
+    //     docs/mspware-field-reference.md.
+    //   - tokenization ADDED 2026-07-03: Teddy confirmed "No tokenization is
+    //     available to us now" — sent as 'none' for ALL merchants (not just Cash
+    //     Discount), overriding template #154's stale 'token' default, which was
+    //     the actual cause of the "Tokenization Platform Fee" required-field error.
+    entity_number: '48603-17',
     safet_service: 'pci',
     safet_fee: '0',
+    tokenization: 'none',
+
+    // ── Cliqbux Cash Discount Fee Schedule (Tiered pricing only) ───────────────
+    // Cliqbux never uses MSPWare's "Clear and Simple" pricing method — confirmed
+    // by Teddy 2026-07-03. Cash Discount merchants use pricing_method: 'TIERD'
+    // ("Tiered") instead, which requires its own explicit fee schedule (template
+    // #154 was built around Clear and Simple, so its Tiered fields aren't
+    // reliable). These values were confirmed live by Teddy on 2026-07-03. ICPLS
+    // merchants are unaffected — this block only applies when pricingMethod is
+    // Cash Discount's wire value. See docs/mspware-field-reference.md.
+    ...(pricingMethod === 'TIERD' ? {
+      billing_method: 'N',
+      monetary_pricing_program: '09828',
+      auth_pricing_program: '49999',
+      all_qualified_discount: '3.3816',     all_qualified_per_item: '0.000',
+      all_mid_qualified_discount: '3.3816', all_mid_qualified_per_item: '0.000',
+      all_non_qualified_discount: '3.3816', all_non_qualified_per_item: '0.000',
+      all_standard_discount: '3.3816',      all_standard_per_item: '0.000',
+      all_rewards_discount: '3.3816',       all_rewards_per_item: '0.000',
+      has_pin_debit: true,
+      debit_auth_method: 'FIXED',
+      debit_pricing_method: 'SURCH',
+      apply_all_pin_debit: true,
+      all_networks_percent_fee: '3.3816',
+      all_networks_per_auth: '0',
+      all_networks_transaction_fee: '0',
+      pin_debit_monthly_fee: '0',
+      intl_card_handling_fee: '0',
+      all_card_auth_per_item: '0',
+      touch_tone_auth: '0',
+      avs_service_auth: '0',
+      bank_referral_auth: '0',
+      op_assisted_auth: '0',
+    } : {}),
+
+    // ── Cliqbux Standard Equipment Configuration ───────────────────────────────
+    // Cliqbux ships and manages equipment deployment separately from the MSPWare
+    // application — every merchant gets the SAME static hardware/VAR config here.
+    // This is NOT merchant-configurable; do not expose it in the UI or derive it
+    // from location/profile data. Confirmed with Teddy 2026-07-03 by reading the
+    // raw form of MSPWare's "Cash Discount Template" (app #133) via
+    // debugMSPFormRaw — these are exact wire values, not guesses. See
+    // docs/mspware-field-reference.md for the full breakdown and how to update
+    // this if the equipment lineup ever changes.
+    foreign_network: 'NOVA',        // Network Type = "Elavon" in the UI
+    equipment_rush_request: 'XX',   // POS Delivery = "Shipping Not Needed"
+    eqp_hardware_section: [{
+      hardware_type: 'CNVNG',            // Converge New Generation
+      hardware_ownership: 'P',           // Purchase
+      hardware_qty: '1',
+      hardware_price_per: '0',
+      hardware_connection_type: 'IP',
+      hardware_capture_method: 'HYBRD',  // Hybrid
+      hardware_close_method: 'AUTO',
+      hardware_training_method: 'NO',    // No Training
+    }],
+    eqp_var_section: [
+      {
+        var_type: 'vendor_distributed',
+        var_vendor: 'V7080',    // PAX Technology Inc
+        var_product: '13231',   // Broad POS Elavon v1.0
+        var_gateway: 'NONE',
+        var_qty: '4',
+        var_price: '0.00',
+        var_capture_method: 'HOST',
+        var_close_method: 'AUTO',
+      },
+      {
+        var_type: 'service_provider',
+        var_provider: 'V6273',  // Network Merchants, Inc
+        var_product: '11198',   // Gateway Processing Services 10.04
+        var_qty: 1,
+        var_price: '0.00',
+        var_capture_method: 'HOST',
+        var_close_method: 'AUTO',
+      },
+    ],
 
     // ── Bank Accounts (only when both routing + account are present) ──────────
     ...(routing && account ? {
@@ -597,9 +710,10 @@ Deno.serve(async (req) => {
         }
 
         if (!mspApplicationNo) {
-          // Detect cash discount via pricingMethod (wire value "CLEAR") OR pricingTier (UI value "CASH_DISCOUNT")
+          // Detect cash discount via pricingMethod (wire value "TIERD" as of 2026-07-03,
+          // "CLEAR" kept for any legacy records) OR pricingTier (UI value "CASH_DISCOUNT")
           const isCashDiscount =
-            ['CLEAR', 'CASH_DISCOUNT'].includes((merchantMID.pricingMethod || '').toUpperCase()) ||
+            ['TIERD', 'CLEAR', 'CASH_DISCOUNT'].includes((merchantMID.pricingMethod || '').toUpperCase()) ||
             ['CASH_DISCOUNT', 'SELF_CASH_DISCOUNT'].includes((merchantMID.pricingTier || profile.pricingTier || '').toUpperCase());
           const templateNo = merchantMID.mspTemplateNo || profile.mspTemplateNo || (isCashDiscount ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
           const createBody = {

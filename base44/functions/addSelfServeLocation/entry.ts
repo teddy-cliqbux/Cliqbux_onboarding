@@ -7,7 +7,11 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 const TIER_TO_METHOD: Record<string, string> = {
   'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
   'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
-  'CASH_DISCOUNT': 'CLEAR', 'SELF_CASH_DISCOUNT': 'CLEAR',
+  // 2026-07-03: Teddy confirmed Cliqbux never uses MSPWare's "Clear and Simple"
+  // pricing method — every Cash Discount plan uses "Tiered" (wire value TIERD)
+  // instead, with a flat-rate fee schedule sent explicitly in buildFormPayload
+  // (see submitToMSP/signApplication + docs/mspware-field-reference.md).
+  'CASH_DISCOUNT': 'TIERD', 'SELF_CASH_DISCOUNT': 'TIERD',
 };
 
 function randomUUID() {

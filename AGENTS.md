@@ -66,6 +66,20 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 ---
 
+### 7. Do not have an AI agent live-fill fields in the MSPWare UI to "discover" correct values
+**The mistake (2026-07-03):** Investigating a validation error required inspecting MSPWare's live dashboard UI. An AI agent (Claude) was driving the same browser tab Teddy was also actively using, and an automated click+type collided with Teddy's own in-progress edit, changing a Pricing Method dropdown he hadn't finished setting.
+
+**Why it's a problem:** MSPWare's live dashboard is a real production system, not a sandbox. Field values there don't have simple `value=` attributes in most cases (many are search-driven comboboxes, e.g. `entity_number` displays "48603 - Buy rate" but the real wire value is `'48603-17'` — the Client Group suffix is invisible in the UI). Reverse-engineering correct values by clicking around is slow, unreliable, and unsafe when a human might be using the same session.
+
+**The correct process:**
+1. A human confirms the correct value once, live in MSPWare (or via Fidano/MSPWare support).
+2. Use `debugMSPFormRaw` (`POST /functions/debugMSPFormRaw { "appNo": "<id>" }`) to pull the **raw wire-format JSON** of a real application or template — this is the reliable way to see actual field names/values, not the UI's friendly labels.
+3. Capture the confirmed value as a constant in `buildFormPayload` (`submitToMSP/entry.ts` and `signApplication/entry.ts`) AND in `docs/mspware-field-reference.md`.
+
+**Rule:** Do not drive the live MSPWare dashboard via browser automation to fill fields or "figure out" values. Use `debugMSPFormRaw` against a real application/template number instead, and codify whatever is found into the repo (code + `docs/mspware-field-reference.md`) rather than re-deriving it each session.
+
+---
+
 ## What This App Does
 
 Merchant onboarding portal for Cliqbux, an ISO/ISV that boards merchants to Elavon via **MSPWare/PulsePoint** (NOT Elavon's direct eBanking API). Merchants complete an online application, connect their bank account via Plaid, and their processing application is submitted to Elavon through MSPWare.
@@ -372,6 +386,9 @@ MSPWare rolls back the entire form and returns `percent_complete: -1` when **any
 - Do not use `discount_percentage` as a HubSpot line item property name — the correct name is `hs_discount_percentage`
 - Do not deduplicate HubSpot companies by email domain for real merchant data — the `createHubspotDeal` domain-based dedup only works for merchants with their own domains; testing with @cliqbux.com creates noise records
 - Do not send `manageLegalEntity` from an authenticated-only path for portal (magic-link) users — they have no Base44 session. The function must use `asServiceRole`.
+- Do not have an AI agent click through and fill fields in the live MSPWare dashboard to discover correct values — use `debugMSPFormRaw` against a real application/template number instead, and codify the result in `docs/mspware-field-reference.md`. See Critical Lesson #7.
+- Do not send bare `entity_number: '48603'` — the correct wire value is `'48603-17'` (includes the Client Group ID). See `docs/mspware-field-reference.md`.
+- Do not derive equipment/VAR fields from merchant/location data — Cliqbux always ships the same static hardware/VAR config. See `docs/mspware-field-reference.md` for the exact `eqp_hardware_section`/`eqp_var_section` values.
 
 ---
 
@@ -438,6 +455,10 @@ Template #154 = Cash Discount template (created 2026-06-29, last updated 2026-06
 - `pricing_method`: `"CLEAR"` (NOT `"CASH_DISCOUNT"` — that value is rejected)
 - CD_TEMPLATE_NO = 154; ICPLS_TEMPLATE_NO = 6
 - Both `submitToMSP` and `signApplication` auto-select the correct template based on `pricingTier`
+
+**⚠️ Two "Cash Discount" templates exist in MSPWare — do not confuse them.** Application #154 ("Cliqbux Template Cash Discount") is `CD_TEMPLATE_NO`, the one actually used for application creation — as of 2026-07-03 it has no equipment/VAR data at all. Application #133 ("Cash Discount Template") is a separate reference copy Teddy built on 2026-07-03 to demonstrate correct equipment and pricing values — it is NOT used by the code, only as a source of truth for `docs/mspware-field-reference.md`. See that file for the full Cliqbux Program Configuration and Standard Equipment Configuration field values (entity_number, safet_service/safet_fee, equipment/VAR sections, network type, etc.) confirmed 2026-07-03.
+
+**⚠️ Cliqbux NEVER uses MSPWare's "Clear and Simple" pricing method.** Confirmed by Teddy 2026-07-03: "We do not use clear and simple for pricing method ever. Tiered only." `TIER_TO_METHOD` maps Cash Discount to `pricing_method: 'TIERD'` ("Tiered"), not `'CLEAR'`, in all 6 files that declare the mapping. `buildFormPayload` (submitToMSP + signApplication) sends an explicit flat-rate Tiered fee schedule (3.3816% across all discount tiers, $0 per-item, flat PIN debit surcharge) when `pricingMethod === 'TIERD'` — see `docs/mspware-field-reference.md` for the full field list. This resolved the `CLEAR_plan` legacy-picklist blocker entirely (it's a field on the Clear and Simple method, which is never selected). Also resolved 2026-07-03: `tokenization: 'none'` is now sent for all merchants ("No tokenization is available to us now" — Teddy), which cleared the `tokenization_platform_fee` required-field error. As of this fix, ZZZ DBA (app #190) reached 99.2% complete — only `is_firearm_verified` remains (template-level fix, see above).
 
 ### Template #154 pre-set fields (read via GET /applications/154/form on 2026-06-30)
 These fields are owned by the template and must NOT be sent in any PUT /form payload:
