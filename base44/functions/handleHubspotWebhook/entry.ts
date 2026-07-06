@@ -155,7 +155,12 @@ Deno.serve(async (req) => {
         industryClass,
         mccCode,
         hubspotQuoteUrl: quoteUrl || '',
-        pricingTier:    pricingTier || 'Standard',
+        // 2026-07-06: no longer defaulting to a guessed tier here — 'Standard' isn't
+        // a valid pricingTier value anymore (see AGENTS.md Critical Lesson #12), and
+        // guessing CUSTOM_FLAT_RATE vs CUSTOM_INTERCHANGE_PLUS for a demo-scheduled
+        // deal that hasn't been priced yet would be wrong either way. Leave unset
+        // until pricing is actually decided.
+        ...(pricingTier ? { pricingTier } : {}),
         applicationStatus: 'Incomplete',
         // Seed financial defaults so the form feels pre-filled
         monthlyCardSales:    estimateMonthlyCardSales(amount),
@@ -258,7 +263,9 @@ Deno.serve(async (req) => {
         firstName:     (firstName || legalName).split(' ')[0],
         lastName:      (lastName  || legalName).split(' ').slice(1).join(' '),
         hubspotQuoteUrl: hubspotQuoteUrl || '',
-        pricingTier:   pricingTier || 'Standard',
+        // 2026-07-06: no longer defaulting to a guessed tier — see comment above
+        // in the demo_scheduled path. See AGENTS.md Critical Lesson #12.
+        ...(pricingTier ? { pricingTier } : {}),
         customMarkupPercentage: customMarkupPercentage || null,
         customPerTxFee:         customPerTxFee         || null,
         applicationStatus: 'Incomplete',
