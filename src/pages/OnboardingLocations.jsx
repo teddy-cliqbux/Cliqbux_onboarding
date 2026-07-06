@@ -402,6 +402,18 @@ const TAX_CLASS_TYPES = [
   { value: 'PARTNERSHIP', label: 'Partnership' },
 ];
 
+// 2026-07-03: MSPWare's own "LLC Class" field only has 3 real options
+// (Corporation / disregarded entity / Partnership) — showing the full generic
+// TAX_CLASS_TYPES list (meant for other Business Entity Types) was confusing
+// when the merchant had already chosen LLC. Values match mapLlcClass's expected
+// keys exactly ('LLC' -> D, 'LLC_PARTNERSHIP' -> P, 'LLC_CORPORATION' -> C) —
+// see submitToMSP/signApplication entry.ts.
+const LLC_TAX_CLASS_TYPES = [
+  { value: 'LLC_CORPORATION', label: 'Corporation' },
+  { value: 'LLC', label: 'Disregarded Entity' },
+  { value: 'LLC_PARTNERSHIP', label: 'Partnership' },
+];
+
 function deriveOwnership(year) {
   if (!year) return { years: '1', months: '0' };
   const now = new Date();
