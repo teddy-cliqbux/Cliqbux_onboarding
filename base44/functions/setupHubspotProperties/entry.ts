@@ -18,7 +18,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //   monthly_card_sales  — Estimated monthly card volume ($)
 //   avg_ticket          — Average transaction amount ($)
 //   card_present_pct    — % of transactions that are card-present (0–100)
-//   pricing_tier        — Pricing program (TRADITIONAL / STANDARD / PREMIUM / CASH_DISCOUNT)
+//   pricing_tier        — Pricing program (CUSTOM_FLAT_RATE / CUSTOM_INTERCHANGE_PLUS / SELF_SERVE_CASH_DISCOUNT)
 //
 // Already exists (skipped):
 //   legal_name          — Legal Name (HubSpot built-in custom already in your portal)
@@ -99,6 +99,17 @@ const COMPANY_PROPERTIES = [
     groupName: 'companyinformation',
   },
   {
+    // 2026-07-06: simplified to Cliqbux's actual 4-template model (see AGENTS.md
+    // Critical Lesson #12). NOTE: this script only CREATES a property if missing —
+    // 409 (already exists) is treated as skip, it does NOT update an existing
+    // property's option list. If `pricing_tier` already exists in the live HubSpot
+    // portal with the old TRADITIONAL/STANDARD/PREMIUM/CASH_DISCOUNT options,
+    // re-running this will NOT add the new ones — someone needs to add
+    // CUSTOM_FLAT_RATE/CUSTOM_INTERCHANGE_PLUS/SELF_SERVE_CASH_DISCOUNT to the
+    // live property manually in HubSpot, or this script needs a PATCH-based
+    // "add missing options" path added. Not yet done as of 2026-07-06 — flagged
+    // to Teddy, not touched live without his say-so since it's a real CRM property
+    // sales may already be using.
     name: 'pricing_tier',
     label: 'Pricing Tier',
     description: 'Cliqbux pricing program for this location.',
@@ -106,10 +117,15 @@ const COMPANY_PROPERTIES = [
     fieldType: 'select',
     groupName: 'companyinformation',
     options: [
-      { label: 'Traditional',    value: 'TRADITIONAL',    displayOrder: 0, hidden: false },
-      { label: 'Standard',       value: 'STANDARD',       displayOrder: 1, hidden: false },
-      { label: 'Premium',        value: 'PREMIUM',        displayOrder: 2, hidden: false },
-      { label: 'Cash Discount',  value: 'CASH_DISCOUNT',  displayOrder: 3, hidden: false },
+      { label: 'Custom Flat Rate',        value: 'CUSTOM_FLAT_RATE',        displayOrder: 0, hidden: false },
+      { label: 'Custom Interchange Plus', value: 'CUSTOM_INTERCHANGE_PLUS', displayOrder: 1, hidden: false },
+      { label: 'Cash Discount',           value: 'SELF_SERVE_CASH_DISCOUNT', displayOrder: 2, hidden: false },
+      // Legacy — kept so historical HubSpot records with these values still
+      // display correctly if this ever creates the property fresh.
+      { label: 'Traditional (legacy)',    value: 'TRADITIONAL',    displayOrder: 3, hidden: true },
+      { label: 'Standard (legacy)',       value: 'STANDARD',       displayOrder: 4, hidden: true },
+      { label: 'Premium (legacy)',        value: 'PREMIUM',        displayOrder: 5, hidden: true },
+      { label: 'Cash Discount (legacy)',  value: 'CASH_DISCOUNT',  displayOrder: 6, hidden: true },
     ],
   },
 ];
