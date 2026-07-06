@@ -74,6 +74,14 @@ function mapIndustryType(pricingCategory: string): string {
   return map[pricingCategory] || 'RE';
 }
 
+// Reverse of mapIndustryType — used to derive pricingCategory from an explicitly
+// chosen industryType when pricingCategory itself was never set. The current MID
+// editor UI only exposes "MCC Code" + "Industry Type" (no Pricing Category field),
+// so pricingCategory is frequently null even when industryType is correctly set.
+const INDUSTRY_TO_CATEGORY: Record<string, string> = {
+  'RE': '1', 'HT': '2', 'SP': '4', 'ARU': '5', 'MS': '6', 'RS': '7',
+};
+
 function industryClassToMSP(cls: string): string {
   const map: Record<string, string> = {
     'RESTAURANT': 'RS', 'GROCERY': 'SP', 'HOTEL': 'HT', 'ECOMMERCE': 'MS',
@@ -203,7 +211,19 @@ function buildFormPayload(
   const taxId = cleanDigits(profile.taxId || matchedEntity?.federalEIN || '');
   const ssn = cleanDigits(signer.ssn || profile.ssn || '');
   const phone = cleanDigits(signer.corporatePhone || profile.corporatePhone || '');
-  const pricingCategory = String(merchantMID.pricingCategory || profile.pricingCategory || '1');
+  // BUG FIXED 2026-07-03: previously required BOTH pricingCategory AND industryType
+  // to be set on merchantMID before trusting the explicit industryType — but the
+  // current MID editor UI only exposes "MCC Code" + "Industry Type" (no Pricing
+  // Category field), so pricingCategory is normally null even when industryType
+  // is correctly chosen (e.g. "Restaurant (RS)"). That silently discarded the
+  // merchant's real industry and always fell back to Retail. Now: trust an
+  // explicit industryType directly, and derive pricingCategory FROM it (via
+  // INDUSTRY_TO_CATEGORY) when pricingCategory itself was never set.
+  const pricingCategory = String(
+    merchantMID.pricingCategory || profile.pricingCategory
+    || (merchantMID.industryType && INDUSTRY_TO_CATEGORY[merchantMID.industryType])
+    || '1'
+  );
   // Map pricingTier (UI enum) → MSPWare pricing_method when pricingMethod isn't set directly
   // 2026-07-03: Teddy confirmed Cliqbux never uses MSPWare's "Clear and Simple"
   // pricing method — every Cash Discount plan uses "Tiered" (wire value TIERD)
@@ -218,11 +238,7 @@ function buildFormPayload(
     || TIER_TO_METHOD[(merchantMID.pricingTier || profile.pricingTier || '').toUpperCase()]
     || 'ICPLS';
   const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'TIERD' : rawPricingMethod;
-  // Derive industryType from pricingCategory; only use merchantMID.industryType if pricingCategory is also set
-  // (prevents mismatches like industryType=HT with pricingCategory=1/Retail)
-  const industryType = (merchantMID.pricingCategory && merchantMID.industryType)
-    ? merchantMID.industryType
-    : mapIndustryType(pricingCategory);
+  const industryType = merchantMID.industryType || mapIndustryType(pricingCategory);
   const mcc = merchantMID.mccCode || profile.mccCode || '5999';
   const dbaName = merchantMID.dbaName || location.dbaName || profile.legalName || '';
   const monthlyCardSales = Math.max(1, parseFloat(String(merchantMID.monthlyCardSales || profile.monthlyCardSales || '6000')) || 6000);

@@ -99,6 +99,14 @@ function mapIndustryType(pricingCategory: string): string {
   return map[pricingCategory] || 'RE';
 }
 
+// Reverse of mapIndustryType — used to derive pricingCategory from an explicitly
+// chosen industryType when pricingCategory itself was never set. The current MID
+// editor UI only exposes "MCC Code" + "Industry Type" (no Pricing Category field),
+// so pricingCategory is frequently null even when industryType is correctly set.
+const INDUSTRY_TO_CATEGORY: Record<string, string> = {
+  'RE': '1', 'HT': '2', 'SP': '4', 'ARU': '5', 'MS': '6', 'RS': '7',
+};
+
 function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
@@ -263,17 +271,26 @@ function buildFormPayload(
   const phone = cleanDigits(signer.corporatePhone || profile.corporatePhone || '');
 
   // MerchantMID-level fields override profile-level for per-MID differentiation
-  const pricingCategory = String(merchantMID.pricingCategory || profile.pricingCategory || '1');
+  // BUG FIXED 2026-07-03: previously required BOTH pricingCategory AND industryType
+  // to be set on merchantMID before trusting the explicit industryType — but the
+  // current MID editor UI only exposes "MCC Code" + "Industry Type" (no Pricing
+  // Category field), so pricingCategory is normally null even when industryType
+  // is correctly chosen (e.g. "Restaurant (RS)"). That silently discarded the
+  // merchant's real industry and always fell back to Retail. Now: trust an
+  // explicit industryType directly, and derive pricingCategory FROM it (via
+  // INDUSTRY_TO_CATEGORY) when pricingCategory itself was never set.
+  const pricingCategory = String(
+    merchantMID.pricingCategory || profile.pricingCategory
+    || (merchantMID.industryType && INDUSTRY_TO_CATEGORY[merchantMID.industryType])
+    || '1'
+  );
   // TIER_TO_METHOD is declared once at module scope above — used here and by
   // every MerchantMID creation site in this file.
   const rawPricingMethod = merchantMID.pricingMethod || profile.pricingMethod
     || TIER_TO_METHOD[(merchantMID.pricingTier || profile.pricingTier || '').toUpperCase()]
     || 'ICPLS';
   const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'TIERD' : rawPricingMethod;
-  // Derive industryType from pricingCategory; only use merchantMID.industryType if pricingCategory is also set
-  const industryType = (merchantMID.pricingCategory && merchantMID.industryType)
-    ? merchantMID.industryType
-    : mapIndustryType(pricingCategory);
+  const industryType = merchantMID.industryType || mapIndustryType(pricingCategory);
   const mcc = merchantMID.mccCode || profile.mccCode || '5999';
   const dbaName = merchantMID.dbaName || location.dbaName || profile.legalName || '';
   const monthlyCardSales = Math.max(1, parseFloat(String(merchantMID.monthlyCardSales || profile.monthlyCardSales || '6000')) || 6000);
