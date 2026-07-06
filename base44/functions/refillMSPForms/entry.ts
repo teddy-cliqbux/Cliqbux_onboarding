@@ -63,7 +63,19 @@ function buildFormPayload(profile: any, location: any, merchantMID: any, signer:
   // NOTE: this function is stale relative to submitToMSP/signApplication (still
   // has the old has_legal_address:'mailing'/'LGA' bug below) — patched the
   // pricing method mapping only; full parity fix not yet done here.
-  const TIER_TO_METHOD: Record<string, string> = { 'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS', 'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS', 'CASH_DISCOUNT': 'TIERD', 'SELF_CASH_DISCOUNT': 'TIERD' };
+  // 2026-07-06: added the 3 canonical simplified tier names (see AGENTS.md Critical
+  // Lesson #12). NOTE: this file still hardcodes all_markup_discount/all_markup_per_item
+  // as static 0.0000/0.000 below (line ~186) regardless of pricing tier — that's WRONG
+  // for CUSTOM_FLAT_RATE/CUSTOM_INTERCHANGE_PLUS (always individually negotiated, see
+  // submitToMSP/signApplication for the correct customMarkupPercentage/customPerTxFee-
+  // sourced pattern + hard guard). Not yet fixed here — this is an admin-only force-
+  // refill tool, not part of the automatic merchant flow, but do not use it on a
+  // custom-pricing-tier merchant until it has the same guard as the other 2 files.
+  const TIER_TO_METHOD: Record<string, string> = {
+    'CUSTOM_FLAT_RATE': 'FLAT', 'CUSTOM_INTERCHANGE_PLUS': 'ICPLS', 'SELF_SERVE_CASH_DISCOUNT': 'TIERD',
+    'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS', 'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
+    'CASH_DISCOUNT': 'TIERD', 'SELF_CASH_DISCOUNT': 'TIERD',
+  };
   const rawPricingMethod = merchantMID.pricingMethod || profile.pricingMethod || TIER_TO_METHOD[(profile.pricingTier||'').toUpperCase()] || 'ICPLS';
   const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'TIERD' : rawPricingMethod;
   const industryType = (merchantMID.pricingCategory && merchantMID.industryType) ? merchantMID.industryType : mapIndustryType(pricingCategory);
