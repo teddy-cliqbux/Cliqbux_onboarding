@@ -24,7 +24,10 @@ const STEP_ORDER = ['agreement', 'locations', 'banking', 'verification', 'submit
 const STEP_LABELS_MAP = { agreement: 'Agreement', locations: 'Locations', banking: 'Banking', verification: 'Signing', submitted: 'Submitted' };
 
 const PREFILL_FIELDS = [
-  { key: 'pricingTier', label: 'Pricing Tier', type: 'select', options: ['Standard', 'Premium', 'Custom', 'Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'] },
+  // 2026-07-06: simplified to match Cliqbux's 4-template model (see AGENTS.md
+  // Critical Lesson #12). Self_Swiped/Self_Keyed kept as-is — dormant/on hold,
+  // not deprecated (Elavon doesn't support self-serve flat rate yet).
+  { key: 'pricingTier', label: 'Pricing Tier', type: 'select', options: ['CUSTOM_FLAT_RATE', 'CUSTOM_INTERCHANGE_PLUS', 'SELF_SERVE_CASH_DISCOUNT', 'Self_Swiped', 'Self_Keyed'] },
   { key: 'legalName', label: 'Legal Business Name', type: 'text', placeholder: 'Override legal name…' },
   { key: 'productDescription', label: 'Product Description', type: 'text', placeholder: 'Override product description…' },
   { key: 'establishmentYear', label: 'Year Established', type: 'text', placeholder: 'e.g. 2018' },
