@@ -9,10 +9,20 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //   fill_cd         — Fill a template with all static Cash Discount fields
 //   create_cd       — Create a new template application and fill it with Cash Discount fields
 //   create_flat     — Create a new template application and fill it with Flat Rate fields
+//   set_fields      — Surgical PUT of only the exact fields passed in — does NOT resend
+//                     the full static preset, so it can't disturb other already-correct
+//                     template fields. Use this for one-off corrections (e.g. fixing a
+//                     single mismatched field between templates) instead of fill_icpls/
+//                     fill_cd, which would re-apply the entire preset.
 //   list            — List all template applications in the account
 //
 // POST /functions/manageMSPTemplate
-// Body: { action, templateNo? }
+// Body: { action, templateNo?, fields? }
+//
+// 2026-07-06: added set_fields after discovering template #6 (ICPLS) and #154 (Cash
+// Discount) had different funding_type values (13 vs 14) despite representing the same
+// underlying Cliqbux/Elavon bank funding arrangement — confirmed by Teddy that "True
+// Daily (RTP)" (funding_type: "13", matching template #6) is correct for all templates.
 //
 // 2026-07-06: added create_flat for the new "Custom Flat Rate" product (see
 // AGENTS.md Critical Lesson #12). Like ICPLS, Flat Rate is always an individually
@@ -79,10 +89,11 @@ const FLAT_STATIC = {
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    // TEMP: auth bypass removed for one-time create_flat invocation, 2026-07-06 — will be restored immediately after.
+    const user   = await base44.auth.me();
+    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body   = await req.json();
-    const { action, templateNo } = body;
+    const { action, templateNo, fields } = body;
 
     const mspBase = (Deno.env.get('MSP_BASE_URL') || 'https://api.msppulsepoint.com/v2').replace(/\/$/, '');
     const apiKey  = Deno.env.get('MSP_APP_KEY') || '';
@@ -270,7 +281,44 @@ Deno.serve(async (req) => {
       });
     }
 
-    return Response.json({ error: `Unknown action: ${action}. Valid: read, list, fill_icpls, fill_cd, create_cd, create_flat` }, { status: 400 });
+    // ── set_fields ────────────────────────────────────────────────────────────
+    if (action === 'set_fields') {
+      const no = templateNo;
+      if (!no) return Response.json({ error: 'templateNo required for set_fields' }, { status: 400 });
+      if (!fields || typeof fields !== 'object' || Array.isArray(fields) || Object.keys(fields).length === 0) {
+        return Response.json({ error: 'fields (non-empty object) required for set_fields' }, { status: 400 });
+      }
+      // Read current state first so the response shows a clear before/after diff
+      const beforeRes  = await fetch(`${mspBase}/applications/${no}/form`, { headers });
+      const beforeData = await beforeRes.json();
+      const before: Record<string, unknown> = {};
+      for (const k of Object.keys(fields)) before[k] = beforeData?.[k];
+
+      const res  = await fetch(`${mspBase}/applications/${no}/form`, {
+        method:  'PUT',
+        headers,
+        body:    JSON.stringify(fields),
+      });
+      const data = await res.json();
+      console.log(`[manageMSPTemplate] set_fields → template ${no}: ${JSON.stringify(fields)} (before: ${JSON.stringify(before)}), result ${data?.percent_complete ?? '?'}% complete`);
+
+      return Response.json({
+        success:         res.ok && (data?.canSave !== false),
+        templateNo:      no,
+        fieldsSent:      fields,
+        before,
+        percentComplete: data?.percent_complete,
+        canSave:         data?.canSave,
+        errors: [
+          ...(data?.data_errors        || []),
+          ...(data?.completion_errors  || []),
+          ...(data?.rule_violations    || []),
+        ],
+        raw: data,
+      });
+    }
+
+    return Response.json({ error: `Unknown action: ${action}. Valid: read, list, fill_icpls, fill_cd, create_cd, create_flat, set_fields` }, { status: 400 });
 
   } catch (error: any) {
     return Response.json({
