@@ -392,6 +392,14 @@ const OWNERSHIP_TYPES = [
   { value: 'GENERAL_PARTNERSHIP', label: 'General Partnership' },
   { value: 'LIMITED_PARTNERSHIP', label: 'Limited Partnership' },
   { value: 'NON_PROFIT', label: 'Non-Profit' },
+  // 2026-07-06: added to match MSPWare's real Ownership Type field. mapOwnershipType
+  // already maps these to MSP codes SS / T, but those codes were never confirmed via
+  // debugMSPFormRaw/live testing before now — verify before trusting for a real merchant.
+  // MSPWare's dropdown also has Estate, Government (Federal/State/Local), Unincorporated
+  // Association, and a 3-way C-Corp split (Closely Held/Private/Public) that we don't
+  // offer yet — no confirmed wire codes for those, see docs/mspware-field-reference.md.
+  { value: 'SUB_S_CORP', label: 'Sub S Corp' },
+  { value: 'TRUST', label: 'Trust' },
 ];
 
 const TAX_CLASS_TYPES = [
