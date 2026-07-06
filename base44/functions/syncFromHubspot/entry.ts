@@ -4,9 +4,14 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // MerchantMID.pricingMethod has a schema-level default of 'ICPLS', which will
 // silently mask this derivation if the field is left unset at create time —
 // always set it explicitly here rather than relying on the schema default.
+// 2026-07-06: added the 3 canonical simplified tier names (see AGENTS.md Critical
+// Lesson #12). Legacy values kept mapped for historical/in-flight records.
 const TIER_TO_METHOD: Record<string, string> = {
+  'CUSTOM_FLAT_RATE': 'FLAT',
+  'CUSTOM_INTERCHANGE_PLUS': 'ICPLS',
+  'SELF_SERVE_CASH_DISCOUNT': 'TIERD',
   'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
-  'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
+  'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS', // ON HOLD — see Critical Lesson #12
   // 2026-07-03: Teddy confirmed Cliqbux never uses MSPWare's "Clear and Simple"
   // pricing method — every Cash Discount plan uses "Tiered" (wire value TIERD)
   // instead, with a flat-rate fee schedule sent explicitly in buildFormPayload
@@ -48,7 +53,7 @@ const HS_PROPS = {
     'monthly_card_sales',   // estimated monthly card volume
     'avg_ticket',           // average transaction amount
     'card_present_pct',     // % of transactions that are card-present (0-100)
-    'pricing_tier',         // TRADITIONAL, STANDARD, PREMIUM, CASH_DISCOUNT
+    'pricing_tier',         // CUSTOM_FLAT_RATE, CUSTOM_INTERCHANGE_PLUS, SELF_SERVE_CASH_DISCOUNT (legacy: TRADITIONAL, STANDARD, PREMIUM, CASH_DISCOUNT)
     'pricing_method',       // ICPLS, CLEAR, FLAT
   ],
   contact: [
