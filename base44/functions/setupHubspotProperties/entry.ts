@@ -18,7 +18,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //   monthly_card_sales  — Estimated monthly card volume ($)
 //   avg_ticket          — Average transaction amount ($)
 //   card_present_pct    — % of transactions that are card-present (0–100)
-//   pricing_tier        — Pricing program (TRADITIONAL / STANDARD / PREMIUM / CASH_DISCOUNT)
+//   pricing_tier        — Pricing program (CUSTOM_FLAT_RATE / CUSTOM_INTERCHANGE_PLUS / SELF_SERVE_CASH_DISCOUNT)
 //
 // Already exists (skipped):
 //   legal_name          — Legal Name (HubSpot built-in custom already in your portal)
