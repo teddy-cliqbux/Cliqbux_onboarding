@@ -1,26 +1,17 @@
 import { useState } from 'react';
-import { Loader2, ArrowRight, CheckCircle, CreditCard, Percent } from 'lucide-react';
+import { Loader2, ArrowRight, CheckCircle, Percent } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import CliqbuxLogo from './CliqbuxLogo';
 import FormCard from './FormCard';
 import { normalizeBusinessName } from '@/lib/textUtils';
 
+// 2026-07-06: "Swiped & Keyed" (TRADITIONAL/Interchange Plus) card removed from
+// self-serve pricing per Teddy — Interchange Plus is always custom-negotiated
+// (no off-the-shelf self-serve template), and swiped/keyed specifically is on
+// hold because Elavon doesn't support it yet and Cliqbux can't execute that
+// agreement. Cash Discount is the only self-serve pricing option for now.
+// See AGENTS.md.
 const PRICING_CARDS = [
-  {
-    key: 'TRADITIONAL',
-    label: 'Swiped & Keyed',
-    icon: CreditCard,
-    description: 'Covers both in-person card-present and card-not-present transactions. Swiped rate at 2.49% + $0.10, keyed rate at 2.89% + $0.30.',
-    badge: 'Most Popular',
-    badgeColor: 'bg-blue-100 text-blue-700',
-    accentColor: 'border-blue-200 hover:border-blue-400',
-    selectedColor: 'border-blue-500 bg-blue-50',
-    iconColor: 'text-blue-600',
-    iconBg: 'bg-blue-100',
-    rate: '2.49%',
-    fee: '$0.10',
-    rateLabel: 'SWIPED · 2.89% + $0.30 KEYED'
-  },
   {
     key: 'CASH_DISCOUNT',
     label: 'Cash Discount Program',
@@ -111,8 +102,8 @@ export default function SelfServePricing({ onComplete }) {
           <p className="text-gray-100 text-lg leading-relaxed">Select your plan, then add locations — each storefront gets its own volume, industry, and bank account.</p>
         </div>
 
-        {/* Pricing Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl mb-10">
+        {/* Pricing Cards — single card for now; grid retained for when more self-serve options exist */}
+        <div className="grid grid-cols-1 gap-6 w-full max-w-md mb-10 mx-auto">
           {PRICING_CARDS.map((card, index) => {
             const Icon = card.icon;
             const isSelected = selectedCardIndex === index;
