@@ -508,7 +508,8 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
               <select value={taxClassType} onChange={e => setTaxClassType(e.target.value)}
                 className={inputCls} style={{ colorScheme: 'dark' }}>
                 <option value="">Select…</option>
-                {TAX_CLASS_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {(ownershipType === 'LIMITED_COMPANY' ? LLC_TAX_CLASS_TYPES : TAX_CLASS_TYPES)
+                  .map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
           </div>
