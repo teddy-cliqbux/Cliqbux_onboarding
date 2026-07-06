@@ -33,6 +33,13 @@ function mapOwnershipType(t: string): string {
     'S_CORP':           'SS', 'SUB_S_CORP':       'SS',
     'PARTNERSHIP':      'PA', 'LIMITED_COMPANY':  'LL',
     'NON_PROFIT':       'NP', 'TRUST':            'T',
+    // BUG FIXED 2026-07-03: our own frontend's Business Entity Type dropdown
+    // (OWNERSHIP_TYPES in OnboardingLocations.jsx) uses 'GENERAL_PARTNERSHIP'
+    // and 'LIMITED_PARTNERSHIP' as values — neither matched any key here, so
+    // both silently fell through to the 'CO' (Corporation) default instead of
+    // 'PA' (Partnership). Confirmed by comparing our dropdown against MSPWare's
+    // own Ownership Type field live.
+    'GENERAL_PARTNERSHIP': 'PA', 'LIMITED_PARTNERSHIP': 'PA',
   };
   return map[t?.toUpperCase?.()] || map[t] || 'CO';
 }
