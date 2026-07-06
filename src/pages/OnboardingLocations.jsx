@@ -392,6 +392,14 @@ const OWNERSHIP_TYPES = [
   { value: 'GENERAL_PARTNERSHIP', label: 'General Partnership' },
   { value: 'LIMITED_PARTNERSHIP', label: 'Limited Partnership' },
   { value: 'NON_PROFIT', label: 'Non-Profit' },
+  // 2026-07-06: added to match MSPWare's real Ownership Type field. mapOwnershipType
+  // already maps these to MSP codes SS / T, but those codes were never confirmed via
+  // debugMSPFormRaw/live testing before now — verify before trusting for a real merchant.
+  // MSPWare's dropdown also has Estate, Government (Federal/State/Local), Unincorporated
+  // Association, and a 3-way C-Corp split (Closely Held/Private/Public) that we don't
+  // offer yet — no confirmed wire codes for those, see docs/mspware-field-reference.md.
+  { value: 'SUB_S_CORP', label: 'Sub S Corp' },
+  { value: 'TRUST', label: 'Trust' },
 ];
 
 const TAX_CLASS_TYPES = [
@@ -400,6 +408,18 @@ const TAX_CLASS_TYPES = [
   { value: 'LLC_PARTNERSHIP', label: 'LLC taxed as Partnership' },
   { value: 'CORPORATION', label: 'Corporation (C-Corp / S-Corp)' },
   { value: 'PARTNERSHIP', label: 'Partnership' },
+];
+
+// 2026-07-03: MSPWare's own "LLC Class" field only has 3 real options
+// (Corporation / disregarded entity / Partnership) — showing the full generic
+// TAX_CLASS_TYPES list (meant for other Business Entity Types) was confusing
+// when the merchant had already chosen LLC. Values match mapLlcClass's expected
+// keys exactly ('LLC' -> D, 'LLC_PARTNERSHIP' -> P, 'LLC_CORPORATION' -> C) —
+// see submitToMSP/signApplication entry.ts.
+const LLC_TAX_CLASS_TYPES = [
+  { value: 'LLC_CORPORATION', label: 'Corporation' },
+  { value: 'LLC', label: 'Disregarded Entity' },
+  { value: 'LLC_PARTNERSHIP', label: 'Partnership' },
 ];
 
 function deriveOwnership(year) {
@@ -496,7 +516,8 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
               <select value={taxClassType} onChange={e => setTaxClassType(e.target.value)}
                 className={inputCls} style={{ colorScheme: 'dark' }}>
                 <option value="">Select…</option>
-                {TAX_CLASS_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {(ownershipType === 'LIMITED_COMPANY' ? LLC_TAX_CLASS_TYPES : TAX_CLASS_TYPES)
+                  .map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </div>
           </div>

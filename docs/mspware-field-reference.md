@@ -119,10 +119,17 @@ Sent explicitly in `buildFormPayload` (both files) whenever `pricingMethod === '
 
 ---
 
-## Open Items (as of 2026-07-03)
+## Open Items (as of 2026-07-06)
 
 1. **`is_firearm_verified`** — the only remaining validation error (app #190 at 99.2% complete). Requires a one-time manual fix directly on MSPWare templates #6 and #154 (set to "No"), not a code change. Confirmed conditional on business address state. Not yet done.
-2. **Resolved this session:** `CLEAR_plan` (never using Clear and Simple pricing method — Tiered only), `tokenization_platform_fee` (tokenization now explicitly `'none'`), PCI tier (`safet_service: 'pci'`, confirmed).
+2. **ICPLS-specific gap (found 2026-07-03 on app #194, Traditional/ICPLS pricing):** `auth_pricing_program`, `all_markup_discount`, `all_markup_per_item`, `all_card_auth_per_item`, `intl_card_handling_fee` show as required even though template #6 has some of these set. Confirmed `all_markup_discount`/`all_markup_per_item`/`all_card_auth_per_item` are genuinely blank on template #6 itself via `debugMSPFormRaw`. These are markup/billing fields — real values needed from Teddy before hardcoding, not yet resolved.
+3. **Ownership Type dropdown coverage — partially resolved 2026-07-06.** MSPWare's real "Ownership Type" field has ~13 options (C Corp Closely Held/Private/Public, Estate, General Partnership, Government fed/state/local, LLC, Limited Partnership, Non-Profit, Sole Proprietorship, Sub S Corp, Trust, Unincorporated Association). Teddy confirmed: "add those options to our form if they exist on MSPware."
+   - **Added and verified:** `SUB_S_CORP` ("Sub S Corp") and `TRUST` ("Trust") — both now in `OWNERSHIP_TYPES` (`OnboardingLocations.jsx`) and the `MerchantCorporateProfile.ownershipType` schema enum. Verified live via `debugMSPFormRaw`: `SUB_S_CORP → ownership_type: SS`, `TRUST → ownership_type: T`. No validation errors on either.
+   - **Still missing, NOT added:** Estate, Government (Federal/State/Local), Unincorporated Association, and the 3-way C-Corp split (Closely Held/Private/Public). No confirmed wire codes exist for any of these. The C-Corp split is compliance-relevant (likely tied to `beneficial_ownership_exemption` for public vs. private companies), so these should NOT be guessed — get confirmed codes from Teddy or MSPWare/Fidano support first, then verify with the same test-merchant + `debugMSPFormRaw` pattern used for Sub S Corp/Trust before adding to the dropdown. See AGENTS.md Critical Lesson #9.
+4. **Resolved 2026-07-03:** `CLEAR_plan` (never using Clear and Simple pricing method — Tiered only), `tokenization_platform_fee` (tokenization now explicitly `'none'`), PCI tier (`safet_service: 'pci'`, confirmed).
+5. **Resolved 2026-07-03 / verified 2026-07-06:** `llc_class` was being sourced from `ownershipType` instead of `taxClassType`, silently defaulting to "Disregarded Entity" for merchants who chose e.g. "LLC taxed as C-Corp." Fixed by sourcing it from a dedicated `legalTaxClassType` variable (`matchedEntity?.taxClassType || profile.taxClassType`). Verified via `debugMSPFormRaw`: `llc_class: C`.
+6. **Resolved 2026-07-03 / verified live 2026-07-06:** `mapOwnershipType` had no keys for `'GENERAL_PARTNERSHIP'`/`'LIMITED_PARTNERSHIP'` (our frontend's real dropdown values), so both silently defaulted to `'CO'` (Corporation) instead of `'PA'` (Partnership). Fixed in `submitToMSP`/`signApplication` (`refillMSPForms` already had it right). Verified via `debugMSPFormRaw` on a temporarily-modified test merchant: `ownership_type: PA`.
+7. **Resolved 2026-07-06 (frontend):** `OnboardingLocations.jsx`'s "IRS Tax Classification" dropdown now shows a simplified 3-option `LLC_TAX_CLASS_TYPES` list (Corporation / Disregarded Entity / Partnership) whenever Business Entity Type = LLC, matching MSPWare's real "LLC Class" field instead of the generic 5-option list meant for other entity types.
 
 ---
 

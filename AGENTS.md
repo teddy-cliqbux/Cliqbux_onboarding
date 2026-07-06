@@ -14,6 +14,20 @@ Before touching any file in this repo:
 
 ---
 
+## ⚠️ Edit in the repo only — test in Base44 wherever helpful
+
+**Decided with Teddy 2026-07-03, after this exact mistake caused two merge conflicts in one session:**
+
+Do not hand-edit the same function file in both the local git repo AND the live Base44 app sandbox. The live Base44 app auto-commits to the same GitHub repo Teddy works in via GitHub Desktop — writing the "same" change by hand in both places produces two textually-different commits (different comment wording, different line endings) that collide as a merge conflict the next time Teddy pulls. This happened twice on 2026-07-03.
+
+**The rule going forward:**
+1. Make code changes in the local repo only. Teddy pushes via GitHub Desktop as normal.
+2. It's fine — encouraged, even — to use the live Base44 sandbox for **testing**: running `curl` against deployed functions, using `debugMSPFormRaw` to inspect real MSPWare data, querying/updating entities to set up a test case. None of that touches function source files, so it can't conflict.
+3. If a fix genuinely needs to be verified against the live API before you're confident in it (e.g. confirming a new MSPWare field value actually clears a validation error), it's OK to push that one change directly to the Base44 sandbox temporarily to test it. But once confirmed, make sure the same final content is committed to the local repo, and if GitHub Desktop then shows a merge conflict from the two copies diverging, resolve it yourself (it's almost always a trivial same-code/different-comment conflict) — don't leave it for Teddy to untangle.
+4. Once a value or fix is confirmed and documented (in code comments, `AGENTS.md`, or `docs/mspware-field-reference.md`), there's no need to keep re-verifying it live in future sessions — treat it as a known constant.
+
+---
+
 ## 🚨 Critical Lessons — Do Not Repeat These Mistakes
 
 These are hard-won findings from real debugging. Each one cost hours. Read them before touching the relevant code.
@@ -77,6 +91,32 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 3. Capture the confirmed value as a constant in `buildFormPayload` (`submitToMSP/entry.ts` and `signApplication/entry.ts`) AND in `docs/mspware-field-reference.md`.
 
 **Rule:** Do not drive the live MSPWare dashboard via browser automation to fill fields or "figure out" values. Use `debugMSPFormRaw` against a real application/template number instead, and codify whatever is found into the repo (code + `docs/mspware-field-reference.md`) rather than re-deriving it each session.
+
+---
+
+### 8. `ownershipType` vs `taxClassType` — don't conflate them with `||`
+
+**The mistake (2026-07-03):** Two related bugs, both caused by treating `ownershipType` (Business Entity Type — LLC, Corporation, Sole Prop, etc.) and `taxClassType` (IRS Tax Classification — how that entity is taxed) as interchangeable via a `||` fallback chain.
+
+**Bug A — `llc_class` sent as "disregarded entity" when it should have been "Corporation":** `mapLlcClass` was called on a variable (`ownershipRaw`) that fell back through `profile.ownershipType || matchedEntity?.ownershipType || profile.taxClassType`. Since `profile.ownershipType` (`"LIMITED_COMPANY"`) always won and isn't a key in `mapLlcClass`'s table, it silently defaulted to `'D'` regardless of the merchant's actual chosen tax classification.
+**Fix:** `llc_class` is now sourced from a dedicated `legalTaxClassType` variable — `matchedEntity?.taxClassType || profile.taxClassType` — never from `ownershipType`. Verified via `debugMSPFormRaw`: `llc_class: C` for an LLC-taxed-as-Corporation entity (was `D`).
+
+**Bug B — General Partnership / Limited Partnership silently mapped to Corporation:** `mapOwnershipType`'s lookup table had no keys for `'GENERAL_PARTNERSHIP'` / `'LIMITED_PARTNERSHIP'` (our frontend's actual `OWNERSHIP_TYPES` dropdown values in `OnboardingLocations.jsx`) — only a generic `'PARTNERSHIP'` key that nothing ever sent. Both real values fell through to the `'CO'` default. Discovered by comparing our 6-option Business Entity Type dropdown against MSPWare's own ~13-option Ownership Type field live.
+**Fix:** added `'GENERAL_PARTNERSHIP': 'PA', 'LIMITED_PARTNERSHIP': 'PA'` to `mapOwnershipType` in `submitToMSP/entry.ts` and `signApplication/entry.ts` (`refillMSPForms/entry.ts`'s copy already had this correctly). Verified live 2026-07-06 by temporarily setting a test merchant's `ownershipType` to `GENERAL_PARTNERSHIP`, running `submitToMSP`, and confirming via `debugMSPFormRaw` that the wire value is `ownership_type: PA` (test data reverted after).
+
+**Frontend simplification (same root cause, different fix):** MSPWare's own "LLC Class" field only has 3 real options (Corporation / Disregarded Entity / Partnership). Rather than showing merchants the full generic `TAX_CLASS_TYPES` list when they've already chosen LLC as their Business Entity Type, `OnboardingLocations.jsx` now conditionally shows a dedicated `LLC_TAX_CLASS_TYPES` (3-option) list whenever `ownershipType === 'LIMITED_COMPANY'`. Pushed live 2026-07-06.
+
+**Rule:** `ownershipType` (entity structure) and `taxClassType` (IRS classification) are different fields with different valid-value sets. Never fall back from one to the other with `||` — map each through its own dedicated function/lookup table.
+
+---
+
+### 9. Expanding Ownership Type options — confirm codes live before adding to the dropdown
+
+**Context (2026-07-06):** Teddy compared MSPWare's real "Ownership Type" field (~13 options) against our 6-option `OWNERSHIP_TYPES` dropdown and asked to add the missing options. `mapOwnershipType` already had unconfirmed `'SUB_S_CORP'/'S_CORP' → 'SS'` and `'TRUST' → 'T'` entries sitting in the code from an earlier, undocumented session — no prior debugMSPFormRaw verification existed for either.
+
+**What was done:** Added `SUB_S_CORP` ("Sub S Corp") and `TRUST` ("Trust") to `OWNERSHIP_TYPES` in `OnboardingLocations.jsx` and to the `MerchantCorporateProfile.ownershipType` schema enum, then verified both live using the same safe pattern as Critical Lesson #8's Partnership fix: temporarily set a test merchant's `ownershipType`, run `submitToMSP` (draft-only, `MSP_SUBMIT_ENABLED=false`, no signatures triggered), confirm no `ownership_type`/`llc_class` validation error, read the wire value back via `debugMSPFormRaw`, then revert the test data. Confirmed: `SUB_S_CORP → ownership_type: SS`, `TRUST → ownership_type: T`. Both pushed live and to the local repo.
+
+**What was intentionally NOT added:** Estate, Government (Federal/State/Local), Unincorporated Association, and MSPWare's 3-way C-Corp split (Closely Held/Private/Public) are still missing from our dropdown. No wire codes for any of these exist anywhere in the codebase, and guessing them is riskier than the other fixes in this file — the C-Corp subtype in particular appears tied to `beneficial_ownership_exemption` (public companies typically have different BOI/KYC obligations than private ones), so sending the wrong code could misrepresent a merchant's compliance status to Elavon, not just cosmetically mislabel a dropdown. **Do not guess these codes.** Get them confirmed by Teddy or MSPWare/Fidano support first (the standard process at the top of `docs/mspware-field-reference.md`), then use the same test-and-revert pattern described above to verify before adding to the dropdown.
 
 ---
 

@@ -33,6 +33,13 @@ function mapOwnershipType(t: string): string {
     'S_CORP':           'SS', 'SUB_S_CORP':       'SS',
     'PARTNERSHIP':      'PA', 'LIMITED_COMPANY':  'LL',
     'NON_PROFIT':       'NP', 'TRUST':            'T',
+    // BUG FIXED 2026-07-03: our own frontend's Business Entity Type dropdown
+    // (OWNERSHIP_TYPES in OnboardingLocations.jsx) uses 'GENERAL_PARTNERSHIP'
+    // and 'LIMITED_PARTNERSHIP' as values — neither matched any key here, so
+    // both silently fell through to the 'CO' (Corporation) default instead of
+    // 'PA' (Partnership). Confirmed by comparing our dropdown against MSPWare's
+    // own Ownership Type field live.
+    'GENERAL_PARTNERSHIP': 'PA', 'LIMITED_PARTNERSHIP': 'PA',
   };
   return map[t?.toUpperCase?.()] || map[t] || 'CO';
 }
@@ -261,9 +268,18 @@ function buildFormPayload(
   const cnpPct = 100 - cardPresentPct;
   const intPct  = cnpPct > 0 ? String(profile.internetPct ?? 0) : '0';
   const motoPct = cnpPct > 0 ? String(profile.motoPct ?? Math.max(0, cnpPct - parseInt(intPct, 10))) : '0';
-  const ownershipRaw = profile.ownershipType || profile.taxClassType || '';
+  const ownershipRaw = profile.ownershipType || matchedEntity?.ownershipType || profile.taxClassType || '';
   const ownershipType = mapOwnershipType(ownershipRaw);
   const isLLC = ownershipType === 'LL';
+  // BUG FIXED 2026-07-03: llc_class was being derived from `ownershipRaw` (whichever
+  // of ownershipType/taxClassType happened to resolve first), which is the WRONG
+  // field — mapLlcClass expects taxClassType-style values (LLC/LLC_PARTNERSHIP/
+  // LLC_CORPORATION), but ownershipRaw often resolves to an ownershipType-style
+  // value instead (e.g. "LIMITED_COMPANY"), which isn't in mapLlcClass's table and
+  // silently fell through to the 'D' (disregarded entity) default — even for a
+  // merchant explicitly set to "LLC taxed as C-Corp". taxClassType lives per-entity
+  // (profile.legalEntities[].taxClassType), matched the same way as federalEIN.
+  const legalTaxClassType = matchedEntity?.taxClassType || profile.taxClassType || '';
   const annualRevenue = String(profile.annualRevenue || (parseInt(monthlyCardSales, 10) * 12));
 
   const additionalOwners = additionalSigners.map(s => ({
@@ -300,7 +316,7 @@ function buildFormPayload(
     // Only send TIN/SSN when non-empty — MSPWare rejects the ENTIRE payload for invalid formats
     ...(taxId ? { tin: taxId } : {}),
     ...(!taxId && ssn ? { ssn } : {}),
-    ...(isLLC ? { llc_class: mapLlcClass(ownershipRaw) } : {}),
+    ...(isLLC ? { llc_class: mapLlcClass(legalTaxClassType || ownershipRaw) } : {}),
     country_formation: 'USA',
     country_operations: 'USA',
     industry_type: industryType,

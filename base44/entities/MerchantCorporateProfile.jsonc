@@ -95,7 +95,9 @@
         "SOLE_PROPRIETOR",
         "GENERAL_PARTNERSHIP",
         "LIMITED_PARTNERSHIP",
-        "NON_PROFIT"
+        "NON_PROFIT",
+        "SUB_S_CORP",
+        "TRUST"
       ]
     },
     "taxClassType": {
