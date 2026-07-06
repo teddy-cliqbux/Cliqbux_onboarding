@@ -18,10 +18,24 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // Body: { corporateId }
 
 // ─── Constants (shared with submitToMSP) ─────────────────────────────────────
+// Cliqbux's 4-template pricing model — see AGENTS.md Critical Lesson #12.
 const MSP_APP_TYPE = 24;           // Elavon US Application
-const DEFAULT_TEMPLATE_NO = 6;    // Cliqbux Template Swipe Keyed (ICPLS)
-const CD_TEMPLATE_NO = 154;       // Cliqbux Template Cash Discount
+const DEFAULT_TEMPLATE_NO = 6;    // Cliqbux Template Swipe Keyed — Custom Interchange Plus
+const CD_TEMPLATE_NO = 154;       // Cliqbux Template Cash Discount — Self-Serve Cash Discount
+const FLAT_TEMPLATE_NO = 0;       // TODO: Custom Flat Rate — fill in once created (see submitToMSP)
 const DEFAULT_SALESPERSON_ID = 0;
+// Self-Serve Flat Rate has NO template — on hold, Elavon doesn't support it yet.
+const TIER_TO_TEMPLATE: Record<string, number> = {
+  'CUSTOM_FLAT_RATE': FLAT_TEMPLATE_NO,
+  'CUSTOM_INTERCHANGE_PLUS': DEFAULT_TEMPLATE_NO,
+  'SELF_SERVE_CASH_DISCOUNT': CD_TEMPLATE_NO,
+  'TRADITIONAL': DEFAULT_TEMPLATE_NO, 'STANDARD': DEFAULT_TEMPLATE_NO, 'PREMIUM': DEFAULT_TEMPLATE_NO,
+  'CASH_DISCOUNT': CD_TEMPLATE_NO, 'SELF_CASH_DISCOUNT': CD_TEMPLATE_NO,
+  'SELF_SWIPED': DEFAULT_TEMPLATE_NO, 'SELF_KEYED': DEFAULT_TEMPLATE_NO,
+};
+// Pricing tiers that are ALWAYS a custom, individually-negotiated deal — no
+// off-the-shelf template. See Critical Lesson #12.
+const CUSTOM_PRICING_TIERS = ['CUSTOM_FLAT_RATE', 'CUSTOM_INTERCHANGE_PLUS', 'TRADITIONAL', 'STANDARD', 'PREMIUM'];
 
 // ─── Helpers (mirrored from submitToMSP) ─────────────────────────────────────
 
@@ -237,14 +251,34 @@ function buildFormPayload(
   // instead, with a flat-rate fee schedule sent explicitly in buildFormPayload.
   // See docs/mspware-field-reference.md.
   const TIER_TO_METHOD: Record<string, string> = {
+    'CUSTOM_FLAT_RATE': 'FLAT',
+    'CUSTOM_INTERCHANGE_PLUS': 'ICPLS',
+    'SELF_SERVE_CASH_DISCOUNT': 'TIERD',
+    // Legacy values — kept mapped for historical/in-flight records. Do not use for
+    // new merchants. See AGENTS.md Critical Lesson #12.
     'TRADITIONAL': 'ICPLS', 'STANDARD': 'ICPLS', 'PREMIUM': 'ICPLS',
-    'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
     'CASH_DISCOUNT': 'TIERD', 'SELF_CASH_DISCOUNT': 'TIERD',
+    // ON HOLD — Elavon doesn't support self-serve flat rate yet. See Lesson #12.
+    'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
   };
   const rawPricingMethod = merchantMID.pricingMethod || profile.pricingMethod
     || TIER_TO_METHOD[(merchantMID.pricingTier || profile.pricingTier || '').toUpperCase()]
     || 'ICPLS';
   const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'TIERD' : rawPricingMethod;
+
+  // GUARD (2026-07-06): Custom Flat Rate / Custom Interchange Plus are always
+  // individually-negotiated deals — refuse to build a payload until the merchant's
+  // real negotiated numbers are captured. See AGENTS.md Critical Lesson #12.
+  const tierKey = (merchantMID.pricingTier || profile.pricingTier || '').toUpperCase();
+  const isCustomPricingTier = CUSTOM_PRICING_TIERS.includes(tierKey);
+  if (isCustomPricingTier && (profile.customMarkupPercentage == null || profile.customPerTxFee == null)) {
+    throw new Error(
+      `Custom pricing not yet set for "${profile.legalName || 'this merchant'}" (pricingTier=${tierKey}). ` +
+      `customMarkupPercentage and customPerTxFee must both be set before an MSPWare application can be ` +
+      `created or filled for a custom-pricing tier.`
+    );
+  }
+
   const industryType = merchantMID.industryType || mapIndustryType(pricingCategory);
   const mcc = merchantMID.mccCode || profile.mccCode || '5999';
   const dbaName = merchantMID.dbaName || location.dbaName || profile.legalName || '';
@@ -463,6 +497,16 @@ function buildFormPayload(
       op_assisted_auth: '0',
     } : {}),
 
+    // ── Custom Flat Rate / Custom Interchange Plus markup (individually negotiated) ──
+    // Always a per-merchant negotiated deal — never a static Cliqbux-wide rate. The
+    // guard above already refused to reach this point if either value were missing.
+    // Auth-per-card stays a fixed template-level value — no separate custom field
+    // needed per Teddy 2026-07-06. See AGENTS.md Critical Lesson #12.
+    ...(isCustomPricingTier ? {
+      all_markup_discount: String(profile.customMarkupPercentage),
+      all_markup_per_item: String(profile.customPerTxFee),
+    } : {}),
+
     // ── Cliqbux Standard Equipment Configuration ───────────────────────────────
     // Cliqbux ships and manages equipment deployment separately from the MSPWare
     // application — every merchant gets the SAME static hardware/VAR config here.
@@ -631,12 +675,14 @@ Deno.serve(async (req) => {
           continue;
         }
         try {
-          // Detect cash discount via pricingMethod (wire value "TIERD" as of 2026-07-03,
-          // "CLEAR" kept for any legacy records) OR pricingTier (UI value "CASH_DISCOUNT")
-          const isCashDiscount =
-            ['TIERD', 'CLEAR', 'CASH_DISCOUNT'].includes((merchantMID.pricingMethod || '').toUpperCase()) ||
-            ['CASH_DISCOUNT', 'SELF_CASH_DISCOUNT'].includes((merchantMID.pricingTier || profile.pricingTier || '').toUpperCase());
-          const templateNo = merchantMID.mspTemplateNo || profile.mspTemplateNo || (isCashDiscount ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
+          // Pick the template via pricingTier first (canonical); fall back to the
+          // old pricingMethod-based cash-discount detection for any record that
+          // only has pricingMethod set and no pricingTier.
+          const tierKeyForTemplate = (merchantMID.pricingTier || profile.pricingTier || '').toUpperCase();
+          const isCashDiscountByMethod = ['TIERD', 'CLEAR'].includes((merchantMID.pricingMethod || '').toUpperCase());
+          const templateNo = merchantMID.mspTemplateNo || profile.mspTemplateNo
+            || TIER_TO_TEMPLATE[tierKeyForTemplate]
+            || (isCashDiscountByMethod ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
           const createBody = {
             dba: merchantMID.dbaName || location.dbaName || profile.legalName,
             merchantapplicationtypeno: MSP_APP_TYPE,
