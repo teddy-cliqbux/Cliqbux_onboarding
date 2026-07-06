@@ -57,13 +57,11 @@
     },
     "pricingTier": {
       "type": "string",
+      "description": "Simplified 2026-07-06 to match Cliqbux's actual 4-template model (see AGENTS.md Critical Lesson #12). CUSTOM_FLAT_RATE and CUSTOM_INTERCHANGE_PLUS are always sales-assisted, never self-serve, and always individually negotiated (see customMarkupPercentage/customPerTxFee). SELF_SERVE_CASH_DISCOUNT is the only current self-serve option. Self_Swiped/Self_Keyed self-serve flat rate is on hold (Elavon doesn't support it yet) and intentionally not represented here.",
       "enum": [
-        "Standard",
-        "Premium",
-        "Custom",
-        "TRADITIONAL",
-        "CASH_DISCOUNT",
-        "STANDARD"
+        "CUSTOM_FLAT_RATE",
+        "CUSTOM_INTERCHANGE_PLUS",
+        "SELF_SERVE_CASH_DISCOUNT"
       ]
     },
     "customMarkupPercentage": {

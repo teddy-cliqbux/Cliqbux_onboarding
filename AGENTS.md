@@ -120,6 +120,53 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 ---
 
+### 10. `debugMSPFormRaw` with `corporateId` is NOT read-only — it silently overwrites real application fields
+
+**The incident (2026-07-06):** While verifying the Sub S Corp/Trust ownership fix, an AI agent called `debugMSPFormRaw` with `{"appNo": "194", "corporateId": "334558632649"}`, assuming (based on the function's "debug" name and its established safe read-only role earlier in this same session) that it only reads data. It does not. When `corporateId` is present, the function sends a REAL `PUT /applications/{appNo}/form` using its own hardcoded placeholder payload — including junk pricing values (`all_markup_discount: '0.0000'`, `all_markup_per_item: '0.000'`, `all_card_auth_per_item: '0.050'`, `auth_pricing_program: '49999'`, `intl_card_handling_fee: '0.60'`) — then attempts a REAL `POST /applications/{appNo}/signatures`.
+
+**What actually happened:** Test application #194's markup fields, which were genuinely blank/required before the call, came back filled with these exact placeholder numbers immediately after — confirmed by diffing `submitToMSP` validation errors before (6 errors including `all_markup_discount` etc.) and after (only `is_firearm_verified`) the same call. This is NOT real Cliqbux pricing — it's meaningless debug data now sitting in a test application's fields. Checked via `debugMSPSignatures`: no signature package was actually created (404 — the attempt did not succeed or wasn't reached), so no BoldSign envelope exists. App #194 is a disposable test/dev record (TESTLEGALNAME/DBA Store), not a real merchant, so no merchant-facing harm occurred — but the same mistake against a real merchant's application would corrupt its pricing.
+
+**Fix:** `debugMSPFormRaw` now requires an explicit `confirmFill: true` alongside `corporateId` to run the fill+signature path. Without `confirmFill: true`, `corporateId` is ignored and the function is pure read-only — safe to call with just `{"appNo": "<id>"}` against any real application, anytime, as established earlier in this file.
+
+**Rule:** When calling any "debug" function for inspection purposes, read its actual source first (or check for a data-mutating code path) rather than assuming a diagnostic-sounding name means read-only. Prefer calling it with the minimal parameters needed (bare `appNo`, no `corporateId`) unless you specifically intend to trigger a fill.
+
+---
+
+### 11. ICPLS (Interchange Plus) pricing fields missing on template #6 — root cause, not a code bug
+
+**Context (2026-07-06):** Teddy flagged that a live draft application showed "Authorization Pricing Program", "Markup Discount", "Markup Per Item", and "Auth Per Card" as required/blank under Interchange Plus pricing, while a reference template showed a fully correct, complete pricing section. His principle: merchant applicants must never touch pricing — every field must come from either the MSPWare template or a Cliqbux-prefilled payload.
+
+**Root cause, confirmed via a clean `GET /applications/6/form` (template #6, "Cliqbux Template Swipe Keyed" — the default ICPLS template):** `auth_pricing_program` (`49999`), `intl_card_handling_fee` (`0.60`), and `billing_method` (`N`) ARE set correctly on the template. But `all_markup_discount`, `all_markup_per_item`, and `all_card_auth_per_item` are genuinely `null` on the template itself — no default value to inherit. `buildFormPayload` deliberately never sends any of these 5 fields for ICPLS pricing method (see the Strict Template Preservation Rule above) specifically to avoid corrupting template-owned data. The result: every fresh ICPLS application is born with exactly these 3 fields blank/required, because there's nothing for it to inherit and our code correctly doesn't try to fill them itself.
+
+**This mirrors the Cash Discount / template #154 problem exactly** (see "Cash Discount Template" section below) — a Cliqbux-owned MSPWare template missing default pricing configuration, surfacing as a per-application validation error instead of a template-level fix.
+
+**Resolved 2026-07-06 — there is no universal fix, because there's no universal rate.** Teddy clarified: Interchange Plus is **always** a custom-negotiated deal — there is no self-serve, off-the-shelf Interchange Plus pricing at Cliqbux, ever. So option 1 (fix the template's defaults) was never viable — there's no single correct default to put there. The real fix is option 2's spirit but per-merchant, not universal: `buildFormPayload` must source `all_markup_discount`/`all_markup_per_item` from that merchant's own negotiated `customMarkupPercentage`/`customPerTxFee` (already captured from HubSpot, previously never wired into MSPWare — see Critical Lesson #12), never from a static constant.
+
+**Do not use test application #194 to verify a fix for this** — see Critical Lesson #10; its markup fields currently hold contaminated debug placeholder values, not a clean "freshly created from template #6" state. Create a new draft application (or a fresh test merchant) to test any fix.
+
+---
+
+### 12. Pricing structure model — 3 MSPWare pricing methods, 4 Cliqbux templates, one is on hold
+
+**Clarified with Teddy 2026-07-06.** MSPWare supports 3 pricing methods Cliqbux actually uses: `ICPLS` (Interchange Plus), `FLAT` (Flat Rate), `TIERD` (used for Cash Discount's flat-rate schedule). `CLEAR` (Clear and Simple) is never used — see Critical Lesson #8's pricing note. Cliqbux's actual product lineup is 4 templates:
+
+| # | Template | Self-serve? | Pricing source |
+|---|---|---|---|
+| 1 | Custom Flat Rate | No — always sales-assisted | Per-merchant negotiated rate (HubSpot → `customMarkupPercentage`/`customPerTxFee`) |
+| 2 | Custom Interchange Plus | No — always sales-assisted, no off-the-shelf version exists | Same as above |
+| 3 | Self-Serve Flat Rate | Would be, but **ON HOLD** | N/A — not built |
+| 4 | Self-Serve Cash Discount | Yes | Fixed Cliqbux rate — see "Cliqbux Cash Discount Fee Schedule" |
+
+**Template 3 (Self-Serve Flat Rate) is on hold as of 2026-07-06** — this was going to cover the old `Self_Swiped`/`Self_Keyed` self-serve tiers, but Teddy: "Elavon doesn't support it yet and we're unable to actually execute that agreement." **Do not build this template, do not route real merchants through it, and do not remove the existing `Self_Swiped`/`Self_Keyed` code paths** — they're just dormant, not deprecated; leave them as-is until Elavon adds support.
+
+**A live incident this surfaced:** the self-serve pricing screens (`SelfServePricing.jsx` desktop, `MobilePricing.jsx` mobile) were actively offering a "Swiped & Keyed" card (advertising 2.49%+$0.10 / 2.89%+$0.30) as a real self-serve option in production — creating a real HubSpot deal with `pricingTier: 'TRADITIONAL'` that our backend maps to Interchange Plus, which per the above has no self-serve template at all. Real prospective merchants could pick an option Cliqbux couldn't actually fulfill end-to-end. **Fixed 2026-07-06:** removed the card from both files; Cash Discount is currently the only self-serve pricing option. Re-add a flat-rate self-serve card only once template 3 is actually built and Elavon support exists.
+
+**pricingTier enum simplification (in progress 2026-07-06):** the old enum was a genuine mess — inconsistent casing across files (`CASH_DISCOUNT` in the entity schema/HubSpot flow vs. `Self_CashDiscount` in `OnboardingPortal.jsx`'s `SELF_SERVE_TIERS` check, meaning **self-serve Cash Discount merchants were never actually recognized as self-serve** due to the mismatch — a real bug found during this cleanup), plus `TRADITIONAL`/`STANDARD`/`PREMIUM`/`Custom` all really meaning the same thing (a sales-assisted deal whose actual method is either Flat or Interchange Plus). New simplified enum: `CUSTOM_FLAT_RATE`, `CUSTOM_INTERCHANGE_PLUS`, `SELF_SERVE_CASH_DISCOUNT`. `Self_Swiped`/`Self_Keyed` left untouched (dormant, see above).
+
+**The "must never be blank" guard:** Teddy confirmed — for `CUSTOM_FLAT_RATE` and `CUSTOM_INTERCHANGE_PLUS`, application creation/submission must be blocked with a clear internal error if `customMarkupPercentage` or `customPerTxFee` isn't set on the profile yet, rather than silently creating an MSPWare draft with blank pricing fields for someone to fill in by hand. Auth Per Card does NOT need a separate custom field — Teddy confirmed the existing `customPerTxFee` is sufficient; auth-per-card stays a fixed template-level value like `all_card_auth_per_item: '0.050'` already used elsewhere.
+
+---
+
 ## What This App Does
 
 Merchant onboarding portal for Cliqbux, an ISO/ISV that boards merchants to Elavon via **MSPWare/PulsePoint** (NOT Elavon's direct eBanking API). Merchants complete an online application, connect their bank account via Plaid, and their processing application is submitted to Elavon through MSPWare.

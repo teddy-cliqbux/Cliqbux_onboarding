@@ -8,10 +8,20 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //   fill_icpls      — Fill template #6 with all static ICPLS (interchange plus) fields
 //   fill_cd         — Fill a template with all static Cash Discount fields
 //   create_cd       — Create a new template application and fill it with Cash Discount fields
+//   create_flat     — Create a new template application and fill it with Flat Rate fields
 //   list            — List all template applications in the account
 //
 // POST /functions/manageMSPTemplate
 // Body: { action, templateNo? }
+//
+// 2026-07-06: added create_flat for the new "Custom Flat Rate" product (see
+// AGENTS.md Critical Lesson #12). Like ICPLS, Flat Rate is always an individually
+// negotiated custom deal — all_markup_discount/all_markup_per_item on FLAT_STATIC
+// below are placeholders ONLY so the template application itself validates to a
+// complete/fillable state. Real merchant applications always overwrite these two
+// fields with the merchant's actual customMarkupPercentage/customPerTxFee via the
+// isCustomPricingTier block in buildFormPayload (submitToMSP/signApplication) —
+// the template's own value here is never what a real merchant ends up with.
 
 const MSP_APP_TYPE   = 24;  // Elavon US Application
 const ICPLS_TEMPLATE = 6;   // existing "Cliqbux Template Swipe Keyed"
@@ -52,6 +62,16 @@ const ICPLS_STATIC = {
 const CD_STATIC = {
   ...ALWAYS_STATIC,
   pricing_method:       'CLEAR',
+  pricing_category:     '1',
+  card_acceptance_split: 'CP',
+};
+
+// Custom Flat Rate — individually negotiated, same structure as ICPLS but
+// pricing_method 'FLAT'. See 2026-07-06 comment above: markup fields here are
+// placeholders only, always overwritten per-merchant in production.
+const FLAT_STATIC = {
+  ...ALWAYS_STATIC,
+  pricing_method:       'FLAT',
   pricing_category:     '1',
   card_acceptance_split: 'CP',
 };
@@ -200,7 +220,58 @@ Deno.serve(async (req) => {
       });
     }
 
-    return Response.json({ error: `Unknown action: ${action}. Valid: read, list, fill_icpls, fill_cd, create_cd` }, { status: 400 });
+    // ── create_flat ───────────────────────────────────────────────────────────
+    if (action === 'create_flat') {
+      // Step 1: Create a new template application
+      const createBody = {
+        dba:                          'Cliqbux Template Flat Rate',
+        merchantapplicationtypeno:    MSP_APP_TYPE,
+        salespersonid:                salespersonId,
+        // No templatemerchantapplicationno — start fresh for Flat Rate
+      };
+      const createRes  = await fetch(`${mspBase}/applications`, {
+        method:  'POST',
+        headers,
+        body:    JSON.stringify(createBody),
+      });
+      const createData = await createRes.json();
+      console.log(`[manageMSPTemplate] create_flat application:`, JSON.stringify(createData));
+
+      if (!createRes.ok || !createData.success) {
+        return Response.json({
+          success: false,
+          error:   createData?.error || createData?.message || `HTTP ${createRes.status}`,
+          raw:     createData,
+        });
+      }
+
+      const newTemplateNo = createData.merchantapplicationno;
+
+      // Step 2: Fill with Flat Rate static fields
+      const fillRes  = await fetch(`${mspBase}/applications/${newTemplateNo}/form`, {
+        method:  'PUT',
+        headers,
+        body:    JSON.stringify(FLAT_STATIC),
+      });
+      const fillData = await fillRes.json();
+      console.log(`[manageMSPTemplate] create_flat fill → ${newTemplateNo}: ${fillData?.percent_complete ?? '?'}% complete`);
+
+      return Response.json({
+        success:         fillRes.ok,
+        newTemplateNo,
+        percentComplete: fillData?.percent_complete,
+        canSave:         fillData?.canSave,
+        note:            `Created Flat Rate template as application #${newTemplateNo}. Update FLAT_TEMPLATE_NO in submitToMSP and signApplication to use this number.`,
+        errors: [
+          ...(fillData?.data_errors       || []),
+          ...(fillData?.completion_errors || []),
+          ...(fillData?.rule_violations   || []),
+        ],
+        raw: fillData,
+      });
+    }
+
+    return Response.json({ error: `Unknown action: ${action}. Valid: read, list, fill_icpls, fill_cd, create_cd, create_flat` }, { status: 400 });
 
   } catch (error: any) {
     return Response.json({

@@ -431,3 +431,33 @@ Every mention of "concept" in prior entries below (`MerchantProcessingConcept`, 
 
 **→ Waiting on:** Base44 (confirm MerchantMID entity is published; run migration dry run if legacy Concept data exists)
 ---
+
+---
+**[CLAUDE]** · 2026-07-06
+**Type:** Action Taken + Architecture Decision
+**Re:** Pricing model overhaul — 4 templates, 3 canonical tiers, hard guard against blank pricing
+
+**Root cause resolved:** the ICPLS "blank pricing fields" validation errors Teddy flagged on a live draft were never a template defect — Interchange Plus is always an individually-negotiated custom deal (Teddy: *"ICPLS...is always associated with custom pricing. We will not have a self serve off the shelf interchange plus pricing template"*). There's no universal rate to hardcode on the template.
+
+**Cliqbux's real product lineup, confirmed by Teddy — exactly 4 templates:**
+1. **Custom Flat Rate** — sales-assisted, individually negotiated, MSPWare `FLAT`. **Template not yet created in MSPWare** (`FLAT_TEMPLATE_NO = 0` placeholder in code).
+2. **Custom Interchange Plus** — sales-assisted, individually negotiated, MSPWare `ICPLS`, template #6.
+3. **Self-Serve Flat Rate** — **on hold**, Elavon doesn't support it yet. Do not build. `Self_Swiped`/`Self_Keyed` left untouched everywhere (dormant, not deprecated).
+4. **Self-Serve Cash Discount** — self-serve, fixed Cliqbux rate, MSPWare `TIERD`, template #154.
+
+**`MerchantCorporateProfile.pricingTier` enum simplified** to `CUSTOM_FLAT_RATE` / `CUSTOM_INTERCHANGE_PLUS` / `SELF_SERVE_CASH_DISCOUNT` (legacy `TRADITIONAL`/`STANDARD`/`PREMIUM`/`CASH_DISCOUNT`/`Self_CashDiscount` values kept mapped everywhere for in-flight records, not deleted). All 7 existing profile records migrated live.
+
+**Hard guard added** in `buildFormPayload` (both `submitToMSP` and `signApplication`): throws before any MSPWare draft is created or filled if the merchant's `pricingTier` is a custom tier and `customMarkupPercentage`/`customPerTxFee` aren't both set on the profile. Pricing must never be left blank for someone to fill in manually inside MSPWare — this was an explicit mandate from Teddy. When set, those two fields feed `all_markup_discount`/`all_markup_per_item` directly; `all_card_auth_per_item` stays template-level (no separate custom Auth-Per-Card field needed).
+
+**Real casing bug fixed:** `OnboardingPortal.jsx`'s self-serve detection checked for `'Self_CashDiscount'` but the actual stored value was `'CASH_DISCOUNT'` — self-serve Cash Discount merchants were never recognized as self-serve. Fixed via the new canonical value.
+
+**Live production issue fixed:** the self-serve pricing screens (`SelfServePricing.jsx`, `MobilePricing.jsx`) were showing a "Swiped & Keyed" flat-rate card as a real self-serve option — pulled per Teddy's explicit go-ahead, since Cliqbux can't currently deliver it (same Elavon gap as the on-hold Self-Serve Flat Rate template).
+
+**Files touched (all pushed live this session):** `MerchantCorporateProfile.jsonc` (schema), `submitToMSP`, `signApplication`, `refillMSPForms`, `manageMerchantID`, `addSelfServeLocation`, `syncFromHubspot`, `handleHubspotWebhook`, `setupHubspotProperties`, `OnboardingPortal.jsx`, `ApplicationManager.jsx`, `SelfServePricing.jsx`, `MobilePricing.jsx`. See AGENTS.md Critical Lesson #12 and `docs/mspware-field-reference.md` for full field-level detail.
+
+**Still open:**
+- Custom Flat Rate MSPWare template needs to be created via API (mirroring how #154 was built) — `FLAT_TEMPLATE_NO` placeholder needs the real number once it exists.
+- HubSpot's live `pricing_tier` property options are stale — `setupHubspotProperties` only creates-if-missing, doesn't update an existing property's option list. Needs a manual HubSpot edit or a PATCH-based script enhancement.
+
+**→ Waiting on:** Nobody yet — flagging for awareness before either side builds anything new against `pricingTier`.
+---

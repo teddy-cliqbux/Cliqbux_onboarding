@@ -18,7 +18,12 @@ import ApplicationTracker from '@/components/onboarding/ApplicationTracker';
 import { Lock, Check } from 'lucide-react';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
-const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'Self_CashDiscount'];
+// 2026-07-06: fixed a real bug here — this array checked for 'Self_CashDiscount'
+// but the actual stored value (entity schema + HubSpot flow) was 'CASH_DISCOUNT'
+// (now 'SELF_SERVE_CASH_DISCOUNT'), so self-serve Cash Discount merchants were
+// NEVER actually recognized as self-serve. See AGENTS.md Critical Lesson #12.
+// Self_Swiped/Self_Keyed left as-is — dormant/on hold, not deprecated.
+const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'SELF_SERVE_CASH_DISCOUNT'];
 
 // Steps within the post-agreement flow
 const STEP_WELCOME      = 'welcome';
@@ -27,11 +32,22 @@ const STEP_BANKING      = 'banking';
 const STEP_VERIFICATION = 'verification';
 const STEP_SUCCESS      = 'success';
 
+// pricingTier simplified 2026-07-06 to CUSTOM_FLAT_RATE / CUSTOM_INTERCHANGE_PLUS /
+// SELF_SERVE_CASH_DISCOUNT (see AGENTS.md Critical Lesson #12). Legacy labels kept
+// so any not-yet-migrated record still renders sensibly instead of showing a raw enum.
 const TIER_LABELS = {
-  Standard: 'Standard', Premium: 'Premium', Custom: 'Custom',
-  Self_Swiped: 'Traditional Swiped', Self_Keyed: 'Traditional Keyed', Self_CashDiscount: 'Cash Discount'
+  CUSTOM_FLAT_RATE: 'Custom Flat Rate',
+  CUSTOM_INTERCHANGE_PLUS: 'Custom Interchange Plus',
+  SELF_SERVE_CASH_DISCOUNT: 'Cash Discount',
+  // Legacy
+  Standard: 'Standard', Premium: 'Premium', Custom: 'Custom', TRADITIONAL: 'Traditional',
+  Self_Swiped: 'Traditional Swiped', Self_Keyed: 'Traditional Keyed', Self_CashDiscount: 'Cash Discount',
 };
 const TIER_CLASSES = {
+  CUSTOM_FLAT_RATE:         'bg-purple-500/20 text-purple-400 border border-purple-500/30',
+  CUSTOM_INTERCHANGE_PLUS: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+  SELF_SERVE_CASH_DISCOUNT: 'bg-green-500/20 text-green-400 border border-green-500/30',
+  // Legacy
   Premium:         'bg-amber-500/20 text-amber-400 border border-amber-500/30',
   Custom:          'bg-purple-500/20 text-purple-400 border border-purple-500/30',
   Standard:        'bg-gray-700 text-gray-300 border border-gray-600',
