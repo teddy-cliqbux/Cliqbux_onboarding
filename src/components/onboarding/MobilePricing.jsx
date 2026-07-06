@@ -1,18 +1,15 @@
 import { useState } from 'react';
-import { Loader2, Check, CreditCard, Percent } from 'lucide-react';
+import { Loader2, Check, Percent } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { normalizeBusinessName } from '@/lib/textUtils';
 
+// 2026-07-06: "Swiped & Keyed" (TRADITIONAL/Interchange Plus) card removed from
+// self-serve pricing per Teddy — Interchange Plus is always custom-negotiated
+// (no off-the-shelf self-serve template), and swiped/keyed specifically is on
+// hold because Elavon doesn't support it yet and Cliqbux can't execute that
+// agreement. Cash Discount is the only self-serve pricing option for now.
+// See AGENTS.md.
 const PRICING_CARDS = [
-  {
-    key: 'TRADITIONAL',
-    label: 'Swiped & Keyed',
-    description: 'Covers both in-person card-present and card-not-present transactions. Swiped rate at 2.49% + $0.10, keyed rate at 2.89% + $0.30.',
-    badge: 'Most Popular',
-    rate: '2.49%',
-    fee: '$0.10',
-    rateLabel: 'SWIPED · 2.89% + $0.30 KEYED',
-  },
   {
     key: 'CASH_DISCOUNT',
     label: 'Cash Discount Program',
@@ -99,7 +96,7 @@ export default function MobilePricing({ onComplete }) {
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isSelected ? 'bg-amber-100' : 'bg-gray-100'}`}>
-                    {card.key === 'TRADITIONAL' ? <CreditCard className={`w-5 h-5 ${isSelected ? 'text-amber-600' : 'text-gray-500'}`} /> : <Percent className={`w-5 h-5 ${isSelected ? 'text-amber-600' : 'text-gray-500'}`} />}
+                    <Percent className={`w-5 h-5 ${isSelected ? 'text-amber-600' : 'text-gray-500'}`} />
                   </div>
                   <div>
                     <h3 className="text-base font-bold text-gray-900">{card.label}</h3>
