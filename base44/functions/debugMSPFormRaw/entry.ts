@@ -2,12 +2,24 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Debug: create a fresh app, fill it with real merchant data, and return the FULL raw form GET response
 // so we can see exactly what MSPWare thinks is incomplete.
-
+//
+// ⚠️ SAFETY GUARDRAIL (added 2026-07-06 after a real incident): passing `corporateId`
+// does NOT just read data — it sends a REAL `PUT /applications/{appNo}/form` with this
+// file's own hardcoded placeholder payload (including junk pricing like
+// all_markup_discount: '0.0000', all_card_auth_per_item: '0.050'), then attempts a REAL
+// `POST /applications/{appNo}/signatures`. Calling this against a real/shared application
+// number silently overwrites its fields with these placeholders — this happened to test
+// app #194 on 2026-07-06 (an AI agent passed corporateId thinking the call was read-only,
+// contaminating the app's markup fields with debug values instead of leaving them blank/
+// template-owned). To use the fill+signature path, you must now ALSO pass
+// `confirmFill: true` explicitly. Without it, corporateId is ignored and this function is
+// pure read-only (safe to call anytime against any real appNo).
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
-    const { corporateId, appNo: existingAppNo } = body;
+    const { corporateId: rawCorporateId, appNo: existingAppNo, confirmFill } = body;
+    const corporateId = confirmFill === true ? rawCorporateId : null;
 
     const mspBase = (Deno.env.get('MSP_BASE_URL') || 'https://api.msppulsepoint.com/v2').replace(/\/$/, '');
     const apiKey  = Deno.env.get('MSP_APP_KEY') || '';
