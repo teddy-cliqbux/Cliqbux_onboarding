@@ -435,7 +435,13 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
   const [ownershipType, setOwnershipType] = useState(entity.ownershipType || '');
   const [taxClassType, setTaxClassType]   = useState(entity.taxClassType  || '');
   const [estYear, setEstYear]             = useState(entity.establishmentYear || '');
-  const [saved, setSaved] = useState(!!(entity.ownershipType && entity.taxClassType && entity.establishmentYear));
+  // Federal EIN — added 2026-07-07. Entities can now be auto-seeded (from the
+  // Company Name collected at signup) with no EIN at all, since self-serve
+  // signup never asks for one. This panel is where that EIN gets filled in
+  // later, using the same required-field gating pattern as the fields below.
+  const [federalEIN, setFederalEIN]       = useState(entity.federalEIN || '');
+  const einDigits = federalEIN.replace(/\D/g, '');
+  const [saved, setSaved] = useState(!!(entity.ownershipType && entity.taxClassType && entity.establishmentYear && entity.federalEIN));
   const [expanded, setExpanded] = useState(!saved);
 
   // Re-sync when parent reloads entity data (e.g. after navigating away and back)
@@ -443,24 +449,25 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
     setOwnershipType(entity.ownershipType || '');
     setTaxClassType(entity.taxClassType || '');
     setEstYear(entity.establishmentYear || '');
-    const complete = !!(entity.ownershipType && entity.taxClassType && entity.establishmentYear);
+    setFederalEIN(entity.federalEIN || '');
+    const complete = !!(entity.ownershipType && entity.taxClassType && entity.establishmentYear && entity.federalEIN);
     setSaved(complete);
     setExpanded(!complete);
-  }, [entity.entityId, entity.ownershipType, entity.taxClassType, entity.establishmentYear]);
+  }, [entity.entityId, entity.ownershipType, entity.taxClassType, entity.establishmentYear, entity.federalEIN]);
 
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveError] = useState(null);
 
-  const isComplete = saved || !!(ownershipType && taxClassType && estYear && entity.ownershipType);
+  const isComplete = saved || !!(ownershipType && taxClassType && estYear && einDigits.length === 9 && entity.ownershipType);
 
   const handleSave = async () => {
-    if (!ownershipType || !taxClassType || !estYear) return;
+    if (!ownershipType || !taxClassType || !estYear || einDigits.length !== 9) return;
     setSaving(true);
     setSaveError(null);
     try {
       const res = await base44.functions.invoke('manageLegalEntity', {
         action: 'edit', corporateId, entityId: entity.entityId,
-        ownershipType, taxClassType, establishmentYear: estYear,
+        ownershipType, taxClassType, establishmentYear: estYear, federalEIN: einDigits,
       });
       if (res.data?.error) throw new Error(res.data.error);
       const { years, months } = deriveOwnership(estYear);
@@ -470,7 +477,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
       });
       setSaved(true);
       // Only notify parent once on explicit save — no feedback loop
-      onUpdated({ ...entity, ownershipType, taxClassType, establishmentYear: estYear });
+      onUpdated({ ...entity, ownershipType, taxClassType, establishmentYear: estYear, federalEIN: einDigits });
     } catch (err) {
       setSaveError(err?.message || 'Save failed');
     } finally {
@@ -478,7 +485,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
     }
   };
 
-  const canSave = !!(ownershipType && taxClassType && estYear);
+  const canSave = !!(ownershipType && taxClassType && estYear && einDigits.length === 9);
   const showComplete = saved && canSave;
 
   return (
@@ -531,6 +538,12 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
                 const { years, months } = deriveOwnership(estYear);
                 return <p className="text-[10px] text-gray-500 mt-1">{years} yr{years !== '1' ? 's' : ''}{months !== '0' ? ` ${months} mo` : ''} in operation</p>;
               })()}
+            </div>
+            <div>
+              <label className={labelCls}>Federal EIN *</label>
+              <input value={federalEIN} onChange={e => setFederalEIN(e.target.value.replace(/\D/g, '').slice(0, 9))}
+                placeholder="9 digits" className={`${inputCls} font-mono`} />
+              {federalEIN.length > 0 && einDigits.length !== 9 && <p className="text-[10px] text-amber-400 mt-1">{einDigits.length}/9 digits</p>}
             </div>
           </div>
           <div className="flex items-center gap-3 pt-1">
@@ -816,8 +829,12 @@ function AddEntityModal({ corporateId, onSaved, onClose }) {
 
 // ─── Add Location Form ────────────────────────────────────────────────────────
 
-function AddLocationForm({ corporateId, profile, entities, defaultEntityId, onSaved, onCancel, onEntityAdded }) {
-  const [dbaName, setDbaName] = useState('');
+function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFirstLocation, onSaved, onCancel, onEntityAdded }) {
+  // Prefill the very first location's DBA name from the Company Name entered at
+  // signup — most self-serve merchants are a single storefront, so re-typing the
+  // same name here was pure friction. Only applies to the first location; later
+  // locations (additional storefronts) start blank as before. 2026-07-07.
+  const [dbaName, setDbaName] = useState(isFirstLocation ? (profile.legalName || '') : '');
   const [addressDisplay, setAddressDisplay] = useState('');
   const [parsedAddress, setParsedAddress] = useState(null);
   const [unverifiedWarning, setUnverifiedWarning] = useState(false);
@@ -1124,7 +1141,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const [showValidation, setShowValidation] = useState(false);
 
   const businessComplete = entities.length > 0 && entities.every(e =>
-    e.ownershipType && e.taxClassType && e.establishmentYear
+    e.ownershipType && e.taxClassType && e.establishmentYear && e.federalEIN
   );
 
   const totalMids = merchantIDs.length;
@@ -1142,6 +1159,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       if (!e.ownershipType) missing.push('Business Entity Type');
       if (!e.taxClassType) missing.push('IRS Tax Classification');
       if (!e.establishmentYear) missing.push('Year Established');
+      if (!e.federalEIN) missing.push('Federal EIN');
       if (missing.length) validationIssues.push(`${e.legalBusinessName || 'Legal Entity'}: missing ${missing.join(', ')}`);
     });
   }
@@ -1233,6 +1251,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             profile={profile}
             entities={entities}
             defaultEntityId={addFormEntityId}
+            isFirstLocation={locations.length === 0}
             onSaved={handleLocationSaved}
             onCancel={() => setAddFormEntityId(null)}
             onEntityAdded={handleEntityAdded}
