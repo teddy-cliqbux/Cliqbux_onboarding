@@ -140,7 +140,7 @@ export default function SelfServePricing({ onComplete }) {
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
               <div>
-                <label className={labelCls}>Business Legal Name <span className="text-red-400">*</span></label>
+                <label className={labelCls}>Company Name <span className="text-red-400">*</span></label>
                 <input type="text" value={basic.businessName} onChange={(e) => setBasic(p => ({ ...p, businessName: e.target.value }))}
                   placeholder="e.g. Acme Retail LLC" className={inputCls} required />
               </div>
