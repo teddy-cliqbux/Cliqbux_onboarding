@@ -65,10 +65,20 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'add') {
-      if (!legalBusinessName || !federalEIN) {
-        return Response.json({ error: 'legalBusinessName and federalEIN are required' }, { status: 400 });
+      if (!legalBusinessName) {
+        return Response.json({ error: 'legalBusinessName is required' }, { status: 400 });
       }
-      entities = entities.concat({ entityId: randomUUID(), legalBusinessName: legalBusinessName.trim(), tradeNameDBA: (tradeNameDBA || legalBusinessName).trim(), federalEIN: federalEIN.trim(), corporateMailingAddress: (corporateMailingAddress || '').trim() });
+      // federalEIN is OPTIONAL here — fixed 2026-07-07. This action is used both
+      // for the auto-seeded "primary entity" (created from the Company Name
+      // collected at signup, before any EIN has ever been asked for) and for a
+      // user explicitly adding a second/different legal entity later. Requiring
+      // federalEIN unconditionally meant the auto-seed call in
+      // OnboardingLocations.jsx's loadAll() ALWAYS failed with a 400 (self-serve
+      // signup never collects an EIN), silently leaving entities empty and
+      // forcing merchants to discover the tiny "+ New Legal Entity" toggle just
+      // to add their first location. The EIN can now be filled in later via
+      // EntityDetailsPanel. See AGENTS.md.
+      entities = entities.concat({ entityId: randomUUID(), legalBusinessName: legalBusinessName.trim(), tradeNameDBA: (tradeNameDBA || legalBusinessName).trim(), federalEIN: (federalEIN || '').trim(), corporateMailingAddress: (corporateMailingAddress || '').trim() });
       await base44.asServiceRole.entities.MerchantCorporateProfile.update(updateId, { legalEntities: entities });
       return Response.json({ success: true, entities });
     }
