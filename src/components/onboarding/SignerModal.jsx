@@ -106,8 +106,8 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
               <UserPlus className="w-4 h-4 text-blue-400" />
             </div>
             <div>
-              <h3 className="font-bold text-white text-base">Add Beneficial Owner / Signer</h3>
-              <p className="text-xs text-gray-500 mt-0.5">All data is encrypted and used only for underwriting</p>
+              <h3 className="font-bold text-white text-base">Add Another Owner or Signer</h3>
+              <p className="text-xs text-gray-500 mt-0.5">For someone other than yourself — all data is encrypted and used only for underwriting</p>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white p-1.5 rounded-lg transition-colors">
