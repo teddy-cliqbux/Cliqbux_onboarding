@@ -118,7 +118,7 @@ export default function MobilePricing({ onComplete }) {
         {selectedTier && (
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
             <div>
-              <label className="text-xs font-semibold text-gray-100 mb-1.5 block">Business Legal Name <span className="text-red-400">*</span></label>
+              <label className="text-xs font-semibold text-gray-100 mb-1.5 block">Company Name <span className="text-red-400">*</span></label>
               <input type="text" value={info.businessName} onChange={(e) => setInfo(p => ({ ...p, businessName: e.target.value }))} placeholder="e.g. Acme Retail LLC"
                 className="w-full bg-[#1A1D24] border border-white/25 rounded-xl px-4 py-3.5 text-sm text-white placeholder:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent" />
             </div>
