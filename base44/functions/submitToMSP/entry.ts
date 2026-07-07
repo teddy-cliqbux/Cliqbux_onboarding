@@ -7,10 +7,16 @@ const MSP_APP_TYPE = 24;
 // Cliqbux's 4-template pricing model (confirmed with Teddy 2026-07-06, see AGENTS.md
 // Critical Lesson #12). Override per-merchant via profile.mspTemplateNo if needed.
 // Template 6   = "Cliqbux Template Swipe Keyed"     — Custom Interchange Plus
-// Template 154 = "Cliqbux Template Cash Discount"    — Self-Serve Cash Discount
+// Template 133 = "Cash Discount Template"           — Self-Serve Cash Discount
 // Custom Flat Rate template — created 2026-07-06, see docs/mspware-field-reference.md
+//
+// 2026-07-07: CD_TEMPLATE_NO switched from 154 to 133. #154 ("Cliqbux Template Cash
+// Discount") was missing key data and is no longer used for anything. #133 ("Cash
+// Discount Template") is the new standard — it is a properly MSPWare-typed Template
+// record (unlike #154, which was a plain "New"-status application being reused as a
+// template source) and its field values have been confirmed by Teddy. See AGENTS.md.
 const DEFAULT_TEMPLATE_NO = 6;        // Custom Interchange Plus
-const CD_TEMPLATE_NO = 154;           // Self-Serve Cash Discount
+const CD_TEMPLATE_NO = 133;           // Self-Serve Cash Discount
 const FLAT_TEMPLATE_NO = 0;           // TODO: Custom Flat Rate — fill in once created (this session, see task tracker)
 // Self-Serve Flat Rate has NO template — on hold, Elavon doesn't support it yet.
 // Do not create one or route real merchants through it. See Critical Lesson #12.
