@@ -49,6 +49,26 @@ export default function OnboardingVerification({ profile, locations, initialSign
     return () => clearInterval(pollRef.current);
   }, [activeIndex, allSigned]);
 
+  // Notify HubSpot the moment the Merchant Processing Agreement is fully executed
+  // (all merchantMIDs signed) — independent of flow type (sales vs self-serve) and
+  // independent of the later "Submit Application" action, which pushes its own
+  // separate 'application_submitted' milestone. Fixes 2026-07-07: this milestone
+  // previously only fired from Step1Agreement.jsx's earlier "accept quote" screen,
+  // which self-serve merchants never see — so agreement_signed (HubSpot's "Quote &
+  // Agreement Executed" stage) never fired for self-serve deals at all.
+  const agreementPushedRef = useRef(false);
+  useEffect(() => {
+    if (allSigned && profile?.corporateId && !agreementPushedRef.current) {
+      agreementPushedRef.current = true;
+      base44.functions.invoke('pushStatusToHubspot', {
+        corporateId: profile.corporateId,
+        milestone: 'agreement_signed',
+      }).catch(() => {
+        // Non-fatal — HubSpot sync is best-effort
+      });
+    }
+  }, [allSigned, profile?.corporateId]);
+
   const fetchSigningState = async () => {
     setLoadingSigning(true);
     setSigningError('');
