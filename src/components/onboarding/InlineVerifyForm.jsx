@@ -62,13 +62,17 @@ const emptyForm = () => ({
   titleType: '',
 });
 
-export default function InlineVerifyForm({ signer, onVerified, corporateId, profileTitleType }) {
+export default function InlineVerifyForm({ signer, onVerified, corporateId, profileTitleType, soleSigner }) {
   // If the signer already has data filled in, pre-expand and skip the upload phase
   const alreadyHasDoc = !!(signer.idDocumentUrl);
   const alreadyHasData = !!(signer.dobYear && signer.ssn && signer.homeStreet);
-  // Don't auto-expand if data is already complete — user must explicitly click to re-verify
-  // Auto-expand only when doc is uploaded but form hasn't been submitted yet (partial state)
-  const [expanded, setExpanded] = useState(alreadyHasDoc && !alreadyHasData);
+  // Don't auto-expand if data is already complete — user must explicitly click to re-verify.
+  // Auto-expand when: doc is uploaded but form hasn't been submitted yet (partial state),
+  // OR this is the sole signer (the common case — one owner filling out and signing the
+  // application themselves). Previously this always started collapsed behind a small
+  // "Verify Now" pill, which testers were missing entirely in favor of the much more
+  // prominent "+ Add Beneficial Owner / Signer" button below. 2026-07-07.
+  const [expanded, setExpanded] = useState((alreadyHasDoc && !alreadyHasData) || (soleSigner && !alreadyHasData));
   const [phase, setPhase] = useState(alreadyHasDoc ? 'fields' : 'upload'); // 'upload' | 'fields'
   const [showSsn, setShowSsn] = useState(false);
   const [saving, setSaving] = useState(false);

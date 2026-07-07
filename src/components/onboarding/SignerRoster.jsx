@@ -170,6 +170,17 @@ export default function SignerRoster({ profile, onValidChange }) {
   const allRequiredCleared = requiredSigners.length > 0 &&
     requiredSigners.every(s => s.identityStatus === 'Verified' || s.identityStatus === 'Sent');
 
+  // Reworked 2026-07-07: the single-signer-present case is by far the most common
+  // (one owner filling out and signing the application themselves), but the roster
+  // framing below ("Beneficial Owners & Signers" + a big "+ Add" button) reads like
+  // a list-management tool, not a "verify yourself" step. Testers were clicking
+  // "+ Add Beneficial Owner / Signer" instead of the small "Verify Now" pill on
+  // their own row. When there's exactly one (primary, unverified) signer, swap in
+  // simpler, single-purpose copy and auto-expand their verification form — see
+  // InlineVerifyForm's soleSigner prop below.
+  const isSoleSigner = signers.length === 1 && signers[0]?.isPrimarySigner === true;
+  const soleSignerVerified = isSoleSigner && signers[0]?.identityStatus === 'Verified';
+
   return (
     <div className="border border-white/10 rounded-xl overflow-hidden">
       {/* Panel header */}
@@ -179,8 +190,16 @@ export default function SignerRoster({ profile, onValidChange }) {
             <Users className="w-4 h-4 text-blue-400" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white">Beneficial Owners & Signers</p>
-            <p className="text-xs text-gray-400 mt-0.5">Owners with ≥25% stake must verify or receive an invitation</p>
+            <p className="text-sm font-semibold text-white">
+              {isSoleSigner ? (soleSignerVerified ? 'Your Identity' : 'Verify Your Identity') : 'Beneficial Owners & Signers'}
+            </p>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {isSoleSigner
+                ? (soleSignerVerified
+                    ? "You're verified as the sole owner and signer on this application."
+                    : "You're completing this application yourself as the sole owner — confirm a few details below to continue.")
+                : 'Owners with ≥25% stake must verify or receive an invitation'}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -299,7 +318,7 @@ export default function SignerRoster({ profile, onValidChange }) {
                 {/* Inline verify form renders below the row for primary signers */}
                 {isPrimary && (
                   <div className="mt-3">
-                    <InlineVerifyForm signer={signer} corporateId={profile.corporateId} profileTitleType={profile.titleType} onVerified={(updated) => {
+                    <InlineVerifyForm signer={signer} corporateId={profile.corporateId} profileTitleType={profile.titleType} soleSigner={isSoleSigner} onVerified={(updated) => {
                       setSigners(prev => prev.map(s => s.id === updated.id ? updated : s));
                     }} />
                   </div>
@@ -321,15 +340,35 @@ export default function SignerRoster({ profile, onValidChange }) {
         )}
       </div>
 
-      {/* Add button */}
+      {/* Add another owner — deliberately de-emphasized while the sole signer hasn't
+          verified yet, so it doesn't visually compete with the verify action above
+          and get mistaken for "verify myself". Restored to a normal-weight button
+          once verified or once there's already more than one signer. 2026-07-07. */}
       <div className="px-5 py-4 border-t border-white/10">
-        <button
-          onClick={() => setShowModal(true)}
-          className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-gray-400 border border-dashed border-white/10 hover:border-white/30 hover:bg-white/[0.04] rounded-xl py-2.5 transition-all"
-        >
-          <UserPlus className="w-4 h-4" />
-          + Add Beneficial Owner / Signer
-        </button>
+        {isSoleSigner && !soleSignerVerified ? (
+          <button
+            onClick={() => setShowModal(true)}
+            className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-300 py-1.5 transition-colors"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            Have a different owner with 25%+ stake? Add them instead
+          </button>
+        ) : (
+          <>
+            {isSoleSigner && (
+              <p className="text-[11px] text-gray-500 mb-2 text-center">
+                Only use this if there's another owner with 25%+ stake — not for yourself.
+              </p>
+            )}
+            <button
+              onClick={() => setShowModal(true)}
+              className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-gray-400 border border-dashed border-white/10 hover:border-white/30 hover:bg-white/[0.04] rounded-xl py-2.5 transition-all"
+            >
+              <UserPlus className="w-4 h-4" />
+              + Add Another Owner
+            </button>
+          </>
+        )}
       </div>
 
       {showModal && (
