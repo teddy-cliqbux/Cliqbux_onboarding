@@ -18,7 +18,7 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
-    const { corporateId: rawCorporateId, appNo: existingAppNo, confirmFill } = body;
+    const { corporateId: rawCorporateId, appNo: existingAppNo, confirmFill, createFromTemplate } = body;
     const corporateId = confirmFill === true ? rawCorporateId : null;
 
     const mspBase = (Deno.env.get('MSP_BASE_URL') || 'https://api.msppulsepoint.com/v2').replace(/\/$/, '');
@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
           dba: 'Debug Raw Form Test',
           merchantapplicationtypeno: 24,
           salespersonid: salespersonId,
-          templatemerchantapplicationno: 6,
+          templatemerchantapplicationno: createFromTemplate || 6,
         }),
       });
       const createData = await createRes.json();
