@@ -165,6 +165,14 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 **The "must never be blank" guard:** Teddy confirmed — for `CUSTOM_FLAT_RATE` and `CUSTOM_INTERCHANGE_PLUS`, application creation/submission must be blocked with a clear internal error if `customMarkupPercentage` or `customPerTxFee` isn't set on the profile yet, rather than silently creating an MSPWare draft with blank pricing fields for someone to fill in by hand. Auth Per Card does NOT need a separate custom field — Teddy confirmed the existing `customPerTxFee` is sufficient; auth-per-card stays a fixed template-level value like `all_card_auth_per_item: '0.050'` already used elsewhere.
 
+### 13. `cards_accepted` — another template-owned field we were incorrectly sending
+
+**Found 2026-07-08**, right after switching `CD_TEMPLATE_NO` from 154 to 133. Both `submitToMSP` and `signApplication` hardcoded `cards_accepted: ['VISA', 'VISA_DEBIT', 'MASTERCARD', 'MASTERCARD_DEBIT', 'DISCOVER', 'AMEX']` in every PUT payload. Template #133 has `all_cards: true` (every card type, including UnionPay) as its intended default — but this hardcoded list silently overwrote that on every application, dropping UnionPay and unchecking "All Cards" in the MSPWare UI. Teddy caught it by comparing a fresh test application's Pricing tab against the template.
+
+**Fix:** removed `cards_accepted` entirely from both `buildFormPayload` functions — same treatment as every other template-owned field. The template's `all_cards`/`cards_accepted` default now passes through untouched.
+
+**Lesson generalized:** any field that a template pre-fills is a candidate for this bug, not just the fee/billing fields originally identified 2026-06-30. When template #133 was adopted, its full field set should have been diffed against what our code sends, not just the fee fields Teddy happened to be looking at. Worth a full pass over `docs/mspware-field-reference.md`'s "Fields we DO send" list against a fresh `debugMSPFormRaw` pull of #133 to check for any other silent overwrites of this kind.
+
 ---
 
 ## What This App Does
@@ -441,8 +449,8 @@ MSPWare templates (#6 ICPLS, #154 Cash Discount) pre-fill a large set of fee sch
 
 **The fix:** `buildFormPayload` in both `submitToMSP` and `signApplication` must send ONLY the merchant-specific fields listed in its header comment. Any field owned by the template must be completely absent from the PUT payload.
 
-**Fields that must NEVER be sent in PUT /form (template-owned, confirmed 2026-06-30):**
-`billing_method`, `billing_frequency`, `funding_type`, `monetary_code`, `statement_type`, `monthly_minimum_fee`, `chargeback_fee`, `account_maintenance_fee`, `rtp_monthly_fee`, `touch_tone_auth`, `avs_service_auth`, `bank_referral_auth`, `op_assisted_auth`, `C4_surcharging_cardholder_surcharge`, `tokenization`, `tokenization_service_fee`, `tokenization_platform_fee`, `tokenization_sharing_indicator`, `has_pin_debit`, `debit_auth_method`, `debit_pricing_method`, all `ACCL_*`/`AFFN_*`/`ALAS_*`/`CU24_*`/`INKL_*`/`MSTO_*`/`NETS_*`/`NYCE_*`/`POSD_*`/`PULSE_*`/`ITS_*`/`STAR_*`/`UPDBT_*` per-network debit fields, `fixed_individual_tiers_pricing`, `multi_currency_conversion`, `secure3d`, `all_markup_discount`, `all_markup_per_item`, `all_card_auth_per_item`, `intl_card_handling_fee`, `auth_pricing_program`, `annual_fee_start_date`, `is_firearm_verified`.
+**Fields that must NEVER be sent in PUT /form (template-owned, confirmed 2026-06-30, updated 2026-07-08):**
+`billing_method`, `billing_frequency`, `funding_type`, `monetary_code`, `statement_type`, `monthly_minimum_fee`, `chargeback_fee`, `account_maintenance_fee`, `rtp_monthly_fee`, `touch_tone_auth`, `avs_service_auth`, `bank_referral_auth`, `op_assisted_auth`, `C4_surcharging_cardholder_surcharge`, `tokenization`, `tokenization_service_fee`, `tokenization_platform_fee`, `tokenization_sharing_indicator`, `has_pin_debit`, `debit_auth_method`, `debit_pricing_method`, all `ACCL_*`/`AFFN_*`/`ALAS_*`/`CU24_*`/`INKL_*`/`MSTO_*`/`NETS_*`/`NYCE_*`/`POSD_*`/`PULSE_*`/`ITS_*`/`STAR_*`/`UPDBT_*` per-network debit fields, `fixed_individual_tiers_pricing`, `multi_currency_conversion`, `secure3d`, `all_markup_discount`, `all_markup_per_item`, `all_card_auth_per_item`, `intl_card_handling_fee`, `auth_pricing_program`, `annual_fee_start_date`, `is_firearm_verified`, **`cards_accepted`/`all_cards`** (added 2026-07-08 — see Critical Lesson below; sending an explicit card list overwrote template #133's `all_cards: true` default and silently dropped UnionPay on every application).
 
 **How to verify before adding a new field:** `GET /applications/154/form` — if the field appears in the response with a non-null value, it is template-owned. Do not send it.
 
