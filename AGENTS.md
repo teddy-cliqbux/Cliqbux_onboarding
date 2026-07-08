@@ -538,51 +538,57 @@ Admin calls (issued from the Base44 dashboard, not the magic-link portal) pass t
 
 ## Cash Discount Template
 
-Template #154 = Cash Discount template (created 2026-06-29, last updated 2026-06-30).
-- `pricing_method`: `"CLEAR"` (NOT `"CASH_DISCOUNT"` — that value is rejected)
-- CD_TEMPLATE_NO = 154; ICPLS_TEMPLATE_NO = 6
-- Both `submitToMSP` and `signApplication` auto-select the correct template based on `pricingTier`
+**⚠️ CD_TEMPLATE_NO switched from 154 to 133 (2026-07-07).** MSPWare has two similarly-named "Cash Discount" records, and this has caused confusion twice now — read carefully before touching either one.
 
-**⚠️ Two "Cash Discount" templates exist in MSPWare — do not confuse them.** Application #154 ("Cliqbux Template Cash Discount") is `CD_TEMPLATE_NO`, the one actually used for application creation — as of 2026-07-03 it has no equipment/VAR data at all. Application #133 ("Cash Discount Template") is a separate reference copy Teddy built on 2026-07-03 to demonstrate correct equipment and pricing values — it is NOT used by the code, only as a source of truth for `docs/mspware-field-reference.md`. See that file for the full Cliqbux Program Configuration and Standard Equipment Configuration field values (entity_number, safet_service/safet_fee, equipment/VAR sections, network type, etc.) confirmed 2026-07-03.
+- **#154 "Cliqbux Template Cash Discount"** — the OLD template. Confirmed via direct API pull on 2026-07-07 that it was missing key data and was never properly maintained. **No longer used anywhere in the code.** Do not edit it; do not reference it for anything going forward.
+- **#133 "Cash Discount Template"** — the NEW/current `CD_TEMPLATE_NO`, as of 2026-07-07. Originally built by Teddy weeks ago as a scratch/reference copy (hence the generic name), it is a properly MSPWare-typed **Template** record (unlike #154, which was a plain "New"-status application being reused as a template source — that's why #154 never showed up in the MSPWare dashboard's Templates list, only under Applications). Teddy has since confirmed its field values and it is now the live source for every new Cash Discount application, in both `submitToMSP` and `signApplication`.
+- Both `submitToMSP` and `signApplication` auto-select the correct template based on `pricingTier`.
+- **Before editing fees or any template config in the MSPWare dashboard, always confirm the `merchantapplicationno` in the URL is 133, not 154 or any other record — the on-screen title alone isn't a reliable check.**
 
-**⚠️ Cliqbux NEVER uses MSPWare's "Clear and Simple" pricing method.** Confirmed by Teddy 2026-07-03: "We do not use clear and simple for pricing method ever. Tiered only." `TIER_TO_METHOD` maps Cash Discount to `pricing_method: 'TIERD'` ("Tiered"), not `'CLEAR'`, in all 6 files that declare the mapping. `buildFormPayload` (submitToMSP + signApplication) sends an explicit flat-rate Tiered fee schedule (3.3816% across all discount tiers, $0 per-item, flat PIN debit surcharge) when `pricingMethod === 'TIERD'` — see `docs/mspware-field-reference.md` for the full field list. This resolved the `CLEAR_plan` legacy-picklist blocker entirely (it's a field on the Clear and Simple method, which is never selected). Also resolved 2026-07-03: `tokenization: 'none'` is now sent for all merchants ("No tokenization is available to us now" — Teddy), which cleared the `tokenization_platform_fee` required-field error. As of this fix, ZZZ DBA (app #190) reached 99.2% complete — only `is_firearm_verified` remains (template-level fix, see above).
+**⚠️ Cliqbux NEVER uses MSPWare's "Clear and Simple" pricing method.** Confirmed by Teddy 2026-07-03: "We do not use clear and simple for pricing method ever. Tiered only." `TIER_TO_METHOD` maps Cash Discount to `pricing_method: 'TIERD'` ("Tiered"). `buildFormPayload` (submitToMSP + signApplication) sends an explicit flat-rate Tiered fee schedule (3.3816% across all discount tiers, $0 per-item, flat PIN debit surcharge) when `pricingMethod === 'TIERD'` — see `docs/mspware-field-reference.md` for the full field list. Template #133 already natively defaults to `pricing_method: "TIERD"` (unlike old #154, which defaulted to `"CLEAR"` and required an explicit override), so this is now consistent end-to-end. Also confirmed: `tokenization: 'none'` is sent for all merchants ("No tokenization is available to us now" — Teddy).
 
-### Template #154 pre-set fields (read via GET /applications/154/form on 2026-06-30)
+### Template #133 pre-set fields (confirmed live via `debugMSPFormRaw {"appNo":"133"}` on 2026-07-07)
 These fields are owned by the template and must NOT be sent in any PUT /form payload:
+
+**✅ RESOLVED 2026-07-07:** `funding_type: "0"` and `billing_frequency: "D"` are both intentional, confirmed by Teddy via the MSPWare Bank Accounts screen — `"0"` is the wire code for **"True Daily (RTP)"** funding (paired with **"Daily Billing"**), not an unset/blank value. This is a deliberate, different funding product from old #154's Monthly/net-settlement setup, not a data gap.
 
 | Field | Template value | Notes |
 |---|---|---|
-| `pricing_method` | `"CLEAR"` | Cash Discount surcharge method |
-| `card_acceptance_split` | `"CP"` | Card-present only by default |
-| `pricing_category` | `"1"` | Retail — merchant value should override per MID |
+| `pricing_method` | `"TIERD"` | Tiered — native default on #133, no override needed |
+| `card_acceptance_split` | `"OMNI"` | |
+| `pricing_category` | `"1"` (implied; not set on #133's owners stub — verify per MID) | Merchant/MID value should override |
 | `billing_method` | `"N"` | Net settlement |
-| `billing_frequency` | `"M"` | Monthly |
-| `funding_type` | `14` | Elavon funding type |
-| `monetary_code` | `"D"` | USD |
+| `billing_frequency` | `"D"` | **Daily Billing** — pairs with True Daily (RTP) funding above; confirmed intentional by Teddy 2026-07-07 (differs from old #154's Monthly setup) |
+| `funding_type` | `"0"` | "True Daily (RTP)" — confirmed correct/intentional by Teddy 2026-07-07 |
+| `monetary_code` ("Monetary Billing Method" in UI) | `"C"` (displays as "Card Discount") | Intentionally changed by Teddy 2026-07-07 |
 | `statement_type` | `"A"` | Combined statement |
 | `statement_delivery_method` | `"E"` | Email delivery |
-| `monthly_minimum_fee` | `40` | $40/mo minimum |
-| `chargeback_fee` | `35` | $35 per chargeback |
-| `account_maintenance_fee` | `20` | $20/mo account fee |
-| `rtp_monthly_fee` | `10` | $10/mo RTP fee |
-| `touch_tone_auth` | `0.65` | Voice auth fee |
-| `avs_service_auth` | `2.20` | AVS fee |
-| `bank_referral_auth` | `4` | Bank referral fee |
-| `op_assisted_auth` | `0.95` | Operator-assisted auth |
-| `C4_surcharging_cardholder_surcharge` | `3` | 3% CD surcharge rate |
-| `tokenization` | `"token"` | Tokenization enabled |
-| `tokenization_service_fee` | `"0.0000"` | No per-token fee |
+| `monthly_minimum_fee` | `"0"` | Changed by Teddy 2026-07-07 |
+| `chargeback_fee` | `"15"` | Changed by Teddy 2026-07-07 |
+| `account_maintenance_fee` | `"0"` | Changed by Teddy 2026-07-07 |
+| `return_item_fee` | `"15"` | Newly documented 2026-07-07 |
+| `annual_fee` | `"0"` | Newly documented 2026-07-07 |
+| `monthly_service_fee` | `"0"` | Newly documented 2026-07-07 |
+| `rtp_monthly_fee` | `"0"` | Differs from old #154's `10` |
+| `touch_tone_auth` | `"0"` | Differs from old #154's `0.65` |
+| `avs_service_auth` | `"0"` | Differs from old #154's `2.20` |
+| `bank_referral_auth` | `"0"` | Differs from old #154's `4` |
+| `op_assisted_auth` | `"0"` | Differs from old #154's `0.95` |
+| `C4_surcharging_cardholder_surcharge` | `3` | 3% CD surcharge rate — same as #154 |
+| `tokenization` | `"none"` | Differs from old #154's `"token"` — matches the 2026-07-03 "no tokenization" decision |
 | `tokenization_sharing_indicator` | `"N"` | No token sharing |
 | `fixed_individual_tiers_pricing` | `false` | No tiered pricing |
 | `multi_currency_conversion` | `false` | No DCC |
 | `secure3d` | `false` | No 3DS |
-| `cards_accepted` | VISA, VISA_DEBIT, MC, MC_DEBIT, DISC, AMEX | All major cards |
-| `beneficial_ownership_exemption` | `"NON"` | Standard — non-exempt |
+| `cards_accepted` | VISA, VISA_DEBIT, MC, MC_DEBIT, DISC, UNIONPAY, AMEX | All major cards + UnionPay (old #154 lacked UnionPay) |
 | `has_intermediary_businesses` | `false` | |
-| `owner_confirmed` | `true` | |
+| `owner_confirmed` | `false` (template stub) | Our code always sends `true` per real merchant — this is fine since it's in the "DO send" list |
 | `country_formation` | `"USA"` | |
 | `country_operations` | `"USA"` | |
-| `has_legal_address` | `"business"` | Overridden when entity has separate mailing address |
+| `debit_auth_method` | `"FIXED"` | Differs from old #154 — verify against known-valid values in "MSPWare Form Fill: Known Valid / Invalid Values" below |
+| `debit_pricing_method` | `"SURCH"` | Differs from old #154's `"ICPLS"` |
+| `entity_number` | `"48603-17"` | Same as documented elsewhere |
+| `settlement_option` | `"Net"` | |
 
 **Fields we DO send (merchant-specific):**
 `full_dba_name`, `legal_dba_name`, `products_or_services`, `year_business_established`, `ownership_years/months`, `ownership_type`, `tin`/`ssn`, `llc_class`, `industry_type`, `contact_first/last_name`, `business_phone/email/address/city/state/zip`, `owners[]`, `annual_revenue`, `monthly_sales`, `average_sales`, `highest_ticket`, `freq_highest_average_ticket`, `cp_percent`, `cnp_percent`, `int_percent`, `moto_percent`, `delayed_delivery`, `mcc`, `pricing_method`, `pricing_category`, `deposit_account_no/rtg/type`, `chargebacks_retrievals_format/email`, `state_of_formation`, `currently_processing`, `seasonal_business`, `refund_policy`

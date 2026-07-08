@@ -21,7 +21,11 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // Cliqbux's 4-template pricing model — see AGENTS.md Critical Lesson #12.
 const MSP_APP_TYPE = 24;           // Elavon US Application
 const DEFAULT_TEMPLATE_NO = 6;    // Cliqbux Template Swipe Keyed — Custom Interchange Plus
-const CD_TEMPLATE_NO = 154;       // Cliqbux Template Cash Discount — Self-Serve Cash Discount
+// 2026-07-07: CD_TEMPLATE_NO switched from 154 to 133. #154 ("Cliqbux Template Cash
+// Discount") was missing key data and is no longer used for anything. #133 ("Cash
+// Discount Template") is the new standard — a properly MSPWare-typed Template record
+// with fields confirmed by Teddy. See AGENTS.md.
+const CD_TEMPLATE_NO = 133;       // Cash Discount Template — Self-Serve Cash Discount
 const FLAT_TEMPLATE_NO = 0;       // TODO: Custom Flat Rate — fill in once created (see submitToMSP)
 const DEFAULT_SALESPERSON_ID = 0;
 // Self-Serve Flat Rate has NO template — on hold, Elavon doesn't support it yet.

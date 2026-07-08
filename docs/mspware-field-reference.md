@@ -84,10 +84,12 @@ Terminal Programming checkboxes (Quick Close, Store and Forward, No Signature, C
 
 ## Important: two "Cash Discount" templates exist in MSPWare
 
-- **Application #154 — "Cliqbux Template Cash Discount"**: this is `CD_TEMPLATE_NO` in the code, the template actually used to create every Cash Discount merchant's application. As of 2026-07-03 it has **no equipment/VAR data at all**, and its fee-schedule defaults (`touch_tone_auth: 0.65`, `avs_service_auth: 2.20`, `bank_referral_auth: 4`, `op_assisted_auth: 0.95`, `monthly_minimum_fee: 40`, `chargeback_fee: 35`, `account_maintenance_fee: 20`, `rtp_monthly_fee: 10`, `tokenization: "token"`) look stale/unreviewed. This explains why every application created from it always failed the "at least one equipment or VAR selection is required" check — the template itself has nothing there to inherit.
-- **Application #133 — "Cash Discount Template"**: a separate reference/test template Teddy built on 2026-07-03 specifically to demonstrate correct equipment values and a working flat-rate pricing setup (see "Open Items" below). The code does **not** use this template for application creation — it was used only as a source of truth to extract the static equipment constants above via `debugMSPFormRaw`.
+**⚠️ UPDATE 2026-07-07: `CD_TEMPLATE_NO` is now 133, not 154.** See `AGENTS.md`'s "Cash Discount Template" section for the full current field list and an open issue (invalid-looking `funding_type: "0"` on #133 that needs Teddy to confirm/fix). The history below is kept for context on why the switch happened.
 
-Do not confuse the two. If `CD_TEMPLATE_NO` is ever repointed to #133, re-verify the whole field list, since #133 also has different (and likely more correct) fee-schedule defaults than #154.
+- **Application #154 — "Cliqbux Template Cash Discount"**: was `CD_TEMPLATE_NO` in the code through 2026-07-07. As of 2026-07-03 it had **no equipment/VAR data at all**, and its fee-schedule defaults (`touch_tone_auth: 0.65`, `avs_service_auth: 2.20`, `bank_referral_auth: 4`, `op_assisted_auth: 0.95`, `monthly_minimum_fee: 40`, `chargeback_fee: 35`, `account_maintenance_fee: 20`, `rtp_monthly_fee: 10`, `tokenization: "token"`) were stale/unreviewed. Confirmed missing key data on 2026-07-07; **no longer used anywhere in the code.**
+- **Application #133 — "Cash Discount Template"**: originally a reference/test template Teddy built on 2026-07-03 to demonstrate correct equipment values and a working flat-rate pricing setup (see "Open Items" below). Teddy has since confirmed its fields, and as of 2026-07-07 **this is the live `CD_TEMPLATE_NO`** used to create every real Cash Discount application.
+
+**Always verify the `merchantapplicationno` in the MSPWare dashboard URL (not just the on-screen title) before editing template fees** — #133 and #154 have easily-confused names, which caused this exact mix-up once already.
 
 ---
 
