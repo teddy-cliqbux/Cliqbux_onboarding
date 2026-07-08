@@ -36,6 +36,10 @@
       "type": "string",
       "description": "Secure token for the /verify URL"
     },
+    "verifyTokenSentAt": {
+      "type": "string",
+      "description": "ISO timestamp when verifyToken was last issued/resent — used to enforce the 7-day link expiry promised in the invite email"
+    },
     "dobYear": {
       "type": "string"
     },
