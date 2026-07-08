@@ -131,7 +131,7 @@ Deno.serve(async (req) => {
             `Action Required: Verify Your Identity — ${signerData.legalName || 'Cliqbux'} Merchant Application`,
             buildInviteEmail(signerData.firstName, verifyUrl, signerData.legalName)
           );
-          await base44.asServiceRole.entities.MerchantSigners.update(record.id, { identityStatus: 'Sent' });
+          await base44.asServiceRole.entities.MerchantSigners.update(record.id, { identityStatus: 'Sent', verifyTokenSentAt: new Date().toISOString() });
           record.identityStatus = 'Sent';
         } catch (emailErr: any) {
           console.error('[manageSigner] email send failed:', emailErr.message);
@@ -173,7 +173,8 @@ Deno.serve(async (req) => {
 
       const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, {
         identityStatus: 'Sent',
-        verifyToken: token
+        verifyToken: token,
+        verifyTokenSentAt: new Date().toISOString()
       });
       return Response.json({ success: true, signer: updated });
     }
