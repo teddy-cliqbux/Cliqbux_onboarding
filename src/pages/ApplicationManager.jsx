@@ -588,7 +588,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
 }
 
 // ── Application Row ───────────────────────────────────────────────────────────
-function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onSend, onDelete }) {
+function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onSend, onDelete, onDeleteMerchant }) {
   const [expanded, setExpanded]         = useState(false);
   const [mids, setMids]                 = useState([]);
   const [signers, setSigners]           = useState([]);
@@ -721,6 +721,10 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
+          <button onClick={() => onDeleteMerchant({ corporateId, merchantName })} title="Delete merchant permanently (all data)"
+            className="p-1.5 text-gray-700 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
@@ -828,6 +832,10 @@ export default function ApplicationManager() {
   const [editing, setEditing]             = useState(null);
   const [sending, setSending]             = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [deleteMerchantConfirm, setDeleteMerchantConfirm] = useState(null); // { corporateId, merchantName }
+  const [deleteMerchantTyped, setDeleteMerchantTyped]     = useState('');
+  const [deletingMerchant, setDeletingMerchant]           = useState(false);
+  const [deleteMerchantError, setDeleteMerchantError]     = useState('');
   const [searchText, setSearchText]       = useState('');
   const [jumpId, setJumpId]               = useState('');
 
@@ -872,6 +880,27 @@ export default function ApplicationManager() {
       await base44.functions.invoke('manageStagedApplication', { action: 'delete', stageId: stage.id });
       setAllStages(prev => prev.filter(s => s.id !== stage.id));
     } catch (_) {}
+  };
+
+  const handleDeleteMerchant = async () => {
+    if (!deleteMerchantConfirm) return;
+    setDeletingMerchant(true);
+    setDeleteMerchantError('');
+    try {
+      const res = await base44.functions.invoke('deleteMerchant', {
+        corporateId: deleteMerchantConfirm.corporateId,
+        confirmDelete: true,
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      setProfiles(prev => prev.filter(p => p.corporateId !== deleteMerchantConfirm.corporateId));
+      setAllStages(prev => prev.filter(s => s.corporateId !== deleteMerchantConfirm.corporateId));
+      setDeleteMerchantConfirm(null);
+      setDeleteMerchantTyped('');
+    } catch (err) {
+      setDeleteMerchantError(err.message || 'Failed to delete merchant.');
+    } finally {
+      setDeletingMerchant(false);
+    }
   };
 
   const handleJump = async () => {
@@ -977,6 +1006,7 @@ export default function ApplicationManager() {
                     onEdit={(corpId, name) => setEditing({ corporateId: corpId, merchantName: name, stage: null })}
                     onSend={(stage, corpId, email) => setSending({ stage, corporateId: corpId, prefillEmail: email })}
                     onDelete={setDeleteConfirm}
+                    onDeleteMerchant={(info) => { setDeleteMerchantConfirm(info); setDeleteMerchantTyped(''); setDeleteMerchantError(''); }}
                   />
                 ))}
               </div>
@@ -1016,6 +1046,48 @@ export default function ApplicationManager() {
             <div className="flex gap-3">
               <button onClick={() => handleDelete(deleteConfirm)} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-bold text-sm py-2.5 rounded-xl transition-all">Delete</button>
               <button onClick={() => setDeleteConfirm(null)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteMerchantConfirm && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4"
+          onClick={() => { if (!deletingMerchant) { setDeleteMerchantConfirm(null); setDeleteMerchantTyped(''); } }}>
+          <div className="bg-[#1c2128] border border-red-500/30 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="font-bold text-white mb-2">Permanently delete this merchant?</h3>
+            <p className="text-sm text-gray-400 mb-1">
+              <span className="text-white font-semibold">{deleteMerchantConfirm.merchantName}</span> ({deleteMerchantConfirm.corporateId})
+            </p>
+            <p className="text-xs text-gray-500 mb-4">
+              This permanently deletes the corporate profile, all locations, all MIDs, and all signers from our database.
+              This does not touch any application already drafted in MSPWare. This cannot be undone.
+            </p>
+            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+              Type DELETE to confirm
+            </label>
+            <input
+              value={deleteMerchantTyped}
+              onChange={e => setDeleteMerchantTyped(e.target.value)}
+              placeholder="DELETE"
+              className="w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4"
+            />
+            {deleteMerchantError && (
+              <p className="text-xs text-red-400 mb-3">{deleteMerchantError}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={handleDeleteMerchant}
+                disabled={deleteMerchantTyped !== 'DELETE' || deletingMerchant}
+                className="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-400 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold text-sm py-2.5 rounded-xl transition-all">
+                {deletingMerchant ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete Permanently'}
+              </button>
+              <button
+                onClick={() => { setDeleteMerchantConfirm(null); setDeleteMerchantTyped(''); }}
+                disabled={deletingMerchant}
+                className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white disabled:opacity-40">
+                Cancel
+              </button>
             </div>
           </div>
         </div>
