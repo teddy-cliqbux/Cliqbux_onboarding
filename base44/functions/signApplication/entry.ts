@@ -427,7 +427,12 @@ function buildFormPayload(
     int_percent: intPct,
     moto_percent: motoPct,
     delayed_delivery: deliveryDelayDays,
-    cards_accepted: ['VISA', 'VISA_DEBIT', 'MASTERCARD', 'MASTERCARD_DEBIT', 'DISCOVER', 'AMEX'],
+    // cards_accepted / all_cards intentionally OMITTED as of 2026-07-08 — template #133
+    // has all_cards: true (accept every card type, including UnionPay). Sending an
+    // explicit cards_accepted list here overwrote that with a fixed 6-card list and
+    // silently dropped UnionPay + the "All Cards" toggle on every application. Let
+    // the template's own value pass through untouched, same as other template-owned
+    // fields. See AGENTS.md.
     card_acceptance_split: cardPresentPct >= 100 ? 'CP' : 'OMNI',
     mcc,
     // ── Pricing (merchant-specific only — template owns fee schedule, debit rates, etc.) ──
