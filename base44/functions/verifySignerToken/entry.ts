@@ -3,11 +3,17 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // verifySignerToken — powers the public /verify page (src/pages/VerifyIdentity.jsx)
 // for INVITED (non-primary) signers completing their own identity verification
 // remotely, with no Base44 session and no corporateId — only the token from
+<<<<<<< HEAD
 // their email link. This function existed in the local repo but had never been
 // deployed to the live Base44 app (2026-07-08 — confirmed via direct API pull that
 // the live app returned "function not found" while the local file already had a
 // draft implementation). Rebuilt with token expiry enforcement and pushed live.
 // See AGENTS.md.
+=======
+// their email link. This function was missing entirely (2026-07-08): the /verify
+// page has always called it, but it never existed, so every invited signer's
+// link was a dead end. See AGENTS.md.
+>>>>>>> 7e74221a6c0a4dcad8ace99ffbb9b13045ef8039
 //
 // Actions:
 //   get  — { token } -> { signer, legalName }            (safe fields only)
