@@ -298,28 +298,70 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
+  const [syncMsg, setSyncMsg]         = useState('');
   const [activeTab, setActiveTab]     = useState('locations');
 
   useEffect(() => { loadData(); }, []);
 
+  const fetchLists = async () => {
+    const [locRes, conRes, sigRes] = await Promise.all([
+      base44.functions.invoke('listLocations', { corporateId }),
+      base44.functions.invoke('manageMerchantID', { action: 'list', corporateId }),
+      base44.functions.invoke('manageSigner', { action: 'list', corporateId }),
+    ]);
+    const locs = locRes.data?.locations || [];
+    const mids = conRes.data?.merchantIDs || [];
+    const sigs = sigRes.data?.signers || [];
+    setLocations(locs);
+    setMids(mids);
+    setSigners(sigs);
+    return { locs, mids, sigs };
+  };
+
+  const selectAll = ({ locs, mids, sigs }) => {
+    setSelLocs(new Set(locs.map(l => l.id || l.locationId)));
+    setSelMids(new Set(mids.map(c => c.id)));
+    setSelSigners(new Set(sigs.map(s => s.id)));
+  };
+
   const loadData = async () => {
-    setLoading(true);
+    setLoading(true); setError('');
     try {
-      const [locRes, conRes, sigRes] = await Promise.all([
-        base44.functions.invoke('listLocations', { corporateId }),
-        base44.functions.invoke('manageMerchantID', { action: 'list', corporateId }),
-        base44.functions.invoke('manageSigner', { action: 'list', corporateId }),
-      ]);
-      setLocations(locRes.data?.locations || []);
-      setMids(conRes.data?.merchantIDs || []);
-      setSigners(sigRes.data?.signers || []);
-      if (!stage) {
-        setSelLocs(new Set((locRes.data?.locations || []).map(l => l.id || l.locationId)));
-        setSelMids(new Set((conRes.data?.merchantIDs || []).map(c => c.id)));
-        setSelSigners(new Set((sigRes.data?.signers || []).map(s => s.id)));
+      let lists = await fetchLists();
+      // Nothing in Base44 yet — this corporateId is most likely a HubSpot deal
+      // that has never been synced. Pull it now so staging starts from CRM data
+      // (profile + primary signer from the deal contact, locations/MIDs from
+      // the company hierarchy).
+      if (!lists.locs.length && !lists.sigs.length) {
+        setSyncMsg('Nothing in Base44 yet — pulling this deal from HubSpot…');
+        const syncRes = await base44.functions.invoke('syncFromHubspot', { dealId: corporateId });
+        if (syncRes.data?.error) throw new Error(syncRes.data.error);
+        lists = await fetchLists();
       }
-    } catch (_) {}
-    finally { setLoading(false); }
+      if (!stage) selectAll(lists);
+    } catch (err) {
+      setError(err.message || 'Failed to load merchant data');
+    } finally {
+      setSyncMsg('');
+      setLoading(false);
+    }
+  };
+
+  // Manual re-pull from HubSpot (e.g. the deal was updated after this editor opened)
+  const handleHubspotSync = async () => {
+    setLoading(true); setError('');
+    setSyncMsg('Syncing from HubSpot…');
+    try {
+      const res = await base44.functions.invoke('syncFromHubspot', { dealId: corporateId });
+      if (res.data?.error) throw new Error(res.data.error);
+      const lists = await fetchLists();
+      if (!stage) selectAll(lists);
+    } catch (err) {
+      setError(err.message || 'HubSpot sync failed');
+    } finally {
+      setSyncMsg('');
+      setLoading(false);
+    }
   };
 
   const toggle = (id, setFn) => setFn(prev => {
@@ -368,6 +410,10 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
           <p className="text-[10px] text-gray-500 uppercase tracking-wider">{merchantName}</p>
           <p className="text-sm font-bold text-white">{stage?.id ? 'Edit Stage' : 'New Stage'}</p>
         </div>
+        <button onClick={handleHubspotSync} disabled={loading || saving} title="Pull the latest deal, contact, and company data from HubSpot"
+          className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 hover:text-white border border-white/10 hover:border-white/20 px-2.5 py-2 rounded-xl transition-all disabled:opacity-40">
+          <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> HubSpot Sync
+        </button>
         <button onClick={handleSave} disabled={saving}
           className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold text-sm px-4 py-2 rounded-xl transition-all">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
@@ -376,8 +422,9 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
       </div>
 
       {loading ? (
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex flex-col items-center justify-center gap-3">
           <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
+          {syncMsg && <p className="text-xs text-gray-400">{syncMsg}</p>}
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
