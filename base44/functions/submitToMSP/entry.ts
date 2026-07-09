@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-07-09 — DEFAULT_TEMPLATE_NO=209, customAuthPerCard guard + all_card_auth_per_item
 
 // ─── Portal auth (inlined) ─────────────────────────────────────────────────────────────────────
 // Base44 bundles each function in isolation, so this is duplicated from

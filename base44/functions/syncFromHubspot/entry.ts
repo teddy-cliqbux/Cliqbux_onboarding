@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-07-09 — portal auth gate + processing_pricing_tier + customAuthPerCard sync
 
 // ─── Portal auth (inlined) ─────────────────────────────────────────────────────────────────────
 // Base44 bundles each function in isolation, so this is duplicated from

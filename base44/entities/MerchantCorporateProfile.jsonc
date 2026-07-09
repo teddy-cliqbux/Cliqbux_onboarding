@@ -57,7 +57,7 @@
     },
     "pricingTier": {
       "type": "string",
-      "description": "Simplified 2026-07-06 to match Cliqbux's actual 4-template model (see AGENTS.md Critical Lesson #12). CUSTOM_FLAT_RATE and CUSTOM_INTERCHANGE_PLUS are always sales-assisted, never self-serve, and always individually negotiated (see customMarkupPercentage/customPerTxFee). SELF_SERVE_CASH_DISCOUNT is the only current self-serve option. Self_Swiped/Self_Keyed self-serve flat rate is on hold (Elavon doesn't support it yet) and intentionally not represented here.",
+      "description": "Simplified 2026-07-06 to match Cliqbux's actual 4-template model (see AGENTS.md Critical Lesson #12). CUSTOM_FLAT_RATE and CUSTOM_INTERCHANGE_PLUS are always sales-assisted, never self-serve, and always individually negotiated (see customMarkupPercentage/customPerTxFee/customAuthPerCard). SELF_SERVE_CASH_DISCOUNT is the only current self-serve option. Self_Swiped/Self_Keyed self-serve flat rate is on hold (Elavon doesn't support it yet) and intentionally not represented here.",
       "enum": [
         "CUSTOM_FLAT_RATE",
         "CUSTOM_INTERCHANGE_PLUS",
@@ -69,6 +69,10 @@
     },
     "customPerTxFee": {
       "type": "number"
+    },
+    "customAuthPerCard": {
+      "type": "number",
+      "description": "Per-auth card fee for custom pricing tiers (CUSTOM_FLAT_RATE, CUSTOM_INTERCHANGE_PLUS). Feeds MSPWare all_card_auth_per_item. Set per-deal in HubSpot."
     },
     "applicationStatus": {
       "type": "string",

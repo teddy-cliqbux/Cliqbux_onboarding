@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-07-09 — admin gate live (rejects unauthenticated + merchant tokens)
 
 // Debug: create a fresh app, fill it with real merchant data, and return the FULL raw form GET response
 // so we can see exactly what MSPWare thinks is incomplete.
