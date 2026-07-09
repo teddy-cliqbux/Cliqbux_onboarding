@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Landmark, ClipboardList, CheckCircle, Loader2, ChevronDown, ShieldCheck } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
 import ManualEntryForm from './ManualEntryForm';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 export default function Step2Verification({ profile, onVerified }) {
   const [mode, setMode] = useState(profile?.isManualMode ? 'manual' : 'plaid'); // 'plaid' | 'manual'
@@ -15,7 +15,7 @@ export default function Step2Verification({ profile, onVerified }) {
     setPlaidState('loading');
     setError('');
     try {
-      const res = await base44.functions.invoke('createPlaidLinkToken', { corporateId: profile?.corporateId });
+      const res = await invokePortalFunction('createPlaidLinkToken', { corporateId: profile?.corporateId });
       const token = res.data?.link_token;
       if (!token) throw new Error('Could not initialize Plaid. Please try again.');
       setLinkToken(token);
@@ -37,7 +37,7 @@ export default function Step2Verification({ profile, onVerified }) {
       onSuccess: async (publicToken, metadata) => {
         try {
           // Fetch bank account details — account_id may be null for multi-account flows
-          const bankRes = await base44.functions.invoke('exchangePlaidToken', {
+          const bankRes = await invokePortalFunction('exchangePlaidToken', {
             publicToken,
             accountId: metadata.account_id || ''
           });
@@ -52,7 +52,7 @@ export default function Step2Verification({ profile, onVerified }) {
           const idvId = metadata.identity_verification_id;
           if (idvId) {
             try {
-              const idvRes = await base44.functions.invoke('exchangePlaidToken', {
+              const idvRes = await invokePortalFunction('exchangePlaidToken', {
                 identityVerificationId: idvId
               });
               identity = idvRes.data?.identity || null;
@@ -65,7 +65,7 @@ export default function Step2Verification({ profile, onVerified }) {
             const fields = ['firstName','lastName','dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip'];
             fields.forEach(f => { if (identity[f]) updatePayload[f] = identity[f]; });
             try {
-              await base44.functions.invoke('updateMerchantProfile', updatePayload);
+              await invokePortalFunction('updateMerchantProfile', updatePayload);
             } catch (_) { /* non-critical */ }
           }
 
@@ -86,7 +86,7 @@ export default function Step2Verification({ profile, onVerified }) {
 
   const switchToManual = async () => {
     setMode('manual');
-    await base44.functions.invoke('updateMerchantProfile', {
+    await invokePortalFunction('updateMerchantProfile', {
       corporateId: profile?.corporateId,
       isManualMode: true
     });

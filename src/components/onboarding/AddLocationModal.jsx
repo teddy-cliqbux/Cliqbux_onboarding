@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, MapPin, Loader2, Plus, CheckCircle2, AlertTriangle, Pencil, ChevronDown, ChevronRight } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
 import EINValidator from '@/components/onboarding/EINValidator';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 export default function AddLocationModal({
   corporateId,
@@ -119,7 +119,7 @@ export default function AddLocationModal({
         // First location: persist any edits to the corporate entity (entity 0)
         const ein = rawEIN();
         if (ein.length === 9) {
-          const editRes = await base44.functions.invoke('manageLegalEntity', {
+          const editRes = await invokePortalFunction('manageLegalEntity', {
             corporateId, action: 'edit', entityId: entities[0].entityId,
             legalBusinessName: corporateLegalName.trim(),
             federalEIN: ein,
@@ -135,7 +135,7 @@ export default function AddLocationModal({
         const name = (corporateLegalName || dbaName).trim();
         const ein = rawEIN();
         if (!name || ein.length !== 9) throw new Error('Legal corporate name and a valid 9-digit EIN are required.');
-        const res = await base44.functions.invoke('manageLegalEntity', {
+        const res = await invokePortalFunction('manageLegalEntity', {
           corporateId, action: 'add', legalBusinessName: name, federalEIN: ein, corporateMailingAddress: corporateMailingAddress.trim(),
         });
         if (res.data?.error) throw new Error(res.data.error);
@@ -145,7 +145,7 @@ export default function AddLocationModal({
         targetEntityId = selectedEntityId;
       }
 
-      const locRes = await base44.functions.invoke('addSelfServeLocation', {
+      const locRes = await invokePortalFunction('addSelfServeLocation', {
         corporateId,
         entityId: targetEntityId,
         dbaName: dbaName.trim(),

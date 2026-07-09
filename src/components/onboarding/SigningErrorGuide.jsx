@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AlertCircle, ArrowLeft, Loader2, ChevronDown, ChevronRight, Wrench, ShieldAlert } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 // Maps MSPWare field names → human-readable labels + which onboarding step fixes them
 const FIELD_MAP = {
@@ -137,7 +137,7 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
   const loadDetails = async (appNo) => {
     setChecking(true);
     try {
-      const res = await base44.functions.invoke('getMSPFormStatus', {
+      const res = await invokePortalFunction('getMSPFormStatus', {
         applicationNo: appNo,
         corporateId: app.corporateId,
       });

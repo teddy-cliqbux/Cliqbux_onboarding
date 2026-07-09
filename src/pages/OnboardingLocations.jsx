@@ -7,9 +7,9 @@ import {
   AlertTriangle, Check, ArrowLeft, Pencil, GripVertical, Cloud, Mail, Lock
 
 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
 import { isLocked as getMidLocked, isImported as getMidImported } from '@/utils/statusUtils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -117,7 +117,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
     if (!canSave) return;
     setSaving(true);
     try {
-      const res = await base44.functions.invoke('manageMerchantID', {
+      const res = await invokePortalFunction('manageMerchantID', {
         action: 'update', locationId, corporateId, merchantIDId: mid.id,
         data: { ...form, merchantName: form.merchantName || dbaName },
       });
@@ -275,7 +275,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
   const handleAddMid = async () => {
     setAddMidSaving(true);
     try {
-      const res = await base44.functions.invoke('manageMerchantID', {
+      const res = await invokePortalFunction('manageMerchantID', {
         action: 'add', locationId: location.id, corporateId,
         data: { merchantName: addMidName || location.dbaName, mccCode: '' },
       });
@@ -465,13 +465,13 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
     setSaving(true);
     setSaveError(null);
     try {
-      const res = await base44.functions.invoke('manageLegalEntity', {
+      const res = await invokePortalFunction('manageLegalEntity', {
         action: 'edit', corporateId, entityId: entity.entityId,
         ownershipType, taxClassType, establishmentYear: estYear, federalEIN: einDigits,
       });
       if (res.data?.error) throw new Error(res.data.error);
       const { years, months } = deriveOwnership(estYear);
-      await base44.functions.invoke('updateMerchantProfile', {
+      await invokePortalFunction('updateMerchantProfile', {
         corporateId, ownershipType, taxClassType, establishmentYear: estYear,
         currentOwnershipYears: years, currentOwnershipMonths: months,
       });
@@ -594,7 +594,7 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
   const handleSave = useCallback(async (addr) => {
     setSaving(true);
     try {
-      await base44.functions.invoke('manageLegalEntity', {
+      await invokePortalFunction('manageLegalEntity', {
         action: 'edit', corporateId, entityId: entityIdRef.current,
         mailingStreet: addr.street, mailingCity: addr.city,
         mailingState: addr.state, mailingZip: addr.zip,
@@ -617,7 +617,7 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
   const handleClear = async () => {
     setAddressDisplay(''); setParsedAddress(null); setSavedAt(null);
     try {
-      await base44.functions.invoke('manageLegalEntity', {
+      await invokePortalFunction('manageLegalEntity', {
         action: 'edit', corporateId, entityId: entity.entityId,
         mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '',
       });
@@ -773,7 +773,7 @@ function AddEntityModal({ corporateId, onSaved, onClose }) {
     if (!canSave) return;
     setSaving(true); setError('');
     try {
-      const res = await base44.functions.invoke('manageLegalEntity', {
+      const res = await invokePortalFunction('manageLegalEntity', {
         action: 'add', corporateId,
         legalBusinessName: name.trim(), federalEIN: einDigits,
       });
@@ -858,7 +858,7 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
         return;
       }
       const businessAddress = addr ? `${addr.street}, ${addr.city}, ${addr.state} ${addr.zip}` : addressDisplay.trim();
-      const locRes = await base44.functions.invoke('addSelfServeLocation', {
+      const locRes = await invokePortalFunction('addSelfServeLocation', {
         corporateId, dbaName: dbaName.trim(),
         businessAddress, businessStreet: addr?.street || '', businessCity: addr?.city || '',
         businessState: addr?.state || '', businessZip: addr?.zip || '',
@@ -1003,9 +1003,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     setLoading(true);
     try {
       const [entRes, locRes, conRes] = await Promise.all([
-        base44.functions.invoke('manageLegalEntity', { action: 'list', corporateId: profile.corporateId }),
-        base44.functions.invoke('listLocations', { corporateId: profile.corporateId }),
-        base44.functions.invoke('manageMerchantID', { action: 'list', corporateId: profile.corporateId }),
+        invokePortalFunction('manageLegalEntity', { action: 'list', corporateId: profile.corporateId }),
+        invokePortalFunction('listLocations', { corporateId: profile.corporateId }),
+        invokePortalFunction('manageMerchantID', { action: 'list', corporateId: profile.corporateId }),
       ]);
       const loadedEntities = (entRes.data?.entities || []).map(e => ({
         ...e,
@@ -1029,7 +1029,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       let finalEntities = enrichedEntities;
       if (finalEntities.length === 0) {
         try {
-          const seedRes = await base44.functions.invoke('manageLegalEntity', {
+          const seedRes = await invokePortalFunction('manageLegalEntity', {
             action: 'add', corporateId: profile.corporateId,
             legalBusinessName: profile.legalName || 'Primary Entity',
             federalEIN: (profile.taxId || '').replace(/\D/g, ''),
@@ -1075,7 +1075,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     const idToDelete = loc.id || loc.locationId;
     if (!idToDelete) { alert('Cannot delete: location has no ID.'); return; }
     try {
-      const res = await base44.functions.invoke('removeSelfServeLocation', { locationId: idToDelete });
+      const res = await invokePortalFunction('removeSelfServeLocation', { locationId: idToDelete });
       if (res.data?.error) throw new Error(res.data.error);
       setLocations(prev => prev.filter(l => (l.id || l.locationId) !== idToDelete));
       setMerchantIDs(prev => prev.filter(c => c.locationId !== idToDelete));
@@ -1088,7 +1088,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const handleDeleteMid = async (mid) => {
     setDeleteMidConfirm(null);
     try {
-      const res = await base44.functions.invoke('manageMerchantID', { action: 'delete', corporateId: profile.corporateId, merchantIDId: mid.id });
+      const res = await invokePortalFunction('manageMerchantID', { action: 'delete', corporateId: profile.corporateId, merchantIDId: mid.id });
       if (res.data?.error) throw new Error(res.data.error);
       setMerchantIDs(prev => prev.filter(c => c.id !== mid.id));
     } catch (err) {
@@ -1100,7 +1100,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const handleDeleteEntity = async (entity) => {
     setDeleteEntityConfirm(null);
     try {
-      const res = await base44.functions.invoke('manageLegalEntity', { action: 'delete', corporateId: profile.corporateId, entityId: entity.entityId });
+      const res = await invokePortalFunction('manageLegalEntity', { action: 'delete', corporateId: profile.corporateId, entityId: entity.entityId });
       if (res.data?.error) throw new Error(res.data.error);
       setEntities(prev => prev.filter(e => e.entityId !== entity.entityId));
       // Reassign orphaned locations to first remaining entity
@@ -1120,7 +1120,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       const targetEntityId = destination.droppableId;
       setLocations(prev => prev.map(l => l.id === locId ? { ...l, entityId: targetEntityId } : l));
       try {
-        await base44.functions.invoke('batchUpdateStatus', { corporateId: profile.corporateId, action: 'moveToEntity', locationIds: [locId], targetEntityId });
+        await invokePortalFunction('batchUpdateStatus', { corporateId: profile.corporateId, action: 'moveToEntity', locationIds: [locId], targetEntityId });
       } catch (err) {
         console.error('[onDragEnd] moveToEntity failed', err);
         await loadAll();
@@ -1130,7 +1130,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       const targetLocId = destination.droppableId.replace('mids-', '');
       setMerchantIDs(prev => prev.map(c => c.id === midId ? { ...c, locationId: targetLocId } : c));
       try {
-        await base44.functions.invoke('manageMerchantID', { action: 'update', corporateId: profile.corporateId, merchantIDId: midId, locationId: targetLocId, data: { locationId: targetLocId } });
+        await invokePortalFunction('manageMerchantID', { action: 'update', corporateId: profile.corporateId, merchantIDId: midId, locationId: targetLocId, data: { locationId: targetLocId } });
       } catch (err) {
         console.error('[onDragEnd] MID move failed', err);
         await loadAll();

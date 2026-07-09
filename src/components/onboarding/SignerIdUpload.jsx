@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Upload, FileImage, CheckCircle2, Loader2, X, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const ACCEPTED = 'image/jpeg,image/png,image/webp,application/pdf';
 
@@ -18,7 +19,7 @@ export default function SignerIdUpload({ signer, corporateId, onUploaded }) {
     try {
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
       // Persist to signer record
-      await base44.functions.invoke('manageSigner', {
+      await invokePortalFunction('manageSigner', {
         action: 'update',
         corporateId,
         signerId: signer.id,
@@ -43,7 +44,7 @@ export default function SignerIdUpload({ signer, corporateId, onUploaded }) {
     setUploading(true);
     setError('');
     try {
-      await base44.functions.invoke('manageSigner', {
+      await invokePortalFunction('manageSigner', {
         action: 'update',
         corporateId,
         signerId: signer.id,

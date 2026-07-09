@@ -1,4 +1,5 @@
 import { appParams } from '@/lib/app-params';
+import { base44 } from '@/api/base44Client';
 
 // Merchant-portal auth token (signed by validateResumeToken), cached per-tab.
 const STORAGE_KEY = 'merchant_jwt';
@@ -28,10 +29,18 @@ export function clearMerchantToken() {
 //
 // Response shape matches base44.functions.invoke() (`{ data }`) so call
 // sites don't need restructuring beyond swapping the function name/import.
+//
+// When no merchant token is present (admin viewing via ApplicationManager or
+// read-only impersonation with a workspace session), this falls back to the
+// SDK's own invoke so the workspace Authorization header is attached and the
+// backend's getPortalActor resolves the caller as 'admin'.
 export async function invokePortalFunction(functionName, payload = {}) {
   const token = getMerchantToken();
+  if (!token) {
+    return base44.functions.invoke(functionName, payload);
+  }
   const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`/api/apps/${appParams.appId}/functions/${functionName}`, {
     method: 'POST',

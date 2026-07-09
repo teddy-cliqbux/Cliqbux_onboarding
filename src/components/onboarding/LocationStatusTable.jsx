@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { CheckCircle2, AlertCircle, Clock, Store, CreditCard, ArrowRight, Loader2, CheckSquare, Square, Check, X, Copy, GripVertical, Building2, ChevronDown, ChevronRight } from 'lucide-react';
 import DragOrgMenu from './DragOrgMenu';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const STATUS_STYLES = {
   'Active':            { icon: CheckCircle2, cls: 'text-green-600 bg-green-50 border-green-200', label: 'Active' },
@@ -40,7 +40,7 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
 
   useEffect(() => {
     if (corporateId) {
-      base44.functions.invoke('manageLegalEntity', { action: 'list', corporateId })
+      invokePortalFunction('manageLegalEntity', { action: 'list', corporateId })
         .then(res => setEntities(res.data?.entities || []))
         .catch(() => {});
     }
@@ -95,7 +95,7 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
 
     setMovingLocId(draggableId);
     try {
-      const res = await base44.functions.invoke('batchUpdateStatus', {
+      const res = await invokePortalFunction('batchUpdateStatus', {
         corporateId,
         action: 'moveToEntity',
         locationIds: [draggableId],
@@ -119,7 +119,7 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
   const handleDuplicate = async (locId) => {
     setDuplicatingIds(prev => [...prev, locId]);
     try {
-      await base44.functions.invoke('batchUpdateStatus', { corporateId, action: 'duplicateLocation', locationIds: [locId] });
+      await invokePortalFunction('batchUpdateStatus', { corporateId, action: 'duplicateLocation', locationIds: [locId] });
       if (onStatusChanged) onStatusChanged();
     } catch (_) {}
     finally { setDuplicatingIds(prev => prev.filter(x => x !== locId)); }
@@ -132,7 +132,7 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
     if (!batchStatus) { setBatchError('Select a status.'); return; }
     setBatchBusy(true); setBatchError('');
     try {
-      const res = await base44.functions.invoke('batchUpdateStatus', { corporateId, action: 'updateStatus', locationIds: selectedIds, newStatus: batchStatus });
+      const res = await invokePortalFunction('batchUpdateStatus', { corporateId, action: 'updateStatus', locationIds: selectedIds, newStatus: batchStatus });
       if (res.data?.error) throw new Error(res.data.error);
       setBatchDone(true);
       if (onStatusChanged) onStatusChanged();

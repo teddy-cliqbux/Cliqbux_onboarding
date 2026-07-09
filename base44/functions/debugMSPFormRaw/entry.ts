@@ -17,6 +17,11 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+    // Admin-only: requires a Base44 workspace session. Merchant portal tokens
+    // are deliberately NOT accepted here.
+    let adminUser: any = null;
+    try { adminUser = await base44.auth.me(); } catch { /* no session */ }
+    if (!adminUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await req.json();
     const { corporateId: rawCorporateId, appNo: existingAppNo, confirmFill, createFromTemplate } = body;
     const corporateId = confirmFill === true ? rawCorporateId : null;

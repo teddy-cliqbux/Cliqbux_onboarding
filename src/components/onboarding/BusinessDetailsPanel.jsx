@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Building2, ChevronDown, ChevronRight, Check, Loader2, AlertCircle, Cloud } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
 const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
@@ -88,7 +88,7 @@ export default function BusinessDetailsPanel({ profile, onSaved }) {
     setError('');
     try {
       const { years, months } = deriveOwnership(f.establishmentYear);
-      const res = await base44.functions.invoke('updateMerchantProfile', {
+      const res = await invokePortalFunction('updateMerchantProfile', {
         corporateId: profile.corporateId,
         legalName: f.legalName,
         taxId: f.taxId,

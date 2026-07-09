@@ -1,13 +1,85 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // manageStagedApplication — CRUD for StagedApplication records
-// Actions: list, get, create, update, delete, send
+// Actions:
+//   validate                                — PUBLIC: merchant proves possession of the
+//                                             staged-link token; returns a signed merchant
+//                                             JWT + a sanitized stage record
+//   trackProgress                           — merchant token (matching corporateId) or admin
+//   list, get, create, update, delete, send — ADMIN ONLY (Base44 workspace session)
 // POST /functions/manageStagedApplication
+
+// ─── Portal auth (inlined) ─────────────────────────────────────────────────────────────────────
+// Base44 bundles each function in isolation, so this is duplicated from
+// base44/functions/helpers/auth.ts — keep both copies in sync.
+function base64UrlEncode(bytes: Uint8Array): string {
+  let binary = '';
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function __b64uDecode(str: string): Uint8Array {
+  const pad = (4 - (str.length % 4)) % 4;
+  const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(pad));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+async function getHmacKey(usage: 'sign' | 'verify'): Promise<CryptoKey> {
+  const secret = Deno.env.get('MERCHANT_JWT_SECRET');
+  if (!secret) throw new Error('MERCHANT_JWT_SECRET env var not set');
+  const keyData = new TextEncoder().encode(secret);
+  return crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, [usage]);
+}
+
+async function signMerchantToken(corporateId: string, email: string | undefined, expiresAt: string): Promise<string> {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const exp = Math.floor(new Date(expiresAt).getTime() / 1000);
+  const payload = { corporateId, email, exp };
+  const encodedHeader = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
+  const encodedPayload = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
+  const signingInput = `${encodedHeader}.${encodedPayload}`;
+  const key = await getHmacKey('sign');
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signingInput));
+  return `${signingInput}.${base64UrlEncode(new Uint8Array(signature))}`;
+}
+
+async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merchant' | 'admin'; corporateId?: string } | null> {
+  try {
+    const m = (req.headers.get('Authorization') || '').match(/^Bearer\s+(.+)$/i);
+    const parts = m ? m[1].split('.') : [];
+    const secret = Deno.env.get('MERCHANT_JWT_SECRET');
+    if (parts.length === 3 && secret) {
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
+      const ok = await crypto.subtle.verify('HMAC', key, __b64uDecode(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
+      if (ok) {
+        const payload = JSON.parse(new TextDecoder().decode(__b64uDecode(parts[1])));
+        if (payload.corporateId && typeof payload.exp === 'number' && Date.now() < payload.exp * 1000) {
+          return { actor: 'merchant', corporateId: String(payload.corporateId) };
+        }
+      }
+    }
+  } catch { /* invalid merchant token — fall through to workspace check */ }
+  try {
+    const user = await base44.auth.me();
+    if (user) return { actor: 'admin' };
+  } catch { /* no workspace session */ }
+  return null;
+}
 
 function generateToken(): string {
   const arr = new Uint8Array(24);
   crypto.getRandomValues(arr);
   return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Strip the fields a merchant must never see (accessToken most of all —
+// returning it would let anyone holding a stageId mint a valid link).
+function sanitizeStage(stage: any) {
+  if (!stage) return stage;
+  const { accessToken: _accessToken, ...safe } = stage;
+  return safe;
 }
 
 Deno.serve(async (req) => {
@@ -18,8 +90,79 @@ Deno.serve(async (req) => {
 
     const publicUrl = (Deno.env.get('PUBLIC_APP_URL') || 'https://onboarding.cliqbux.com').replace(/\/$/, '');
 
+    // ── validate — the ONLY public action ────────────────────────────────────
+    // The merchant proves possession of the emailed link token; the comparison
+    // happens server-side (the token is never returned to the client). On
+    // success we mint a merchant JWT so every subsequent portal call is
+    // authenticated, exactly like validateResumeToken does for resume links.
+    if (action === 'validate') {
+      const token = data?.token || body.token;
+      if (!stageId || !token) return Response.json({ error: 'stageId and token required' }, { status: 400 });
+
+      const stage = await base44.asServiceRole.entities.StagedApplication.get(stageId).catch(() => null);
+      if (!stage || !stage.accessToken || stage.accessToken !== token) {
+        return Response.json({ success: false, error: 'Invalid or expired link' }, { status: 401 });
+      }
+
+      // Staged links don't expire themselves; the session token they mint is
+      // good for 7 days. Revisiting the link mints a fresh one.
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      const merchantToken = await signMerchantToken(String(stage.corporateId), stage.sentToEmail, expiresAt);
+
+      return Response.json({ success: true, stage: sanitizeStage(stage), merchantToken });
+    }
+
+    const actor = await getPortalActor(req, base44);
+    if (!actor) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // ── trackProgress — merchant (own corporateId) or admin ──────────────────
+    // Auto-upserts a tracking record when a merchant opens/advances the portal.
+    if (action === 'trackProgress') {
+      if (!corporateId) return Response.json({ error: 'corporateId required' }, { status: 400 });
+      if (actor.actor === 'merchant' && actor.corporateId !== String(corporateId)) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+
+      // Find existing auto-tracking record for this merchant (label = '__auto_track__')
+      const existing = await base44.asServiceRole.entities.StagedApplication.filter(
+        { corporateId, label: '__auto_track__' }, '-created_date', 1
+      );
+
+      const trackData: any = {
+        corporateId,
+        label: '__auto_track__',
+        status: 'draft',
+        prefilledData: {
+          currentStep: data?.currentStep || 'agreement',
+          completedSteps: data?.completedSteps || {},
+          merchantName: data?.merchantName || '',
+          signerEmail: data?.signerEmail || '',
+          pricingTier: data?.pricingTier || '',
+          applicationStatus: data?.applicationStatus || '',
+          lastSeenAt: new Date().toISOString(),
+        },
+      };
+
+      if (existing.length > 0) {
+        // Merge with existing prefilledData so we don't overwrite fields not sent this call
+        const prev = existing[0].prefilledData || {};
+        trackData.prefilledData = { ...prev, ...trackData.prefilledData };
+        const updated = await base44.asServiceRole.entities.StagedApplication.update(existing[0].id, trackData);
+        return Response.json({ success: true, stage: sanitizeStage(updated) });
+      } else {
+        const token = generateToken();
+        const created = await base44.asServiceRole.entities.StagedApplication.create({ ...trackData, accessToken: token });
+        return Response.json({ success: true, stage: sanitizeStage(created) });
+      }
+    }
+
+    // ── Everything below is ADMIN ONLY ───────────────────────────────────────
+    if (actor.actor !== 'admin') {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     if (action === 'list') {
-      // List all staged apps for a corporateId (or all if admin)
+      // List all staged apps for a corporateId (or all if no filter given)
       const filter: any = {};
       if (corporateId) filter.corporateId = corporateId;
       const stages = await base44.asServiceRole.entities.StagedApplication.filter(filter, '-created_date', 100);
@@ -110,43 +253,6 @@ Deno.serve(async (req) => {
       });
 
       return Response.json({ success: true, stage: updated, link });
-    }
-
-    // trackProgress — auto-upsert a tracking record when a merchant opens/advances through the portal
-    if (action === 'trackProgress') {
-      if (!corporateId) return Response.json({ error: 'corporateId required' }, { status: 400 });
-
-      // Find existing auto-tracking record for this merchant (label = '__auto_track__')
-      const existing = await base44.asServiceRole.entities.StagedApplication.filter(
-        { corporateId, label: '__auto_track__' }, '-created_date', 1
-      );
-
-      const trackData: any = {
-        corporateId,
-        label: '__auto_track__',
-        status: 'draft',
-        prefilledData: {
-          currentStep: data?.currentStep || 'agreement',
-          completedSteps: data?.completedSteps || {},
-          merchantName: data?.merchantName || '',
-          signerEmail: data?.signerEmail || '',
-          pricingTier: data?.pricingTier || '',
-          applicationStatus: data?.applicationStatus || '',
-          lastSeenAt: new Date().toISOString(),
-        },
-      };
-
-      if (existing.length > 0) {
-        // Merge with existing prefilledData so we don't overwrite fields not sent this call
-        const prev = existing[0].prefilledData || {};
-        trackData.prefilledData = { ...prev, ...trackData.prefilledData };
-        const updated = await base44.asServiceRole.entities.StagedApplication.update(existing[0].id, trackData);
-        return Response.json({ success: true, stage: updated });
-      } else {
-        const token = generateToken();
-        const created = await base44.asServiceRole.entities.StagedApplication.create({ ...trackData, accessToken: token });
-        return Response.json({ success: true, stage: created });
-      }
     }
 
     return Response.json({ error: `Unknown action: ${action}` }, { status: 400 });

@@ -97,3 +97,32 @@ export async function verifyMerchantToken(req: Request): Promise<{ corporateId: 
 
   return { corporateId: payload.corporateId, email: payload.email };
 }
+
+// ─── getPortalActor — the standard per-request auth check ─────────────────────
+// This is the canonical copy of the block inlined into every merchant-facing
+// function (Base44 bundles each function in isolation, so it cannot be
+// imported — keep the inlined copies in sync with this one).
+//
+// Returns:
+//   { actor: 'merchant', corporateId }  — request carries a valid merchant JWT
+//     (issued by validateResumeToken, createHubspotDeal, or
+//     manageStagedApplication 'validate')
+//   { actor: 'admin' }                  — request carries a Base44 workspace session
+//   null                                — neither; callers must respond 401
+//
+// Callers must also enforce that merchant actors only touch their own data:
+//   const actor = await getPortalActor(req, base44);
+//   if (!actor || (actor.actor === 'merchant' && actor.corporateId !== String(corporateId))) {
+//     return Response.json({ error: 'Unauthorized' }, { status: 401 });
+//   }
+export async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merchant' | 'admin'; corporateId?: string } | null> {
+  try {
+    const tok = await verifyMerchantToken(req);
+    if (tok) return { actor: 'merchant', corporateId: String(tok.corporateId) };
+  } catch { /* invalid/missing merchant token — fall through to workspace check */ }
+  try {
+    const user = await base44.auth.me();
+    if (user) return { actor: 'admin' };
+  } catch { /* no workspace session */ }
+  return null;
+}

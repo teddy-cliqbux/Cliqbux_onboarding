@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Upload, FileText, Loader2, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 export default function FileDropZone({ onExtracted, corporateId }) {
   const [dragOver, setDragOver] = useState(false);
@@ -24,7 +25,7 @@ export default function FileDropZone({ onExtracted, corporateId }) {
       setStatus('extracting');
 
       // Call AI extraction backend function
-      const response = await base44.functions.invoke('processAIDocumentExtraction', {
+      const response = await invokePortalFunction('processAIDocumentExtraction', {
         corporateId,
         fileUrl
       });

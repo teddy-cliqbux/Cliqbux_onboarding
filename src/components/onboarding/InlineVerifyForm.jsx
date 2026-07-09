@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { ShieldCheck, CheckCircle2, Loader2, Eye, EyeOff, X, Upload, FileImage, Sparkles, AlertCircle, RotateCcw, ExternalLink } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { formatSSN, rawSSN, formatPhone, rawPhone } from '@/lib/textUtils';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
@@ -127,7 +128,7 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId, prof
     (async () => {
       setLookingUp(true);
       try {
-        const res = await base44.functions.invoke('manageSigner', {
+        const res = await invokePortalFunction('manageSigner', {
           action: 'lookupByEmail',
           corporateId,
           signerEmail: signer.signerEmail,
@@ -227,7 +228,7 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId, prof
     setSaving(true);
     setError('');
     try {
-      const res = await base44.functions.invoke('manageSigner', {
+      const res = await invokePortalFunction('manageSigner', {
         action: 'inlineVerify',
         corporateId,
         signerId: signer.id,

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { ExternalLink, Clock, RefreshCw } from 'lucide-react';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 export default function Step1Agreement({ profile, onStatusChange }) {
   const [pollingActive, setPollingActive] = useState(true);
@@ -10,7 +11,7 @@ export default function Step1Agreement({ profile, onStatusChange }) {
     const interval = setInterval(async () => {
       try {
         const { base44 } = await import('@/api/base44Client');
-        const response = await base44.functions.invoke('getMerchantData', {
+        const response = await invokePortalFunction('getMerchantData', {
           corporateId: profile.corporateId,
         });
         if (response.data?.profile?.applicationStatus === 'Quote Signed') {

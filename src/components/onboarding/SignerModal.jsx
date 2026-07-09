@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, UserPlus, Send, Loader2, ShieldCheck, Mail, CheckCircle2 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
@@ -77,7 +77,7 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
     setSaving(true);
     setError('');
     try {
-      const res = await base44.functions.invoke('manageSigner', {
+      const res = await invokePortalFunction('manageSigner', {
         action: 'create',
         corporateId,
         sendInvite: mode === 'invite',

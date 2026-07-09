@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback } from 'react';
 import { Landmark, Loader2 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 export default function EntityPlaidButton({ corporateId, entityId, onAccountsConnected }) {
   const [connecting, setConnecting] = useState(false);
@@ -11,7 +11,7 @@ export default function EntityPlaidButton({ corporateId, entityId, onAccountsCon
     setConnecting(true);
     setError('');
     try {
-      const tokenRes = await base44.functions.invoke('createPlaidLinkToken', { corporateId });
+      const tokenRes = await invokePortalFunction('createPlaidLinkToken', { corporateId });
       const linkToken = tokenRes.data?.link_token;
       if (!linkToken) { setError('Could not initialize bank connection.'); setConnecting(false); return; }
       if (!window.Plaid) { setError('Plaid is not available. Please enter banking details manually.'); setConnecting(false); return; }
@@ -21,7 +21,7 @@ export default function EntityPlaidButton({ corporateId, entityId, onAccountsCon
         token: linkToken,
         onSuccess: async (publicToken, metadata) => {
           try {
-            const res = await base44.functions.invoke('exchangePlaidToken', {
+            const res = await invokePortalFunction('exchangePlaidToken', {
               publicToken,
               accountId: metadata.account_id
             });

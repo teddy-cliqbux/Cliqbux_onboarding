@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle2, Clock, Loader2, Building2, Zap } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 function MidTracker({ locations }) {
   const [liveLocations, setLiveLocations] = useState(locations);
@@ -14,7 +14,7 @@ function MidTracker({ locations }) {
 
     const poll = async () => {
       try {
-        const res = await base44.functions.invoke('getMerchantData', { corporateId });
+        const res = await invokePortalFunction('getMerchantData', { corporateId });
         if (res.data?.locations) setLiveLocations(res.data.locations);
       } catch (_) {}
     };

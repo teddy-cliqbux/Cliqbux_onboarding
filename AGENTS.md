@@ -529,7 +529,26 @@ The `legalEntities` array items now include `ownershipType`, `taxClassType`, `es
 
 ---
 
-## Security: Portal Auth (corrected 2026-06-30)
+## Security: Portal Auth (LOCKED DOWN 2026-07-09 — read this before touching any backend function)
+
+**As of 2026-07-09, every merchant-facing backend function verifies the caller on every request.** The old model (trust whatever `corporateId` the browser sends) is gone — it let anyone who guessed a corporateId (= HubSpot deal ID, a guessable number) read/write another merchant's SSNs and bank details.
+
+**How it works now:**
+1. Merchant tokens (HMAC-signed JWTs bound to a `corporateId`) are issued by exactly three functions: `validateResumeToken` (magic resume links), `createHubspotDeal` (self-serve signup), and `manageStagedApplication` action `validate` (staged application links, 7-day expiry).
+2. The frontend stores the token in sessionStorage (`merchant_jwt`) and attaches it as a Bearer header via `invokePortalFunction` (`src/lib/merchantAuthFetch.js`). When no merchant token exists, `invokePortalFunction` falls back to `base44.functions.invoke` so admin/workspace sessions still work through the same call sites.
+3. Every merchant-facing function contains an **inlined** `getPortalActor(req, base44)` block (canonical copy + usage docs in `base44/functions/helpers/auth.ts` — it cannot be imported because Base44 bundles each function in isolation). It resolves the caller to `{ actor: 'merchant', corporateId }` (valid merchant JWT), `{ actor: 'admin' }` (Base44 workspace session), or `null` (reject 401). Merchant actors are only allowed to touch their own `corporateId`; ownership checks use the **token's** corporateId, never the request body's.
+4. Functions keyed on something other than corporateId resolve ownership first: `removeSelfServeLocation` and `saveLocationBankDetails` load the location record and compare its corporateId to the token's; `getMSPFormStatus` checks the applicationNo belongs to one of the token's MIDs.
+5. Admin-only functions (`deleteMerchant`, `debugEnv`, `debugMSPForm`, `debugMSPFormRaw`, `debugMSPSignatures`, `refillMSPForms`, `importExistingMIDs`, `readMSPTemplate`) require a workspace session and deliberately reject merchant tokens. Note: curl-testing these against the published URL now requires a workspace session.
+6. `manageStagedApplication` no longer leaks `accessToken`: the `get` action is admin-only, and the new public `validate` action does the token comparison server-side and returns a sanitized stage + merchant JWT. `OnboardingPortal.validateStageToken` uses it.
+7. Still deliberately public: `validateResumeToken`, `verifySignerToken` (its own signer token), `sendResumeLink` (email-keyed, no data returned), `createHubspotDeal` (signup), `handleHubspotWebhook` (HubSpot webhook — TODO: verify HubSpot signatures).
+
+**Rules:**
+- Requires `MERCHANT_JWT_SECRET` env var in Base44 (already used by `validateResumeToken`). If it's unset, all merchant tokens fail verification and merchants get 401s.
+- New merchant-facing functions MUST copy the `getPortalActor` block from `helpers/auth.ts` and gate on it. New portal call sites MUST use `invokePortalFunction`, not `base44.functions.invoke`.
+- Do NOT “fix” a portal 401 by removing a gate — fix the missing/expired token instead. The pre-2026-07-09 lessons below about removing `auth.me()` checks are superseded by this model: `getPortalActor` already handles the no-session case gracefully.
+- `pushStatusToHubspot`, `verifyEIN`, `syncFromHubspot`, `batchUpdateStatus` now accept merchant tokens (previously they either required a workspace session — silently 401ing portal users — or were wide open).
+
+## Security: Portal Auth (HISTORICAL — superseded 2026-07-09, kept for context)
 
 **Correction:** this section previously described a `withToken()` helper in `src/lib/portalToken.js` injecting a `portalToken` into every backend call, verified server-side via `verifyPortalAccess()`. That was an aspirational note that was never implemented. Neither the helper, the file, nor any `portalToken` sessionStorage key exist anywhere in the codebase. **Do not build against the old description.**
 

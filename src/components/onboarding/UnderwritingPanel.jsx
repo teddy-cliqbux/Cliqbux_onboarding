@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { CheckCircle2, ChevronDown, ChevronUp, ShieldCheck, AlertTriangle, Loader2 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const MONTHS = [
   { value: '01', label: 'JAN' }, { value: '02', label: 'FEB' }, { value: '03', label: 'MAR' },
@@ -128,7 +128,7 @@ export default function UnderwritingPanel({ profile, onValidChange }) {
     setSaving(true);
     setSaveError('');
     try {
-      await base44.functions.invoke('updateMerchantProfile', {
+      await invokePortalFunction('updateMerchantProfile', {
         corporateId: profile.corporateId,
         ...form,
         ssn: form.ssn.replace(/\D/g, ''),
