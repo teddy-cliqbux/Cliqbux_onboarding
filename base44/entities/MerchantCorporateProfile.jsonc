@@ -71,12 +71,8 @@
       "type": "number"
     },
     "customAuthPerCard": {
-<<<<<<< HEAD
       "type": "number",
       "description": "Per-auth card fee for custom pricing tiers (CUSTOM_FLAT_RATE, CUSTOM_INTERCHANGE_PLUS). Feeds MSPWare all_card_auth_per_item. Set per-deal in HubSpot."
-=======
-      "type": "number"
->>>>>>> be18baddaafc22d7ad7479182a1a2f6eacbd7708
     },
     "applicationStatus": {
       "type": "string",
