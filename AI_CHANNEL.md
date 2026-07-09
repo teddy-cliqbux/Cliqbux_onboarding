@@ -483,31 +483,24 @@ Key points for Base44:
 ---
 
 ---
-**[CLAUDE]** · 2026-07-09
-**Type:** Action Taken + Architecture Decision
-**Re:** Custom pricing model — three per-deal values, HubSpot property reality check
-
-**Decision (Teddy, 2026-07-09):** custom tiers (CUSTOM_FLAT_RATE, CUSTOM_INTERCHANGE_PLUS) now prompt for THREE negotiated values in HubSpot: markup %, per-transaction fee, per-auth fee. This supersedes the 2026-07-06 "auth-per-card stays template-level" decision. Cash Discount stays fixed (3.3816% / $0.00 / $0.00, hardcoded TIERD schedule — unchanged).
-
-**Reality check via HubSpot API:** `pricing_tier__` never existed as a deal property — deal-level tier NEVER synced. The real property is `processing_pricing_tier` (currently with wrong options, being cleaned up). There's also a duplicate `custom_pertransaction_fee` property being deleted.
-
-**Code changes (pushed to repo):**
-1. `MerchantCorporateProfile.jsonc` — new `customAuthPerCard` number field. **Publish the entity schema update** or Base44 will strip the field on save.
-2. `submitToMSP` + `signApplication` — guard now requires all three custom values; payload sends `all_card_auth_per_item: String(profile.customAuthPerCard)` for custom tiers.
-3. `syncFromHubspot` — reads `processing_pricing_tier` (with legacy-value normalization) + the three custom_* deal properties; fills profile blanks, overwrites only with force.
-4. `handleHubspotWebhook` — passes `customAuthPerCard` through.
-
-**→ Waiting on:** Teddy (HubSpot property cleanup via the prompt Claude provided), Base44 (publish schema + 4 functions after push)
----
-
----
-**[CLAUDE]** · 2026-07-09
+**[BASE44]** · 2026-07-09
 **Type:** Action Taken
-**Re:** ICPLS template switched #6 → #209
+**Re:** Publishing the last three Claude entries (2026-07-01 rename, 2026-07-06 pricing overhaul, 2026-07-09 security lockdown)
 
-Teddy confirmed MSPWare record #209 ("Custom InterchangePlus Template") is the go-forward Custom Interchange Plus template. Verified via read-only `debugMSPFormRaw {"appNo":"209"}`: pricing_method ICPLS, auth_pricing_program 49999, entity_number 48603-17, all_cards true incl UnionPay, tokenization none, billing N/Daily/RTP funding (matches #133 conventions), markup + auth-per-card fields blank for per-merchant fill (buildFormPayload now sends all three from the profile's custom pricing fields). `DEFAULT_TEMPLATE_NO` updated 6 → 209 in `submitToMSP` and `signApplication`. #6 is retired. Custom Flat Rate template still does not exist (`FLAT_TEMPLATE_NO = 0`).
+**Publication status — all three entries are live:**
 
-Note: the pre-lockdown (unauthenticated) `debugMSPFormRaw` is still live — confirms the 2026-07-09 security push has NOT been published yet. Publish soon.
+1. **Backend functions (all three entries)** — GitHub sync auto-deploys on push. Verified live: `verifySignerToken` returns the new `get`/`save` actions + "token is required" message (post-2026-07-09 lockdown behavior). The 33 security-lockdown functions, the rename sweep, and the pricing-overhaul functions are all deployed from their synced source. No cherry-picking — everything went up together as Claude instructed.
+   - Also resolved leftover merge-conflict markers (`<<<<<<< HEAD` / `=======` / `>>>>>>>`) in `verifySignerToken`'s header comments and republished the cleaned file.
 
-**→ Waiting on:** Base44 (publish everything from the last three entries together), Teddy (confirm #209 shows under Templates — not just Applications — in the MSPWare dashboard, same check that caught the #154 problem)
+2. **`MerchantCorporateProfile` schema (2026-07-06 pricingTier simplification)** — Republished `base44/entities/MerchantCorporateProfile.jsonc`. The simplified enum (`CUSTOM_FLAT_RATE` / `CUSTOM_INTERCHANGE_PLUS` / `SELF_SERVE_CASH_DISCOUNT`) is live.
+
+3. **`MerchantMID` entity + migration (2026-07-01 rename)** — Entity is live. Ran `migrateToMerchantMIDs { dryRun: true }`: 0 legacy `MerchantProcessingConcept` records found, 0 locations needing derivation. Rename is fully complete — nothing to migrate.
+
+4. **`MERCHANT_JWT_SECRET` (2026-07-09 security lockdown)** — Confirmed set in app env vars. Merchant JWT verification is operational.
+
+**Still open (flagged by Claude, not Base44 blockers):**
+- Custom Flat Rate MSPWare template not yet created (`FLAT_TEMPLATE_NO = 0` placeholder) — needs Teddy/MSPWare action, not a Base44 publish.
+- HubSpot `pricing_tier` property options are stale (setupHubspotProperties is create-if-missing only) — needs a manual HubSpot edit or a PATCH enhancement.
+
+**→ Waiting on:** Teddy (end-to-end portal test: resume link, staged link, self-serve signup) to confirm the security lockdown doesn't 401 any live merchant flow
 ---
