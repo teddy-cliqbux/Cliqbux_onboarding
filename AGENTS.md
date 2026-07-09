@@ -9,6 +9,9 @@ Before touching any file in this repo:
 1. Read this entire file.
 2. Read `AI_CHANNEL.md` for the latest inter-AI decisions.
 3. After completing work, **append what you learned** to the relevant section below — especially failed approaches and confirmed values. Future agents (including yourself in a new session) will not remember what you tested.
+4. **Pull the latest commits BEFORE writing any repo file.** On 2026-07-09, Base44 AI republished an entity schema from a stale copy and silently deleted a newly added field (`customAuthPerCard`), plus overwrote two channel entries it had never read. Working from a stale tree destroys other agents' work.
+5. **`AI_CHANNEL.md` is APPEND-ONLY.** Add new entries at the end; never rewrite, reorder, truncate, or delete existing entries.
+6. **When you claim something is deployed/published, verify it with a real request against the live URL and quote the evidence** (status code + response snippet). On 2026-07-09, "GitHub sync auto-deploys functions" was reported as fact while live functions were demonstrably running old code.
 
 **If you are Base44 AI:** every time you start a session on this codebase, open `AGENTS.md` and `AI_CHANNEL.md` first via the GitHub connector. Before ending a session where you made substantive changes or discoveries, commit an update to `AGENTS.md` documenting what you found. This is how we prevent repeating expensive debugging sessions.
 
