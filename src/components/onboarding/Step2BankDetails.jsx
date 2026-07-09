@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Save, Send, Loader2, Info, Plus } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
 import FileDropZone from './FileDropZone';
 import LocationsGrid from './LocationsGrid';
 import AddLocationModal from './AddLocationModal';
 import SignerRoster from './SignerRoster';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 export default function Step2BankDetails({ profile, locations: initialLocations, plaidAccounts = [], onStatusChange }) {
   const [locations, setLocations] = useState(initialLocations);
@@ -45,7 +45,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
       const toSave = locationRows
         .filter(row => row.applicationStepStatus !== 'Approved')
         .map(row => ({ id: row.id, routingNumber: row.routingInput, accountNumber: row.accountInput }));
-      await base44.functions.invoke('saveLocationBankDetails', { locations: toSave });
+      await invokePortalFunction('saveLocationBankDetails', { locations: toSave });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
@@ -62,7 +62,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
     setSubmissionResults([]);
 
     try {
-      const response = await base44.functions.invoke('submitToMSP', { corporateId: profile?.corporateId });
+      const response = await invokePortalFunction('submitToMSP', { corporateId: profile?.corporateId });
       const data = response.data;
       setSubmissionResults(data.results || []);
 
@@ -71,7 +71,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
       } else {
         const errorResults = (data.results || []).filter(r => r.status === 'error');
         setSubmitError(`Submission failed for ${errorResults.length} location(s). Please review and retry.`);
-        const refreshed = await base44.functions.invoke('getMerchantData', { corporateId: profile?.corporateId });
+        const refreshed = await invokePortalFunction('getMerchantData', { corporateId: profile?.corporateId });
         if (refreshed.data?.locations) setLocations(refreshed.data.locations);
       }
     } catch (err) {
@@ -87,7 +87,7 @@ export default function Step2BankDetails({ profile, locations: initialLocations,
     setSubmitting(true);
     setSubmitError('');
     try {
-      const response = await base44.functions.invoke('submitToMSP', {
+      const response = await invokePortalFunction('submitToMSP', {
         corporateId: profile?.corporateId,
         locationIds: failedIds
       });

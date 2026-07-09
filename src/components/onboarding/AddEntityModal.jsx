@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, Building2, CheckCircle2, AlertCircle } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const LABEL = { fontSize: '11px', fontWeight: 600, color: '#6B7280', display: 'block', marginBottom: '5px', textTransform: 'uppercase', letterSpacing: '0.04em' };
 const INPUT = { width: '100%', border: '1px solid #E5E7EB', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', outline: 'none', boxSizing: 'border-box', fontFamily: 'Inter, sans-serif', color: '#111827' };
@@ -29,7 +29,7 @@ export default function AddEntityModal({ corporateId, onAdded, onClose }) {
     setVerifying(true);
     setVerified(null);
     try {
-      const res = await base44.functions.invoke('verifyEIN', { corporateId, federalEIN: digits });
+      const res = await invokePortalFunction('verifyEIN', { corporateId, federalEIN: digits });
       setVerified(res.data);
     } catch {
       setVerified({ valid: false, errors: ['Validation service unavailable'] });
@@ -49,7 +49,7 @@ export default function AddEntityModal({ corporateId, onAdded, onClose }) {
     setSaving(true);
     setError('');
     try {
-      const res = await base44.functions.invoke('manageLegalEntity', {
+      const res = await invokePortalFunction('manageLegalEntity', {
         corporateId,
         action: 'add',
         legalBusinessName: legalName.trim(),

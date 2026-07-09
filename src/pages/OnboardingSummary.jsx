@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, AlertCircle, CreditCard, Store, BarChart3, Percent, DollarSign, Loader2 } from 'lucide-react';
 import LocationStatusTable from '@/components/onboarding/LocationStatusTable';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const inputCls = 'w-full bg-[#1A1D24] border border-white/25 rounded-lg px-3 py-2 text-sm text-white placeholder:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
 const statCls = 'text-sm font-semibold text-white';
@@ -30,7 +30,7 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
   const loadMerchantIDs = async () => {
     setLoading(true);
     try {
-      const res = await base44.functions.invoke('manageMerchantID', { action: 'list', corporateId: profile.corporateId });
+      const res = await invokePortalFunction('manageMerchantID', { action: 'list', corporateId: profile.corporateId });
       setMerchantIDs(res.data?.merchantIDs || []);
     } catch (_) { setMerchantIDs([]); }
     finally { setLoading(false); }
@@ -107,7 +107,7 @@ export default function OnboardingSummary({ profile, locations, onContinue, onBa
                     setEditData={setEditData}
                     onSave={async () => {
                       try {
-                        await base44.functions.invoke('manageMerchantID', {
+                        await invokePortalFunction('manageMerchantID', {
                           action: 'update',
                           corporateId: profile.corporateId,
                           merchantIDId: c.id,

@@ -4,7 +4,7 @@ import {
   ArrowRight, ArrowLeft, Loader2, Store, Landmark, CheckCircle2,
   MapPin, Building2, CreditCard, Banknote, Check, X, AlertTriangle
 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
 const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
@@ -40,7 +40,7 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
   const saveBank = async (details) => {
     setSaving(true);
     try {
-      await base44.functions.invoke('saveLocationBankDetails', { locations: [{ id: location.id, bankDetails: details }] });
+      await invokePortalFunction('saveLocationBankDetails', { locations: [{ id: location.id, bankDetails: details }] });
       setSaved(true);
       onBankSaved(location.id, details, entityId);
     } catch (err) {
@@ -53,14 +53,14 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
   const handlePlaidConnect = async () => {
     setConnecting(true); setPlaidError('');
     try {
-      const tokenRes = await base44.functions.invoke('createPlaidLinkToken', { corporateId });
+      const tokenRes = await invokePortalFunction('createPlaidLinkToken', { corporateId });
       const linkToken = tokenRes.data?.link_token;
       if (!linkToken || !window.Plaid) { setPlaidError('Bank connection unavailable.'); setConnecting(false); return; }
       const handler = window.Plaid.create({
         token: linkToken,
         onSuccess: async (publicToken, metadata) => {
           try {
-            const res = await base44.functions.invoke('exchangePlaidToken', { publicToken, accountId: metadata.account_id });
+            const res = await invokePortalFunction('exchangePlaidToken', { publicToken, accountId: metadata.account_id });
             const accounts = res.data?.accounts || [];
             onAccountsConnected(entityId, accounts);
             if (accounts[0]) {
@@ -286,7 +286,7 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
     try {
       // Use getMerchantData (single call) instead of manageLegalEntity + listLocations + manageMerchantID
       // to avoid hitting rate limits on the banking step mount.
-      const res = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
+      const res = await invokePortalFunction('getMerchantData', { corporateId: profile.corporateId });
       const data = res.data;
 
       // Always use entities from the fresh getMerchantData call to avoid stale prop data

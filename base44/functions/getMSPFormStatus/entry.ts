@@ -1,5 +1,45 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
+// ─── Portal auth (inlined) ─────────────────────────────────────────────────────────────────────
+// Base44 bundles each function in isolation, so this is duplicated from
+// base44/functions/helpers/auth.ts — keep both copies in sync.
+// getPortalActor returns { actor: 'merchant', corporateId } when the request
+// carries a valid merchant JWT (issued by validateResumeToken, createHubspotDeal,
+// or manageStagedApplication 'validate'), { actor: 'admin' } when it carries a
+// Base44 workspace session, or null when neither. Callers must 401 on null and
+// enforce corporateId match for merchant actors.
+function __b64uDecode(str: string): Uint8Array {
+  const pad = (4 - (str.length % 4)) % 4;
+  const bin = atob(str.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(pad));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merchant' | 'admin'; corporateId?: string } | null> {
+  try {
+    const m = (req.headers.get('Authorization') || '').match(/^Bearer\s+(.+)$/i);
+    const parts = m ? m[1].split('.') : [];
+    const secret = Deno.env.get('MERCHANT_JWT_SECRET');
+    if (parts.length === 3 && secret) {
+      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
+      const ok = await crypto.subtle.verify('HMAC', key, __b64uDecode(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
+      if (ok) {
+        const payload = JSON.parse(new TextDecoder().decode(__b64uDecode(parts[1])));
+        if (payload.corporateId && typeof payload.exp === 'number' && Date.now() < payload.exp * 1000) {
+          return { actor: 'merchant', corporateId: String(payload.corporateId) };
+        }
+      }
+    }
+  } catch { /* invalid merchant token — fall through to workspace check */ }
+  try {
+    const user = await base44.auth.me();
+    if (user) return { actor: 'admin' };
+  } catch { /* no workspace session */ }
+  return null;
+}
+
+
 // Returns the MSPWare form completion status for a specific application number.
 // Used by the signing error guide to surface missing fields to the merchant.
 // POST /functions/getMSPFormStatus
@@ -9,32 +49,18 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    // base44.auth.me() throws (rather than resolving to null) when there is no
-    // logged-in staff session — which is the normal case for self-serve merchants
-    // using the magic-link portal. Treat that as "no user" instead of letting it
-    // crash the function (previously caused a 500 here, masking the real MSPWare
-    // validation errors this endpoint exists to surface).
-    let user: any = null;
-    try {
-      user = await base44.auth.me();
-    } catch (_e) {
-      user = null;
-    }
-
     const body = await req.json();
-    const { corporateId, applicationNo } = body;
+    const { applicationNo } = body;
     if (!applicationNo) return Response.json({ error: 'applicationNo required' }, { status: 400 });
 
-    // Verify the application belongs to this merchant (or user is admin).
-    // Self-serve merchants have no `user` at all, so they must prove ownership
-    // via corporateId; staff/admin sessions skip this check.
-    if (user?.role !== 'admin') {
-      if (!corporateId) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-      const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
-      const profile = profiles?.[0];
-      if (!profile) return Response.json({ error: 'Merchant not found' }, { status: 404 });
-      // Verify the application number is associated with this merchant's merchantMIDs
-      const merchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId });
+    const actor = await getPortalActor(req, base44);
+    if (!actor) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+    // Merchant actors must own the application: corporateId comes from the
+    // VERIFIED token (never the request body), and the applicationNo must
+    // belong to one of that merchant's MIDs.
+    if (actor.actor === 'merchant') {
+      const merchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId: actor.corporateId });
       const owned = (merchantMIDs || []).some((c: any) => String(c.mspApplicationNo) === String(applicationNo));
       if (!owned) return Response.json({ error: 'Forbidden' }, { status: 403 });
     }

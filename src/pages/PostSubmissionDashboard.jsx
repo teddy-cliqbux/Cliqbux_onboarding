@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
 import UnderwritingTracker from '@/components/onboarding/UnderwritingTracker';
 import EquipmentShippingModal from '@/components/onboarding/EquipmentShippingModal';
 import InventoryUpload from '@/components/onboarding/InventoryUpload';
 import LegacyPOSBridge from '@/components/onboarding/LegacyPOSBridge';
 import LocationStatusTable from '@/components/onboarding/LocationStatusTable';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 export default function PostSubmissionDashboard() {
   const navigate = useNavigate();
@@ -28,7 +28,7 @@ export default function PostSubmissionDashboard() {
       }
 
       try {
-        const res = await base44.functions.invoke('getMerchantData', { corporateId });
+        const res = await invokePortalFunction('getMerchantData', { corporateId });
         const data = res.data;
         if (data?.error) {
           setLoading(false);
@@ -108,7 +108,7 @@ export default function PostSubmissionDashboard() {
             corporateId={profile.corporateId}
             onStatusChanged={async () => {
               try {
-                const res = await base44.functions.invoke('getMerchantData', { corporateId: profile.corporateId });
+                const res = await invokePortalFunction('getMerchantData', { corporateId: profile.corporateId });
                 if (!res.data?.error) {
                   setLocations(res.data.locations || []);
                   setMerchantIDs(res.data.merchantIDs || []);

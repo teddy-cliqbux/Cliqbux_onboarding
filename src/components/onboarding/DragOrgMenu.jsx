@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Loader2, Copy, ArrowRightFromLine, Check, Building2 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 export default function DragOrgMenu({ corporateId, entities, selectedIds, onActionDone }) {
   const [targetEntityId, setTargetEntityId] = useState('');
@@ -23,7 +23,7 @@ export default function DragOrgMenu({ corporateId, entities, selectedIds, onActi
     setBusy(true);
     setError('');
     try {
-      const res = await base44.functions.invoke('batchUpdateStatus', {
+      const res = await invokePortalFunction('batchUpdateStatus', {
         corporateId,
         action: action === 'move' ? 'moveToEntity' : 'copyToEntity',
         locationIds: selectedIds,

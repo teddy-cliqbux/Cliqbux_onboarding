@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Loader2, CheckCircle2, AlertCircle, CheckCheck } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 export default function EINValidator({ corporateId, value, onChange, onValidated }) {
   const [status, setStatus] = useState(null); // null | 'loading' | 'valid' | 'invalid'
@@ -16,7 +16,7 @@ export default function EINValidator({ corporateId, value, onChange, onValidated
     setStatus('loading');
     setMessage('');
     try {
-      const res = await base44.functions.invoke('verifyEIN', { corporateId, federalEIN: digits });
+      const res = await invokePortalFunction('verifyEIN', { corporateId, federalEIN: digits });
       const d = res.data;
       if (d?.valid) {
         setStatus('valid');

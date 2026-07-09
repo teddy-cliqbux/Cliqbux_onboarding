@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Save, Loader2, User, Home, Calendar, Lock } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA',
@@ -32,7 +32,7 @@ export default function ManualEntryForm({ corporateId, onSaved }) {
     setSaving(true);
     setError('');
     try {
-      await base44.functions.invoke('updateMerchantProfile', { corporateId, ...form });
+      await invokePortalFunction('updateMerchantProfile', { corporateId, ...form });
       onSaved(form);
     } catch (err) {
       setError(err.message || 'Failed to save. Please try again.');

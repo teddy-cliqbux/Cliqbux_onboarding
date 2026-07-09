@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Upload, FileText, CheckCircle2, Loader2, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const ALLOWED = ['.pdf', '.csv', '.xlsx'];
 
@@ -19,7 +20,7 @@ export default function InventoryUpload({ corporateId }) {
       const uploadRes = await base44.integrations.Core.UploadFile({ file });
       const fileUrl = uploadRes.file_url;
       const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-      await base44.functions.invoke('saveInventoryFile', {
+      await invokePortalFunction('saveInventoryFile', {
         corporateId,
         fileName: file.name,
         fileType,

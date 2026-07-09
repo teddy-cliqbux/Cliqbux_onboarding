@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Landmark, Loader2, CheckCircle, ChevronDown } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 export default function PlaidLinkButton({ corporateId, onAccountsLinked, onAllAccountsLinked }) {
   const [linkToken, setLinkToken] = useState(null);
@@ -14,7 +14,7 @@ export default function PlaidLinkButton({ corporateId, onAccountsLinked, onAllAc
   useEffect(() => {
     const fetchLinkToken = async () => {
       try {
-        const res = await base44.functions.invoke('createPlaidLinkToken', { corporateId });
+        const res = await invokePortalFunction('createPlaidLinkToken', { corporateId });
         setLinkToken(res.data?.link_token || null);
       } catch (e) {
         setError('Could not initialize bank connection.');
@@ -36,7 +36,7 @@ export default function PlaidLinkButton({ corporateId, onAccountsLinked, onAllAc
       token: linkToken,
       onSuccess: async (publicToken, metadata) => {
         try {
-          const res = await base44.functions.invoke('exchangePlaidToken', {
+          const res = await invokePortalFunction('exchangePlaidToken', {
             publicToken,
             accountId: metadata.account_id
           });

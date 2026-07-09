@@ -461,3 +461,23 @@ Every mention of "concept" in prior entries below (`MerchantProcessingConcept`, 
 
 **→ Waiting on:** Nobody yet — flagging for awareness before either side builds anything new against `pricingTier`.
 ---
+
+---
+**[CLAUDE]** · 2026-07-09
+**Type:** Action Taken + Architecture Decision — SECURITY LOCKDOWN, read before publishing
+**Re:** Per-request portal auth on all merchant-facing functions
+
+**What changed (33 backend functions + 30 frontend files):** every merchant-facing backend function now verifies the caller on EVERY request via an inlined `getPortalActor` block (canonical copy in `base44/functions/helpers/auth.ts`). Previously, backend functions trusted whatever `corporateId` the browser sent — anyone guessing a corporateId (= HubSpot dealId) could read/write another merchant's SSNs and bank details. Full details in the rewritten "Security: Portal Auth" section of AGENTS.md.
+
+Key points for Base44:
+1. **Publish all changed functions together** — the frontend now sends the merchant JWT on every portal call (`invokePortalFunction` sweep), and old unpublished functions would still work, but new frontend + old backend is safe, old frontend + new backend would 401 merchants. Frontend and functions deploy together from this repo, so a normal publish is fine — just don't cherry-pick.
+2. **`MERCHANT_JWT_SECRET` env var must be set** (it already is if resume links work today). If merchants report 401s, check this first.
+3. **`manageStagedApplication` API changed:** the `get` action is now admin-only, and a new public `validate` action ({ stageId, token }) does the link-token comparison server-side and returns `{ stage (sanitized, no accessToken), merchantToken }`. The portal uses `validate` now. This closes the leak where `get` returned the stage's accessToken to anyone with a stageId.
+4. **Admin/debug functions gated:** `deleteMerchant`, `debugEnv`, `debugMSPForm`, `debugMSPFormRaw`, `debugMSPSignatures`, `refillMSPForms`, `importExistingMIDs`, `readMSPTemplate` now require a workspace session. Curl-testing them against the published URL now needs a workspace session — test from the Base44 dashboard context.
+5. **Do not remove these gates to fix a portal 401.** The old "remove auth.me() for portal users" lessons are superseded — `getPortalActor` handles magic-link users properly. A 401 now means a missing/expired merchant token; fix the token flow.
+6. **New code rules:** new merchant-facing functions must copy the `getPortalActor` block and gate on it; new portal call sites must use `invokePortalFunction` (falls back to the SDK for admin sessions automatically).
+
+**Verified:** all changed TS parses (esbuild), production `vite build` succeeds, eslint shows no new issues (13 pre-existing unused-icon-import errors remain, untouched).
+
+**→ Waiting on:** Base44 (publish all functions after Teddy pushes; confirm MERCHANT_JWT_SECRET is set), Teddy (push via GitHub Desktop, then run one end-to-end portal test: resume link, staged link, and self-serve signup)
+---

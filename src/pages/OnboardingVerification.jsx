@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Lock, Loader2, CheckCircle2, AlertCircle, ShieldCheck, PenLine, ChevronRight } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
 import SignerRoster from '@/components/onboarding/SignerRoster';
 import SigningErrorGuide from '@/components/onboarding/SigningErrorGuide';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 // How often to poll MSPWare for signing completion (ms)
 const POLL_INTERVAL_MS = 5000;
@@ -60,7 +60,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
   useEffect(() => {
     if (allSigned && profile?.corporateId && !agreementPushedRef.current) {
       agreementPushedRef.current = true;
-      base44.functions.invoke('pushStatusToHubspot', {
+      invokePortalFunction('pushStatusToHubspot', {
         corporateId: profile.corporateId,
         milestone: 'agreement_signed',
       }).catch(() => {
@@ -73,7 +73,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
     setLoadingSigning(true);
     setSigningError('');
     try {
-      const res  = await base44.functions.invoke('signApplication', { corporateId: profile.corporateId });
+      const res  = await invokePortalFunction('signApplication', { corporateId: profile.corporateId });
       const data = res.data;
 
       if (!data?.success) {
@@ -96,7 +96,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
 
   const pollSigningStatus = async () => {
     try {
-      const res  = await base44.functions.invoke('signApplication', { corporateId: profile.corporateId });
+      const res  = await invokePortalFunction('signApplication', { corporateId: profile.corporateId });
       const data = res.data;
       if (!data?.applications) return;
 
@@ -122,7 +122,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
     setSubmitting(true);
     setSubmitError('');
     try {
-      const res  = await base44.functions.invoke('submitToMSP', { corporateId: profile.corporateId });
+      const res  = await invokePortalFunction('submitToMSP', { corporateId: profile.corporateId });
       const data = res.data;
       if (data?.allSubmitted || data?.success) {
         onComplete();

@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { UserPlus, CheckCircle2, AlertCircle, Clock, Mail, Trash2, Send, Loader2, Users, Pencil, Save } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
 import SignerModal from './SignerModal';
 import InlineVerifyForm from './InlineVerifyForm';
 import SignerIdUpload from './SignerIdUpload';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 function StatusBadge({ status }) {
   const map = {
@@ -39,11 +39,11 @@ export default function SignerRoster({ profile, onValidChange }) {
     if (!profile?.corporateId) { setLoading(false); return; }
     setLoading(true);
     try {
-      const res = await base44.functions.invoke('manageSigner', { action: 'list', corporateId: profile.corporateId });
+      const res = await invokePortalFunction('manageSigner', { action: 'list', corporateId: profile.corporateId });
       let list = res.data?.signers || [];
       // Auto-seed primary signer from Step 1 profile when roster is empty
       if (list.length === 0 && profile.signerEmail && (profile.firstName || profile.lastName || profile.legalName)) {
-        const signerRes = await base44.functions.invoke('manageSigner', {
+        const signerRes = await invokePortalFunction('manageSigner', {
           action: 'create',
           corporateId: profile.corporateId,
           signerData: {
@@ -97,14 +97,14 @@ export default function SignerRoster({ profile, onValidChange }) {
 
   const handleDelete = async (signerId) => {
     if (!confirm('Remove this signer?')) return;
-    await base44.functions.invoke('manageSigner', { action: 'delete', corporateId: profile.corporateId, signerId });
+    await invokePortalFunction('manageSigner', { action: 'delete', corporateId: profile.corporateId, signerId });
     setSigners(prev => prev.filter(s => s.id !== signerId));
   };
 
   const handleResendInvite = async (signer) => {
     setResendingId(signer.id);
     try {
-      const res = await base44.functions.invoke('manageSigner', {
+      const res = await invokePortalFunction('manageSigner', {
         action: 'sendInvite',
         corporateId: profile.corporateId,
         signerId: signer.id
@@ -134,7 +134,7 @@ export default function SignerRoster({ profile, onValidChange }) {
     if (!draft.firstName.trim() || !draft.lastName.trim() || !draft.signerEmail.trim()) return;
     const isPrimary = signers.find(s => s.id === signerId)?.isPrimarySigner;
     try {
-      const res = await base44.functions.invoke('manageSigner', {
+      const res = await invokePortalFunction('manageSigner', {
         action: 'update',
         corporateId: profile.corporateId,
         signerId,
@@ -149,7 +149,7 @@ export default function SignerRoster({ profile, onValidChange }) {
         setSigners(prev => prev.map(s => s.id === signerId ? { ...s, firstName: res.data.signer.firstName, lastName: res.data.signer.lastName, signerEmail: res.data.signer.signerEmail, ownershipPercentage: res.data.signer.ownershipPercentage } : s));
         // If this is the primary signer, sync the root session profile to prevent data drift
         if (isPrimary && profile) {
-          await base44.functions.invoke('updateMerchantProfile', {
+          await invokePortalFunction('updateMerchantProfile', {
             corporateId: profile.corporateId,
             firstName: draft.firstName.trim(),
             lastName: draft.lastName.trim(),

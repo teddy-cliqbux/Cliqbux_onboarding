@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Loader2, Check, Percent } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { normalizeBusinessName } from '@/lib/textUtils';
+import { setMerchantToken } from '@/lib/merchantAuthFetch';
 
 // 2026-07-06: "Swiped & Keyed" (TRADITIONAL/Interchange Plus) card removed from
 // self-serve pricing per Teddy — Interchange Plus is always custom-negotiated
@@ -50,6 +51,10 @@ export default function MobilePricing({ onComplete }) {
       });
       const data = res.data;
       if (data?.error) throw new Error(data.error);
+
+      // Store the merchant JWT issued at signup so all subsequent portal
+      // calls are authenticated (backend functions now require it).
+      if (data.merchantToken) setMerchantToken(data.merchantToken);
       onComplete({
         corporateId: data.corporateId,
         firstName: info.signerName.split(' ')[0] || info.signerName,

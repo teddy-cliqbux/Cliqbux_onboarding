@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Landmark, Loader2 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 export default function PerRowPlaidLink({ corporateId, locationId, onBankConnected }) {
   const [linkToken, setLinkToken] = useState(null);
@@ -17,7 +17,7 @@ export default function PerRowPlaidLink({ corporateId, locationId, onBankConnect
     setLoading(true);
     setError('');
     try {
-      const res = await base44.functions.invoke('createPlaidLinkToken', { corporateId });
+      const res = await invokePortalFunction('createPlaidLinkToken', { corporateId });
       if (mountedRef.current) {
         setLinkToken(res.data?.link_token || null);
         if (!res.data?.link_token) setError('Could not initialize bank connection.');
@@ -46,7 +46,7 @@ export default function PerRowPlaidLink({ corporateId, locationId, onBankConnect
       token: linkToken,
       onSuccess: async (publicToken, metadata) => {
         try {
-          const res = await base44.functions.invoke('exchangePlaidToken', {
+          const res = await invokePortalFunction('exchangePlaidToken', {
             publicToken,
             accountId: metadata.account_id
           });

@@ -172,18 +172,17 @@ export default function OnboardingPortal() {
   const validateStageToken = async (stageId, token) => {
     setLoading(true);
     try {
-      const res = await base44.functions.invoke('manageStagedApplication', { action: 'get', stageId });
-      const stage = res.data?.stage;
+      // Server-side validation: the backend compares the token and, on success,
+      // returns a signed merchant JWT that authenticates every portal call in
+      // this session. The stage's accessToken is never sent back to the browser.
+      const res = await invokePortalFunction('manageStagedApplication', { action: 'validate', stageId, token });
+      const stage = res.data?.success ? res.data.stage : null;
       if (!stage) {
         setError({ title: 'Invalid Link', message: 'This staged application link is invalid or has expired.' });
         setLoading(false);
         return;
       }
-      if (stage.accessToken !== token) {
-        setError({ title: 'Invalid Link', message: 'This staged application link is invalid or has expired.' });
-        setLoading(false);
-        return;
-      }
+      setMerchantToken(res.data.merchantToken);
       setStagedApp(stage);
       stagedAppRef.current = stage;
       setMode('sales');
@@ -209,7 +208,7 @@ export default function OnboardingPortal() {
         return;
       }
 
-      const res  = await base44.functions.invoke('validateResumeToken', { token });
+      const res  = await invokePortalFunction('validateResumeToken', { token });
       const data = res.data;
       if (!data?.success || !data?.corporateId) {
         setError({
@@ -254,7 +253,7 @@ export default function OnboardingPortal() {
       if (!alreadySynced && !hasLocations) {
         // First visit or no locations yet — pull from HubSpot silently
         try {
-          await base44.functions.invoke('syncFromHubspot', { dealId: id });
+          await invokePortalFunction('syncFromHubspot', { dealId: id });
         } catch {
           // Non-fatal — if HubSpot sync fails, merchant can still fill in manually
         }
@@ -329,7 +328,7 @@ export default function OnboardingPortal() {
   // Fire-and-forget HubSpot stage update — never blocks the UI
   const pushMilestoneToHubspot = (corporateId, milestone) => {
     if (!corporateId) return;
-    base44.functions.invoke('pushStatusToHubspot', { corporateId, milestone }).catch(() => {
+    invokePortalFunction('pushStatusToHubspot', { corporateId, milestone }).catch(() => {
       // Non-fatal — HubSpot sync is best-effort
     });
   };
@@ -337,7 +336,7 @@ export default function OnboardingPortal() {
   // Fire-and-forget progress tracking — upserts a StagedApplication record for admin visibility
   const trackProgress = (corporateId, progressData) => {
     if (!corporateId) return;
-    base44.functions.invoke('manageStagedApplication', {
+    invokePortalFunction('manageStagedApplication', {
       action: 'trackProgress',
       corporateId,
       data: progressData,

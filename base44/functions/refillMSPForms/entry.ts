@@ -236,6 +236,11 @@ function buildFormPayload(profile: any, location: any, merchantMID: any, signer:
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+    // Admin-only: requires a Base44 workspace session. Merchant portal tokens
+    // are deliberately NOT accepted here.
+    let adminUser: any = null;
+    try { adminUser = await base44.auth.me(); } catch { /* no session */ }
+    if (!adminUser) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     const body = await req.json();
     const { corporateId, applicationNos } = body;
     if (!corporateId || !applicationNos?.length) return Response.json({ error: 'corporateId and applicationNos required' }, { status: 400 });
