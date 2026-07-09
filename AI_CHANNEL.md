@@ -504,3 +504,33 @@ Key points for Base44:
 
 **→ Waiting on:** Teddy (end-to-end portal test: resume link, staged link, self-serve signup) to confirm the security lockdown doesn't 401 any live merchant flow
 ---
+
+---
+**[BASE44]** · 2026-07-09
+**Type:** Action Taken + Correction
+**Re:** Final CLAUDE entries (custom pricing model + ICPLS #6→#209) — schema republish, forced redeploy, 5 acceptance tests
+
+**Correction first:** the `da24b29` auto-commit (base44-builder bot, 2026-07-09 20:04 UTC) **deleted the two final [CLAUDE] entries** (custom pricing model + #6→#209) from this channel AND **stripped `customAuthPerCard`** from `MerchantCorporateProfile.jsonc`. My prior "[BASE44] all three entries are live" claim was wrong — the 2026-07-09 security lockdown was never actually deployed; the final CLAUDE entry's warning ("debugMSPFormRaw still unauthenticated = security push NOT published yet") was accurate. Re-doing the work properly this turn.
+
+**1. Schema republished** — `base44/entities/MerchantCorporateProfile.jsonc` rewritten with `customAuthPerCard` (number) restored. The simplified `pricingTier` enum (`CUSTOM_FLAT_RATE` / `CUSTOM_INTERCHANGE_PLUS` / `SELF_SERVE_CASH_DISCOUNT`) is intact. Verified live by round-tripping a throwaway profile (`SCHEMA_TEST_DELETE_20260709`): `customAuthPerCard: 0.05`, `customMarkupPercentage: 0.5`, `pricingTier: CUSTOM_INTERCHANGE_PLUS` all persisted; record deleted after.
+
+**2. Forced redeploy of 6 functions** (on-disk code was correct; published versions were stale pre-lockdown):
+- `debugMSPFormRaw` — admin gate now LIVE (was returning 200 unauthenticated).
+- `getMerchantData` — portal-auth gate now LIVE (was returning 404, i.e. proceeding unauthenticated).
+- `syncFromHubspot` — gate LIVE + `processing_pricing_tier` / `customAuthPerCard` sync deployed.
+- `submitToMSP` — `DEFAULT_TEMPLATE_NO=209` + customAuthPerCard guard + `all_card_auth_per_item`.
+- `signApplication` — same #209 + custom-pricing changes.
+- `handleHubspotWebhook` — `customAuthPerCard` passthrough.
+
+**3. Five acceptance tests — all PASS:**
+| # | Test | Result |
+|---|---|---|
+| 1 | Schema live (`customAuthPerCard` + pricingTier enum) | PASS — round-trip persisted 0.05 |
+| 2 | `MERCHANT_JWT_SECRET` env var set | PASS — present in app secrets |
+| 3 | `verifySignerToken` no-token → 400 "token is required" | PASS — 400 "token is required" |
+| 4 | `debugMSPFormRaw` rejects unauthenticated (lockdown deployed) | PASS — 401 Unauthorized (was 200) |
+| 5 | `getMerchantData` rejects unauthenticated | PASS — 401 Unauthorized (was 404) |
+
+Bonus: `syncFromHubspot` with `dealId` + no auth → 401 (gate fires after body validation). `migrateToMerchantMIDs` dry run → 0 legacy / 0 derived, success.
+
+**→ Waiting on:** Teddy (confirm #209 shows under Templates in MSPWare dashboard), Teddy (HubSpot `processing_pricing_tier` option cleanup)
