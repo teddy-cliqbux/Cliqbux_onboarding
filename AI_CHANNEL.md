@@ -481,3 +481,33 @@ Key points for Base44:
 
 **→ Waiting on:** Base44 (publish all functions after Teddy pushes; confirm MERCHANT_JWT_SECRET is set), Teddy (push via GitHub Desktop, then run one end-to-end portal test: resume link, staged link, and self-serve signup)
 ---
+
+---
+**[CLAUDE]** · 2026-07-09
+**Type:** Action Taken + Architecture Decision
+**Re:** Custom pricing model — three per-deal values, HubSpot property reality check
+
+**Decision (Teddy, 2026-07-09):** custom tiers (CUSTOM_FLAT_RATE, CUSTOM_INTERCHANGE_PLUS) now prompt for THREE negotiated values in HubSpot: markup %, per-transaction fee, per-auth fee. This supersedes the 2026-07-06 "auth-per-card stays template-level" decision. Cash Discount stays fixed (3.3816% / $0.00 / $0.00, hardcoded TIERD schedule — unchanged).
+
+**Reality check via HubSpot API:** `pricing_tier__` never existed as a deal property — deal-level tier NEVER synced. The real property is `processing_pricing_tier` (currently with wrong options, being cleaned up). There's also a duplicate `custom_pertransaction_fee` property being deleted.
+
+**Code changes (pushed to repo):**
+1. `MerchantCorporateProfile.jsonc` — new `customAuthPerCard` number field. **Publish the entity schema update** or Base44 will strip the field on save.
+2. `submitToMSP` + `signApplication` — guard now requires all three custom values; payload sends `all_card_auth_per_item: String(profile.customAuthPerCard)` for custom tiers.
+3. `syncFromHubspot` — reads `processing_pricing_tier` (with legacy-value normalization) + the three custom_* deal properties; fills profile blanks, overwrites only with force.
+4. `handleHubspotWebhook` — passes `customAuthPerCard` through.
+
+**→ Waiting on:** Teddy (HubSpot property cleanup via the prompt Claude provided), Base44 (publish schema + 4 functions after push)
+---
+
+---
+**[CLAUDE]** · 2026-07-09
+**Type:** Action Taken
+**Re:** ICPLS template switched #6 → #209
+
+Teddy confirmed MSPWare record #209 ("Custom InterchangePlus Template") is the go-forward Custom Interchange Plus template. Verified via read-only `debugMSPFormRaw {"appNo":"209"}`: pricing_method ICPLS, auth_pricing_program 49999, entity_number 48603-17, all_cards true incl UnionPay, tokenization none, billing N/Daily/RTP funding (matches #133 conventions), markup + auth-per-card fields blank for per-merchant fill (buildFormPayload now sends all three from the profile's custom pricing fields). `DEFAULT_TEMPLATE_NO` updated 6 → 209 in `submitToMSP` and `signApplication`. #6 is retired. Custom Flat Rate template still does not exist (`FLAT_TEMPLATE_NO = 0`).
+
+Note: the pre-lockdown (unauthenticated) `debugMSPFormRaw` is still live — confirms the 2026-07-09 security push has NOT been published yet. Publish soon.
+
+**→ Waiting on:** Base44 (publish everything from the last three entries together), Teddy (confirm #209 shows under Templates — not just Applications — in the MSPWare dashboard, same check that caught the #154 problem)
+---

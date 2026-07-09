@@ -102,7 +102,11 @@ const HS_PROPS = {
   ],
   deal: [
     'dealname', 'amount', 'dealstage', 'pipeline',
-    'pricing_tier__',       // Custom: pricing tier on the deal
+    'pricing_tier__',            // legacy — property was never actually created in HubSpot (confirmed 2026-07-09)
+    'processing_pricing_tier',   // the REAL deal-level tier property (created 2026-07-09)
+    'custom_markup_percentage',  // negotiated markup % — required for custom tiers
+    'custom_per_tx_fee',         // negotiated per-transaction fee ($) — required for custom tiers
+    'custom_auth_per_card',      // negotiated per-auth fee ($) — required for custom tiers
     'hs_quote_link',
   ],
 };
@@ -218,7 +222,20 @@ Deno.serve(async (req) => {
     }
 
     const dealProps = deal.properties || {};
-    const pricingTier = dealProps.pricing_tier__ || dealProps.pricing_tier || 'STANDARD';
+    // Tier precedence: processing_pricing_tier (the real deal property, 2026-07-09)
+    // → legacy names → STANDARD. Normalize legacy/lowercase option values to the
+    // canonical enum so TIER_TO_METHOD and the custom-pricing guard match.
+    const TIER_ALIASES: Record<string, string> = {
+      'CUSTOM': 'CUSTOM_INTERCHANGE_PLUS',              // pre-cleanup processing_pricing_tier option
+      'ZERO_CASH_DISCOUNT': 'SELF_SERVE_CASH_DISCOUNT', // pre-cleanup processing_pricing_tier option
+      'CASH_DISCOUNT': 'SELF_SERVE_CASH_DISCOUNT',
+      'SELF_CASH_DISCOUNT': 'SELF_SERVE_CASH_DISCOUNT',
+      // 'STANDARD_PROCESSING_249_010_289_030' deliberately NOT mapped — that is the
+      // on-hold self-serve flat rate (Elavon unsupported); leaving it unmapped makes
+      // downstream fall back to safe defaults instead of boarding an unsupported plan.
+    };
+    const rawTier = String(dealProps.processing_pricing_tier || dealProps.pricing_tier__ || dealProps.pricing_tier || 'STANDARD').toUpperCase();
+    const pricingTier = TIER_ALIASES[rawTier] || rawTier;
 
     // ── 2. Find the associated parent company ─────────────────────────────────
     const companyAssocs = deal.associations?.companies?.results || [];
@@ -272,6 +289,14 @@ Deno.serve(async (req) => {
     if (pc.avg_ticket)          profileData.avgSaleAmount     = String(pc.avg_ticket);
     if (pc.card_present_pct)    profileData.cardPresentPct    = parseInt(pc.card_present_pct, 10);
 
+    // Deal-level negotiated pricing (custom tiers). Cash Discount deals leave these
+    // blank on purpose — the fixed CD schedule (3.3816% / $0.00 / $0.00) is hardcoded
+    // in buildFormPayload (submitToMSP/signApplication), single source of truth.
+    const numOrNull = (v: any) => (v == null || v === '' ? null : parseFloat(v));
+    if (numOrNull(dealProps.custom_markup_percentage) != null) profileData.customMarkupPercentage = numOrNull(dealProps.custom_markup_percentage);
+    if (numOrNull(dealProps.custom_per_tx_fee)        != null) profileData.customPerTxFee         = numOrNull(dealProps.custom_per_tx_fee);
+    if (numOrNull(dealProps.custom_auth_per_card)     != null) profileData.customAuthPerCard      = numOrNull(dealProps.custom_auth_per_card);
+
     const existingProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
     let profileId: string;
 
@@ -291,6 +316,10 @@ Deno.serve(async (req) => {
       if (force || !existing.corporatePhone)   safeUpdate.corporatePhone   = profileData.corporatePhone;
       if (force || !existing.monthlyCardSales) safeUpdate.monthlyCardSales = profileData.monthlyCardSales;
       if (force || !existing.avgSaleAmount)    safeUpdate.avgSaleAmount    = profileData.avgSaleAmount;
+      // Negotiated pricing: fill blanks always; overwrite only with force
+      if (profileData.customMarkupPercentage != null && (force || existing.customMarkupPercentage == null)) safeUpdate.customMarkupPercentage = profileData.customMarkupPercentage;
+      if (profileData.customPerTxFee         != null && (force || existing.customPerTxFee         == null)) safeUpdate.customPerTxFee         = profileData.customPerTxFee;
+      if (profileData.customAuthPerCard      != null && (force || existing.customAuthPerCard      == null)) safeUpdate.customAuthPerCard      = profileData.customAuthPerCard;
 
       await base44.asServiceRole.entities.MerchantCorporateProfile.update(existing.id, safeUpdate);
       profileId = existing.id;

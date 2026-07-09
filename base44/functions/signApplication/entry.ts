@@ -60,7 +60,8 @@ async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merc
 // ─── Constants (shared with submitToMSP) ─────────────────────────────────────
 // Cliqbux's 4-template pricing model — see AGENTS.md Critical Lesson #12.
 const MSP_APP_TYPE = 24;           // Elavon US Application
-const DEFAULT_TEMPLATE_NO = 6;    // Cliqbux Template Swipe Keyed — Custom Interchange Plus
+// 2026-07-09: switched from #6 to #209 ('Custom InterchangePlus Template') — see submitToMSP.
+const DEFAULT_TEMPLATE_NO = 209;  // Custom InterchangePlus Template
 // 2026-07-07: CD_TEMPLATE_NO switched from 154 to 133. #154 ("Cliqbux Template Cash
 // Discount") was missing key data and is no longer used for anything. #133 ("Cash
 // Discount Template") is the new standard — a properly MSPWare-typed Template record
@@ -315,11 +316,12 @@ function buildFormPayload(
   // real negotiated numbers are captured. See AGENTS.md Critical Lesson #12.
   const tierKey = (merchantMID.pricingTier || profile.pricingTier || '').toUpperCase();
   const isCustomPricingTier = CUSTOM_PRICING_TIERS.includes(tierKey);
-  if (isCustomPricingTier && (profile.customMarkupPercentage == null || profile.customPerTxFee == null)) {
+  if (isCustomPricingTier && (profile.customMarkupPercentage == null || profile.customPerTxFee == null || profile.customAuthPerCard == null)) {
     throw new Error(
       `Custom pricing not yet set for "${profile.legalName || 'this merchant'}" (pricingTier=${tierKey}). ` +
-      `customMarkupPercentage and customPerTxFee must both be set before an MSPWare application can be ` +
-      `created or filled for a custom-pricing tier.`
+      `customMarkupPercentage, customPerTxFee, and customAuthPerCard must ALL be set before an MSPWare ` +
+      `application can be created or filled for a custom-pricing tier. (These come from the HubSpot deal: ` +
+      `processing_pricing_tier + custom_markup_percentage + custom_per_tx_fee + custom_auth_per_card.)`
     );
   }
 
@@ -554,6 +556,10 @@ function buildFormPayload(
     ...(isCustomPricingTier ? {
       all_markup_discount: String(profile.customMarkupPercentage),
       all_markup_per_item: String(profile.customPerTxFee),
+      // 2026-07-09: auth-per-card is now ALSO per-deal for custom tiers (Teddy —
+      // supersedes the 2026-07-06 "template-level only, no custom field" decision).
+      // HubSpot prompts all three values on custom-tier deals.
+      all_card_auth_per_item: String(profile.customAuthPerCard),
     } : {}),
 
     // ── Cliqbux Standard Equipment Configuration ───────────────────────────────

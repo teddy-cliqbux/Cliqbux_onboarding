@@ -163,7 +163,13 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 **pricingTier enum simplification (in progress 2026-07-06):** the old enum was a genuine mess — inconsistent casing across files (`CASH_DISCOUNT` in the entity schema/HubSpot flow vs. `Self_CashDiscount` in `OnboardingPortal.jsx`'s `SELF_SERVE_TIERS` check, meaning **self-serve Cash Discount merchants were never actually recognized as self-serve** due to the mismatch — a real bug found during this cleanup), plus `TRADITIONAL`/`STANDARD`/`PREMIUM`/`Custom` all really meaning the same thing (a sales-assisted deal whose actual method is either Flat or Interchange Plus). New simplified enum: `CUSTOM_FLAT_RATE`, `CUSTOM_INTERCHANGE_PLUS`, `SELF_SERVE_CASH_DISCOUNT`. `Self_Swiped`/`Self_Keyed` left untouched (dormant, see above).
 
-**The "must never be blank" guard:** Teddy confirmed — for `CUSTOM_FLAT_RATE` and `CUSTOM_INTERCHANGE_PLUS`, application creation/submission must be blocked with a clear internal error if `customMarkupPercentage` or `customPerTxFee` isn't set on the profile yet, rather than silently creating an MSPWare draft with blank pricing fields for someone to fill in by hand. Auth Per Card does NOT need a separate custom field — Teddy confirmed the existing `customPerTxFee` is sufficient; auth-per-card stays a fixed template-level value like `all_card_auth_per_item: '0.050'` already used elsewhere.
+**The "must never be blank" guard (updated 2026-07-09):** for `CUSTOM_FLAT_RATE` and `CUSTOM_INTERCHANGE_PLUS`, application creation/submission is blocked with a clear internal error unless `customMarkupPercentage`, `customPerTxFee`, AND `customAuthPerCard` are all set on the profile. ~~Auth Per Card does NOT need a separate custom field~~ — **superseded 2026-07-09**: Teddy now wants all three values (markup %, per-transaction fee, per-auth fee) prompted per-deal in HubSpot for both custom tiers. `customAuthPerCard` feeds `all_card_auth_per_item` in `buildFormPayload` (submitToMSP + signApplication). Cash Discount stays fixed: 3.3816% / $0.00 / $0.00, hardcoded in the TIERD schedule — no HubSpot values needed or read for CD.
+
+**HubSpot deal-level pricing properties (reality-checked via API 2026-07-09):**
+- `pricing_tier__` **NEVER EXISTED in HubSpot** — the code read it for weeks but the property was never created, so deal-level tier never synced. Kept as a legacy fallback only.
+- The real deal property is `processing_pricing_tier`. `syncFromHubspot` reads it first, uppercases, and maps legacy option values (`custom` → CUSTOM_INTERCHANGE_PLUS, `zero_cash_discount` → SELF_SERVE_CASH_DISCOUNT). `standard_processing_249_010_289_030` is deliberately unmapped (on-hold self-serve flat rate).
+- Negotiated values come from deal properties `custom_markup_percentage`, `custom_per_tx_fee`, `custom_auth_per_card` → profile fields `customMarkupPercentage`/`customPerTxFee`/`customAuthPerCard`. Sync fills blanks; only `force: true` overwrites.
+- `custom_pertransaction_fee` (no underscores between "per" and "transaction") is a DUPLICATE property slated for deletion in HubSpot — never read it.
 
 ### 13. `cards_accepted` — another template-owned field we were incorrectly sending
 
@@ -194,7 +200,7 @@ Published function base URL: `https://cliqbux-onboard-prime.base44.app/functions
 - Auth headers: `X-API-KEY: {MSP_APP_KEY}` and `X-App-ID: cliqbux`
   - Note: swagger shows `appkey`/`appid` as security scheme names — these are NOT the header names
 - Application type: `24` = Elavon US Application
-- Default template: `6` = Cliqbux Template Swipe Keyed
+- Default (ICPLS) template: `209` = "Custom InterchangePlus Template" — **switched from #6 on 2026-07-09** (Teddy built #209 and confirmed it's the go-forward Custom Interchange Plus template; verified via `debugMSPFormRaw {"appNo":"209"}`: pricing_method ICPLS, auth_pricing_program 49999, entity_number 48603-17, all_cards incl UnionPay, tokenization none, markup fields blank for per-merchant fill). #6 ("Cliqbux Template Swipe Keyed") is retired — don't reference it for new work.
 - Salesperson ID: `76764` (Teddy Elsenbaumer's MSPWare ID — NOT 86764 which is the old Elavon rep code)
 
 ### MSPWare boarding flow

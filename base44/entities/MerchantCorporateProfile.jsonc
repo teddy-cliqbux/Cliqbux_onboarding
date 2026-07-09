@@ -70,6 +70,9 @@
     "customPerTxFee": {
       "type": "number"
     },
+    "customAuthPerCard": {
+      "type": "number"
+    },
     "applicationStatus": {
       "type": "string",
       "enum": [

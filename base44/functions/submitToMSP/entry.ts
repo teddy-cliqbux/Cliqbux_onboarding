@@ -55,7 +55,12 @@ const MSP_APP_TYPE = 24;
 // Discount Template") is the new standard — it is a properly MSPWare-typed Template
 // record (unlike #154, which was a plain "New"-status application being reused as a
 // template source) and its field values have been confirmed by Teddy. See AGENTS.md.
-const DEFAULT_TEMPLATE_NO = 6;        // Custom Interchange Plus
+// 2026-07-09: ICPLS template switched from #6 ('Cliqbux Template Swipe Keyed') to
+// #209 ('Custom InterchangePlus Template') — built and confirmed by Teddy. Verified
+// via debugMSPFormRaw pull of #209: pricing_method ICPLS, auth_pricing_program 49999,
+// entity_number 48603-17, all_cards true (incl UnionPay), tokenization none, markup
+// fields correctly blank (per-merchant, sent by buildFormPayload for custom tiers).
+const DEFAULT_TEMPLATE_NO = 209;      // Custom Interchange Plus
 const CD_TEMPLATE_NO = 133;           // Self-Serve Cash Discount
 const FLAT_TEMPLATE_NO = 0;           // TODO: Custom Flat Rate — fill in once created (this session, see task tracker)
 // Self-Serve Flat Rate has NO template — on hold, Elavon doesn't support it yet.
@@ -393,12 +398,14 @@ function buildFormPayload(
   // flagged 2026-07-06 — see AGENTS.md Critical Lesson #12.
   const tierKey = (merchantMID.pricingTier || profile.pricingTier || '').toUpperCase();
   const isCustomPricingTier = CUSTOM_PRICING_TIERS.includes(tierKey);
-  if (isCustomPricingTier && (profile.customMarkupPercentage == null || profile.customPerTxFee == null)) {
+  if (isCustomPricingTier && (profile.customMarkupPercentage == null || profile.customPerTxFee == null || profile.customAuthPerCard == null)) {
     throw new Error(
       `Custom pricing not yet set for "${profile.legalName || 'this merchant'}" (pricingTier=${tierKey}). ` +
-      `customMarkupPercentage and customPerTxFee must both be set on the corporate profile before an ` +
-      `MSPWare application can be created or filled for a custom-pricing tier — pricing must never be ` +
-      `left blank for someone to fill in manually inside MSPWare.`
+      `customMarkupPercentage, customPerTxFee, and customAuthPerCard must ALL be set on the corporate ` +
+      `profile before an MSPWare application can be created or filled for a custom-pricing tier — ` +
+      `pricing must never be left blank for someone to fill in manually inside MSPWare. ` +
+      `(These come from the HubSpot deal: processing_pricing_tier + custom_markup_percentage + ` +
+      `custom_per_tx_fee + custom_auth_per_card.)`
     );
   }
 
@@ -652,6 +659,10 @@ function buildFormPayload(
     ...(isCustomPricingTier ? {
       all_markup_discount: String(profile.customMarkupPercentage),
       all_markup_per_item: String(profile.customPerTxFee),
+      // 2026-07-09: auth-per-card is now ALSO per-deal for custom tiers (Teddy —
+      // supersedes the 2026-07-06 "template-level only, no custom field" decision).
+      // HubSpot prompts all three values on custom-tier deals.
+      all_card_auth_per_item: String(profile.customAuthPerCard),
     } : {}),
 
     // ── Cliqbux Standard Equipment Configuration ───────────────────────────────

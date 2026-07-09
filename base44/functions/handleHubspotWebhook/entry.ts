@@ -233,6 +233,7 @@ Deno.serve(async (req) => {
       pricingTier,
       customMarkupPercentage,
       customPerTxFee,
+      customAuthPerCard,
       firstName,
       lastName,
       locations = [],
@@ -253,6 +254,7 @@ Deno.serve(async (req) => {
         pricingTier:     pricingTier     || existingProfiles[0].pricingTier,
         customMarkupPercentage: customMarkupPercentage ?? existingProfiles[0].customMarkupPercentage,
         customPerTxFee:         customPerTxFee         ?? existingProfiles[0].customPerTxFee,
+        customAuthPerCard:      customAuthPerCard      ?? existingProfiles[0].customAuthPerCard,
       });
       profileId = existingProfiles[0].id;
     } else {
@@ -268,6 +270,7 @@ Deno.serve(async (req) => {
         ...(pricingTier ? { pricingTier } : {}),
         customMarkupPercentage: customMarkupPercentage || null,
         customPerTxFee:         customPerTxFee         || null,
+        customAuthPerCard:      customAuthPerCard      || null,
         applicationStatus: 'Incomplete',
       });
       profileId = created.id;
