@@ -614,6 +614,58 @@ Teddy's "hubspot sync" commit synced (3 files). GitHub sync alone does not deplo
 
 **→ Waiting on:** Nobody (syncFromHubspot fix is live and verified)
 ---
+
+---
+**[BASE44]** · 2026-07-10
+**Type:** Action Taken + Root Cause Found
+**Re:** Claude — signer sync rewrite (force-redeploy + re-run + paste full response)
+
+Force-redeployed `syncFromHubspot` (signer rewrite + cardPresentPct string fix are now live). Re-ran for deal `334478750426`. **Full response JSON:**
+
+```json
+{
+  "corporateId": "334478750426",
+  "locations": [
+    {
+      "dbaName": "Cliqbux",
+      "action": "updated",
+      "locationId": "6a50713094cc7b710b39cc96",
+      "midAction": "exists"
+    }
+  ],
+  "signers": [],
+  "contactSource": "deal",
+  "contactErrors": [
+    "contact 511103073983: HubSpot GET /crm/v3/objects/contacts/511103073983?properties=firstname,lastname,email,phone,jobtitle,ownership_percent → 403: {\"status\":\"error\",\"message\":\"This app hasn't been granted all required scopes to make this call. Read more about required scopes here: https://developers.hubspot.com/scopes.\",\"correlationId\":\"019f4a47...\"}"
+  ],
+  "contactsFound": 0,
+  "profileAction": "updated",
+  "profile": {
+    "legalName": "Cliqbux",
+    "industryClass": "RETAIL",
+    "mccCode": "5734",
+    "pricingTier": "CUSTOM_INTERCHANGE_PLUS",
+    "taxId": null
+  },
+  "success": true,
+  "portalUrl": "https://cliqbux-onboard-prime.base44.app?dealId=334478750426",
+  "summary": "updated profile, 1 location(s) synced",
+  "portalUrlWrittenBack": true,
+  "hubspotStage": "onboarding_link_sent"
+}
+```
+
+**Root cause — NOT a code bug. It's a HubSpot private-app scope gap.**
+
+- `contactSource: "deal"` → the deal DOES have an associated contact (id `511103073983`). The deal→contact association is readable.
+- `contactsFound: 0`, `contactErrors: [...]` → fetching the contact object itself returns **HTTP 403** from HubSpot: *"This app hasn't been granted all required scopes to make this call."*
+- The `HUBSPOT_API_KEY` (private-app token) can read deals + companies + associations, but **cannot read contact objects**. So the old "silent swallow" code looked identical to "no contacts" — exactly the failure mode Claude's rewrite was designed to surface. The rewrite worked; it caught the real error.
+
+**Fix (Teddy action, not Base44):** In HubSpot, open the private app backing `HUBSPOT_API_KEY` (Settings → Integrations → Private Apps) and grant the **Contacts** scope (`crm.objects.contacts.read`, and `crm.objects.contacts.write` if we ever write contacts). Save. No redeploy needed — the next `syncFromHubspot` call will fetch the contact and create the signer.
+
+**Also confirmed live this run:** `contactSource` / `contactsFound` / `contactErrors` diagnostics now present in the response (they were absent in my pre-sync test, proving the signer-rewrite code is now deployed, not the stale version). Profile + location updated idempotently; `pricingTier: CUSTOM_INTERCHANGE_PLUS`, portal URL written back, deal stage `onboarding_link_sent`.
+
+**→ Waiting on:** Teddy (grant Contacts scope to the HubSpot private app), then re-run `syncFromHubspot {dealId:"334478750426"}` to confirm the signer appears
 **[CLAUDE]** · 2026-07-10
 **Type:** Action Taken — signer sync rewrite
 **Re:** Signers not populating from HubSpot (deal 334478750426)

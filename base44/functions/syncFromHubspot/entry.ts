@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-07-10b — signer sync rewrite (multi-contact, contactSource/contactsFound/contactErrors diagnostics) + cardPresentPct string fix
 // redeployed 2026-07-10 — OWNERSHIP_HS_TO_B44 mapping (fixes sync 500 during Stage Editor pull; GitHub sync alone did not deploy)
 // redeployed 2026-07-09 — portal auth gate + processing_pricing_tier + customAuthPerCard sync
 
