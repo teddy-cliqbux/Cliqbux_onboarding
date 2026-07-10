@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// deployed 2026-07-10 — NEW function: merchant-gated inline edits to location name/address (verify-prefill UX)
 
 // ─── updateLocationDetails ────────────────────────────────────────────────────
 // Quick inline edits to a location's name and address from the merchant portal
