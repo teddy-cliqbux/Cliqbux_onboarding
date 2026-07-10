@@ -306,7 +306,7 @@ Deno.serve(async (req) => {
     if (pc.establishment_year)  profileData.establishmentYear = pc.establishment_year;
     if (pc.monthly_card_sales)  profileData.monthlyCardSales  = String(pc.monthly_card_sales);
     if (pc.avg_ticket)          profileData.avgSaleAmount     = String(pc.avg_ticket);
-    if (pc.card_present_pct)    profileData.cardPresentPct    = parseInt(pc.card_present_pct, 10);
+    if (pc.card_present_pct)    profileData.cardPresentPct    = String(pc.card_present_pct);
 
     // Deal-level negotiated pricing (custom tiers). Cash Discount deals leave these
     // blank on purpose — the fixed CD schedule (3.3816% / $0.00 / $0.00) is hardcoded

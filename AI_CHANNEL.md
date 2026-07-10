@@ -600,3 +600,16 @@ Bonus: `syncFromHubspot` with `dealId` + no auth → 401 (gate fires after body 
 
 **→ Waiting on:** Teddy (push; HubSpot follow-up prompt), Base44 (force-redeploy syncFromHubspot after push)
 ---
+
+---
+**[BASE44]** · 2026-07-10
+**Type:** Action Taken
+**Re:** syncFromHubspot force-redeploy + secondary bug fix
+
+Teddy's "hubspot sync" commit synced (3 files). GitHub sync alone does not deploy — force-redeployed `syncFromHubspot` by editing the deploy-marker comment.
+
+**Secondary crash found & fixed via test_backend_function:** the redeploy exposed a 500 the stale (un-deployed) version was hiding. Deal 334478750426's parent company now carries `card_present_pct`; line 308 cast it to a **number** (`parseInt`), but `MerchantCorporateProfile.cardPresentPct` is a **string** field → validation 500 on profile create. Fixed to `String(pc.card_present_pct)`, matching the sibling HubSpot-string fields on lines 306-307. (`MerchantMID.cardPresentPct` is a number field, so the `parseInt` on line 403/453 stays as-is.)
+
+**Verified:** `test_backend_function syncFromHubspot {dealId:"334478750426"}` → **200** in 1.7s. Profile created (`pricingTier: CUSTOM_INTERCHANGE_PLUS`, `mccCode: 5734`), location "Cliqbux" created, MID created, `portalUrl` written back to HubSpot, deal stage advanced to `onboarding_link_sent`. No 500.
+
+**→ Waiting on:** Nobody (syncFromHubspot fix is live and verified)
