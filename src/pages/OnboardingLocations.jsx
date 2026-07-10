@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
   Plus, ArrowRight, Loader2, Store, Trash2, CheckCircle2,
   MapPin, Building2, CreditCard, ChevronDown, ChevronRight, X,
-  AlertTriangle, Check, ArrowLeft, Pencil, GripVertical, Cloud, Mail, Lock
+  AlertTriangle, Check, ArrowLeft, Pencil, GripVertical, Cloud, Mail, Lock, Info
 
 } from 'lucide-react';
 import { isLocked as getMidLocked, isImported as getMidImported } from '@/utils/statusUtils';
@@ -258,8 +258,44 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
 
 // ─── Location Card (nested inside Entity, draggable) ──────────────────────────
 
-function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, index, showValidation }) {
+function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, index, showValidation }) {
   const locMids = merchantIDs.filter(c => c.locationId === location.id);
+  // Quick inline edit for the (often prefilled) name + address — 2026-07-10
+  const [editingLoc, setEditingLoc] = useState(false);
+  const [locForm, setLocForm] = useState({ dbaName: '', street: '', city: '', state: '', zip: '' });
+  const [locSaving, setLocSaving] = useState(false);
+  const [locEditError, setLocEditError] = useState('');
+  const startLocEdit = () => {
+    setLocForm({
+      dbaName: location.dbaName || '',
+      street: location.businessStreet || (location.businessAddress || '').split(',')[0]?.trim() || '',
+      city: location.businessCity || '',
+      state: location.businessState || '',
+      zip: location.businessZip || '',
+    });
+    setLocEditError('');
+    setEditingLoc(true);
+    setExpanded(true);
+  };
+  const saveLocEdit = async () => {
+    if (!locForm.dbaName.trim()) { setLocEditError('Location name is required'); return; }
+    if (!/^\s*\d/.test(locForm.street)) { setLocEditError('Street address must include a street number (e.g. "123 Main St")'); return; }
+    setLocSaving(true); setLocEditError('');
+    try {
+      const res = await invokePortalFunction('updateLocationDetails', {
+        locationId: location.id,
+        dbaName: locForm.dbaName.trim(),
+        businessStreet: locForm.street.trim(),
+        businessCity: locForm.city.trim(),
+        businessState: locForm.state.trim(),
+        businessZip: locForm.zip.trim(),
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      onLocationUpdated?.({ id: location.id, ...res.data.location });
+      setEditingLoc(false);
+    } catch (err) { setLocEditError(err.message || 'Save failed'); }
+    finally { setLocSaving(false); }
+  };
   const [expanded, setExpanded] = useState(locMids.length === 0 || locMids.some(m => !m.mccCode));
   const [addingMid, setAddingMid] = useState(false);
   const [addMidName, setAddMidName] = useState('');
@@ -317,6 +353,10 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
               <span className="text-[10px] font-semibold text-gray-500 bg-white/5 rounded-full px-2 py-0.5">
                 {locMids.length} MID{locMids.length !== 1 ? 's' : ''}
               </span>
+              <button onClick={e => { e.stopPropagation(); startLocEdit(); }} title="Edit location name / address"
+                className="p-1.5 text-gray-600 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-all">
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
               <button onClick={e => { e.stopPropagation(); onDelete(location); }}
                 className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all">
                 <Trash2 className="w-3.5 h-3.5" />
@@ -326,6 +366,29 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
               </button>
             </div>
           </div>
+
+          {/* Inline location edit — quick correction of prefilled data (2026-07-10) */}
+          {editingLoc && (
+            <div className="mx-4 mb-3 bg-[#111318] border border-amber-500/25 rounded-xl p-3 space-y-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input value={locForm.dbaName} onChange={e => setLocForm(f => ({ ...f, dbaName: e.target.value }))} placeholder="Location name" autoFocus className={inputCls} />
+                <input value={locForm.street} onChange={e => setLocForm(f => ({ ...f, street: e.target.value }))} placeholder="Street address (e.g. 123 Main St)" className={inputCls} />
+                <input value={locForm.city} onChange={e => setLocForm(f => ({ ...f, city: e.target.value }))} placeholder="City" className={inputCls} />
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={locForm.state} onChange={e => setLocForm(f => ({ ...f, state: e.target.value }))} placeholder="State" maxLength={2} className={inputCls} />
+                  <input value={locForm.zip} onChange={e => setLocForm(f => ({ ...f, zip: e.target.value }))} placeholder="ZIP" className={inputCls} />
+                </div>
+              </div>
+              {locEditError && <p className="text-xs text-red-400">{locEditError}</p>}
+              <div className="flex items-center gap-2">
+                <button onClick={saveLocEdit} disabled={locSaving}
+                  className="text-xs font-bold bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black px-4 py-2 rounded-lg transition-colors">
+                  {locSaving ? 'Saving…' : 'Save Changes'}
+                </button>
+                <button onClick={() => setEditingLoc(false)} className="text-xs font-semibold text-gray-400 hover:text-white px-2 py-2">Cancel</button>
+              </div>
+            </div>
+          )}
 
           {/* MIDs — nested droppable */}
           {expanded && (
@@ -677,7 +740,7 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
 
 // ─── Entity Section (top-level group) ────────────────────────────────────────
 
-function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onAddLocation, isOnly, onEntityUpdated, onDeleteEntity, showValidation }) {
+function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, onAddLocation, isOnly, onEntityUpdated, onDeleteEntity, showValidation }) {
   const entityLocs = locations.filter(l => l.entityId === entity.entityId);
   const entityMids = merchantIDs.filter(m => entityLocs.some(l => l.id === m.locationId));
   const allComplete = entityLocs.length > 0 && entityLocs.every(l =>
@@ -686,6 +749,35 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
   const entityDetailsComplete = !!(entity.ownershipType && entity.taxClassType && entity.establishmentYear);
   const highlightError = showValidation && !allComplete;
 
+  // Quick inline edit for the (often prefilled) legal name + EIN — 2026-07-10
+  const [editingHeader, setEditingHeader] = useState(false);
+  const [hdrName, setHdrName]     = useState(entity.legalBusinessName || '');
+  const [hdrEIN, setHdrEIN]       = useState(entity.federalEIN || '');
+  const [hdrSaving, setHdrSaving] = useState(false);
+  const [hdrError, setHdrError]   = useState('');
+  const startHeaderEdit = () => {
+    setHdrName(entity.legalBusinessName || '');
+    setHdrEIN(entity.federalEIN || '');
+    setHdrError('');
+    setEditingHeader(true);
+  };
+  const saveHeaderEdit = async () => {
+    const einDigits = hdrEIN.replace(/\D/g, '');
+    if (!hdrName.trim()) { setHdrError('Legal name is required'); return; }
+    if (einDigits && einDigits.length !== 9) { setHdrError('EIN must be 9 digits'); return; }
+    setHdrSaving(true); setHdrError('');
+    try {
+      const res = await invokePortalFunction('manageLegalEntity', {
+        action: 'edit', corporateId, entityId: entity.entityId,
+        legalBusinessName: hdrName.trim(), federalEIN: einDigits,
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      onEntityUpdated({ ...entity, legalBusinessName: hdrName.trim(), federalEIN: einDigits });
+      setEditingHeader(false);
+    } catch (err) { setHdrError(err.message || 'Save failed'); }
+    finally { setHdrSaving(false); }
+  };
+
   return (
     <div className={`rounded-2xl border overflow-hidden ${allComplete ? 'border-green-500/20' : highlightError ? 'border-red-500/40' : 'border-white/10'} bg-[#1c2128]`}>
       {/* Entity header bar */}
@@ -693,13 +785,36 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
         <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center flex-shrink-0">
           <Building2 className="w-3.5 h-3.5 text-amber-400" />
         </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold text-amber-300 uppercase tracking-wider truncate">{entity.legalBusinessName}</p>
-          {entity.federalEIN && (
-            <p className="text-[10px] text-gray-500 font-mono">EIN {formatEIN(entity.federalEIN)}</p>
-          )}
-        </div>
+        {editingHeader ? (
+          <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-2 py-0.5">
+            <input value={hdrName} onChange={e => setHdrName(e.target.value)} placeholder="Legal business name" autoFocus
+              className="flex-1 min-w-0 bg-[#111318] border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500" />
+            <input value={hdrEIN} onChange={e => setHdrEIN(e.target.value)} placeholder="EIN (9 digits)"
+              className="w-full sm:w-36 bg-[#111318] border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-500" />
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <button onClick={saveHeaderEdit} disabled={hdrSaving}
+                className="text-[11px] font-bold bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black px-3 py-1.5 rounded-lg transition-colors">
+                {hdrSaving ? 'Saving…' : 'Save'}
+              </button>
+              <button onClick={() => setEditingHeader(false)} className="text-[11px] font-semibold text-gray-400 hover:text-white px-2 py-1.5">Cancel</button>
+            </div>
+            {hdrError && <p className="text-[10px] text-red-400">{hdrError}</p>}
+          </div>
+        ) : (
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-bold text-amber-300 uppercase tracking-wider truncate">{entity.legalBusinessName}</p>
+            {entity.federalEIN && (
+              <p className="text-[10px] text-gray-500 font-mono">EIN {formatEIN(entity.federalEIN)}</p>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-2 flex-shrink-0">
+          {!editingHeader && (
+            <button onClick={startHeaderEdit} title="Edit legal entity name / EIN"
+              className="p-1.5 text-gray-600 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-all">
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          )}
           <span className="text-[10px] text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''} · {entityMids.length} MID{entityMids.length !== 1 ? 's' : ''}</span>
           {allComplete && entityLocs.length > 0 && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
           {!isOnly && (
@@ -736,6 +851,7 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
                 onMerchantIDAdded={onMerchantIDAdded}
                 onMerchantIDUpdated={onMerchantIDUpdated}
                 onMerchantIDDeleted={onMerchantIDDeleted}
+                onLocationUpdated={onLocationUpdated}
                 showValidation={showValidation}
               />
             ))}
@@ -1070,6 +1186,10 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     setEntities(prev => prev.map(e => e.entityId === updated.entityId ? { ...e, ...updated } : e));
   };
 
+  const handleLocationUpdated = (updated) => {
+    setLocations(prev => prev.map(l => l.id === updated.id ? { ...l, ...updated } : l));
+  };
+
   const handleDeleteLocation = async (loc) => {
     setDeleteConfirm(null);
     const idToDelete = loc.id || loc.locationId;
@@ -1214,6 +1334,18 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
       {/* Hierarchy: Entity → Locations → MIDs */}
       <div className="px-8 py-6 space-y-4">
+        {/* Prefill verification notice (2026-07-10, Teddy: applicants must be
+            prompted to verify prefilled data and be able to correct it here) */}
+        <div className="flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3">
+          <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-200/90 leading-relaxed">
+            <span className="font-semibold">Please verify everything below before continuing.</span>{' '}
+            Some details were prefilled by your Cliqbux representative and may be incomplete or out of date.
+            Use the <Pencil className="w-3 h-3 inline -mt-0.5" /> edit icons to correct your legal entity name,
+            EIN, or a location&apos;s name and address.
+          </p>
+        </div>
+
         {/* Toolbar */}
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
@@ -1234,6 +1366,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                 onMerchantIDAdded={c => setMerchantIDs(prev => [...prev, c])}
                 onMerchantIDUpdated={updated => setMerchantIDs(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))}
                 onMerchantIDDeleted={m => setDeleteMidConfirm(m)}
+                onLocationUpdated={handleLocationUpdated}
                 onAddLocation={entityId => setAddFormEntityId(entityId)}
                 isOnly={entities.length === 1}
                 onEntityUpdated={handleEntityUpdated}
