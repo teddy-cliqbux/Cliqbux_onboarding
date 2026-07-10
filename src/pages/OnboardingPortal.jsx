@@ -82,8 +82,18 @@ function MilestoneCard({ index, title, description, done, unlocked, ctaLabel, on
 
       <div className="flex-shrink-0">
         {done ? (
-          <span className="inline-flex items-center gap-1 text-xs font-bold text-green-400 bg-green-500/15 border border-green-500/30 px-3 py-1.5 rounded-full">
-            Complete <Check className="w-3.5 h-3.5" strokeWidth={3} />
+          <span className="inline-flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 text-xs font-bold text-green-400 bg-green-500/15 border border-green-500/30 px-3 py-1.5 rounded-full">
+              Complete <Check className="w-3.5 h-3.5" strokeWidth={3} />
+            </span>
+            {/* Completed steps stay reachable for review/edits — prefilled data
+                especially needs merchant eyes on it before submission */}
+            {onCta && unlocked && (
+              <button onClick={onCta}
+                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-white/15 text-gray-300 hover:text-white hover:border-white/30 transition-colors">
+                Review
+              </button>
+            )}
           </span>
         ) : (
           <button
@@ -448,7 +458,11 @@ export default function OnboardingPortal() {
   const renderStep = () => {
     // Welcome Hub — macro-level landing page merchants see immediately upon
     // secure entry, before diving into the deep data-entry grids.
-    if (step === STEP_WELCOME) {
+    // Until the quote is signed (status 'Incomplete'), the deep steps are locked,
+    // so the hub also catches any step value here — previously this fell through
+    // to Step1Agreement, dumping merchants on a premature "waiting for signature"
+    // screen when they clicked a milestone before signing.
+    if (step === STEP_WELCOME || applicationStatus === 'Incomplete') {
       const m1Done = agreementDone; // quote reviewed & signed (or pricing selected for self-serve)
       // Fall back to deriving completion from actual saved data, not just this
       // browser tab's in-memory completedSteps — otherwise resuming after a
@@ -459,7 +473,10 @@ export default function OnboardingPortal() {
       const m2Done = !!allCompletedSteps.locations || hasLocations;
       const m3Done = !!allCompletedSteps.banking || hasBanking;
       const m2Unlocked = m1Done;
-      const m3Unlocked = locations && locations.length > 0;
+      // Banking requires BOTH a signed quote and at least one location — HubSpot
+      // prefill means locations often exist before the quote is signed, which
+      // previously unlocked this step prematurely.
+      const m3Unlocked = m1Done && hasLocations;
       const m4Unlocked = m1Done && m2Done && m3Done;
       const m4Done = applicationStatus === 'Submitted';
 
@@ -479,7 +496,9 @@ export default function OnboardingPortal() {
             <MilestoneCard
               index={1}
               title="Review & Sign Product Quote"
-              description="Review your pricing and terms, then sign electronically to unlock the rest of onboarding."
+              description={profile.hubspotQuoteUrl
+                ? 'Review your pricing and terms, then sign electronically to unlock the rest of onboarding.'
+                : 'Your Cliqbux representative is finalizing your quote. This step will unlock automatically once it’s ready.'}
               done={m1Done}
               unlocked={true}
               ctaLabel="→ Review & Sign Quote"

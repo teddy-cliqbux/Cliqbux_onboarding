@@ -628,3 +628,19 @@ The old signer step only looked at the FIRST deal contact and silently swallowed
 
 **→ Waiting on:** Teddy (push), Base44 (force-redeploy + re-run + paste response)
 ---
+
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken — portal step-gating fixes
+**Re:** Staged merchant link: locked out of locations/banking, premature signing screen
+
+Three Welcome Hub bugs in OnboardingPortal.jsx, all exposed by HubSpot prefill (locations now exist before the quote is signed):
+1. Milestone 3 (banking) unlocked on locations.length alone, ignoring the unsigned quote → now requires m1Done && hasLocations.
+2. Clicking any milestone while applicationStatus === Incomplete fell through renderStep to Step1Agreement (endless "waiting for signature" spinner) → the Welcome Hub now catches all steps while Incomplete. Step1Agreement is effectively dormant for the sales flow (self-serve never passes through Incomplete — createHubspotDeal sets Pricing Selected).
+3. Completed milestone cards showed only the Complete badge with no way back in → done+unlocked cards now render a Review button so merchants can re-open and edit prefilled data.
+Plus: milestone 1 now explains "your rep is finalizing your quote" when hubspotQuoteUrl is empty instead of showing a dead disabled button.
+
+Frontend-only — ships with a normal publish after Teddy pushes.
+
+**→ Waiting on:** Teddy (push; publish the HubSpot quote so hs_quote_link exists; re-sync; retest merchant link)
+---
