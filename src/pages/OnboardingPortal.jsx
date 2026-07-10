@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { setMerchantToken, getMerchantToken, clearMerchantToken, invokePortalFunction } from '@/lib/merchantAuthFetch';
 import TopNav from '@/components/onboarding/TopNav';
-import Step1Agreement from '@/components/onboarding/Step1Agreement';
 import ErrorScreen from '@/components/onboarding/ErrorScreen';
 import LoadingScreen from '@/components/onboarding/LoadingScreen';
 import SelfServePricing from '@/components/onboarding/SelfServePricing';
@@ -316,7 +315,7 @@ export default function OnboardingPortal() {
       // Track that merchant opened the portal — creates a record if none exists
       if (mergedProfile?.corporateId && mergedProfile?.applicationStatus !== 'Submitted') {
         trackProgress(mergedProfile.corporateId, {
-          currentStep: mergedProfile.applicationStatus === 'Incomplete' ? 'agreement' : 'locations',
+          currentStep: 'locations',
           merchantName: mergedProfile.legalName,
           signerEmail: mergedProfile.signerEmail,
           pricingTier: mergedProfile.pricingTier,
@@ -356,32 +355,9 @@ export default function OnboardingPortal() {
     }).catch(() => {});
   };
 
-  const handleStatusChange = (newStatus) => {
-    setProfile(prev => ({ ...prev, applicationStatus: newStatus }));
-    if (newStatus === 'Quote Signed') {
-      fetchMerchantData(profile.corporateId);
-      pushMilestoneToHubspot(profile.corporateId, 'agreement_signed');
-      trackProgress(profile.corporateId, { currentStep: 'locations', completedSteps: { agreement: true } });
-    }
-  };
-
-  // Welcome Hub polling — mirrors the auto-advance behavior Step1Agreement used
-  // to provide on its own. While the merchant is sitting on the Welcome Hub with
-  // an unsigned quote, quietly re-fetch every 5s; the moment the quote is signed
-  // in the other tab, unlock Milestone 2 without requiring a manual refresh.
-  useEffect(() => {
-    if (step !== STEP_WELCOME || profile?.applicationStatus !== 'Incomplete' || !dealId) return;
-
-    const intervalId = setInterval(async () => {
-      const updatedProfile = await fetchMerchantData(dealId, { silent: true });
-      if (updatedProfile?.applicationStatus === 'Pricing Selected' || updatedProfile?.applicationStatus === 'Quote Signed') {
-        clearInterval(intervalId);
-        handleStatusChange('Quote Signed');
-      }
-    }, 5000);
-
-    return () => clearInterval(intervalId);
-  }, [step, profile?.applicationStatus, dealId]);
+  // (2026-07-10 flow reorder: the old quote-signing poll and Step1Agreement
+  // status handler were removed — the equipment quote is now signed on the
+  // post-submission dashboard and gates nothing in this flow.)
 
   const handleSelfServeComplete = (newProfile) => {
     setProfile(newProfile);
@@ -418,7 +394,7 @@ export default function OnboardingPortal() {
 
   // Step key → internal step constant
   const handleNavigate = (stepKey) => {
-    const map = { agreement: null, locations: STEP_LOCATIONS, banking: STEP_BANKING, verify: STEP_VERIFICATION };
+    const map = { quote: null, locations: STEP_LOCATIONS, banking: STEP_BANKING, verify: STEP_VERIFICATION };
     const target = map[stepKey];
     if (target) setStep(target);
   };
@@ -461,27 +437,21 @@ export default function OnboardingPortal() {
   const renderStep = () => {
     // Welcome Hub — macro-level landing page merchants see immediately upon
     // secure entry, before diving into the deep data-entry grids.
-    // Until the quote is signed (status 'Incomplete'), the deep steps are locked,
-    // so the hub also catches any step value here — previously this fell through
-    // to Step1Agreement, dumping merchants on a premature "waiting for signature"
-    // screen when they clicked a milestone before signing.
-    if (step === STEP_WELCOME || applicationStatus === 'Incomplete') {
-      const m1Done = agreementDone; // quote reviewed & signed (or pricing selected for self-serve)
-      // Fall back to deriving completion from actual saved data, not just this
-      // browser tab's in-memory completedSteps — otherwise resuming after a
-      // refresh (or in a new tab via a resume link) re-locks milestones the
-      // merchant already finished, even though the data is safely on the server.
+    // 2026-07-10 FLOW REORDER (Teddy): data entry and the MERCHANT AGREEMENT come
+    // first; the equipment QUOTE is signed LAST, embedded on the post-submission
+    // dashboard. Nothing in the application flow is gated on the quote anymore.
+    if (step === STEP_WELCOME) {
+      // Derive completion from actual saved data, not just this browser tab's
+      // in-memory completedSteps — otherwise resuming after a refresh (or in a
+      // new tab via a resume link) re-locks milestones the merchant already
+      // finished, even though the data is safely on the server.
       const hasLocations = (locations?.length ?? 0) > 0;
       const hasBanking = hasLocations && locations.every(l => l.bankDetails?.routingNumber);
-      const m2Done = !!allCompletedSteps.locations || hasLocations;
-      const m3Done = !!allCompletedSteps.banking || hasBanking;
-      const m2Unlocked = m1Done;
-      // Banking requires BOTH a signed quote and at least one location — HubSpot
-      // prefill means locations often exist before the quote is signed, which
-      // previously unlocked this step prematurely.
-      const m3Unlocked = m1Done && hasLocations;
-      const m4Unlocked = m1Done && m2Done && m3Done;
-      const m4Done = applicationStatus === 'Submitted';
+      const m1Done = !!allCompletedSteps.locations || hasLocations;
+      const m2Done = !!allCompletedSteps.banking || hasBanking;
+      const m3Done = applicationStatus === 'Submitted';
+      const m2Unlocked = hasLocations;
+      const m3Unlocked = m1Done && m2Done;
 
       return (
         <div className="px-6 sm:px-8 py-8 flex flex-col gap-6">
@@ -498,50 +468,48 @@ export default function OnboardingPortal() {
           <div className="flex flex-col gap-3">
             <MilestoneCard
               index={1}
-              title="Review & Sign Product Quote"
-              description={profile.hubspotQuoteUrl
-                ? 'Review your pricing and terms, then sign electronically to unlock the rest of onboarding.'
-                : 'Your Cliqbux representative is finalizing your quote. This step will unlock automatically once it’s ready.'}
+              title="Complete Merchant Profile & Storefronts"
+              description="Review and confirm your legal entities, storefront locations, and Merchant IDs."
               done={m1Done}
               unlocked={true}
-              ctaLabel="→ Review & Sign Quote"
-              onCta={() => window.open(profile.hubspotQuoteUrl, '_blank')}
-              ctaDisabled={!profile.hubspotQuoteUrl}
-            />
-            <MilestoneCard
-              index={2}
-              title="Complete Merchant Profile & Storefronts"
-              description="Add your legal entities, storefront locations, and Merchant IDs."
-              done={m2Done}
-              unlocked={m2Unlocked}
               ctaLabel="Configure Locations & MIDs"
               onCta={() => setStep(STEP_LOCATIONS)}
             />
             <MilestoneCard
-              index={3}
+              index={2}
               title="Link Deposit Bank Account"
               description="Connect or manually enter the bank account where your processing funds will deposit."
-              done={m3Done}
-              unlocked={m3Unlocked}
+              done={m2Done}
+              unlocked={m2Unlocked}
               ctaLabel="Set Up Banking"
               onCta={() => setStep(STEP_BANKING)}
             />
             <MilestoneCard
-              index={4}
-              title="Submit for Underwriting Processing"
-              description="Verify signer identities and submit your completed application for approval."
-              done={m4Done}
-              unlocked={m4Unlocked}
+              index={3}
+              title="Verify Identity & Sign Merchant Agreement"
+              description="Verify signer identities, sign your merchant processing agreement, and submit for underwriting approval."
+              done={m3Done}
+              unlocked={m3Unlocked}
               ctaLabel="Continue to Verification"
               onCta={() => setStep(STEP_VERIFICATION)}
+            />
+            <MilestoneCard
+              index={4}
+              title="Review & Sign Equipment Quote"
+              description="Your equipment and services order — signed on your dashboard after the merchant application is submitted."
+              done={quoteSigned}
+              unlocked={m3Done}
+              ctaLabel="Open Dashboard"
+              onCta={() => navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`)}
             />
           </div>
         </div>
       );
     }
 
-    // Pricing confirmed → locations & per-location banking
-    if (applicationStatus === 'Pricing Selected' || applicationStatus === 'Quote Signed') {
+    // Deep data-entry steps — available regardless of quote status
+    // (2026-07-10 reorder: the equipment quote no longer gates anything)
+    {
       if (step === STEP_LOCATIONS) {
         return (
           <OnboardingLocations
@@ -576,11 +544,6 @@ export default function OnboardingPortal() {
       }
     }
 
-    // Sales flow: agreement signing first
-    if (applicationStatus === 'Incomplete') {
-      return <Step1Agreement profile={profile} onStatusChange={handleStatusChange} />;
-    }
-
     return (
       <ErrorScreen
         title="Unexpected State"
@@ -591,11 +554,13 @@ export default function OnboardingPortal() {
 
   // Map internal step → tracker key
   const stepToKey = { [STEP_LOCATIONS]: 'locations', [STEP_BANKING]: 'banking', [STEP_VERIFICATION]: 'verify' };
-  const currentTrackerStep = applicationStatus === 'Incomplete' ? 'agreement' : (stepToKey[step] || 'locations');
+  const currentTrackerStep = stepToKey[step] || 'locations';
 
-  // Agreement is complete once pricing is selected/signed
-  const agreementDone = applicationStatus === 'Pricing Selected' || applicationStatus === 'Quote Signed' || applicationStatus === 'Submitted';
-  const allCompletedSteps = { ...completedSteps, ...(agreementDone ? { agreement: true } : {}) };
+  // 2026-07-10 flow reorder: the equipment quote is signed LAST (embedded on the
+  // post-submission dashboard). 'Quote Signed' status = HubSpot esign came back
+  // SIGNED via syncFromHubspot or the quote_signed webhook.
+  const quoteSigned = applicationStatus === 'Quote Signed';
+  const allCompletedSteps = { ...completedSteps, ...(quoteSigned ? { quote: true } : {}) };
 
   return (
     <div className="portal-bg" style={{ fontFamily: 'Inter, sans-serif' }}>
@@ -603,7 +568,7 @@ export default function OnboardingPortal() {
         applicationStatus={applicationStatus}
         currentStep={currentTrackerStep}
         completedSteps={allCompletedSteps}
-        onNavigate={agreementDone ? handleNavigate : undefined}
+        onNavigate={handleNavigate}
       />
 
       <div className="pt-16 min-h-screen flex flex-col items-center justify-start px-4 py-10">

@@ -121,6 +121,32 @@ export default function PostSubmissionDashboard() {
           <div>
             <h2 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-4">Complete Your Setup</h2>
             <div className="flex flex-col gap-4">
+              {/* Equipment & Services Quote — per the 2026-07-10 flow reorder, the
+                  quote is signed HERE, after the merchant application is submitted.
+                  Embedding works because the quote serves from www.cliqbux.com
+                  (HubSpot custom domain) with no X-Frame-Options/frame-ancestors —
+                  verified 2026-07-10. HubSpot's own hs-sites URLs are NOT frameable. */}
+              {profile.hubspotQuoteUrl && (
+                <div className="bg-white rounded-xl border border-gray-100 p-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-sm font-bold text-gray-900">Review &amp; Sign Your Equipment Quote</h3>
+                    <a href={profile.hubspotQuoteUrl} target="_blank" rel="noopener noreferrer"
+                      className="text-xs font-semibold text-amber-600 hover:text-amber-700 underline">
+                      Open in new tab
+                    </a>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-3">
+                    Your equipment and services order. Review the line items and sign below to finalize.
+                  </p>
+                  <iframe
+                    src={profile.hubspotQuoteUrl}
+                    title="Equipment & Services Quote"
+                    className="w-full rounded-lg border border-gray-200 bg-white"
+                    style={{ height: 900 }}
+                  />
+                </div>
+              )}
+
               {/* A: Equipment Shipping */}
               <div className="bg-white rounded-xl border border-gray-100 p-5">
                 <div className="flex items-center justify-between mb-1">

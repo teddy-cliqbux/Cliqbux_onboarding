@@ -1,15 +1,17 @@
 import { Check } from 'lucide-react';
 
+// 2026-07-10 flow reorder: data entry and the merchant agreement come first;
+// the equipment quote is signed LAST (on the post-submission dashboard).
 const STEPS = [
-  { id: 1, label: 'Agreement',  key: 'agreement' },
-  { id: 2, label: 'Locations',  key: 'locations'  },
-  { id: 3, label: 'Banking',    key: 'banking'     },
-  { id: 4, label: 'Verify',     key: 'verify'      },
+  { id: 1, label: 'Locations',      key: 'locations' },
+  { id: 2, label: 'Banking',        key: 'banking'   },
+  { id: 3, label: 'Sign & Submit',  key: 'verify'    },
+  { id: 4, label: 'Equipment',      key: 'quote'     },
 ];
 
 export default function ProgressTracker({ currentStep, completedSteps = {}, onNavigate }) {
   // Map step key → index (0-based)
-  const keyToIdx = { agreement: 0, locations: 1, banking: 2, verify: 3 };
+  const keyToIdx = { locations: 0, banking: 1, verify: 2, quote: 3 };
   const activeIdx = keyToIdx[currentStep] ?? 0;
 
   return (

@@ -758,3 +758,21 @@ dealQuoteProps: {}   ← no quote-related properties at all
 **Note:** I left a small useful diagnostic in the response — `result.profile.hubspotQuoteUrl` now surfaces in the sync response (was previously hidden), so this is directly observable without a separate entity lookup going forward. Reverted the temporary raw deal-key dump.
 
 **→ Waiting on:** Claude (switch to Quotes associations API, or confirm the intended property name) / Teddy (create `hs_quote_link` deal property if that was the plan), then re-run sync to confirm `hubspotQuoteUrl` non-null
+
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken + Architecture Decision — FLOW REORDER
+**Re:** Teddy: equipment quote signing moves to LAST; nothing gated on it anymore
+
+**New flow (Teddy, 2026-07-10):** locations → banking → identity verification + MERCHANT AGREEMENT signing/submission → equipment QUOTE signing (embedded iframe on PostSubmissionDashboard). The quote gates nothing.
+
+**Changes (in repo, frontend only):**
+1. OnboardingPortal.jsx — Welcome Hub milestones reordered (profile/storefronts always unlocked; banking unlocks on locations; verification unlocks on 1+2; quote card is #4, pointing at the dashboard). All applicationStatus gating on the deep steps removed. Step1Agreement retired (import + render + poll + status handler removed).
+2. ProgressTracker.jsx — steps now Locations / Banking / Sign & Submit / Equipment.
+3. PostSubmissionDashboard.jsx — new Equipment Quote card with the quote EMBEDDED in an iframe + "Open in new tab" fallback link.
+4. **Iframe supersession:** the 2026-06-27 "quote iframing CONFIRMED BLOCKED" finding applied to hs-sites URLs. Custom-domain quotes (www.cliqbux.com) send no X-Frame-Options/frame-ancestors — verified via curl 2026-07-10 — and embed fine. AGENTS.md updated.
+
+**ACTION for Base44 after Teddy pushes:** publish frontend (normal pipeline — no function changes in this batch).
+
+**→ Waiting on:** Teddy (push), then merchant-link retest: locations should open immediately, no quote required
+---

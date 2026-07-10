@@ -496,16 +496,24 @@ MSPWare rolls back the entire form and returns `percent_complete: -1` when **any
 
 ---
 
-## Onboarding Portal Flow (current as of 2026-06-29)
+## Onboarding Portal Flow (REORDERED 2026-07-10 — quote signing moved to LAST)
 
-The merchant onboarding portal uses a 4-step flow:
+**Decided by Teddy 2026-07-10:** the equipment quote is signed AFTER the merchant
+account signing, and nothing in the application flow is gated on it. The flow is now:
 
 ```
-Step 1: Agreement (Step1Agreement — pricing/quote signing)
-Step 2: Locations & Org Chart (OnboardingLocations)
-Step 3: Banking (OnboardingBanking — new dedicated page)
-Step 4: Identity Verification & Signing (OnboardingVerification)
+Step 1: Locations & Org Chart (OnboardingLocations) — always unlocked
+Step 2: Banking (OnboardingBanking) — unlocked when ≥1 location exists
+Step 3: Identity Verification & Merchant Agreement Signing (OnboardingVerification) — unlocked when 1+2 done
+Step 4: Equipment Quote signing — EMBEDDED IFRAME on PostSubmissionDashboard, after submission
 ```
+
+- `Step1Agreement` is RETIRED (no longer imported/rendered anywhere). Do not route merchants to it.
+- `applicationStatus: 'Incomplete'` no longer locks anything — it's just the pre-quote-signed state.
+- **Quote iframing: the 2026-06-27 "CONFIRMED BLOCKED" finding is SUPERSEDED for custom-domain quotes.** Quotes served from `www.cliqbux.com` (HubSpot custom domain) send NO `X-Frame-Options`/`frame-ancestors` — verified via curl 2026-07-10 — so `PostSubmissionDashboard` embeds them directly. HubSpot's own `*.hs-sites-na2.com` URLs remain unframeable; if a quote URL ever isn't on cliqbux.com, fall back to the "Open in new tab" link (already rendered next to the iframe).
+- Quote signature detection: `syncFromHubspot` reads the quote's `hs_quote_esign_status` and upgrades `applicationStatus` Incomplete → 'Quote Signed' (never regresses later statuses). The `quote_signed` HubSpot webhook remains a second path.
+
+### Historical (pre-2026-07-10) flow — quote-first, for context only
 
 The `STEP_SUMMARY` (review step) was removed — it was redundant.
 
