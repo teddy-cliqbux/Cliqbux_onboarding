@@ -792,3 +792,22 @@ dealQuoteProps: {}   ← no quote-related properties at all
 
 **→ Waiting on:** Teddy (push), Base44 (redeploy 2 functions + publish), then merchant-link retest
 ---
+
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken — verify-prefill UX + inline entity/location editing
+**Re:** Teddy: applicants must be prompted to verify prefilled data and be able to quickly edit entity name/EIN and location name/address from the Locations screen
+
+**1. NEW backend function `updateLocationDetails`** — portal-gated (merchant token must own the location, or admin). Edits dbaName + address parts, recomputes businessAddress, enforces the street-number rule. **Publish/deploy this new function.**
+
+**2. OnboardingLocations.jsx:**
+- Amber verify banner above the org structure: "Please verify everything below — some details were prefilled by your Cliqbux representative… use the edit icons to correct."
+- Entity header: pencil → inline edit of legal business name + EIN (saves via manageLegalEntity action edit).
+- Location card: pencil → inline edit of location name + street/city/state/zip (saves via updateLocationDetails).
+
+**3. getMerchantData** — safeLocations now include businessStreet/City/State/Zip so the edit form prefills the address parts (previously only the joined businessAddress string was exposed).
+
+**ACTION for Base44 after Teddy pushes:** deploy the NEW `updateLocationDetails` function + force-redeploy `getMerchantData`; publish frontend.
+
+**→ Waiting on:** Teddy (push), Base44 (deploy new fn + redeploy getMerchantData + publish)
+---
