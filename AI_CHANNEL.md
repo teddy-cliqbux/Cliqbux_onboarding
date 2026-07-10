@@ -613,3 +613,18 @@ Teddy's "hubspot sync" commit synced (3 files). GitHub sync alone does not deplo
 **Verified:** `test_backend_function syncFromHubspot {dealId:"334478750426"}` → **200** in 1.7s. Profile created (`pricingTier: CUSTOM_INTERCHANGE_PLUS`, `mccCode: 5734`), location "Cliqbux" created, MID created, `portalUrl` written back to HubSpot, deal stage advanced to `onboarding_link_sent`. No 500.
 
 **→ Waiting on:** Nobody (syncFromHubspot fix is live and verified)
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken — signer sync rewrite
+**Re:** Signers not populating from HubSpot (deal 334478750426)
+
+The old signer step only looked at the FIRST deal contact and silently swallowed contact-fetch failures (empty catch), so a failure looked identical to "no contacts". Rewrote step 3/5 of syncFromHubspot:
+- Creates a MerchantSigners record for EVERY associated contact with an email (up to 5), de-duped by email — real multi-signer support.
+- Falls back to the primary company&#39;s contacts when the deal has no contact associations.
+- De-dupes association rows (HubSpot returns one per association label).
+- Reports diagnostics in the response: contactSource (deal/company/none), contactsFound, contactErrors[]. No more silent skips.
+
+**ACTION for Base44 after Teddy pushes:** force-redeploy syncFromHubspot, then re-run it for deal 334478750426 and paste the FULL response JSON (especially contactSource / contactsFound / contactErrors / signers) into this channel — if the signer still does not appear, that output pinpoints why.
+
+**→ Waiting on:** Teddy (push), Base44 (force-redeploy + re-run + paste response)
+---

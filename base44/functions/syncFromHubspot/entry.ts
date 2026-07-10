@@ -251,14 +251,38 @@ Deno.serve(async (req) => {
     const pc = parentCompany.properties || {};
 
     // ── 3. Fetch associated contacts (signers) ────────────────────────────────
-    const contactAssocs = deal.associations?.contacts?.results || [];
+    // Falls back to the primary company's contacts when the deal itself has no
+    // contact associations. Fetch failures are REPORTED in the result, never
+    // silently swallowed (a swallowed failure here is why signers appeared to
+    // "not populate" on 2026-07-09).
+    let contactAssocs = deal.associations?.contacts?.results || [];
+    result.contactSource = contactAssocs.length ? 'deal' : 'none';
+    if (!contactAssocs.length) {
+      try {
+        const compWithContacts = await hsGet(
+          `/crm/v3/objects/companies/${primaryCompanyId}?associations=contacts`, hsHeaders
+        );
+        contactAssocs = compWithContacts.associations?.contacts?.results || [];
+        if (contactAssocs.length) result.contactSource = 'company';
+      } catch (e: any) {
+        (result.contactErrors = result.contactErrors || []).push(`company contact lookup failed: ${e.message}`);
+      }
+    }
+    // De-dupe association entries (HubSpot returns one row per association label)
+    const seenContactIds = new Set<string>();
     const contacts: any[] = [];
-    for (const ca of contactAssocs.slice(0, 5)) {
+    for (const ca of contactAssocs) {
+      if (seenContactIds.has(String(ca.id))) continue;
+      seenContactIds.add(String(ca.id));
+      if (contacts.length >= 5) break;
       try {
         const c = await getContact(ca.id, hsHeaders);
         contacts.push(c.properties || {});
-      } catch { /* skip bad contacts */ }
+      } catch (e: any) {
+        (result.contactErrors = result.contactErrors || []).push(`contact ${ca.id}: ${e.message}`);
+      }
     }
+    result.contactsFound = contacts.length;
     const primaryContact = contacts[0] || {};
 
     // ── 4. Upsert MerchantCorporateProfile ────────────────────────────────────
@@ -351,26 +375,31 @@ Deno.serve(async (req) => {
 
     result.profile = { legalName, industryClass, mccCode, pricingTier, taxId: profileData.taxId || null };
 
-    // ── 5. Upsert primary signer from contact ─────────────────────────────────
-    if (signerEmail) {
-      const existingSigners = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
-      const primarySigner = existingSigners?.find((s: any) => s.isPrimarySigner) || existingSigners?.[0];
-
-      if (!primarySigner) {
+    // ── 5. Upsert signers from ALL associated contacts (multi-signer support) ──
+    // Every deal/company contact with an email becomes a MerchantSigners record,
+    // de-duped by email. The first contact becomes primary unless a primary
+    // already exists.
+    {
+      const existingSigners = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }) || [];
+      let hasPrimary = existingSigners.some((s: any) => s.isPrimarySigner);
+      for (const contact of contacts) {
+        const email = (contact.email || '').trim().toLowerCase();
+        if (!email) { result.signers.push({ action: 'skipped_no_email' }); continue; }
+        const already = existingSigners.find((s: any) => (s.signerEmail || '').trim().toLowerCase() === email);
+        if (already) { result.signers.push({ action: 'exists', email }); continue; }
         await base44.asServiceRole.entities.MerchantSigners.create({
           corporateId,
-          firstName:          primaryContact.firstname || '',
-          lastName:           primaryContact.lastname  || '',
-          signerEmail,
-          ownershipPercentage: parseInt(primaryContact.ownership_percent || '100', 10),
-          isPrimarySigner:    true,
+          firstName:          contact.firstname || '',
+          lastName:           contact.lastname  || '',
+          signerEmail:        email,
+          ownershipPercentage: parseInt(contact.ownership_percent || (hasPrimary ? '0' : '100'), 10),
+          isPrimarySigner:    !hasPrimary,
           identityStatus:     'Pending Invitation',
-          titleType:          mapJobTitle(primaryContact.jobtitle || ''),
-          corporatePhone:     (primaryContact.phone || '').replace(/\D/g, ''),
+          titleType:          mapJobTitle(contact.jobtitle || ''),
+          corporatePhone:     (contact.phone || '').replace(/\D/g, ''),
         });
-        result.signers.push({ action: 'created', email: signerEmail });
-      } else {
-        result.signers.push({ action: 'exists', email: primarySigner.signerEmail });
+        if (!hasPrimary) hasPrimary = true;
+        result.signers.push({ action: 'created', email });
       }
     }
 
