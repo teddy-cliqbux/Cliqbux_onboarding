@@ -668,9 +668,16 @@ Status locking: `manageMerchantID` blocks `update` and `delete` when `applicatio
 
 ---
 
-## Signer Verification Persistence
+## Signer Verification UI + Persistence (reworked 2026-07-10)
 
-`manageSigner` with `action: 'inlineVerify'` saves the signer's SSN, DOB, home address, and ID document URL. The `verifySignerToken` backend's `get` action now returns all previously saved fields so the form pre-populates on revisit. Once `identityStatus === 'Verified'`, `InlineVerifyForm` returns null (hidden) unless the signer explicitly clicks to re-verify.
+**One modal per signer — `SignerDetailsModal.jsx`.** Teddy's direction 2026-07-10: splitting name/email/ownership editing (inline row fields) from identity verification (a separate expanding form) confused merchants, and ID upload/AI reading is unnecessary for now. Changes:
+
+- `InlineVerifyForm.jsx` and `SignerIdUpload.jsx` are **DELETED**. Do not recreate them. `SignerRoster` now opens `SignerDetailsModal` from a single "Edit" button per row (and from a full-width amber "Complete Identity Verification" CTA for the unverified primary — keep that CTA prominent, see the 2026-07-07 lesson about testers missing small verify pills).
+- The modal collects contact info (first/last/email/ownership %) plus, for the **primary signer only**, identity fields (DOB, SSN, address, title, phone). Saving the primary sets `identityStatus: 'Verified'` via one `manageSigner action: 'update'` call and syncs the profile's firstName/lastName via `updateMerchantProfile`. Non-primary signers get contact fields only — they verify themselves via the email invite (`/verify` page, `VerifyIdentity.jsx`, unchanged).
+- **ID upload is removed from the UI everywhere** (no upload phase, no AI extraction via `InvokeLLM`, no per-signer "Government ID Document" dropzone). The `idDocumentUrl` entity field, the `manageSigner` `inlineVerify` action, and the `uploadSignerIDsToMSP` backend function all still exist — dormant, not deleted — so re-enabling upload later is a frontend-only change.
+- The "returning signer detected" lookup (`manageSigner action: 'lookupByEmail'`) lives on in the modal.
+
+`verifySignerToken`'s `get` action still returns all previously saved fields so the invited-signer form pre-populates on revisit.
 
 ---
 

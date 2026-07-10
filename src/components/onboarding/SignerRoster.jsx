@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, CheckCircle2, AlertCircle, Clock, Mail, Trash2, Send, Loader2, Users, Pencil, Save } from 'lucide-react';
+import { UserPlus, CheckCircle2, AlertCircle, Clock, Mail, Trash2, Send, Loader2, Users, Pencil, ShieldCheck } from 'lucide-react';
 import SignerModal from './SignerModal';
-import InlineVerifyForm from './InlineVerifyForm';
-import SignerIdUpload from './SignerIdUpload';
+import SignerDetailsModal from './SignerDetailsModal';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 function StatusBadge({ status }) {
@@ -118,52 +117,9 @@ export default function SignerRoster({ profile, onValidChange }) {
     setResendingId(null);
   };
 
-  // Inline editing lifecycle
-  const [editingRowId, setEditingRowId] = useState(null);
-  // Draft state: { [id]: { firstName, lastName, signerEmail, ownershipPercentage } }
-  const [drafts, setDrafts] = useState({});
-
-  const editDraft = (signer) => {
-    setDrafts(prev => ({ ...prev, [signer.id]: { firstName: signer.firstName || '', lastName: signer.lastName || '', signerEmail: signer.signerEmail || '', ownershipPercentage: signer.ownershipPercentage || 0 } }));
-    setEditingRowId(signer.id);
-  };
-
-  const handleSaveRow = async (signerId) => {
-    const draft = drafts[signerId];
-    if (!draft) { setEditingRowId(null); return; }
-    if (!draft.firstName.trim() || !draft.lastName.trim() || !draft.signerEmail.trim()) return;
-    const isPrimary = signers.find(s => s.id === signerId)?.isPrimarySigner;
-    try {
-      const res = await invokePortalFunction('manageSigner', {
-        action: 'update',
-        corporateId: profile.corporateId,
-        signerId,
-        signerData: {
-          firstName: draft.firstName.trim(),
-          lastName: draft.lastName.trim(),
-          signerEmail: draft.signerEmail.trim(),
-          ownershipPercentage: Number(draft.ownershipPercentage) || 0,
-        },
-      });
-      if (res.data?.signer) {
-        setSigners(prev => prev.map(s => s.id === signerId ? { ...s, firstName: res.data.signer.firstName, lastName: res.data.signer.lastName, signerEmail: res.data.signer.signerEmail, ownershipPercentage: res.data.signer.ownershipPercentage } : s));
-        // If this is the primary signer, sync the root session profile to prevent data drift
-        if (isPrimary && profile) {
-          await invokePortalFunction('updateMerchantProfile', {
-            corporateId: profile.corporateId,
-            firstName: draft.firstName.trim(),
-            lastName: draft.lastName.trim(),
-          });
-          if (profile.firstName !== undefined) {
-            Object.assign(profile, { firstName: draft.firstName.trim(), lastName: draft.lastName.trim() });
-          }
-        }
-      }
-    } catch (err) {
-      console.error('[SignerRoster.handleSaveRow]', err?.message || 'Unknown error');
-    }
-    setEditingRowId(null);
-  };
+  // Which signer's details/verification modal is open (single modal for both
+  // contact edits and identity verification — see SignerDetailsModal)
+  const [detailSigner, setDetailSigner] = useState(null);
 
   const totalPct = signers.reduce((sum, s) => sum + (Number(s.ownershipPercentage) || 0), 0);
   const requiredSigners = signers.filter(s => (Number(s.ownershipPercentage) || 0) >= 25);
@@ -176,11 +132,9 @@ export default function SignerRoster({ profile, onValidChange }) {
   // a list-management tool, not a "verify yourself" step. Testers were clicking
   // "+ Add Beneficial Owner / Signer" instead of the small "Verify Now" pill on
   // their own row. When there's exactly one (primary, unverified) signer, swap in
-  // simpler, single-purpose copy and auto-expand their verification form — see
-  // InlineVerifyForm's soleSigner prop below.
+  // simpler, single-purpose copy and a full-width verify button that can't be
+  // missed (opens SignerDetailsModal).
   const isSoleSigner = signers.length === 1 && signers[0]?.isPrimarySigner === true;
-  // Which verified signer (if any) has reopened their verification form for edits
-  const [reverifyId, setReverifyId] = useState(null);
   const soleSignerVerified = isSoleSigner && signers[0]?.identityStatus === 'Verified';
 
   return (
@@ -237,9 +191,6 @@ export default function SignerRoster({ profile, onValidChange }) {
             const isPrimary = signer.isPrimarySigner === true;
             const needsInvite = signer.identityStatus === 'Pending Invitation' || signer.identityStatus === 'Sent';
             const inviteBtnLabel = signer.identityStatus === 'Sent' ? 'Resend' : 'Send Invite';
-            const isEditing = editingRowId === signer.id;
-            const draft = drafts[signer.id] || {};
-            const inputCls = 'w-full text-xs border border-white/15 rounded px-2 py-1 text-white placeholder:text-gray-500 focus:outline-none focus:ring-1 focus:ring-amber-500 bg-white/5';
 
             return (
               <div key={signer.id} className="px-5 py-3.5">
@@ -247,38 +198,19 @@ export default function SignerRoster({ profile, onValidChange }) {
                 <div className="flex items-center gap-4">
                   {/* Avatar */}
                   <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 text-sm font-bold text-gray-400">
-                    {(draft.firstName || signer.firstName)?.[0]}{(draft.lastName || signer.lastName)?.[0]}
+                    {signer.firstName?.[0]}{signer.lastName?.[0]}
                   </div>
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    {isEditing ? (
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                        <input type="text" value={draft.firstName || ''} placeholder="First"
-                          onChange={(e) => setDrafts(prev => ({ ...prev, [signer.id]: { ...prev[signer.id], firstName: e.target.value } }))}
-                          className={`${inputCls} w-28`} />
-                        <input type="text" value={draft.lastName || ''} placeholder="Last"
-                          onChange={(e) => setDrafts(prev => ({ ...prev, [signer.id]: { ...prev[signer.id], lastName: e.target.value } }))}
-                          className={`${inputCls} w-28`} />
-                        <input type="text" value={draft.signerEmail || ''} placeholder="Email"
-                          onChange={(e) => setDrafts(prev => ({ ...prev, [signer.id]: { ...prev[signer.id], signerEmail: e.target.value } }))}
-                          className={`${inputCls} w-44`} />
-                        <input type="number" min="1" max="100" placeholder="%" value={draft.ownershipPercentage || ''}
-                          onChange={(e) => { const v = Math.min(100, Math.max(1, parseInt(e.target.value, 10) || 0)); setDrafts(prev => ({ ...prev, [signer.id]: { ...prev[signer.id], ownershipPercentage: v || '' } })); }}
-                          className={`${inputCls} w-[76px] text-center`} />
-                      </div>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-white">{signer.firstName} {signer.lastName}</p>
-                          {isPrimary && (
-                            <span className="text-xs bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-semibold">Primary</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
-                      </>
-                    )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm font-semibold text-white">{signer.firstName} {signer.lastName}</p>
+                      {isPrimary && (
+                        <span className="text-xs bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-semibold">Primary</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
                   </div>
-                  {/* Status badge — hidden for unverified primary (verifies inline instead) */}
+                  {/* Status badge — hidden for unverified primary (verifies via the modal instead) */}
                   {!(isPrimary && signer.identityStatus === 'Pending Invitation') && (
                     <StatusBadge status={signer.identityStatus} />
                   )}
@@ -295,19 +227,12 @@ export default function SignerRoster({ profile, onValidChange }) {
                         {inviteBtnLabel}
                       </button>
                     )}
-                    {/* Inline Edit/Save lifecycle toggle */}
-                    {isEditing ? (
-                      <button onClick={() => handleSaveRow(signer.id)}
-                        className="text-xs text-green-300 hover:text-green-200 border border-green-500/30 bg-green-500/15 hover:bg-green-500/25 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap">
-                        <Save className="w-3.5 h-3.5" /> Save
-                      </button>
-                    ) : (
-                      <button onClick={() => editDraft(signer)}
-                        className="text-xs text-gray-300 hover:text-white font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap"
-                        title="Edit">
-                        <Pencil className="w-3.5 h-3.5" /> Edit
-                      </button>
-                    )}
+                    {/* One modal for everything — contact info + identity verification */}
+                    <button onClick={() => setDetailSigner(signer)}
+                      className="text-xs text-gray-300 hover:text-white font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                      title="Edit details">
+                      <Pencil className="w-3.5 h-3.5" /> Edit
+                    </button>
                     <button
                       onClick={() => handleDelete(signer.id)}
                       className="text-gray-300 hover:text-red-500 p-1.5 rounded-lg transition-colors"
@@ -317,36 +242,13 @@ export default function SignerRoster({ profile, onValidChange }) {
                     </button>
                   </div>
                 </div>
-                {/* Inline verify form renders below the row for primary signers */}
-                {isPrimary && (
-                  <div className="mt-3">
-                    {/* Verified signers can reopen the form to correct DOB/SSN/address —
-                        without this there was no way to fix identity data after
-                        verification (Teddy, 2026-07-10) */}
-                    {signer.identityStatus === 'Verified' && reverifyId !== signer.id && (
-                      <button onClick={() => setReverifyId(signer.id)}
-                        className="text-[11px] font-semibold text-gray-400 hover:text-white border border-white/10 hover:border-white/25 px-2.5 py-1.5 rounded-lg transition-colors">
-                        Review / update verification details
-                      </button>
-                    )}
-                    <InlineVerifyForm signer={signer} corporateId={profile.corporateId} profileTitleType={profile.titleType} soleSigner={isSoleSigner}
-                      forceOpen={reverifyId === signer.id}
-                      onVerified={(updated) => {
-                        setSigners(prev => prev.map(s => s.id === updated.id ? updated : s));
-                        setReverifyId(null);
-                      }} />
-                  </div>
-                )}
-                {/* ID document upload for all signers */}
-                {!isPrimary && (
-                  <div className="mt-3">
-                    <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Government ID Document</p>
-                    <SignerIdUpload
-                      signer={signer}
-                      corporateId={profile.corporateId}
-                      onUploaded={(updated) => setSigners(prev => prev.map(s => s.id === updated.id ? updated : s))}
-                    />
-                  </div>
+                {/* Unverified primary: full-width verify CTA — kept prominent so it
+                    can't be missed in favor of "+ Add Another Owner" (2026-07-07 lesson) */}
+                {isPrimary && signer.identityStatus !== 'Verified' && (
+                  <button onClick={() => setDetailSigner(signer)}
+                    className="mt-3 w-full flex items-center justify-center gap-2 text-sm font-bold text-black bg-amber-500 hover:bg-amber-400 py-3 rounded-xl transition-all">
+                    <ShieldCheck className="w-4 h-4" /> Complete Identity Verification
+                  </button>
                 )}
               </div>
             );
@@ -392,6 +294,16 @@ export default function SignerRoster({ profile, onValidChange }) {
           isPrimary={signers.length === 0}
           onSaved={handleSignerSaved}
           onClose={() => setShowModal(false)}
+        />
+      )}
+
+      {detailSigner && (
+        <SignerDetailsModal
+          signer={detailSigner}
+          corporateId={profile.corporateId}
+          profile={profile}
+          onSaved={(updated) => setSigners(prev => prev.map(s => s.id === updated.id ? { ...s, ...updated } : s))}
+          onClose={() => setDetailSigner(null)}
         />
       )}
     </div>

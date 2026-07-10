@@ -950,3 +950,18 @@ Switching Industry Type MOTO(MS) → Retail(RE) cleared ALL remaining processor 
 
 **→ Waiting on:** Teddy (push; then finish the test — sign the BoldSign doc, submit, verify dashboard + embedded equipment quote)
 ---
+
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken — Step 4 signer UI cleanup (Teddy's direction)
+
+Two UX changes to the Identity & Signing step, per Teddy:
+1. **ID upload/AI reading removed from the UI.** `InlineVerifyForm.jsx` and `SignerIdUpload.jsx` are DELETED from the repo. Backend stays dormant (`idDocumentUrl` field, `inlineVerify` action, `uploadSignerIDsToMSP`) so re-enabling later is frontend-only. Do not recreate the deleted components.
+2. **Single modal for signer data.** New `SignerDetailsModal.jsx` combines contact editing (name/email/ownership %) with identity verification (DOB/SSN/address/title/phone, primary signer only) — replaces the old split of inline row editing vs. a separate expanding verify form. Saving the primary uses one `manageSigner action:'update'` call with `identityStatus:'Verified'` and syncs profile name via `updateMerchantProfile`. Unverified primary gets a full-width amber "Complete Identity Verification" button (kept prominent per the 2026-07-07 missed-pill lesson). Non-primary signers still verify via email invite; their /verify page is unchanged.
+
+`SignerRoster.jsx` rewired accordingly; vite build passes. AGENTS.md "Signer Verification" section updated.
+
+**ACTION for Base44 after Teddy pushes:** publish frontend. No backend function changes in this batch.
+
+**→ Waiting on:** Teddy (push via GitHub Desktop)
+---
