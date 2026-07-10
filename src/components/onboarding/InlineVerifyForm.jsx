@@ -63,7 +63,7 @@ const emptyForm = () => ({
   titleType: '',
 });
 
-export default function InlineVerifyForm({ signer, onVerified, corporateId, profileTitleType, soleSigner }) {
+export default function InlineVerifyForm({ signer, onVerified, corporateId, profileTitleType, soleSigner, forceOpen }) {
   // If the signer already has data filled in, pre-expand and skip the upload phase
   const alreadyHasDoc = !!(signer.idDocumentUrl);
   const alreadyHasData = !!(signer.dobYear && signer.ssn && signer.homeStreet);
@@ -249,8 +249,10 @@ export default function InlineVerifyForm({ signer, onVerified, corporateId, prof
     }
   };
 
-  // Don't show the verify form if already verified or data is complete
-  if (signer.identityStatus === 'Verified') return null;
+  // Don't show the verify form if already verified — unless the signer
+  // explicitly asked to review/update their details (forceOpen), which is the
+  // only way to correct DOB/SSN/address after verification (2026-07-10).
+  if (signer.identityStatus === 'Verified' && !forceOpen) return null;
 
   // If signer has all required data AND was previously verified (may have been reset),
   // show a compact "re-verify" prompt instead of auto-expanding the full form

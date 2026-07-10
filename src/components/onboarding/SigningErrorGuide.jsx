@@ -165,6 +165,11 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
     }
   };
 
+  // Per-field rejections surfaced by signApplication from the PUT response —
+  // when MSPWare rolls the form back, these are the ACTUAL cause and the
+  // raw-form heuristics below misleadingly report everything as missing.
+  const processorErrors = (app?.formErrors || []).filter(e => typeof e === 'string' && e.trim());
+
   const { byStep, unknown } = details ? categorize(details.allErrors) : { byStep: {}, unknown: [] };
   const rawIssues = details?.rawIssues || [];
   const targetStep = primaryStep(byStep, rawIssues);
@@ -194,6 +199,25 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
             <div className="flex items-center gap-1.5 mt-2">
               <Loader2 className="w-3 h-3 text-gray-400 animate-spin" />
               <span className="text-xs text-gray-500">Checking what's missing…</span>
+            </div>
+          )}
+
+          {/* Actual processor rejections — shown first and always, since they are
+              the true cause; the heuristic lists below can be rollback noise */}
+          {processorErrors.length > 0 && (
+            <div className="mt-3 rounded-lg border px-3 py-2 text-red-300 bg-red-500/10 border-red-500/30">
+              <p className="text-[11px] font-bold uppercase tracking-wider mb-1.5">Processor Validation Errors</p>
+              <ul className="space-y-1">
+                {processorErrors.map((e, i) => (
+                  <li key={i} className="text-[11px] flex items-start gap-1.5">
+                    <ShieldAlert className="w-3 h-3 flex-shrink-0 mt-0.5" /> {e}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[10px] opacity-70 mt-1.5">
+                Note: when the processor rejects any value, it may temporarily report other
+                fields as missing below — fix the errors above first, then retry.
+              </p>
             </div>
           )}
 

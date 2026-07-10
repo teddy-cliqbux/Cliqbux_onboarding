@@ -854,6 +854,17 @@ Deno.serve(async (req) => {
               method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
             });
             const refillData = await refillRes.json();
+            // THE REAL ERROR LIVES IN THE PUT RESPONSE: MSPWare rolls the whole
+            // form back when ANY field fails PUT validation, so the follow-up GET
+            // only shows generic "everything missing" completion errors. Observed
+            // live 2026-07-10: a single rejected field made the UI claim owner
+            // DOB/SSN and bank were missing when all three were saved and sent.
+            const putErrors = [
+              ...(refillData?.validation?.errors?.data  || refillData?.data_errors     || []),
+              ...(refillData?.validation?.errors?.rules || refillData?.rule_violations || []),
+              ...(refillData?.errors || []),
+            ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || JSON.stringify(e)));
+            if (putErrors.length) console.log(`[signApplication] PUT validation errors for ${mspApplicationNo}:`, JSON.stringify(putErrors));
             // After PUT, always re-check via GET for true completion (PUT response can be misleading)
             const getRes2 = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
             const getData2 = await getRes2.json();
@@ -861,13 +872,18 @@ Deno.serve(async (req) => {
             refillPercentComplete = rawPct2 !== null ? Math.round(parseFloat(String(rawPct2))) : null;
         console.log(`[signApplication] Full GET form response AFTER refill for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(getData2)));
 
-            refillErrors = [
-              ...(getData2?.completion_errors || getData2?.validation?.errors?.completion || []),
-              ...(getData2?.data_errors       || getData2?.validation?.errors?.data       || []),
-              ...(getData2?.rule_violations   || getData2?.validation?.errors?.rules      || []),
-              ...(getData2?.errors            || []),
-              ...(getData2?.form?.errors      || []),
-            ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
+            // PUT rejections are the authoritative cause; the GET list after a
+            // rollback is misleading noise, so only fall back to it when the PUT
+            // reported nothing.
+            refillErrors = putErrors.length
+              ? putErrors.map((e: string) => `Processor rejected a value — ${e}`)
+              : [
+                  ...(getData2?.completion_errors || getData2?.validation?.errors?.completion || []),
+                  ...(getData2?.data_errors       || getData2?.validation?.errors?.data       || []),
+                  ...(getData2?.rule_violations   || getData2?.validation?.errors?.rules      || []),
+                  ...(getData2?.errors            || []),
+                  ...(getData2?.form?.errors      || []),
+                ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
             console.log(`[signApplication] After refill GET: ${refillPercentComplete ?? '?'}% complete, ${refillErrors.length} errors`);
             if (refillErrors.length) console.log(`[signApplication] Errors:`, JSON.stringify(refillErrors));
           }

@@ -863,3 +863,20 @@ The stranded draft is fine — signApplication reuses the stored mspApplicationN
 
 **→ Waiting on:** Teddy (push), Base44 (redeploy 3 fns), then retry signing from the applicant interface
 ---
+
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken — rollback-noise fix + post-verification editing
+**Re:** Misleading "DOB/SSN missing + bank not linked" at signing (all three verified present in Base44: signer fully populated, location bankDetails full Plaid numbers, MID bankDetails null → correct inheritance)
+
+**Root cause:** signApplication captured the PUT /form response (refillData) but never read its validation errors — it reported errors from the post-rollback GET instead. MSPWare rolls the ENTIRE form back when any one field fails PUT validation, so the GET claims everything is missing (the exact trap documented in AGENTS.md). The UI then told the merchant to fix identity/banking that were already correct.
+
+**Fixes (in repo):**
+1. signApplication — extracts validation errors from the PUT response; when present they take priority as "Processor rejected a value — …" (GET-derived list only as fallback). submitToMSP already did this correctly.
+2. SigningErrorGuide.jsx — renders app.formErrors as a "Processor Validation Errors" section FIRST, with a note that other fields may be rollback noise.
+3. InlineVerifyForm + SignerRoster — verified signers get a "Review / update verification details" button that reopens the (prefilled) verification form; previously there was NO way to edit DOB/SSN/address after verification.
+
+**ACTION for Base44 after Teddy pushes:** force-redeploy signApplication; publish frontend. Then Teddy retries signing — the banner will now name the actual rejected field(s).
+
+**→ Waiting on:** Teddy (push), Base44 (redeploy signApplication + publish), retry from applicant UI
+---

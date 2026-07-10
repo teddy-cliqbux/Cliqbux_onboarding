@@ -179,6 +179,8 @@ export default function SignerRoster({ profile, onValidChange }) {
   // simpler, single-purpose copy and auto-expand their verification form — see
   // InlineVerifyForm's soleSigner prop below.
   const isSoleSigner = signers.length === 1 && signers[0]?.isPrimarySigner === true;
+  // Which verified signer (if any) has reopened their verification form for edits
+  const [reverifyId, setReverifyId] = useState(null);
   const soleSignerVerified = isSoleSigner && signers[0]?.identityStatus === 'Verified';
 
   return (
@@ -318,9 +320,21 @@ export default function SignerRoster({ profile, onValidChange }) {
                 {/* Inline verify form renders below the row for primary signers */}
                 {isPrimary && (
                   <div className="mt-3">
-                    <InlineVerifyForm signer={signer} corporateId={profile.corporateId} profileTitleType={profile.titleType} soleSigner={isSoleSigner} onVerified={(updated) => {
-                      setSigners(prev => prev.map(s => s.id === updated.id ? updated : s));
-                    }} />
+                    {/* Verified signers can reopen the form to correct DOB/SSN/address —
+                        without this there was no way to fix identity data after
+                        verification (Teddy, 2026-07-10) */}
+                    {signer.identityStatus === 'Verified' && reverifyId !== signer.id && (
+                      <button onClick={() => setReverifyId(signer.id)}
+                        className="text-[11px] font-semibold text-gray-400 hover:text-white border border-white/10 hover:border-white/25 px-2.5 py-1.5 rounded-lg transition-colors">
+                        Review / update verification details
+                      </button>
+                    )}
+                    <InlineVerifyForm signer={signer} corporateId={profile.corporateId} profileTitleType={profile.titleType} soleSigner={isSoleSigner}
+                      forceOpen={reverifyId === signer.id}
+                      onVerified={(updated) => {
+                        setSigners(prev => prev.map(s => s.id === updated.id ? updated : s));
+                        setReverifyId(null);
+                      }} />
                   </div>
                 )}
                 {/* ID document upload for all signers */}
