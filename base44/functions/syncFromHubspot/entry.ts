@@ -283,7 +283,24 @@ Deno.serve(async (req) => {
 
     // Only set fields that come from HubSpot custom properties if present
     if (pc.ein)                 profileData.taxId             = pc.ein.replace(/\D/g, '');
-    if (pc.ownership_type)      profileData.ownershipType     = pc.ownership_type.toUpperCase();
+    // HubSpot ownership_type option values do not match the Base44 enum
+    // (HubSpot: LLC / SOLE_PROP / PARTNERSHIP / GOVERNMENT / OTHER; Base44:
+    // LIMITED_COMPANY / SOLE_PROPRIETOR / GENERAL_PARTNERSHIP / ...). Map here;
+    // unknown values are DROPPED rather than crashing profile create with an
+    // enum violation (root cause of the 2026-07-09 sync 500).
+    const OWNERSHIP_HS_TO_B44: Record<string, string> = {
+      'LLC': 'LIMITED_COMPANY', 'LIMITED_COMPANY': 'LIMITED_COMPANY',
+      'SOLE_PROP': 'SOLE_PROPRIETOR', 'SOLE_PROPRIETOR': 'SOLE_PROPRIETOR',
+      'CORPORATION': 'CORPORATION',
+      'PARTNERSHIP': 'GENERAL_PARTNERSHIP', 'GENERAL_PARTNERSHIP': 'GENERAL_PARTNERSHIP',
+      'LIMITED_PARTNERSHIP': 'LIMITED_PARTNERSHIP',
+      'NON_PROFIT': 'NON_PROFIT', 'SUB_S_CORP': 'SUB_S_CORP', 'TRUST': 'TRUST',
+      // GOVERNMENT / OTHER intentionally unmapped — no confirmed MSPWare wire codes
+    };
+    if (pc.ownership_type) {
+      const mappedOwnership = OWNERSHIP_HS_TO_B44[String(pc.ownership_type).toUpperCase()];
+      if (mappedOwnership) profileData.ownershipType = mappedOwnership;
+    }
     if (pc.state_of_formation)  profileData.stateOfFormation  = pc.state_of_formation.toUpperCase();
     if (pc.establishment_year)  profileData.establishmentYear = pc.establishment_year;
     if (pc.monthly_card_sales)  profileData.monthlyCardSales  = String(pc.monthly_card_sales);

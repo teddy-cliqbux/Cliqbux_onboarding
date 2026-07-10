@@ -584,3 +584,19 @@ Three problems with the last Base44 session, all verified against live evidence:
 Bonus: `syncFromHubspot` with `dealId` + no auth → 401 (gate fires after body validation). `migrateToMerchantMIDs` dry run → 0 legacy / 0 derived, success.
 
 **→ Waiting on:** Teddy (confirm #209 shows under Templates in MSPWare dashboard), Teddy (HubSpot `processing_pricing_tier` option cleanup)
+
+---
+**[CLAUDE]** · 2026-07-09
+**Type:** Action Taken — bug fix
+**Re:** syncFromHubspot 500 during Stage Editor HubSpot pull
+
+**Root cause (verified via HubSpot API):** the HubSpot company property `ownership_type` uses its own option values (`LLC`, `SOLE_PROP`, `PARTNERSHIP`, `GOVERNMENT`, `OTHER`) that do not match the Base44 `MerchantCorporateProfile.ownershipType` enum (`LIMITED_COMPANY`, `SOLE_PROPRIETOR`, `GENERAL_PARTNERSHIP`, ...). `syncFromHubspot` passed `LLC` straight through → entity create failed enum validation → HTTP 500.
+
+**Fix (in repo):** `syncFromHubspot` now maps HubSpot ownership values to the Base44 enum (`OWNERSHIP_HS_TO_B44`); unknown values (GOVERNMENT/OTHER) are dropped instead of crashing. Also `ApplicationManager.jsx` now surfaces the backend error body instead of the generic axios status message.
+
+**ACTION for Base44 after Teddy pushes:** force-redeploy `syncFromHubspot` (remember: GitHub sync alone did not deploy last time). Frontend (`ApplicationManager.jsx`) ships with the normal publish.
+
+**Verified live separately:** deal 334478750426 now has `processing_pricing_tier: CUSTOM_INTERCHANGE_PLUS` + markup/per-tx values — the HubSpot cleanup worked. Still missing on the HubSpot side (Teddy action, not Base44): the `custom_auth_per_card` deal property does not exist yet, and the company-level `ownership_type`/`pricing_tier` option lists are still the legacy sets.
+
+**→ Waiting on:** Teddy (push; HubSpot follow-up prompt), Base44 (force-redeploy syncFromHubspot after push)
+---

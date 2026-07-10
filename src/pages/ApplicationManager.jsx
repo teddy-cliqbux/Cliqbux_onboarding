@@ -340,7 +340,8 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
       }
       if (!stage) selectAll(lists);
     } catch (err) {
-      setError(err.message || 'Failed to load merchant data');
+      // Surface the backend's real error body, not axios's generic status message
+      setError(err.response?.data?.error || err.message || 'Failed to load merchant data');
     } finally {
       setSyncMsg('');
       setLoading(false);
@@ -357,7 +358,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
       const lists = await fetchLists();
       if (!stage) selectAll(lists);
     } catch (err) {
-      setError(err.message || 'HubSpot sync failed');
+      setError(err.response?.data?.error || err.message || 'HubSpot sync failed');
     } finally {
       setSyncMsg('');
       setLoading(false);
