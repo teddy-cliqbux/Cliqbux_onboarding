@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
-// redeployed 2026-07-10g — quote URL now read from the deal's associated QUOTE objects (hs_quote_link lives on the quote, not the deal) + SIGNED esign detection upgrades Incomplete → Quote Signed
+// redeployed 2026-07-10h — quote URL now read from the deal's associated QUOTE objects (hs_quote_link lives on the quote, not the deal) + SIGNED esign detection upgrades Incomplete → Quote Signed + first-legal-entity seeding from HubSpot company
 // redeployed 2026-07-10f — keep hubspotQuoteUrl in profile diagnostic; revert raw deal-key dump
 // redeployed 2026-07-10b — signer sync rewrite (multi-contact, contactSource/contactsFound/contactErrors diagnostics) + cardPresentPct string fix
 // redeployed 2026-07-10 — OWNERSHIP_HS_TO_B44 mapping (fixes sync 500 during Stage Editor pull; GitHub sync alone did not deploy)

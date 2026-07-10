@@ -792,3 +792,28 @@ dealQuoteProps: {}   ← no quote-related properties at all
 
 **→ Waiting on:** Teddy (push), Base44 (redeploy 2 functions + publish), then merchant-link retest
 ---
+
+---
+**[BASE44]** · 2026-07-10
+**Type:** Action Taken + Verified — quoteUrl now resolves; updateLocationDetails source missing
+**Re:** Claude — honest completeness (force-redeploy getMerchantData + syncFromHubspot + publish frontend)
+
+Force-redeployed both functions (bumped deploy markers — GitHub sync alone does not deploy, per the established lesson):
+
+**1. `getMerchantData` → 200.** Readiness report is LIVE: returns `readiness` with per-record `missing` lists for entities / locations / mids, and `readiness.complete`. `safeProfile.legalEntities` now carries `ownershipType` / `taxClassType` / `establishmentYear` / `mailingStreet/City/State/Zip` (previously stripped). For deal 334478750426: 1 legal entity (Cliqbux, EIN 321456789, LLC-Corp, est. 2014) passes; the location is flagged missing a street number (address is "Hayward Boulevard, Hayward, CA, 94542" — no number); the MID is flagged missing industry type / monthly volume / avg sale / highest ticket / card split.
+
+**2. `syncFromHubspot` → 200.** The Quotes-associations fix is LIVE and **the quote URL now resolves** — resolving the open question from my prior entry:
+```
+quoteUrl: "https://www.cliqbux.com/o1n2ptzywimn1uc4ga"
+quoteEsignStatus: "PENDING_SIGNATURE"
+profile.hubspotQuoteUrl: "https://www.cliqbux.com/o1n2ptzywimn1uc4ga"
+entityAction: "exists"   (entity was already seeded by a prior run)
+```
+So `hs_quote_link` read off the associated **quote object** (not the deal) was the right fix — Claude's option 2. No `quoteErrors` (the private app has quotes read scope). Milestone 1 will now unlock for this merchant. `quoteEsignStatus: "PENDING_SIGNATURE"` → applicationStatus stays `Incomplete` (correct — not yet signed).
+
+**3. Frontend** — OnboardingPortal.jsx (Welcome Hub amber "needs your input" state + readiness gating), ProgressTracker.jsx, PostSubmissionDashboard.jsx ship via the normal sync pipeline (commits `3da4f77` + `255f8cc`).
+
+**⚠️ `updateLocationDetails` — NO SOURCE EXISTS.** Teddy asked me to "deploy the NEW updateLocationDetails function," but there is no `base44/functions/updateLocationDetails/entry.ts` in the repo, no git history for it, and no reference to it anywhere (frontend, docs, or this channel). The platform lists it as a *registered* function (likely deployed from source that was later deleted from the repo, or created in the dashboard), so there is nothing on disk for me to deploy or redeploy. **Teddy / Claude: push the `updateLocationDetails` source to the repo (or confirm the intended name — it may overlap with `updateMerchantProfile` / `saveLocationBankDetails` / `addSelfServeLocation`) and I'll deploy it immediately.**
+
+**→ Waiting on:** Teddy / Claude (push `updateLocationDetails` source or clarify the intended function name) — everything else in this batch is live
+---
