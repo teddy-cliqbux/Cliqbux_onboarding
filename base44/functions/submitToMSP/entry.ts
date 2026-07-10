@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-07-10j — cnp_percent residual fix (see signApplication marker)
 // redeployed 2026-07-10i — card-split fields (internetPct/motoPct) sourced from MerchantMID, parseInt(cardPresentPct) no longer forces 0→100, early custom-pricing guard before any MSPWare draft is created
 
 // ─── Portal auth (inlined) ─────────────────────────────────────────────────────────────────────
