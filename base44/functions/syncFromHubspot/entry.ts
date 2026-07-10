@@ -181,7 +181,7 @@ async function getCompany(id: string, headers: Record<string, string>): Promise<
 async function getDealWithAssociations(dealId: string, headers: Record<string, string>): Promise<any> {
   const props = HS_PROPS.deal.join(',');
   const data = await hsGet(
-    `/crm/v3/objects/deals/${dealId}?properties=${props}&associations=companies,contacts`,
+    `/crm/v3/objects/deals/${dealId}?properties=${props}&associations=companies,contacts,quotes`,
     headers
   );
   return data;
@@ -286,6 +286,39 @@ Deno.serve(async (req) => {
     result.contactsFound = contacts.length;
     const primaryContact = contacts[0] || {};
 
+    // ── 3b. Resolve the signing link from the deal's QUOTES ──────────────────
+    // hs_quote_link lives on the QUOTE object, NOT the deal — confirmed via API
+    // 2026-07-10: the deal-level property of the same name is always empty, so
+    // milestone 1 never unlocked. Newest quote with a live link wins. Also
+    // captures the esign status so a sync after signing upgrades the profile
+    // to 'Quote Signed' even if the HubSpot quote_signed workflow is missing.
+    let quoteUrl = dealProps.hs_quote_link || '';
+    let quoteEsignStatus = '';
+    const quoteAssocs = deal.associations?.quotes?.results || [];
+    const seenQuoteIds = new Set<string>();
+    const dealQuotes: any[] = [];
+    for (const qa of quoteAssocs) {
+      if (seenQuoteIds.has(String(qa.id))) continue;
+      seenQuoteIds.add(String(qa.id));
+      if (dealQuotes.length >= 5) break;
+      try {
+        const q = await hsGet(`/crm/v3/objects/quotes/${qa.id}?properties=hs_quote_link,hs_status,hs_quote_esign_status,hs_expiration_date,hs_createdate`, hsHeaders);
+        dealQuotes.push(q.properties || {});
+      } catch (e: any) {
+        // A 403 here means the HubSpot private app lacks crm.objects.quotes.read
+        (result.quoteErrors = result.quoteErrors || []).push(`quote ${qa.id}: ${e.message}`);
+      }
+    }
+    const linkedQuotes = dealQuotes
+      .filter((q: any) => q.hs_quote_link)
+      .sort((a: any, b: any) => String(b.hs_createdate || '').localeCompare(String(a.hs_createdate || '')));
+    if (linkedQuotes.length) {
+      quoteUrl = linkedQuotes[0].hs_quote_link;
+      quoteEsignStatus = linkedQuotes[0].hs_quote_esign_status || '';
+    }
+    result.quoteUrl = quoteUrl || null;
+    result.quoteEsignStatus = quoteEsignStatus || null;
+
     // ── 4. Upsert MerchantCorporateProfile ────────────────────────────────────
     const industryClass = mapHubspotIndustry(pc.industry || '');
     const mccCode = pc.mcc_code || industryToMcc(industryClass);
@@ -303,8 +336,8 @@ Deno.serve(async (req) => {
       industryClass,
       mccCode,
       pricingTier,
-      hubspotQuoteUrl:   dealProps.hs_quote_link || '',
-      applicationStatus: 'Incomplete',
+      hubspotQuoteUrl:   quoteUrl,
+      applicationStatus: quoteEsignStatus === 'SIGNED' ? 'Quote Signed' : 'Incomplete',
     };
 
     // Only set fields that come from HubSpot custom properties if present
@@ -351,6 +384,10 @@ Deno.serve(async (req) => {
         legalName,
         hubspotQuoteUrl: profileData.hubspotQuoteUrl || existing.hubspotQuoteUrl,
         pricingTier:     pricingTier || existing.pricingTier,
+        // Signature detection — only ever upgrades Incomplete, never regresses a
+        // later status (Quote Signed / Submitted / Pending MID / Active)
+        ...(quoteEsignStatus === 'SIGNED' && (!existing.applicationStatus || existing.applicationStatus === 'Incomplete')
+          ? { applicationStatus: 'Quote Signed' } : {}),
         industryClass:   industryClass || existing.industryClass,
         mccCode:         mccCode || existing.mccCode,
       };

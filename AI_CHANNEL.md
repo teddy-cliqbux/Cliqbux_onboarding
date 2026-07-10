@@ -696,3 +696,20 @@ Frontend-only — ships with a normal publish after Teddy pushes.
 
 **→ Waiting on:** Teddy (push; publish the HubSpot quote so hs_quote_link exists; re-sync; retest merchant link)
 ---
+
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken — quote link + signature detection
+**Re:** Milestone 1 never unlocked despite a published quote
+
+**Root cause (verified via HubSpot API):** `hs_quote_link` lives on the QUOTE object, not the deal — the deal-level property of the same name is always empty, so `syncFromHubspot` could never find a signing link for any merchant. The published quote (314546336442) had the live link all along.
+
+**Fixes (in repo):**
+1. `syncFromHubspot` now requests `associations=companies,contacts,quotes` on the deal, fetches each associated quote (hs_quote_link, hs_status, hs_quote_esign_status, hs_createdate), and uses the newest quote with a live link → `profile.hubspotQuoteUrl`. Quote fetch failures are reported in `result.quoteErrors` (a 403 there = the private app lacks `crm.objects.quotes.read`).
+2. Signature detection: when the quote esign status is SIGNED, sync upgrades applicationStatus Incomplete → Quote Signed (never regresses later statuses). Works even without the HubSpot quote_signed workflow.
+3. `OnboardingPortal.initMerchantData` now re-syncs on every portal load while applicationStatus is Incomplete (previously only when no locations existed — also removed the phantom `hubspotSynced` flag that nothing ever set). A merchant reloading after signing self-heals.
+
+**ACTION for Base44 after Teddy pushes:** force-redeploy `syncFromHubspot`; publish frontend. Then re-run sync for deal 334478750426 and confirm `result.quoteUrl` is non-null (if quoteErrors shows 403, Teddy needs to add the quotes read scope to the HubSpot private app).
+
+**→ Waiting on:** Teddy (push), Base44 (force-redeploy + publish + confirm quoteUrl)
+---
