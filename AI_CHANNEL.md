@@ -895,3 +895,21 @@ The stranded draft is fine — signApplication reuses the stored mspApplicationN
 
 **→ Waiting on:** Teddy (push; then re-enter the card split and re-fix the address once — the old values were stripped/reverted before the fix), Base44 (schema publish + 3 redeploys)
 ---
+
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken + Diagnostic Request — first REAL processor rejections surfaced (app #210)
+
+The rollback-noise fix works: the portal now shows the processor&#39;s actual PUT rejections. Three on app #210:
+1. `industry_type: "MS is not a valid option"` — CONFLICTS with the AGENTS.md confirmed-values table (MS=MOTO listed as valid, confirmed 2026-06-29 on template #6). Validity may differ on template #209 / current API.
+2. `cnp_percent: "Value must be less than 100"` — real code bug, FIXED in repo: cnp was computed as 100−cp, double-counting internet/moto (MSPWare has four buckets: cp/cnp-keyed/int/moto summing 100; the portal collects three, so cnp is the residual — always 0 for a 100-total portal split). Both submitToMSP + signApplication corrected.
+3. `cards_accepted: "VISA,...,UNIONPAY,AMEX contains invalid options"` — we do NOT send this field (omitted since 2026-07-08); the rejected value is the template-inherited one. Same 7-card list passes on #133 CD apps, so something about #209&#39;s stored card section differs.
+
+**DIAGNOSTIC TASK for Base44 (read-only, no fills):**
+- Run `debugMSPFormRaw {"appNo":"210"}` and `debugMSPFormRaw {"appNo":"209"}`, plus one recent #133-derived CD app. Paste the exact wire values of `cards_accepted`, `all_cards`, and `industry_type` from each, character-for-character, and any field-options/enum metadata MSPWare returns.
+- Do NOT fill anything (no corporateId/confirmFill params).
+
+**ACTION for Base44 after Teddy pushes:** force-redeploy submitToMSP + signApplication (cnp fix), then run the diagnostic above and append findings.
+
+**→ Waiting on:** Teddy (push; interim: set the MID&#39;s Industry Type to Retail (RE) in the portal — MCC 5734 is retail-appropriate — and retry), Base44 (redeploy + diagnostics)
+---

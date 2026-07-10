@@ -432,15 +432,23 @@ function buildFormPayload(
   // (0 is falsy) — only default when the value is genuinely absent/NaN.
   const parsedCpPct = parseInt(String(rawCpPct), 10);
   const cardPresentPct = Math.max(0, Math.min(100, Number.isFinite(parsedCpPct) ? parsedCpPct : 100));
-  const cnpPct = 100 - cardPresentPct;
+  // MSPWare has FOUR acceptance buckets (cp / cnp-keyed / internet / moto) that
+  // must sum to 100, and rejects cnp_percent >= 100. The portal collects three
+  // (in-person / online / moto), so cnp is the RESIDUAL keyed portion — with a
+  // 100-total portal split it is always 0. The old formula (100 - cp) double-
+  // counted internet/moto and produced cnp_percent: 100 for online merchants,
+  // which the processor rejected (observed live 2026-07-10, app #210).
+  const midIntPct  = Math.max(0, Math.min(100, parseInt(String(merchantMID.internetPct ?? profile.internetPct ?? 0), 10) || 0));
+  const midMotoPct = Math.max(0, Math.min(100, parseInt(String(merchantMID.motoPct ?? profile.motoPct ?? 0), 10) || 0));
+  const cnpPct = Math.max(0, 100 - cardPresentPct - midIntPct - midMotoPct);
   // internetPct and motoPct are collected separately on Step 2.
   // int_percent = internet only; MSPWare derives MOTO as cnp - int.
   // Default: if no internet breakdown is set, assume all CNP is internet (covers MOTO-only merchants too).
   // The card split is entered PER-MID in the portal (merchantMID.internetPct/motoPct);
   // the profile-level fields were a dead fallback that never existed, which
   // misclassified online merchants as 100% MOTO (2026-07-10).
-  const intPct  = cnpPct > 0 ? String(merchantMID.internetPct ?? profile.internetPct ?? 0) : '0';
-  const motoPct = cnpPct > 0 ? String(merchantMID.motoPct ?? profile.motoPct ?? Math.max(0, cnpPct - parseInt(intPct, 10))) : '0';
+  const intPct  = String(midIntPct);
+  const motoPct = String(midMotoPct);
 
   const ownershipRaw = profile.ownershipType || matchedEntity?.ownershipType || profile.taxClassType || '';
   const ownershipType = mapOwnershipType(ownershipRaw);
