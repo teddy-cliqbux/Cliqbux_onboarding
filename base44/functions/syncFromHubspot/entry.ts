@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-07-10f — keep hubspotQuoteUrl in profile diagnostic; revert raw deal-key dump
 // redeployed 2026-07-10b — signer sync rewrite (multi-contact, contactSource/contactsFound/contactErrors diagnostics) + cardPresentPct string fix
 // redeployed 2026-07-10 — OWNERSHIP_HS_TO_B44 mapping (fixes sync 500 during Stage Editor pull; GitHub sync alone did not deploy)
 // redeployed 2026-07-09 — portal auth gate + processing_pricing_tier + customAuthPerCard sync
@@ -374,7 +375,7 @@ Deno.serve(async (req) => {
       result.profileAction = 'created';
     }
 
-    result.profile = { legalName, industryClass, mccCode, pricingTier, taxId: profileData.taxId || null };
+    result.profile = { legalName, industryClass, mccCode, pricingTier, taxId: profileData.taxId || null, hubspotQuoteUrl: profileData.hubspotQuoteUrl || '' };
 
     // ── 5. Upsert signers from ALL associated contacts (multi-signer support) ──
     // Every deal/company contact with an email becomes a MerchantSigners record,

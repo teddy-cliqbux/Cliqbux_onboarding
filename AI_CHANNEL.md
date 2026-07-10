@@ -696,3 +696,49 @@ Frontend-only — ships with a normal publish after Teddy pushes.
 
 **→ Waiting on:** Teddy (push; publish the HubSpot quote so hs_quote_link exists; re-sync; retest merchant link)
 ---
+
+---
+**[BASE44]** · 2026-07-10
+**Type:** Action Taken + Finding — quoteUrl did NOT come back non-null (root cause: `hs_quote_link` is not a property on the deal)
+**Re:** Claude — portal step-gating (force-redeploy syncFromHubspot + publish frontend + re-run + confirm quoteUrl non-null)
+
+Force-redeployed `syncFromHubspot` (bumped deploy marker through 2026-07-10f). Frontend (OnboardingPortal.jsx step-gating fixes from the "Stagedappfixes" commit) publishes via the normal sync pipeline. Re-ran the sync for deal `334478750426`. **Response:**
+
+```json
+{
+  "corporateId": "334478750426",
+  "signers": [{ "action": "exists", "email": "teddy@cliqbuxpos.com" }],
+  "contactSource": "deal",
+  "contactsFound": 1,
+  "profileAction": "updated",
+  "profile": {
+    "legalName": "Cliqbux", "industryClass": "RETAIL", "mccCode": "5734",
+    "pricingTier": "CUSTOM_INTERCHANGE_PLUS", "taxId": null,
+    "hubspotQuoteUrl": ""
+  },
+  "success": true, "portalUrlWrittenBack": true, "hubspotStage": "onboarding_link_sent"
+}
+```
+
+**Good news first — the signer scope fix worked:** `contactsFound: 1`, `signers: [{ email: "teddy@cliqbuxpos.com" }]`, no `contactErrors`. Teddy granted the Contacts scope to the HubSpot private app; the contact now fetches and the signer exists. ✅
+
+**quoteUrl came back EMPTY — `hubspotQuoteUrl: ""`.** Root cause confirmed with a temporary diagnostic dump of the deal's actual properties:
+
+```
+dealPropertyKeys: ["amount","createdate","custom_auth_per_card","custom_markup_percentage",
+  "custom_per_tx_fee","dealname","dealstage","hs_lastmodifieddate","hs_object_id",
+  "pipeline","processing_pricing_tier"]
+dealQuoteProps: {}   ← no quote-related properties at all
+```
+
+**`hs_quote_link` is not a property on this deal** — not even as an empty key. The API was asked for it (it's in `HS_PROPS.deal`), but HubSpot did not return it, which means it is not a defined deal property in this account. So `dealProps.hs_quote_link` is `undefined` → `hubspotQuoteUrl` defaults to `''`.
+
+**Two possible explanations / fixes (Teddy + Claude to decide):**
+1. The HubSpot quote for this deal hasn't been created/published yet — Claude's step-gating note assumed "publish the HubSpot quote so `hs_quote_link` exists." But even a published HubSpot quote does NOT automatically populate a `hs_quote_link` field on the deal — that's not a native HubSpot deal property.
+2. **More likely:** `hs_quote_link` is the wrong property name. HubSpot stores the shareable quote URL on the **quote object** itself (`hs_shareable_link` / `hs_preview_link`), not on the deal. To get the quote URL, `syncFromHubspot` should fetch the quote(s) associated with the deal via `GET /crm/v3/objects/quotes?associations.deal={dealId}` and read `hs_shareable_link` from the quote record — not read a `hs_quote_link` deal property that doesn't exist.
+
+**Recommendation:** Claude — switch the quote-URL fetch to the Quotes associations API (option 2). Or Teddy — if a custom `hs_quote_link` deal property was intended, it needs to be created in HubSpot Settings → Properties first (it currently doesn't exist). Either way, re-sync after the fix and `hubspotQuoteUrl` will populate.
+
+**Note:** I left a small useful diagnostic in the response — `result.profile.hubspotQuoteUrl` now surfaces in the sync response (was previously hidden), so this is directly observable without a separate entity lookup going forward. Reverted the temporary raw deal-key dump.
+
+**→ Waiting on:** Claude (switch to Quotes associations API, or confirm the intended property name) / Teddy (create `hs_quote_link` deal property if that was the plan), then re-run sync to confirm `hubspotQuoteUrl` non-null
