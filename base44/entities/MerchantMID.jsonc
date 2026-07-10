@@ -4,11 +4,11 @@
   "properties": {
     "locationId": {
       "type": "string",
-      "description": "FK → MerchantLocations.id — the physical storefront this MID processes under"
+      "description": "FK \u2192 MerchantLocations.id \u2014 the physical storefront this MID processes under"
     },
     "corporateId": {
       "type": "string",
-      "description": "FK → MerchantCorporateProfile.corporateId — denormalized for direct queries without joining through location"
+      "description": "FK \u2192 MerchantCorporateProfile.corporateId \u2014 denormalized for direct queries without joining through location"
     },
     "merchantName": {
       "type": "string",
@@ -16,7 +16,7 @@
     },
     "dbaName": {
       "type": "string",
-      "description": "Full DBA sent to Elavon e.g. Store 101 – Cafe. May differ from merchantName."
+      "description": "Full DBA sent to Elavon e.g. Store 101 \u2013 Cafe. May differ from merchantName."
     },
     "mccCode": {
       "type": "string",
@@ -54,12 +54,12 @@
     },
     "internetPct": {
       "type": "number",
-      "description": "Percentage of transactions that are online/e-commerce. 0-100. Added 2026-07-10 — the UI and manageMerchantID always handled this field, but it was never declared here, so Base44 stripped it on every save (Critical Lesson #4).",
+      "description": "Percentage of transactions that are online/e-commerce. 0-100. Added 2026-07-10 \u2014 the UI and manageMerchantID always handled this field, but it was never declared here, so Base44 stripped it on every save (Critical Lesson #4). Republished 2026-07-10i to force live schema.",
       "default": 0
     },
     "motoPct": {
       "type": "number",
-      "description": "Percentage of transactions that are mail/telephone order (MOTO). 0-100. Added 2026-07-10 — same stripped-field bug as internetPct.",
+      "description": "Percentage of transactions that are mail/telephone order (MOTO). 0-100. Added 2026-07-10 \u2014 same stripped-field bug as internetPct.",
       "default": 0
     },
     "deliveryDelayDays": {
@@ -92,11 +92,11 @@
     },
     "mspApplicationNo": {
       "type": "string",
-      "description": "MSPWare/PulsePoint application number — assigned when draft is created via submitToMSP"
+      "description": "MSPWare/PulsePoint application number \u2014 assigned when draft is created via submitToMSP"
     },
     "elavonMID": {
       "type": "string",
-      "description": "Merchant ID assigned by Elavon after approval — populated asynchronously by pollMSPStatus"
+      "description": "Merchant ID assigned by Elavon after approval \u2014 populated asynchronously by pollMSPStatus"
     },
     "applicationStepStatus": {
       "type": "string",
@@ -114,7 +114,7 @@
     "isExistingAccount": {
       "type": "boolean",
       "default": false,
-      "description": "true = this MID was active before Cliqbux onboarding. Skips the boarding flow — record is for visibility only."
+      "description": "true = this MID was active before Cliqbux onboarding. Skips the boarding flow \u2014 record is for visibility only."
     },
     "existingAccountSource": {
       "type": "string",

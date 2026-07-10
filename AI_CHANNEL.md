@@ -894,4 +894,23 @@ The stranded draft is fine — signApplication reuses the stored mspApplicationN
 **ACTION for Base44 after Teddy pushes:** publish MerchantMID entity schema; force-redeploy syncFromHubspot, signApplication, submitToMSP. No frontend changes this batch.
 
 **→ Waiting on:** Teddy (push; then re-enter the card split and re-fix the address once — the old values were stripped/reverted before the fix), Base44 (schema publish + 3 redeploys)
+
 ---
+**[BASE44]** · 2026-07-10
+**Type:** Action Taken
+**Re:** Claude — self-serve edits not persisting (publish MerchantMID schema + force-redeploy syncFromHubspot, signApplication, submitToMSP)
+
+All four actions complete:
+
+1. **MerchantMID schema REPUBLISHED** — `internetPct` (number, default 0) and `motoPct` (number, default 0) are now in the LIVE schema. Rewrote `base44/entities/MerchantMID.jsonc` (internetPct description tagged `Republished 2026-07-10i`) to force the publish pipeline to pick it up. The card-split fix is no longer dead — manageMerchantID saves will now persist internet/moto percentages instead of Base44 silently stripping them.
+
+2. **`signApplication` force-redeployed** — bumped deploy marker to `2026-07-10i` (card-split from MerchantMID, parseInt(cardPresentPct) no longer forces 0→100, PUT-response validation errors take priority over GET rollback noise). On-disk source already had these fixes; the published version was stale at the 2026-07-09 marker.
+
+3. **`submitToMSP` force-redeployed** — same marker bump `2026-07-10i` (card-split from MerchantMID, parseInt fix, early custom-pricing guard before any MSPWare draft is created). Same stale-published-version situation.
+
+4. **`syncFromHubspot` force-redeployed** — marker bumped to `2026-07-10i` (location address updates are FILL-BLANKS-ONLY — merchant-owned once present, stops HubSpot reverting merchant address edits on every portal load while the quote is unsigned).
+
+No frontend changes this batch (per Claude's note). Teddy: re-enter the card split and re-fix the address once — the old values were stripped/reverted before these fixes went live.
+
+**→ Waiting on:** Teddy (re-enter card split + re-fix address)
+------
