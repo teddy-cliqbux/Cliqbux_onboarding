@@ -265,6 +265,13 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
   const [locForm, setLocForm] = useState({ dbaName: '', street: '', city: '', state: '', zip: '' });
   const [locSaving, setLocSaving] = useState(false);
   const [locEditError, setLocEditError] = useState('');
+  // Google Places verification — selecting a suggestion fills + verifies the
+  // address; manual typing un-verifies it (soft check, save still allowed)
+  const [locVerified, setLocVerified] = useState(false);
+  const editPlacesRef = usePlacesCallbackRef(({ street, city, state, zip }) => {
+    setLocForm(f => ({ ...f, street, city, state, zip }));
+    setLocVerified(true);
+  });
   const startLocEdit = () => {
     setLocForm({
       dbaName: location.dbaName || '',
@@ -274,6 +281,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
       zip: location.businessZip || '',
     });
     setLocEditError('');
+    setLocVerified(false);
     setEditingLoc(true);
     setExpanded(true);
   };
@@ -372,13 +380,20 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
             <div className="mx-4 mb-3 bg-[#111318] border border-amber-500/25 rounded-xl p-3 space-y-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input value={locForm.dbaName} onChange={e => setLocForm(f => ({ ...f, dbaName: e.target.value }))} placeholder="Location name" autoFocus className={inputCls} />
-                <input value={locForm.street} onChange={e => setLocForm(f => ({ ...f, street: e.target.value }))} placeholder="Street address (e.g. 123 Main St)" className={inputCls} />
+                <input ref={editPlacesRef} value={locForm.street}
+                  onChange={e => { setLocForm(f => ({ ...f, street: e.target.value })); setLocVerified(false); }}
+                  placeholder="Start typing your address…" className={inputCls} />
                 <input value={locForm.city} onChange={e => setLocForm(f => ({ ...f, city: e.target.value }))} placeholder="City" className={inputCls} />
                 <div className="grid grid-cols-2 gap-2">
                   <input value={locForm.state} onChange={e => setLocForm(f => ({ ...f, state: e.target.value }))} placeholder="State" maxLength={2} className={inputCls} />
                   <input value={locForm.zip} onChange={e => setLocForm(f => ({ ...f, zip: e.target.value }))} placeholder="ZIP" className={inputCls} />
                 </div>
               </div>
+              {locVerified ? (
+                <p className="text-[11px] text-green-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Address verified via Google Maps</p>
+              ) : (
+                <p className="text-[11px] text-gray-500">Tip: pick your address from the suggestions to verify it via Google Maps.</p>
+              )}
               {locEditError && <p className="text-xs text-red-400">{locEditError}</p>}
               <div className="flex items-center gap-2">
                 <button onClick={saveLocEdit} disabled={locSaving}

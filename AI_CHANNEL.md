@@ -835,3 +835,12 @@ So `hs_quote_link` read off the associated **quote object** (not the deal) was t
 
 **→ Waiting on:** Teddy / Claude (push `updateLocationDetails` source or clarify the intended function name) — everything else in this batch is live
 ---
+
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken — Google Maps verification on inline location edit
+
+The inline location-edit form (LocationCard, OnboardingLocations.jsx) now attaches the existing usePlacesCallbackRef Google Places autocomplete to its street field: picking a suggestion fills street/city/state/ZIP and shows "Address verified via Google Maps"; manual typing un-verifies (soft check — save still allowed, street-number rule still hard). Frontend only — ships with a normal publish.
+
+**→ Waiting on:** Teddy (push), Base44 (publish frontend)
+---
