@@ -112,6 +112,7 @@ const HS_PROPS = {
     'custom_markup_percentage',  // negotiated markup % — required for custom tiers
     'custom_per_tx_fee',         // negotiated per-transaction fee ($) — required for custom tiers
     'custom_auth_per_card',      // negotiated per-auth fee ($) — required for custom tiers
+    'custom_pertransaction_fee',  // LEGACY duplicate labeled "Custom Per-Auth Fee ($)" — some deal cards are bound to it; accepted as fallback
     'hs_quote_link',
   ],
 };
@@ -374,7 +375,15 @@ Deno.serve(async (req) => {
     const numOrNull = (v: any) => (v == null || v === '' ? null : parseFloat(v));
     if (numOrNull(dealProps.custom_markup_percentage) != null) profileData.customMarkupPercentage = numOrNull(dealProps.custom_markup_percentage);
     if (numOrNull(dealProps.custom_per_tx_fee)        != null) profileData.customPerTxFee         = numOrNull(dealProps.custom_per_tx_fee);
-    if (numOrNull(dealProps.custom_auth_per_card)     != null) profileData.customAuthPerCard      = numOrNull(dealProps.custom_auth_per_card);
+    // Per-auth fee: canonical property wins, but fall back to the legacy duplicate
+    // "custom_pertransaction_fee" (labeled "Custom Per-Auth Fee ($)" in HubSpot) —
+    // 2026-07-10: the property cleanup didn't delete it, some deal cards are bound
+    // to it, and reps filled it instead of custom_auth_per_card. Reading only the
+    // canonical name left customAuthPerCard null and blocked the first ICPLS signing.
+    const authPerCardVal = numOrNull(dealProps.custom_auth_per_card) != null
+      ? numOrNull(dealProps.custom_auth_per_card)
+      : numOrNull(dealProps.custom_pertransaction_fee);
+    if (authPerCardVal != null) profileData.customAuthPerCard = authPerCardVal;
 
     const existingProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
     let profileId: string;
@@ -399,10 +408,13 @@ Deno.serve(async (req) => {
       if (force || !existing.corporatePhone)   safeUpdate.corporatePhone   = profileData.corporatePhone;
       if (force || !existing.monthlyCardSales) safeUpdate.monthlyCardSales = profileData.monthlyCardSales;
       if (force || !existing.avgSaleAmount)    safeUpdate.avgSaleAmount    = profileData.avgSaleAmount;
-      // Negotiated pricing: fill blanks always; overwrite only with force
-      if (profileData.customMarkupPercentage != null && (force || existing.customMarkupPercentage == null)) safeUpdate.customMarkupPercentage = profileData.customMarkupPercentage;
-      if (profileData.customPerTxFee         != null && (force || existing.customPerTxFee         == null)) safeUpdate.customPerTxFee         = profileData.customPerTxFee;
-      if (profileData.customAuthPerCard      != null && (force || existing.customAuthPerCard      == null)) safeUpdate.customAuthPerCard      = profileData.customAuthPerCard;
+      // Negotiated pricing is SALES-owned — set on the HubSpot deal, never edited
+      // by the merchant — so always mirror non-null deal values. The old
+      // fill-blanks-only rule meant a rep correcting a rate in HubSpot never
+      // propagated to the profile. Never nulls an existing value.
+      if (profileData.customMarkupPercentage != null) safeUpdate.customMarkupPercentage = profileData.customMarkupPercentage;
+      if (profileData.customPerTxFee         != null) safeUpdate.customPerTxFee         = profileData.customPerTxFee;
+      if (profileData.customAuthPerCard      != null) safeUpdate.customAuthPerCard      = profileData.customAuthPerCard;
 
       await base44.asServiceRole.entities.MerchantCorporateProfile.update(existing.id, safeUpdate);
       profileId = existing.id;

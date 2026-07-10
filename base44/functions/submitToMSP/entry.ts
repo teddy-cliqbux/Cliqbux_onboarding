@@ -770,6 +770,23 @@ Deno.serve(async (req) => {
     const profile = profiles?.[0];
     if (!profile) return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
 
+    // ── Early custom-pricing guard (2026-07-10) ───────────────────────────────
+    // buildFormPayload has the same check, but it runs AFTER the MSPWare draft is
+    // created — failing there strands an empty draft application in MSPWare
+    // (observed on the first live ICPLS test). Fail fast here, before anything
+    // is created in MSPWare.
+    {
+      const tierKeyEarly = (profile.pricingTier || '').toUpperCase();
+      if (CUSTOM_PRICING_TIERS.includes(tierKeyEarly) &&
+          (profile.customMarkupPercentage == null || profile.customPerTxFee == null || profile.customAuthPerCard == null)) {
+        return Response.json({
+          error: `Custom pricing not yet set for "${profile.legalName || 'this merchant'}" (pricingTier=${tierKeyEarly}). ` +
+            `Your Cliqbux representative needs to set the negotiated markup, per-transaction fee, and per-auth fee ` +
+            `on the deal before your application can be prepared. No application was created.`,
+        }, { status: 422 });
+      }
+    }
+
     // ── Auto-create merchantMIDs for new merchants who have locations but no merchantMIDs yet ──
     // This covers the standard onboarding flow: merchant adds location(s) via the UI,
     // then clicks Submit on the verification page before the tree UI / migration creates merchantMIDs.

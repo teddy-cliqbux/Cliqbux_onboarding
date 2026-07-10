@@ -844,3 +844,22 @@ The inline location-edit form (LocationCard, OnboardingLocations.jsx) now attach
 
 **→ Waiting on:** Teddy (push), Base44 (publish frontend)
 ---
+
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken — root fix for the empty ICPLS draft (first live signing attempt)
+**Re:** Guard fired at signing; MSPWare draft created with template #209 but zero merchant data
+
+**Root cause (verified via HubSpot API):** the deal value the rep entered as the per-auth fee lives in the LEGACY duplicate property `custom_pertransaction_fee` (labeled "Custom Per-Auth Fee ($)") — the cleanup never deleted it and the deal card is bound to it. `custom_auth_per_card` (the property the sync reads) is EMPTY. So `profile.customAuthPerCard` stayed null → buildFormPayload guard threw → but the MSPWare draft had already been created → stranded empty application.
+
+**Fixes (in repo):**
+1. `syncFromHubspot` — per-auth fee now falls back to `custom_pertransaction_fee` when `custom_auth_per_card` is empty (canonical name wins when both set).
+2. `syncFromHubspot` — negotiated pricing is sales-owned: sync now ALWAYS mirrors non-null deal values onto the profile (old fill-blanks-only rule meant rate corrections in HubSpot never propagated). Never nulls an existing value.
+3. `submitToMSP` + `signApplication` — the custom-pricing guard now ALSO runs early, before any MSPWare draft is created (422 with a merchant-friendly message, "No application was created"). buildFormPayload guard stays as backstop.
+
+The stranded draft is fine — signApplication reuses the stored mspApplicationNo and will fill it on the next attempt.
+
+**ACTION for Base44 after Teddy pushes:** force-redeploy syncFromHubspot, submitToMSP, signApplication.
+
+**→ Waiting on:** Teddy (push), Base44 (redeploy 3 fns), then retry signing from the applicant interface
+---
