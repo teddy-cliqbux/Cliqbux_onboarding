@@ -55,20 +55,22 @@ const TIER_CLASSES = {
   Self_CashDiscount: 'bg-green-500/20 text-green-400 border border-green-500/30',
 };
 
-function MilestoneCard({ index, title, description, done, unlocked, ctaLabel, onCta, ctaDisabled }) {
+function MilestoneCard({ index, title, description, done, unlocked, ctaLabel, onCta, ctaDisabled, attention, attentionItems = [] }) {
   return (
     <div
       className={`flex items-start gap-4 rounded-xl border px-5 py-4 transition-colors ${
         done
           ? 'bg-green-500/10 border-green-500/30'
-          : unlocked
-            ? 'bg-white/5 border-white/10'
-            : 'bg-white/[0.02] border-white/5 opacity-60'
+          : attention
+            ? 'bg-amber-500/10 border-amber-500/30'
+            : unlocked
+              ? 'bg-white/5 border-white/10'
+              : 'bg-white/[0.02] border-white/5 opacity-60'
       }`}
     >
       <div
         className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold ${
-          done ? 'bg-green-500 text-white' : unlocked ? 'bg-blue-500 text-white' : 'bg-white/10 text-gray-500'
+          done ? 'bg-green-500 text-white' : attention ? 'bg-amber-500 text-black' : unlocked ? 'bg-blue-500 text-white' : 'bg-white/10 text-gray-500'
         }`}
       >
         {done ? <Check className="w-4 h-4" strokeWidth={3} /> : unlocked ? index : <Lock className="w-3.5 h-3.5" />}
@@ -77,6 +79,19 @@ function MilestoneCard({ index, title, description, done, unlocked, ctaLabel, on
       <div className="flex-1 min-w-0">
         <h3 className={`text-sm font-semibold ${unlocked || done ? 'text-white' : 'text-gray-500'}`}>{title}</h3>
         <p className={`text-xs mt-0.5 ${unlocked || done ? 'text-gray-400' : 'text-gray-600'}`}>{description}</p>
+        {/* Per-record list of what the applicant still needs to fill in */}
+        {attention && attentionItems.length > 0 && (
+          <ul className="mt-2 flex flex-col gap-1">
+            {attentionItems.slice(0, 5).map((it, i) => (
+              <li key={i} className="text-xs text-amber-300/90">
+                <span className="font-semibold">{it.label}:</span> {it.missing.join(', ')}
+              </li>
+            ))}
+            {attentionItems.length > 5 && (
+              <li className="text-xs text-amber-300/60">…and {attentionItems.length - 5} more</li>
+            )}
+          </ul>
+        )}
       </div>
 
       <div className="flex-shrink-0">
@@ -98,7 +113,9 @@ function MilestoneCard({ index, title, description, done, unlocked, ctaLabel, on
           <button
             onClick={onCta}
             disabled={!unlocked || ctaDisabled}
-            className="text-xs font-semibold px-4 py-2 rounded-lg transition-colors bg-blue-600 hover:bg-blue-700 text-white disabled:bg-white/5 disabled:text-gray-600 disabled:cursor-not-allowed"
+            className={`text-xs font-semibold px-4 py-2 rounded-lg transition-colors disabled:bg-white/5 disabled:text-gray-600 disabled:cursor-not-allowed ${
+              attention ? 'bg-amber-500 hover:bg-amber-400 text-black' : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
           >
             {ctaLabel}
           </button>
@@ -113,6 +130,8 @@ export default function OnboardingPortal() {
   const [dealId, setDealId]           = useState(null);
   const [profile, setProfile]         = useState(null);
   const [locations, setLocations]     = useState([]);
+  // Backend-computed data-completeness report (entity/location/MID missing fields)
+  const [readiness, setReadiness]     = useState(null);
   const [step, setStep]               = useState(STEP_WELCOME); // within post-agreement flow
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState(null);
@@ -312,6 +331,7 @@ export default function OnboardingPortal() {
       }
       setProfile(mergedProfile);
       setLocations(filteredLocations);
+      setReadiness(data.readiness || null);
       // Track that merchant opened the portal — creates a record if none exists
       if (mergedProfile?.corporateId && mergedProfile?.applicationStatus !== 'Submitted') {
         trackProgress(mergedProfile.corporateId, {
@@ -447,7 +467,18 @@ export default function OnboardingPortal() {
       // finished, even though the data is safely on the server.
       const hasLocations = (locations?.length ?? 0) > 0;
       const hasBanking = hasLocations && locations.every(l => l.bankDetails?.routingNumber);
-      const m1Done = !!allCompletedSteps.locations || hasLocations;
+      // "Complete" means the data can actually build a valid application — the
+      // backend readiness check covers entity, location, and MID required fields.
+      // HubSpot prefill creates partially-filled records, so records merely
+      // existing is NOT completion (Teddy, 2026-07-10).
+      const dataReady = readiness ? readiness.complete : hasLocations;
+      const m1Done = hasLocations && dataReady;
+      const m1Attention = hasLocations && !dataReady;
+      const attentionItems = readiness ? [
+        ...readiness.entities.map(e => ({ label: e.name, missing: e.missing })),
+        ...readiness.locations.map(l => ({ label: l.dbaName, missing: l.missing })),
+        ...readiness.mids.map(m => ({ label: `${m.dbaName} (Merchant ID)`, missing: m.missing })),
+      ] : [];
       const m2Done = !!allCompletedSteps.banking || hasBanking;
       const m3Done = applicationStatus === 'Submitted';
       const m2Unlocked = hasLocations;
@@ -469,10 +500,14 @@ export default function OnboardingPortal() {
             <MilestoneCard
               index={1}
               title="Complete Merchant Profile & Storefronts"
-              description="Review and confirm your legal entities, storefront locations, and Merchant IDs."
+              description={m1Attention
+                ? 'We prefilled what we could from your Cliqbux representative — a few details still need your input:'
+                : 'Review and confirm your legal entities, storefront locations, and Merchant IDs.'}
               done={m1Done}
+              attention={m1Attention}
+              attentionItems={attentionItems}
               unlocked={true}
-              ctaLabel="Configure Locations & MIDs"
+              ctaLabel={m1Attention ? 'Finish Details' : 'Configure Locations & MIDs'}
               onCta={() => setStep(STEP_LOCATIONS)}
             />
             <MilestoneCard

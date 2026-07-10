@@ -414,6 +414,37 @@ Deno.serve(async (req) => {
     }
 
     result.profile = { legalName, industryClass, mccCode, pricingTier, taxId: profileData.taxId || null, hubspotQuoteUrl: profileData.hubspotQuoteUrl || '' };
+    // ── 4b. Seed the first legal entity from HubSpot company data ─────────────
+    // The sync previously left legalEntities[] empty, so the merchant entity
+    // panel showed blank fields even when HubSpot already knew the EIN and
+    // ownership type (2026-07-10). Only seeds when NO entity exists — never
+    // touches merchant-entered entities.
+    let seededEntityId = null;
+    {
+      const profRec = await base44.asServiceRole.entities.MerchantCorporateProfile.get(profileId);
+      let entsRaw = profRec?.legalEntities ?? [];
+      if (typeof entsRaw === 'string') { try { entsRaw = JSON.parse(entsRaw); } catch { entsRaw = []; } }
+      const ents = Array.isArray(entsRaw) ? entsRaw : [];
+      if (ents.length === 0) {
+        seededEntityId = crypto.randomUUID();
+        const entity: Record<string, any> = {
+          entityId: seededEntityId,
+          legalBusinessName: legalName,
+        };
+        if (profileData.taxId)             entity.federalEIN        = profileData.taxId;
+        if (profileData.ownershipType)     entity.ownershipType     = profileData.ownershipType;
+        if (profileData.establishmentYear) entity.establishmentYear = String(profileData.establishmentYear);
+        if (pc.address) entity.mailingStreet = pc.address;
+        if (pc.city)    entity.mailingCity   = pc.city;
+        if (pc.state)   entity.mailingState  = pc.state;
+        if (pc.zip)     entity.mailingZip    = pc.zip;
+        await base44.asServiceRole.entities.MerchantCorporateProfile.update(profileId, { legalEntities: [entity] });
+        result.entityAction = 'seeded';
+      } else {
+        seededEntityId = ents[0]?.entityId || null;
+        result.entityAction = 'exists';
+      }
+    }
 
     // ── 5. Upsert signers from ALL associated contacts (multi-signer support) ──
     // Every deal/company contact with an email becomes a MerchantSigners record,
@@ -489,6 +520,7 @@ Deno.serve(async (req) => {
         } else {
           const newLoc = await base44.asServiceRole.entities.MerchantLocations.create({
             corporateId,
+            entityId: seededEntityId || undefined,
             dbaName,
             businessStreet:  street,
             businessCity:    city,

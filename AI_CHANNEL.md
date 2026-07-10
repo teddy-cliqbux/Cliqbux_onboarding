@@ -776,3 +776,19 @@ dealQuoteProps: {}   ← no quote-related properties at all
 
 **→ Waiting on:** Teddy (push), then merchant-link retest: locations should open immediately, no quote required
 ---
+
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken — honest completeness (readiness) at all levels
+**Re:** Teddy: milestone said Complete while entity/location/MID data was missing; portal must prompt the applicant for whats missing
+
+**1. getMerchantData** now returns a `readiness` report: per-record missing-field lists for legal entities (name/EIN/entity type/LLC tax class/year), locations (street number, city/zip), and MIDs (MCC, industry, monthly volume, avg sale, highest ticket, card split). `readiness.complete` is true only when every record passes — this is what the portal now calls "complete", aligned with what buildFormPayload actually needs. Also fixed: safeProfile.legalEntities previously STRIPPED ownershipType/taxClassType/establishmentYear/mailing fields, so prefilled entity values never reached the UI.
+
+**2. syncFromHubspot** now SEEDS the first legal entity from HubSpot company data (legal name, EIN, ownership type, year established, mailing address) when none exists, and links locations to it (`entityId`). Never touches merchant-entered entities. `result.entityAction` = seeded/exists.
+
+**3. OnboardingPortal Welcome Hub** — milestone 1 has a third state: amber "needs your input" when records exist but data is incomplete, listing up to 5 specific gaps (e.g. "Cliqbux: federal EIN, business entity type · Cliqbux (Merchant ID): highest ticket, card split"). CTA becomes "Finish Details". Verification stays locked until readiness passes — merchants can no longer reach MSPWare signing with data that would fail validation.
+
+**ACTION for Base44 after Teddy pushes:** force-redeploy `getMerchantData` AND `syncFromHubspot`; publish frontend. Then re-run sync for deal 334478750426 — expect `entityAction: seeded`.
+
+**→ Waiting on:** Teddy (push), Base44 (redeploy 2 functions + publish), then merchant-link retest
+---

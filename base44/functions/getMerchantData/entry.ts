@@ -82,7 +82,16 @@ Deno.serve(async (req) => {
         entityId: e.entityId,
         legalBusinessName: e.legalBusinessName,
         federalEIN: e.federalEIN,
-        corporateMailingAddress: e.corporateMailingAddress || ''
+        corporateMailingAddress: e.corporateMailingAddress || '',
+        // Required for the entity details panel + readiness checks — these were
+        // previously stripped here, so prefilled values never reached the UI
+        ownershipType: e.ownershipType || '',
+        taxClassType: e.taxClassType || '',
+        establishmentYear: e.establishmentYear || '',
+        mailingStreet: e.mailingStreet || '',
+        mailingCity: e.mailingCity || '',
+        mailingState: e.mailingState || '',
+        mailingZip: e.mailingZip || ''
       }))
     };
 
@@ -125,10 +134,59 @@ Deno.serve(async (req) => {
       pricingMethod: c.pricingMethod || 'ICPLS',
     }));
 
+    // ── Readiness — drives the portal's milestone states ──────────────────────
+    // "Complete" must mean the data can actually build a valid MSPWare
+    // application, not merely that records exist. HubSpot prefill creates
+    // partially-filled records, so the portal must tell the applicant exactly
+    // what still needs their input at each level (Teddy, 2026-07-10).
+    let entsRaw = profile.legalEntities ?? [];
+    if (typeof entsRaw === 'string') { try { entsRaw = JSON.parse(entsRaw); } catch { entsRaw = []; } }
+    const ents = Array.isArray(entsRaw) ? entsRaw : [];
+
+    const entityIssues = ents.map((e) => {
+      const missing = [];
+      if (!e.legalBusinessName) missing.push('legal business name');
+      if (!/^\d{9}$/.test(String(e.federalEIN || '').replace(/\D/g, ''))) missing.push('federal EIN');
+      if (!e.ownershipType) missing.push('business entity type');
+      if (e.ownershipType === 'LIMITED_COMPANY' && !e.taxClassType) missing.push('IRS tax classification');
+      if (!e.establishmentYear) missing.push('year established');
+      return { entityId: e.entityId, name: e.legalBusinessName || 'Legal entity', missing };
+    }).filter((e) => e.missing.length > 0);
+    if (ents.length === 0) {
+      entityIssues.push({ entityId: null, name: 'Legal entity', missing: ['business details (entity type, EIN, year established)'] });
+    }
+
+    const locationIssues = (locations || []).map((l) => {
+      const missing = [];
+      const street = l.businessStreet || l.businessAddress || '';
+      if (!/^\s*\d/.test(String(street))) missing.push('street address with a street number');
+      if (!l.businessCity && !l.businessZip) missing.push('city/state/ZIP');
+      return { id: l.id, dbaName: l.dbaName || 'Location', missing };
+    }).filter((l) => l.missing.length > 0);
+
+    const midIssues = (merchantMIDs || []).map((c) => {
+      const missing = [];
+      if (!c.mccCode) missing.push('MCC code');
+      if (!c.industryType) missing.push('industry type');
+      if (!(parseFloat(c.monthlyCardSales) > 0)) missing.push('monthly volume');
+      if (!(parseFloat(c.avgSaleAmount) > 0)) missing.push('average sale');
+      if (!(parseFloat(c.highestTicketAmount) > 0)) missing.push('highest ticket');
+      if (c.cardPresentPct == null || c.cardPresentPct === '') missing.push('card split');
+      return { id: c.id, dbaName: c.dbaName || c.merchantName || 'Merchant ID', missing };
+    }).filter((c) => c.missing.length > 0);
+
+    const readiness = {
+      entities: entityIssues,
+      locations: locationIssues,
+      mids: midIssues,
+      complete: (locations || []).length > 0 && entityIssues.length === 0 && locationIssues.length === 0 && midIssues.length === 0,
+    };
+
     return Response.json({
       profile: safeProfile,
       locations: safeLocations,
       merchantMIDs: safeMerchantMIDs,
+      readiness,
     });
 
   } catch (error) {
