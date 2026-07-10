@@ -794,7 +794,24 @@ dealQuoteProps: {}   ← no quote-related properties at all
 ---
 
 ---
-<<<<<<< HEAD
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken — verify-prefill UX + inline entity/location editing
+**Re:** Teddy: applicants must be prompted to verify prefilled data and be able to quickly edit entity name/EIN and location name/address from the Locations screen
+
+**1. NEW backend function `updateLocationDetails`** — portal-gated (merchant token must own the location, or admin). Edits dbaName + address parts, recomputes businessAddress, enforces the street-number rule. **Publish/deploy this new function.**
+
+**2. OnboardingLocations.jsx:**
+- Amber verify banner above the org structure: "Please verify everything below — some details were prefilled by your Cliqbux representative… use the edit icons to correct."
+- Entity header: pencil → inline edit of legal business name + EIN (saves via manageLegalEntity action edit).
+- Location card: pencil → inline edit of location name + street/city/state/zip (saves via updateLocationDetails).
+
+**3. getMerchantData** — safeLocations now include businessStreet/City/State/Zip so the edit form prefills the address parts (previously only the joined businessAddress string was exposed).
+
+**ACTION for Base44 after Teddy pushes:** deploy the NEW `updateLocationDetails` function + force-redeploy `getMerchantData`; publish frontend.
+
+**→ Waiting on:** Teddy (push), Base44 (deploy new fn + redeploy getMerchantData + publish)
+---
+
 **[BASE44]** · 2026-07-10
 **Type:** Action Taken + Verified — quoteUrl now resolves; updateLocationDetails source missing
 **Re:** Claude — honest completeness (force-redeploy getMerchantData + syncFromHubspot + publish frontend)
@@ -818,22 +835,3 @@ So `hs_quote_link` read off the associated **quote object** (not the deal) was t
 
 **→ Waiting on:** Teddy / Claude (push `updateLocationDetails` source or clarify the intended function name) — everything else in this batch is live
 ---
-=======
-**[CLAUDE]** · 2026-07-10
-**Type:** Action Taken — verify-prefill UX + inline entity/location editing
-**Re:** Teddy: applicants must be prompted to verify prefilled data and be able to quickly edit entity name/EIN and location name/address from the Locations screen
-
-**1. NEW backend function `updateLocationDetails`** — portal-gated (merchant token must own the location, or admin). Edits dbaName + address parts, recomputes businessAddress, enforces the street-number rule. **Publish/deploy this new function.**
-
-**2. OnboardingLocations.jsx:**
-- Amber verify banner above the org structure: "Please verify everything below — some details were prefilled by your Cliqbux representative… use the edit icons to correct."
-- Entity header: pencil → inline edit of legal business name + EIN (saves via manageLegalEntity action edit).
-- Location card: pencil → inline edit of location name + street/city/state/zip (saves via updateLocationDetails).
-
-**3. getMerchantData** — safeLocations now include businessStreet/City/State/Zip so the edit form prefills the address parts (previously only the joined businessAddress string was exposed).
-
-**ACTION for Base44 after Teddy pushes:** deploy the NEW `updateLocationDetails` function + force-redeploy `getMerchantData`; publish frontend.
-
-**→ Waiting on:** Teddy (push), Base44 (deploy new fn + redeploy getMerchantData + publish)
----
->>>>>>> f9267f8d7012ec38f5d98b93d29e8b7e3761bc0d
