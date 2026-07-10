@@ -428,13 +428,19 @@ function buildFormPayload(
   const deliveryDelayDays = String(Math.max(rawDelay, 1));
   // cardPresentPct: treat null/undefined as 100 (in-person default), NOT 0
   const rawCpPct = merchantMID.cardPresentPct != null ? merchantMID.cardPresentPct : (profile.cardPresentPct != null ? profile.cardPresentPct : 100);
-  const cardPresentPct = Math.max(0, Math.min(100, parseInt(String(rawCpPct), 10) || 100));
+  // NOTE: || 100 here previously turned a legitimate 0% card-present into 100%
+  // (0 is falsy) — only default when the value is genuinely absent/NaN.
+  const parsedCpPct = parseInt(String(rawCpPct), 10);
+  const cardPresentPct = Math.max(0, Math.min(100, Number.isFinite(parsedCpPct) ? parsedCpPct : 100));
   const cnpPct = 100 - cardPresentPct;
   // internetPct and motoPct are collected separately on Step 2.
   // int_percent = internet only; MSPWare derives MOTO as cnp - int.
   // Default: if no internet breakdown is set, assume all CNP is internet (covers MOTO-only merchants too).
-  const intPct  = cnpPct > 0 ? String(profile.internetPct ?? 0) : '0';
-  const motoPct = cnpPct > 0 ? String(profile.motoPct ?? Math.max(0, cnpPct - parseInt(intPct, 10))) : '0';
+  // The card split is entered PER-MID in the portal (merchantMID.internetPct/motoPct);
+  // the profile-level fields were a dead fallback that never existed, which
+  // misclassified online merchants as 100% MOTO (2026-07-10).
+  const intPct  = cnpPct > 0 ? String(merchantMID.internetPct ?? profile.internetPct ?? 0) : '0';
+  const motoPct = cnpPct > 0 ? String(merchantMID.motoPct ?? profile.motoPct ?? Math.max(0, cnpPct - parseInt(intPct, 10))) : '0';
 
   const ownershipRaw = profile.ownershipType || matchedEntity?.ownershipType || profile.taxClassType || '';
   const ownershipType = mapOwnershipType(ownershipRaw);

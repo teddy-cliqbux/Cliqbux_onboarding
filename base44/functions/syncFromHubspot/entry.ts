@@ -521,11 +521,17 @@ Deno.serve(async (req) => {
 
         if (existingLocs?.length) {
           await base44.asServiceRole.entities.MerchantLocations.update(existingLocs[0].id, {
-            businessStreet:  street || existingLocs[0].businessStreet,
-            businessCity:    city   || existingLocs[0].businessCity,
-            businessState:   state  || existingLocs[0].businessState,
-            businessZip:     zip    || existingLocs[0].businessZip,
-            businessAddress: [street, city, state, zip].filter(Boolean).join(', ') || existingLocs[0].businessAddress,
+            // FILL-BLANKS ONLY: the address is MERCHANT-owned once it exists —
+            // HubSpot values are only a prefill seed. The old precedence
+            // (HubSpot first) silently reverted merchant corrections on every
+            // portal load, since the portal re-syncs while the quote is
+            // unsigned (observed live 2026-07-10: an edited street address
+            // reverted to the stale HubSpot company address).
+            businessStreet:  existingLocs[0].businessStreet || street,
+            businessCity:    existingLocs[0].businessCity   || city,
+            businessState:   existingLocs[0].businessState  || state,
+            businessZip:     existingLocs[0].businessZip    || zip,
+            businessAddress: existingLocs[0].businessAddress || [street, city, state, zip].filter(Boolean).join(', '),
           });
           locationId = existingLocs[0].id;
           result.locations.push({ dbaName, action: 'updated', locationId });

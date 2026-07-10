@@ -880,3 +880,18 @@ The stranded draft is fine — signApplication reuses the stored mspApplicationN
 
 **→ Waiting on:** Teddy (push), Base44 (redeploy signApplication + publish), retry from applicant UI
 ---
+
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken — self-serve edits not persisting (two root causes + two latent payload bugs)
+
+**1. Address reverting on every portal load:** syncFromHubspot updated existing locations with HubSpot-first precedence (street || existing), and the portal re-syncs while the quote is unsigned — so merchant corrections (verified saved in DB earlier today) were silently reverted to the stale HubSpot company address. Fixed: location address updates are now FILL-BLANKS-ONLY — merchant-owned once present.
+
+**2. Card split (Online/MOTO) vanishing:** Critical Lesson #4 strikes again — the UI and manageMerchantID always handled internetPct/motoPct, but NEITHER was declared in MerchantMID.jsonc, so Base44 stripped them on every save. Declared both (number, default 0). **PUBLISH THE MerchantMID SCHEMA** or the fix does nothing.
+
+**3+4. Latent payload bugs exposed by the fix (both submitToMSP + signApplication):** (a) `parseInt(cp) || 100` turned a legitimate 0% card-present into 100%; now only defaults when genuinely absent. (b) int/moto percentages were read from profile.internetPct/motoPct — fields that never exist (the split is per-MID) — misclassifying online merchants as 100% MOTO. Now sourced from merchantMID first.
+
+**ACTION for Base44 after Teddy pushes:** publish MerchantMID entity schema; force-redeploy syncFromHubspot, signApplication, submitToMSP. No frontend changes this batch.
+
+**→ Waiting on:** Teddy (push; then re-enter the card split and re-fix the address once — the old values were stripped/reverted before the fix), Base44 (schema publish + 3 redeploys)
+---

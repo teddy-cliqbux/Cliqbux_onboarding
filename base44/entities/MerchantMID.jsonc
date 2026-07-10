@@ -52,6 +52,16 @@
       "description": "Percentage of transactions that are card-present (swipe/tap). 0-100. Default 100.",
       "default": 100
     },
+    "internetPct": {
+      "type": "number",
+      "description": "Percentage of transactions that are online/e-commerce. 0-100. Added 2026-07-10 — the UI and manageMerchantID always handled this field, but it was never declared here, so Base44 stripped it on every save (Critical Lesson #4).",
+      "default": 0
+    },
+    "motoPct": {
+      "type": "number",
+      "description": "Percentage of transactions that are mail/telephone order (MOTO). 0-100. Added 2026-07-10 — same stripped-field bug as internetPct.",
+      "default": 0
+    },
     "deliveryDelayDays": {
       "type": "number",
       "description": "Days between sale and delivery/fulfillment. 0 for immediate. Used for delayed delivery risk.",
