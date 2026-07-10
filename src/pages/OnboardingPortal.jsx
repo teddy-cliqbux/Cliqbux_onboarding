@@ -258,10 +258,13 @@ export default function OnboardingPortal() {
       const checkRes = await invokePortalFunction('getMerchantData', { corporateId: id });
       const checkData = checkRes.data;
       const hasLocations = (checkData?.locations?.length ?? 0) > 0;
-      const alreadySynced = checkData?.profile?.hubspotSynced === true;
+      // Sync on first visit (no locations yet) AND on every visit while the
+      // quote is unsigned — the quote link and esign status live in HubSpot,
+      // so reloading after the rep publishes (or the merchant signs) the quote
+      // picks up the change without any rep action or webhook.
+      const quotePending = checkData?.profile?.applicationStatus === 'Incomplete';
 
-      if (!alreadySynced && !hasLocations) {
-        // First visit or no locations yet — pull from HubSpot silently
+      if (!hasLocations || quotePending) {
         try {
           await invokePortalFunction('syncFromHubspot', { dealId: id });
         } catch {
