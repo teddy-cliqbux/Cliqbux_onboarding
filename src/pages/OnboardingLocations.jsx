@@ -29,14 +29,27 @@ const MCC_OPTIONS = [
   { value: '5211', label: '5211 — Building Materials' },
 ];
 
+// 2026-07-10: MOTO (MS) removed — MSPWare's PUT /form rejected industry_type
+// 'MS' on a live application (#210, template #209) even though it was listed as
+// valid in June testing; do not re-add without live confirmation. ARU removed —
+// not a Cliqbux merchant category. Industry is now auto-derived from the MCC
+// (see mccToIndustry); the dropdown stays visible for manual override among
+// known-good values.
 const INDUSTRY_OPTIONS = [
   { value: 'RE', label: 'Retail (RE)' },
   { value: 'RS', label: 'Restaurant (RS)' },
   { value: 'SP', label: 'Supermarket (SP)' },
   { value: 'HT', label: 'Lodging / Hotel (HT)' },
-  { value: 'MS', label: 'MOTO (MS)' },
-  { value: 'ARU', label: 'ARU' },
 ];
+
+// MCC → MSPWare industry_type. Food-service MCCs → Restaurant, grocery →
+// Supermarket, lodging → Hotel, everything else → Retail.
+function mccToIndustry(mcc) {
+  if (['5812', '5813', '5814'].includes(mcc)) return 'RS';
+  if (mcc === '5411') return 'SP';
+  if (mcc === '7011') return 'HT';
+  return 'RE';
+}
 
 const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
 const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
@@ -190,7 +203,12 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className={labelCls}>MCC Code *</label>
-                  <select value={form.mccCode} onChange={e => setField('mccCode', e.target.value)}
+                  <select value={form.mccCode}
+                    onChange={e => {
+                      const mcc = e.target.value;
+                      // Auto-derive industry from the MCC (merchant can still override below)
+                      setForm(f => ({ ...f, mccCode: mcc, industryType: mcc ? mccToIndustry(mcc) : f.industryType }));
+                    }}
                     className={inputCls} style={{ colorScheme: 'dark' }}>
                     <option value="">Select…</option>
                     {MCC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}

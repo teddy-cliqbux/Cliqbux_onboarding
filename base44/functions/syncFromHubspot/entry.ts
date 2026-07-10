@@ -567,6 +567,12 @@ Deno.serve(async (req) => {
             locationId,
             dbaName,
             mccCode:          locMcc,
+            // Derive industry_type from the MCC (same rule as the portal UI) so
+            // prefilled MIDs don't sit with a blank required field. MS/ARU are
+            // never derived — MS was rejected live by MSPWare 2026-07-10.
+            industryType:     ['5812', '5813', '5814'].includes(String(locMcc)) ? 'RS'
+                              : String(locMcc) === '5411' ? 'SP'
+                              : String(locMcc) === '7011' ? 'HT' : 'RE',
             pricingMethod,
             monthlyCardSales: monthlyVol,
             avgSaleAmount:    avgTicket,

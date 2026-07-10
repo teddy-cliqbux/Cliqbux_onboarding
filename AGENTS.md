@@ -220,7 +220,7 @@ Published function base URL: `https://cliqbux-onboard-prime.base44.app/functions
 |---|---|
 | `ownership_type` | SP, LL, CO, SS, PA, NP, T |
 | `llc_class` | D (disregarded), P (partnership), C (corporation) — only when ownership_type=LL |
-| `industry_type` | RE (Retail), RS (Restaurant), SP (Supermarket), HT (Hotel), MS (MOTO), ARU |
+| `industry_type` | RE (Retail), RS (Restaurant), SP (Supermarket), HT (Hotel). ⚠️ `MS` (MOTO) was listed as valid from June testing but was REJECTED live by `PUT /form` on 2026-07-10 (app #210, template #209: "MS is not a valid option") — removed from the merchant dropdown; do not send without re-confirming live. `ARU` removed from the dropdown (not a Cliqbux category). Industry is auto-derived from MCC in the portal (5812/5813/5814→RS, 5411→SP, 7011→HT, else RE). |
 | `has_legal_address` | `business` — NOT `same` |
 | `chargebacks_retrievals_format` | `WM` (email) — NOT `E` |
 | `billing_method` | N (Net), G (Gross) |

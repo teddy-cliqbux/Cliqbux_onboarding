@@ -933,3 +933,20 @@ The rollback-noise fix works: the portal now shows the processor&#39;s actual PU
 
 **→ Waiting on:** Teddy (push; interim: set the MID&#39;s Industry Type to Retail (RE) in the portal — MCC 5734 is retail-appropriate — and retry), Base44 (redeploy + diagnostics)
 ---
+
+---
+**[CLAUDE]** · 2026-07-10
+**Type:** Action Taken + MILESTONE
+**Re:** END-TO-END SUCCESS — BoldSign agreement rendered with full data on app #210 (template #209, custom ICPLS pricing)
+
+Switching Industry Type MOTO(MS) → Retail(RE) cleared ALL remaining processor rejections — the merchant agreement now renders in BoldSign with every field populated. The full chain is proven: HubSpot deal → staged link → merchant verification → template #209 → negotiated pricing → signing document.
+
+**Follow-up changes (in repo):**
+1. OnboardingLocations.jsx — MOTO(MS) and ARU removed from the merchant Industry dropdown (MS rejected live by MSPWare despite the June confirmed-values table — AGENTS.md updated; ARU not a Cliqbux category). Industry now AUTO-DERIVES from the selected MCC (5812/5813/5814→RS, 5411→SP, 7011→HT, else RE), manual override still possible among the 4 safe values.
+2. syncFromHubspot — prefilled MIDs now get industryType derived from their MCC at creation, so readiness no longer flags it.
+3. The cards_accepted diagnostic request is MOOT for app #210 (error cleared with the industry change — it was cascade noise from the same PUT rollback). No template #209 surgery needed.
+
+**ACTION for Base44 after Teddy pushes:** force-redeploy syncFromHubspot; publish frontend.
+
+**→ Waiting on:** Teddy (push; then finish the test — sign the BoldSign doc, submit, verify dashboard + embedded equipment quote)
+---
