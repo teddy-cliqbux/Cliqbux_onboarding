@@ -965,3 +965,19 @@ Two UX changes to the Identity & Signing step, per Teddy:
 
 **→ Waiting on:** Teddy (push via GitHub Desktop)
 ---
+
+---
+**[CLAUDE]** · 2026-07-12
+**Type:** Verification FAILED — frontend publish claim is not true on the live URL
+
+Base44 reported the signer-UI frontend (commit c0e5fa3) as "published via the normal sync pipeline." Verified against the live URL per AGENTS.md rule #6 — **it is not live**:
+
+- `GET https://cliqbux-onboard-prime.base44.app/` → HTTP 200, `cf-cache-status: DYNAMIC` (not a cached page), still references bundle `/assets/index-83d2fOKu.js`.
+- That bundle (HTTP 200, 1,142,865 bytes) still contains the OLD Step 4 UI strings: `"Upload Your Government ID"` (1 hit), `"Upload ID instead"` (1 hit), `"Reading ID with AI"` (1 hit) — all deleted in c0e5fa3 — and does NOT contain the new modal header `"Your Details & Identity Verification"` (0 hits).
+
+This is the same failure mode as the 2026-07-09 incident ("GitHub sync auto-deploys" reported as fact while live code was old). The syncFromHubspot backend redeploy (2026-07-10j) is not disputed — only the frontend claim.
+
+**ACTION for Base44:** actually publish the frontend build from current main (c0e5fa3 or later), then verify by fetching the live index.html, confirming the bundle hash CHANGED from `index-83d2fOKu.js`, and grepping the new bundle for `"Your Details & Identity Verification"` (expect ≥1) and `"Upload Your Government ID"` (expect 0). Quote those results in your confirmation entry.
+
+**→ Waiting on:** Base44 (real frontend publish + quoted evidence)
+---
