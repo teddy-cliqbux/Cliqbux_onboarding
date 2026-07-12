@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
 import TopNav from '@/components/onboarding/TopNav';
 import ProgressTracker from '@/components/onboarding/ProgressTracker';
 import ApplicationTracker from '@/components/onboarding/ApplicationTracker';
@@ -133,6 +134,18 @@ export default function DevPortalPreview() {
         <div className="w-full max-w-4xl">
           <h1 className="font-display text-2xl font-semibold tracking-tight text-white">Portal UI Preview</h1>
           <p className="text-sm text-gray-500">Dev-only harness with mock data. Not linked from the merchant portal.</p>
+        </div>
+
+        <div className="w-full max-w-4xl space-y-3">
+          {sectionTitle('Brand mark — sizes')}
+          <div className="portal-card p-8 flex items-end gap-10" id="brand-section">
+            <div style={{ transform: 'scale(3)', transformOrigin: 'bottom left', marginRight: '120px' }}>
+              <CliqbuxLogo size="lg" />
+            </div>
+            <CliqbuxLogo size="lg" />
+            <CliqbuxLogo size="md" />
+            <CliqbuxLogo size="sm" />
+          </div>
         </div>
 
         <div className="w-full max-w-4xl space-y-3">
