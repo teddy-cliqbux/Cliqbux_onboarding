@@ -291,12 +291,16 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
     setLocVerified(true);
   });
   const startLocEdit = () => {
+    // Fallback: records touched before the persistence fix may have only the
+    // composed businessAddress string — parse it so the form doesn't open with
+    // blanks that would then be saved over whatever the record still has.
+    const flat = (location.businessAddress || '').match(/^(.+?),\s*(.+?),?\s+([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/);
     setLocForm({
       dbaName: location.dbaName || '',
-      street: location.businessStreet || (location.businessAddress || '').split(',')[0]?.trim() || '',
-      city: location.businessCity || '',
-      state: location.businessState || '',
-      zip: location.businessZip || '',
+      street: location.businessStreet || flat?.[1]?.trim() || (location.businessAddress || '').split(',')[0]?.trim() || '',
+      city: location.businessCity || flat?.[2]?.trim() || '',
+      state: location.businessState || flat?.[3]?.toUpperCase() || '',
+      zip: location.businessZip || flat?.[4]?.trim() || '',
     });
     setLocEditError('');
     setLocVerified(false);
@@ -306,6 +310,9 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
   const saveLocEdit = async () => {
     if (!locForm.dbaName.trim()) { setLocEditError('Location name is required'); return; }
     if (!/^\s*\d/.test(locForm.street)) { setLocEditError('Street address must include a street number (e.g. "123 Main St")'); return; }
+    if (!locForm.city.trim()) { setLocEditError('City is required'); return; }
+    if (!/^[A-Za-z]{2}$/.test(locForm.state.trim())) { setLocEditError('State must be a 2-letter code (e.g. CA)'); return; }
+    if (!/^\d{5}(-\d{4})?$/.test(locForm.zip.trim())) { setLocEditError('ZIP must be 5 digits'); return; }
     setLocSaving(true); setLocEditError('');
     try {
       const res = await invokePortalFunction('updateLocationDetails', {
@@ -1166,9 +1173,16 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         taxClassType: e.taxClassType || '',
         establishmentYear: e.establishmentYear || '',
       }));
+      // Keep the structured address fields — the inline location editor reads
+      // them, and dropping them here made every post-refresh edit open with
+      // blank City/State/ZIP (then save those blanks over the real values).
       const loadedLocations = (locRes.data?.locations || []).map(l => ({
         id: l.id || l.locationId, entityId: l.entityId || '',
         dbaName: l.dbaName, businessAddress: l.businessAddress,
+        businessStreet: l.businessStreet || '',
+        businessCity: l.businessCity || '',
+        businessState: l.businessState || '',
+        businessZip: l.businessZip || '',
         applicationStepStatus: l.applicationStepStatus || 'In Review', elavonMID: l.elavonMID,
       }));
 

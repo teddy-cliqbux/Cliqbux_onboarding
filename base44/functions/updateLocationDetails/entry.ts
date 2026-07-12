@@ -81,6 +81,12 @@ Deno.serve(async (req) => {
       if (!/^\s*\d/.test(street)) {
         return Response.json({ error: 'Street address must include a street number (e.g. "123 Main St")' }, { status: 400 });
       }
+      // Never let an address save blank out city/state/zip — a client that
+      // loaded a record without the structured fields (pre-fix frontend) would
+      // otherwise silently erase them on every edit.
+      if (!city || !state || !zip) {
+        return Response.json({ error: 'City, state, and ZIP are required to save an address' }, { status: 400 });
+      }
       update.businessStreet = street;
       update.businessCity = city;
       update.businessState = state;

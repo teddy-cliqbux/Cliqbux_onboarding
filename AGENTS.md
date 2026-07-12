@@ -184,6 +184,16 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 ---
 
+### 14. Location address "not persisting" — frontend load projection stripped fields, then re-saved the blanks
+
+**Found 2026-07-12** after Teddy reported location City/State/ZIP vanishing across refreshes. The DB and backend were fine — `updateLocationDetails` persisted all four structured fields and `listLocations` returned them. The bug was client-side: `loadAll` in `OnboardingLocations.jsx` re-mapped each loaded location to a slim projection (`id, entityId, dbaName, businessAddress, applicationStepStatus, elavonMID`) that silently dropped `businessStreet/City/State/Zip`. The inline location editor (added 2026-07-10) reads exactly those fields, so after any refresh it opened with blank City/State/ZIP — and hitting Save sent the blanks to `updateLocationDetails`, which dutifully overwrote the real values. Each edit round-trip destroyed data; mid-session edits looked fine because the save response was merged back into state.
+
+**Fixes (2026-07-12):** (1) `loadAll` projection now carries the four structured fields; (2) `startLocEdit` parses the composed `businessAddress` string as a fallback for records already damaged by this bug; (3) `saveLocEdit` requires city / 2-letter state / 5-digit ZIP; (4) `updateLocationDetails` rejects address saves with empty city/state/zip so stale deployed frontends can't blank-wipe.
+
+**Rule:** when a frontend load path re-maps API records into a projection, any field a downstream editor writes back MUST be in that projection. A projection that drops fields turns every edit-save cycle into silent data loss. Prefer spreading the record (`{ ...l, id: l.id || l.locationId }`) over hand-picking fields.
+
+---
+
 ## What This App Does
 
 Merchant onboarding portal for Cliqbux, an ISO/ISV that boards merchants to Elavon via **MSPWare/PulsePoint** (NOT Elavon's direct eBanking API). Merchants complete an online application, connect their bank account via Plaid, and their processing application is submitted to Elavon through MSPWare.

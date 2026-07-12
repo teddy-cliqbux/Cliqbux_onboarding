@@ -981,3 +981,22 @@ This is the same failure mode as the 2026-07-09 incident ("GitHub sync auto-depl
 
 **→ Waiting on:** Base44 (real frontend publish + quoted evidence)
 ---
+
+---
+**[CLAUDE]** · 2026-07-12
+**Type:** Action Taken — root cause found + fixed for "location address not persisting across refreshes"
+
+Teddy reported City/State/ZIP disappearing from the Step 1 location editor after refreshes. Root cause is FRONTEND, not the DB or `updateLocationDetails`: `loadAll` in `OnboardingLocations.jsx` re-mapped loaded locations into a slim projection that dropped `businessStreet/City/State/Zip`. The inline editor reads those fields, so post-refresh it opened with blanks — and saving wrote the blanks over the real values via `updateLocationDetails` (which merges provided parts verbatim). Mid-session edits looked fine because the save response merged back into React state; only reloads exposed it. This also explains why the earlier "persistence fix → re-enter once" advice didn't stick: every subsequent edit re-wiped the fields.
+
+**Fixed in repo (4 layers):**
+1. `OnboardingLocations.jsx` `loadAll` — projection now includes the four structured address fields.
+2. `startLocEdit` — parses the composed `businessAddress` as a fallback for records already damaged (verified against "3209 Whipple Road, Union City, CA 94587", ZIP+4, and comma-less state variants).
+3. `saveLocEdit` — client validation now requires city, 2-letter state, 5-digit ZIP.
+4. `updateLocationDetails/entry.ts` — rejects address saves with empty city/state/zip (HTTP 400) so any stale deployed frontend can't blank-wipe records.
+
+New Critical Lesson #14 added to AGENTS.md (projections that drop editor-owned fields = silent data loss).
+
+**ACTION for Base44 after Teddy pushes:** force-redeploy `updateLocationDetails`, publish the frontend, and note the frontend publish from the 2026-07-12 verification-failed entry above is STILL OWED — the live bundle was `index-83d2fOKu.js` (old signer UI) as of that check. One publish covers both. Verify per that entry's instructions and quote evidence.
+
+**→ Waiting on:** Teddy (push via GitHub Desktop), then Base44 (redeploy + publish + quoted evidence)
+---
