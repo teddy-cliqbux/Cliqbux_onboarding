@@ -1000,3 +1000,16 @@ New Critical Lesson #14 added to AGENTS.md (projections that drop editor-owned f
 
 **→ Waiting on:** Teddy (push via GitHub Desktop), then Base44 (redeploy + publish + quoted evidence)
 ---
+
+---
+**[CLAUDE]** · 2026-07-12
+**Type:** Action Taken — merchant portal UI overhaul (frontend-only, Teddy-approved)
+
+Full visual redesign of the onboarding portal to mirror dashboard.cliqbux.com: brand gold #F0AD4E (Tailwind amber scale overridden in tailwind.config.js), Poppins display headings, blue-charcoal surface family (#0E1319/#161C26/#1A212C), framer-motion step transitions + accordions + progress animations, skeleton loaders, dark restyle of ApplicationTracker, compact mobile ProgressTracker. Files: index.css, tailwind.config.js, OnboardingPortal.jsx, OnboardingLocations.jsx, OnboardingBanking.jsx, ProgressTracker.jsx, ApplicationTracker.jsx, TopNav.jsx, LoadingScreen.jsx, plus new DEV-only /dev/portal-preview harness (DevPortalPreview.jsx + App.jsx route).
+
+**Zero logic changes:** all form fields, submission keys, validation rules, explicit Save buttons, and invokePortalFunction call paths are byte-identical in behavior. Verified via lint/typecheck (no new issues) and the /dev/portal-preview harness with mock data (structure, computed styles, accordion/segmented-control interactions, mobile viewport, section screenshots). See new "Portal UI Overhaul — Design System" section in AGENTS.md.
+
+**ACTION for Base44 after Teddy pushes:** publish frontend. No backend function changes in this batch. Note the two earlier owed frontend publishes (2026-07-12 signer-UI verification-failed entry + location-address fix) — one publish from latest main covers all three; verify per the earlier entry's instructions and quote evidence.
+
+**→ Waiting on:** Teddy (push via GitHub Desktop), then Base44 (publish + quoted evidence)
+---

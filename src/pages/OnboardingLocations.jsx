@@ -51,7 +51,7 @@ function mccToIndustry(mcc) {
   return 'RE';
 }
 
-const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
+const inputCls = 'w-full bg-[#10151C] border border-white/12 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 transition-colors hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-500/70 focus:border-transparent';
 const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
 
 function formatEIN(raw) {
@@ -166,7 +166,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
             </div>
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {imported && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-500/10 text-gray-400 border border-gray-500/20">Imported</span>}
-              {!imported && !locked && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">New</span>}
+              {!imported && !locked && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">New</span>}
               <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
               {locked && (
                 <TooltipProvider>
@@ -362,7 +362,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
-          className={`rounded-2xl border transition-all ${snapshot.isDragging ? 'border-amber-500/70 shadow-2xl' : allMidsComplete ? 'border-green-500/25 bg-[#161b23]' : locationError ? 'border-red-500/40 bg-[#161b23]' : 'border-white/10 bg-[#161b23] hover:border-white/20'}`}
+          className={`rounded-2xl border transition-all ${snapshot.isDragging ? 'border-amber-500/70 shadow-2xl' : allMidsComplete ? 'border-green-500/25 bg-[#151B24]' : locationError ? 'border-red-500/40 bg-[#151B24]' : 'border-white/10 bg-[#151B24] hover:border-white/20'}`}
         >
           {/* Location header */}
           <div className="flex items-center gap-2.5 px-4 py-3">
@@ -402,7 +402,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
 
           {/* Inline location edit — quick correction of prefilled data (2026-07-10) */}
           {editingLoc && (
-            <div className="mx-4 mb-3 bg-[#111318] border border-amber-500/25 rounded-xl p-3 space-y-2">
+            <div className="mx-4 mb-3 bg-[#10151C] border border-amber-500/25 rounded-xl p-3 space-y-2">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input value={locForm.dbaName} onChange={e => setLocForm(f => ({ ...f, dbaName: e.target.value }))} placeholder="Location name" autoFocus className={inputCls} />
                 <input ref={editPlacesRef} value={locForm.street}
@@ -422,7 +422,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
               {locEditError && <p className="text-xs text-red-400">{locEditError}</p>}
               <div className="flex items-center gap-2">
                 <button onClick={saveLocEdit} disabled={locSaving}
-                  className="text-xs font-bold bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black px-4 py-2 rounded-lg transition-colors">
+                  className="text-xs font-bold bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#0E1319] px-4 py-2 rounded-lg transition-colors">
                   {locSaving ? 'Saving…' : 'Save Changes'}
                 </button>
                 <button onClick={() => setEditingLoc(false)} className="text-xs font-semibold text-gray-400 hover:text-white px-2 py-2">Cancel</button>
@@ -819,7 +819,7 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
   };
 
   return (
-    <div className={`rounded-2xl border overflow-hidden ${allComplete ? 'border-green-500/20' : highlightError ? 'border-red-500/40' : 'border-white/10'} bg-[#1c2128]`}>
+    <div className={`rounded-2xl border overflow-hidden ${allComplete ? 'border-green-500/20' : highlightError ? 'border-red-500/40' : 'border-white/10'} bg-[#1A212C]`}>
       {/* Entity header bar */}
       <div className="flex items-center gap-3 px-5 py-3 bg-white/[0.03] border-b border-white/8">
         <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center flex-shrink-0">
@@ -828,12 +828,12 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
         {editingHeader ? (
           <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-2 py-0.5">
             <input value={hdrName} onChange={e => setHdrName(e.target.value)} placeholder="Legal business name" autoFocus
-              className="flex-1 min-w-0 bg-[#111318] border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500" />
+              className="flex-1 min-w-0 bg-[#10151C] border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500" />
             <input value={hdrEIN} onChange={e => setHdrEIN(e.target.value)} placeholder="EIN (9 digits)"
-              className="w-full sm:w-36 bg-[#111318] border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-500" />
+              className="w-full sm:w-36 bg-[#10151C] border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-500" />
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <button onClick={saveHeaderEdit} disabled={hdrSaving}
-                className="text-[11px] font-bold bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black px-3 py-1.5 rounded-lg transition-colors">
+                className="text-[11px] font-bold bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#0E1319] px-3 py-1.5 rounded-lg transition-colors">
                 {hdrSaving ? 'Saving…' : 'Save'}
               </button>
               <button onClick={() => setEditingHeader(false)} className="text-[11px] font-semibold text-gray-400 hover:text-white px-2 py-1.5">Cancel</button>
@@ -942,12 +942,12 @@ function AddEntityModal({ corporateId, onSaved, onClose }) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-4" onClick={onClose}>
-      <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 animate-in fade-in-0 duration-200" onClick={onClose}>
+      <div className="bg-[#1A212C] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-purple-500/15 flex items-center justify-center">
-              <Building2 className="w-4 h-4 text-purple-400" />
+            <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
+              <Building2 className="w-4 h-4 text-amber-400" />
             </div>
             <div>
               <h3 className="font-bold text-white text-sm">Add Legal Entity</h3>
@@ -971,7 +971,7 @@ function AddEntityModal({ corporateId, onSaved, onClose }) {
           {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300">{error}</div>}
           <div className="flex gap-3 pt-1">
             <button onClick={handleSave} disabled={saving || !canSave}
-              className="flex-1 flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold text-sm py-2.5 rounded-xl transition-all">
+              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-[#0E1319] font-bold text-sm py-2.5 rounded-xl transition-all">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               {saving ? 'Creating…' : 'Create Entity'}
             </button>
@@ -1044,7 +1044,7 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
   };
 
   return (
-    <div className="bg-[#1c2128] border border-amber-500/30 rounded-2xl p-5">
+    <div className="bg-[#1A212C] border border-amber-500/30 rounded-2xl p-5">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center"><Plus className="w-4 h-4 text-amber-400" /></div>
@@ -1094,13 +1094,13 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
           <div className="flex items-center justify-between mb-1.5">
             <label className={labelCls + ' mb-0'}>Legal Entity</label>
             <button type="button" onClick={() => setShowAddEntity(e => !e)}
-              className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 transition-colors">
+              className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors">
               <Plus className="w-3 h-3" /> New Legal Entity
             </button>
           </div>
           {showAddEntity ? (
-            <div className="bg-[#111318] border border-purple-500/30 rounded-xl p-3 space-y-2">
-              <p className="text-[10px] font-bold text-purple-300 uppercase tracking-wider">New Legal Entity</p>
+            <div className="bg-[#10151C] border border-amber-500/30 rounded-xl p-3 space-y-2">
+              <p className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">New Legal Entity</p>
               <input value={newEntityName} onChange={e => setNewEntityName(e.target.value)}
                 placeholder="Legal Business Name" className={inputCls} autoFocus />
               <input value={newEntityEIN} onChange={e => setNewEntityEIN(e.target.value.replace(/\D/g,'').slice(0,9))}
@@ -1127,7 +1127,7 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
         {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300">{error}</div>}
         <div className="flex gap-3 pt-1">
           <button type="submit" disabled={saving}
-            className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-600 disabled:to-gray-600 disabled:text-gray-400 text-black font-bold text-sm px-5 py-3 rounded-xl transition-all">
+            className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-600 disabled:to-gray-600 disabled:text-gray-400 text-[#0E1319] font-bold text-sm px-5 py-3 rounded-xl transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             {saving ? 'Adding…' : 'Add Location'}
           </button>
@@ -1340,9 +1340,13 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   }
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center py-24 gap-3">
-      <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
-      <p className="text-sm text-gray-500">Loading…</p>
+    <div className="px-8 py-8 space-y-4" aria-busy="true" aria-label="Loading locations">
+      <div className="skeleton h-6 w-40" />
+      <div className="skeleton h-9 w-2/3" />
+      <div className="skeleton h-4 w-1/2" />
+      <div className="skeleton h-24 w-full !rounded-2xl" />
+      <div className="skeleton h-40 w-full !rounded-2xl" />
+      <div className="skeleton h-14 w-full !rounded-xl" />
     </div>
   );
 
@@ -1350,13 +1354,13 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     <div className="flex flex-col">
       {/* Header */}
       <div className="px-8 pt-8 pb-6 border-b border-white/10">
-        <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+        <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-bold tracking-wider px-3 py-1.5 rounded-full mb-3">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
           STEP 2 OF 4 — LOCATIONS &amp; MIDS
         </div>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-1.5">Locations &amp; Processing Setup</h2>
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-white mb-1.5">Locations &amp; Processing Setup</h2>
             <p className="text-gray-400 text-sm">Add locations under each legal entity, then fill in each MID's processing details.</p>
           </div>
           <button onClick={() => setShowBackConfirm(true)}
@@ -1368,14 +1372,25 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
       {/* Stats bar */}
       {locations.length > 0 && (
-        <div className="px-8 py-4 border-b border-white/5 flex flex-wrap gap-x-8 gap-y-2 items-center">
-          <div><p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Locations</p><p className="text-lg font-bold text-white">{locations.length}</p></div>
-          <div><p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">MIDs</p><p className="text-lg font-bold text-white">{totalMids}</p></div>
-          <div>
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">MIDs Complete</p>
-            <p className={`text-lg font-bold ${completeMids === totalMids && totalMids > 0 ? 'text-green-400' : 'text-amber-400'}`}>{completeMids}/{totalMids}</p>
+        <div className="px-8 py-4 border-b border-white/5 grid grid-cols-3 sm:flex sm:flex-wrap gap-2 sm:gap-3">
+          <div className="rounded-xl border border-white/8 bg-white/[0.025] px-4 py-2.5 sm:min-w-[110px]">
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Locations</p>
+            <p className="font-display text-lg font-semibold text-white leading-snug">{locations.length}</p>
           </div>
-          {entities.length > 1 && <div><p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Legal Entities</p><p className="text-lg font-bold text-purple-400">{entities.length}</p></div>}
+          <div className="rounded-xl border border-white/8 bg-white/[0.025] px-4 py-2.5 sm:min-w-[110px]">
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">MIDs</p>
+            <p className="font-display text-lg font-semibold text-white leading-snug">{totalMids}</p>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-white/[0.025] px-4 py-2.5 sm:min-w-[110px]">
+            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">MIDs Complete</p>
+            <p className={`font-display text-lg font-semibold leading-snug ${completeMids === totalMids && totalMids > 0 ? 'text-green-400' : 'text-amber-400'}`}>{completeMids}/{totalMids}</p>
+          </div>
+          {entities.length > 1 && (
+            <div className="rounded-xl border border-white/8 bg-white/[0.025] px-4 py-2.5 sm:min-w-[110px]">
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Legal Entities</p>
+              <p className="font-display text-lg font-semibold text-amber-300 leading-snug">{entities.length}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -1465,15 +1480,15 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             if (!allMidsComplete) { setShowValidation(true); return; }
             onContinue({ locations, legalEntities: entities, profile: currentProfile });
           }}
-          className={`w-full flex items-center justify-center gap-3 font-bold py-4 px-6 rounded-xl text-base transition-all shadow-lg ${
+          className={`group w-full flex items-center justify-center gap-3 font-bold py-4 px-6 rounded-xl text-base transition-all shadow-lg ${
             allMidsComplete
-              ? 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-black shadow-amber-900/20'
+              ? 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-[#0E1319] shadow-amber-950/30'
               : showValidation
               ? 'bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/25'
-              : 'bg-gray-700 text-gray-500'
+              : 'bg-white/5 border border-white/10 text-gray-500'
           }`}
         >
-          Continue to Banking <ArrowRight className="w-5 h-5" />
+          Continue to Banking <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
         </button>
         {!showValidation && !allMidsComplete && (
           <p className="text-center text-xs text-gray-600">
@@ -1488,8 +1503,8 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
       {/* Delete location confirm */}
       {deleteConfirm && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4" onClick={() => setDeleteConfirm(null)}>
-          <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in-0 duration-200" onClick={() => setDeleteConfirm(null)}>
+          <div className="bg-[#1A212C] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-red-400" /></div>
               <div>
@@ -1507,8 +1522,8 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
       {/* Delete MID confirm */}
       {deleteMidConfirm && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4" onClick={() => setDeleteMidConfirm(null)}>
-          <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in-0 duration-200" onClick={() => setDeleteMidConfirm(null)}>
+          <div className="bg-[#1A212C] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-red-400" /></div>
               <div>
@@ -1526,8 +1541,8 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
       {/* Delete entity confirm */}
       {deleteEntityConfirm && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4" onClick={() => setDeleteEntityConfirm(null)}>
-          <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in-0 duration-200" onClick={() => setDeleteEntityConfirm(null)}>
+          <div className="bg-[#1A212C] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-red-400" /></div>
               <div>
@@ -1545,8 +1560,8 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
       {/* Back confirm */}
       {showBackConfirm && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4" onClick={() => setShowBackConfirm(false)}>
-          <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in-0 duration-200" onClick={() => setShowBackConfirm(false)}>
+          <div className="bg-[#1A212C] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
             <h3 className="font-bold text-white mb-2">Go Back?</h3>
             <p className="text-sm text-gray-400 mb-5">Your locations and MIDs are saved.</p>
             <div className="flex gap-3">

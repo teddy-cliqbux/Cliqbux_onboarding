@@ -878,3 +878,21 @@ After the merchant completes portal signing, the `PostSubmissionDashboard` shoul
 - Use `npm run dev` for frontend-only against hosted backend
 - SDK version in use: `@base44/sdk@0.8.31` — keep consistent across functions
 - Publish via Base44 dashboard or `base44 publish` after pushing to GitHub
+---
+
+## Portal UI Overhaul — Design System (2026-07-12, approved by Teddy)
+
+Visual-only redesign of the onboarding portal to mirror dashboard.cliqbux.com. **No data fields, form keys, validation rules, save-button semantics, or fetch paths were changed** — explicit Save buttons remain everywhere (Critical Lesson #2 still applies; never replace them with debounce/autosave).
+
+**Design tokens:**
+- Brand gold `#F0AD4E` (dashboard accent) — Tailwind's `amber` scale 300–600 is overridden in `tailwind.config.js`, so every existing `amber-*` class app-wide lands on-brand. Change it there, not per-component.
+- Headings use Poppins via `--font-display` / `font-display` class (`index.css`); body/forms stay Inter.
+- Surface family (blue-tinted charcoal, matches dashboard): page `#0E1319` (`.portal-bg`, includes ambient radial gold glow), card `#161C26` (`.portal-card`, hairline border + 18px radius), panels `#1A212C`, nested cards `#151B24`, inputs `#10151C`.
+- Color language: gold = brand/actions/entity level; blue = MID-layer identity accent only; green = complete; red = error. Purple retired.
+- Skeleton loaders: `.skeleton` class (shimmer) in `index.css` — used by OnboardingLocations/OnboardingBanking loading states.
+
+**framer-motion is now in active use** (first real usage in the app): step transitions in `OnboardingPortal` (`AnimatePresence mode="wait"` keyed by step), milestone card entrances/hover, `ProgressTracker` connector fills + compact mobile variant, Banking accordion height animation and progress bar. Keep animations transform/opacity-only.
+
+**/dev/portal-preview harness** (`src/pages/DevPortalPreview.jsx`, DEV-only route in `App.jsx`): mounts the REAL OnboardingLocations/OnboardingBanking plus ProgressTracker/ApplicationTracker/MilestoneCard states against mock data. It sets a fake `merchant_jwt` in sessionStorage and stubs `window.fetch` for `/functions/` URLs (both restored on unmount) so zero backend traffic occurs. Use it to eyeball any future portal UI change without a merchant session.
+
+**Env lesson for AI agents:** the Cowork browser pane loads pages with `document.visibilityState === 'hidden'`, which pauses `requestAnimationFrame` — framer-motion entrance animations freeze at their initial frame (elements stuck at `opacity: 0`) and native screenshots time out. This is NOT a code bug; real visible tabs play animations normally. Verify styling via computed styles/read_page, and for image proof use html2canvas in-page after force-completing inline `opacity`/`transform`.

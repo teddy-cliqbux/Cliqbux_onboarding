@@ -1,8 +1,9 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 @layer base {
   :root {
@@ -31,9 +32,9 @@
     --chart-4: 43 74% 66%;
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
-    --font-heading: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-heading: 'Poppins', 'Inter', ui-sans-serif, system-ui, sans-serif;
     --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
-    --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Poppins', 'Inter', ui-sans-serif, system-ui, sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     --pane: 220 13% 12%;      /* #1c2128 - dashboard card surface */
     --pane-amber: 42 26% 16%; /* #2f281e - dashboard active nav item */
@@ -62,14 +63,20 @@
 
 /* Cliqbux Portal Specific — aligned with dashboard.cliqbux.com */
 .portal-bg {
-  background: #111318;
+  background-color: #0E1319;
+  background-image:
+    radial-gradient(1100px 520px at 50% -180px, rgba(240, 173, 78, 0.07), transparent 60%),
+    radial-gradient(900px 480px at 90% 110%, rgba(59, 130, 246, 0.045), transparent 55%);
   min-height: 100vh;
 }
 
 .portal-card {
-  background: #1c2128;
-  border-radius: 16px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.05);
+  background: #161C26;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 18px;
+  box-shadow:
+    0 30px 60px -15px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .portal-card-amber {
@@ -130,6 +137,36 @@
 
 .animate-spin-slow {
   animation: spin-slow 1.5s linear infinite;
+}
+
+/* Skeleton loaders — shimmering placeholders while portal data loads */
+@keyframes skeleton-shimmer {
+  100% { transform: translateX(100%); }
+}
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.07), transparent);
+  animation: skeleton-shimmer 1.6s infinite;
+}
+
+@keyframes logo-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(0.985); }
+}
+
+.animate-logo-breathe {
+  animation: logo-breathe 2.4s ease-in-out infinite;
 }
 
 /* Google Places autocomplete dropdown — must sit above all modals */

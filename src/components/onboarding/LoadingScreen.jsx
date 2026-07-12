@@ -3,7 +3,9 @@ import CliqbuxLogo from './CliqbuxLogo';
 export default function LoadingScreen({ message = 'Loading your onboarding portal...' }) {
   return (
     <div className="portal-bg min-h-screen flex flex-col items-center justify-center gap-8 px-4">
-      <CliqbuxLogo size="lg" />
+      <div className="animate-logo-breathe">
+        <CliqbuxLogo size="lg" />
+      </div>
       <div className="flex flex-col items-center gap-5">
         <div className="relative w-12 h-12">
           <div className="absolute inset-0 border-4 border-white/10 rounded-full" />

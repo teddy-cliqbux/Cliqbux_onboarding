@@ -12,6 +12,7 @@ import SystemAdminHidden from './pages/SystemAdminHidden';
 import ApplicationManager from './pages/ApplicationManager';
 import DevTrackerPreview from './pages/DevTrackerPreview';
 import DevSignerPreview from './pages/DevSignerPreview';
+import DevPortalPreview from './pages/DevPortalPreview';
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
               <>
                 <Route path="/dev/tracker-preview" element={<DevTrackerPreview />} />
                 <Route path="/dev/signer-preview" element={<DevSignerPreview />} />
+                <Route path="/dev/portal-preview" element={<DevPortalPreview />} />
               </>
             )}
             <Route path="*" element={<PageNotFound />} />

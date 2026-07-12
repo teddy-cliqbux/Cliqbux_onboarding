@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import {
   ArrowRight, ArrowLeft, Loader2, Store, Landmark, CheckCircle2,
-  MapPin, Building2, CreditCard, Banknote, Check, X, AlertTriangle
+  MapPin, Building2, CreditCard, Banknote, Check, ChevronDown
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
-const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
+const inputCls = 'w-full bg-[#10151C] border border-white/12 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 transition-colors hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-500/70 focus:border-transparent';
 const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
 
 function formatEIN(raw) {
@@ -92,20 +92,30 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
     await saveBank({ routingNumber: acct.routingNumber, accountNumber: acct.accountNumber, authMethod: 'Plaid', accountNumberMasked: `••••${acct.mask || ''}`, accountType: acct.subtype || null });
   };
 
-  // Saved state — show summary
+  // Saved state — show summary styled as a mini bank card
   if (saved) {
     const displayAccount = bankDetails?.accountNumberMasked || '••••';
     return (
-      <div className="flex items-center justify-between bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.98 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        className="relative overflow-hidden flex items-center justify-between rounded-2xl border border-green-500/25 bg-gradient-to-br from-green-500/[0.12] via-white/[0.02] to-transparent px-4 py-3.5"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-green-500/15 border border-green-500/25 flex items-center justify-center flex-shrink-0">
+            <Landmark className="w-4 h-4 text-green-400" />
+          </div>
           <div>
-            <p className="text-xs font-bold text-green-300">{bankDetails?.authMethod === 'Plaid' ? 'Bank Linked via Plaid' : 'Manual Bank Entry'}</p>
-            <p className="text-[11px] text-green-400/70 font-mono">{displayAccount} · Routing ••••{bankDetails?.routingNumber?.slice(-4)}</p>
+            <p className="text-xs font-bold text-green-300 flex items-center gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              {bankDetails?.authMethod === 'Plaid' ? 'Bank Linked via Plaid' : 'Manual Bank Entry'}
+            </p>
+            <p className="text-[11px] text-green-400/70 font-mono mt-0.5">{displayAccount} · Routing ••••{bankDetails?.routingNumber?.slice(-4)}</p>
           </div>
         </div>
-        <button onClick={() => { setSaved(false); setMode('connect'); }} className="text-[10px] text-gray-500 hover:text-white border border-white/10 rounded-lg px-2.5 py-1 transition-colors">Change</button>
-      </div>
+        <button onClick={() => { setSaved(false); setMode('connect'); }} className="text-[10px] font-semibold text-gray-400 hover:text-white border border-white/10 hover:border-white/25 rounded-lg px-2.5 py-1.5 transition-colors">Change</button>
+      </motion.div>
     );
   }
 
@@ -130,14 +140,14 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
         </div>
       )}
 
-      {/* Mode toggle */}
-      <div className="flex gap-2">
+      {/* Mode toggle — segmented control */}
+      <div className="flex gap-1 bg-white/[0.04] border border-white/10 rounded-xl p-1">
         <button onClick={() => setMode('connect')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold border transition-all ${mode === 'connect' || mode === 'plaid' ? 'bg-amber-500/15 border-amber-500/40 text-amber-300' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold border transition-all ${mode === 'connect' || mode === 'plaid' ? 'bg-amber-500/15 border-amber-500/35 text-amber-300 shadow-sm' : 'border-transparent text-gray-400 hover:text-white'}`}>
           <Landmark className="w-3.5 h-3.5" /> Plaid (Instant)
         </button>
         <button onClick={() => setMode('manual')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold border transition-all ${mode === 'manual' ? 'bg-blue-500/15 border-blue-500/40 text-blue-300' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}>
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold border transition-all ${mode === 'manual' ? 'bg-white/10 border-white/15 text-white shadow-sm' : 'border-transparent text-gray-400 hover:text-white'}`}>
           <Banknote className="w-3.5 h-3.5" /> Manual Entry
         </button>
       </div>
@@ -187,7 +197,7 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
           </div>
           <button onClick={() => saveBank({ routingNumber: routing, accountNumber: account, authMethod: 'Manual', accountNumberMasked: `••••${account.slice(-4)}`, accountType })}
             disabled={saving || routing.length !== 9 || account.length < 4 || !accountType}
-            className="w-full flex items-center justify-center gap-2 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/30 disabled:opacity-40 text-blue-300 font-semibold text-sm py-2.5 rounded-xl transition-all">
+            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-[#0E1319] font-bold text-sm py-2.5 rounded-xl transition-all shadow-lg shadow-amber-950/20">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             {saving ? 'Saving…' : 'Save Bank Details'}
           </button>
@@ -204,7 +214,7 @@ function LocationBankingRow({ location, corporateId, merchantIDs, bankDetails, r
   const hasBanking = !!(bankDetails?.routingNumber);
 
   return (
-    <div className={`rounded-2xl border transition-all ${isExpanded ? 'border-amber-500/30 bg-[#1c2128]' : hasBanking ? 'border-green-500/20 bg-[#1c2128]' : 'border-white/10 bg-[#1c2128] hover:border-white/20'}`}>
+    <div className={`rounded-2xl border transition-all ${isExpanded ? 'border-amber-500/30 bg-[#1A212C]' : hasBanking ? 'border-green-500/20 bg-[#1A212C]' : 'border-white/10 bg-[#1A212C] hover:border-white/20'}`}>
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-4 cursor-pointer" onClick={onToggleExpand}>
         <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${hasBanking ? 'bg-green-500/15' : 'bg-amber-500/10'}`}>
@@ -231,38 +241,46 @@ function LocationBankingRow({ location, corporateId, merchantIDs, bankDetails, r
               Needs Bank
             </span>
           )}
-          {isExpanded
-            ? <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-            : <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-          }
+          <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
         </div>
       </div>
 
-      {/* Expanded banking panel */}
-      {isExpanded && (
-        <div className="border-t border-white/5 px-5 py-5">
-          {/* MIDs reference */}
-          {locMids.length > 0 && (
-            <div className="mb-4 flex flex-wrap gap-1.5">
-              {locMids.map(m => (
-                <span key={m.id} className="flex items-center gap-1 text-[10px] text-blue-400/70 bg-blue-500/10 border border-blue-500/15 rounded-full px-2 py-0.5">
-                  <CreditCard className="w-2.5 h-2.5" /> {m.merchantName || m.dbaName} {m.mccCode && `· ${m.mccCode}`}
-                </span>
-              ))}
+      {/* Expanded banking panel — smooth height animation */}
+      <AnimatePresence initial={false}>
+        {isExpanded && (
+          <motion.div
+            key="panel"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="border-t border-white/5 px-5 py-5">
+              {/* MIDs reference */}
+              {locMids.length > 0 && (
+                <div className="mb-4 flex flex-wrap gap-1.5">
+                  {locMids.map(m => (
+                    <span key={m.id} className="flex items-center gap-1 text-[10px] text-blue-400/70 bg-blue-500/10 border border-blue-500/15 rounded-full px-2 py-0.5">
+                      <CreditCard className="w-2.5 h-2.5" /> {m.merchantName || m.dbaName} {m.mccCode && `· ${m.mccCode}`}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <BankingPanel
+                location={location}
+                corporateId={corporateId}
+                entityId={location.entityId}
+                plaidAccounts={plaidAccounts}
+                onAccountsConnected={onAccountsConnected}
+                bankDetails={bankDetails}
+                reuseDetails={reuseDetails}
+                onBankSaved={onBankSaved}
+              />
             </div>
-          )}
-          <BankingPanel
-            location={location}
-            corporateId={corporateId}
-            entityId={location.entityId}
-            plaidAccounts={plaidAccounts}
-            onAccountsConnected={onAccountsConnected}
-            bankDetails={bankDetails}
-            reuseDetails={reuseDetails}
-            onBankSaved={onBankSaved}
-          />
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -354,9 +372,13 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
   });
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center py-24 gap-3">
-      <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
-      <p className="text-sm text-gray-500">Loading banking setup…</p>
+    <div className="px-8 py-8 space-y-4" aria-busy="true" aria-label="Loading banking setup">
+      <div className="skeleton h-6 w-40" />
+      <div className="skeleton h-9 w-2/3" />
+      <div className="skeleton h-4 w-1/2" />
+      <div className="skeleton h-16 w-full !rounded-2xl" />
+      <div className="skeleton h-16 w-full !rounded-2xl" />
+      <div className="skeleton h-14 w-full !rounded-xl" />
     </div>
   );
 
@@ -364,13 +386,13 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
     <div className="flex flex-col">
       {/* Header */}
       <div className="px-8 pt-8 pb-6 border-b border-white/10">
-        <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
+        <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-bold tracking-wider px-3 py-1.5 rounded-full mb-3">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
           STEP 3 OF 4 — BANKING
         </div>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-1.5">Link Bank Accounts</h2>
+            <h2 className="font-display text-2xl font-semibold tracking-tight text-white mb-1.5">Link Bank Accounts</h2>
             <p className="text-gray-400 text-sm">Connect a bank account to each location. Locations under the same legal entity can share an account.</p>
           </div>
           <button onClick={onBack}
@@ -386,8 +408,13 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
           <p className="text-xs font-semibold text-gray-400">{bankingCount} of {locations.length} locations linked</p>
           {bankingComplete && <span className="text-xs font-bold text-green-400 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> All done</span>}
         </div>
-        <div className="w-full bg-white/10 rounded-full h-1.5">
-          <div className="bg-amber-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${locations.length > 0 ? (bankingCount / locations.length) * 100 : 0}%` }} />
+        <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+          <motion.div
+            className="bg-gradient-to-r from-amber-600 to-amber-400 h-1.5 rounded-full"
+            initial={false}
+            animate={{ width: `${locations.length > 0 ? (bankingCount / locations.length) * 100 : 0}%` }}
+            transition={{ type: 'spring', stiffness: 90, damping: 20 }}
+          />
         </div>
       </div>
 
@@ -465,8 +492,8 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
       <div className="px-8 pt-2 pb-8 border-t border-white/10 space-y-3">
         <button onClick={() => onContinue({ locations, legalEntities: entities })}
           disabled={!bankingComplete}
-          className="w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-black font-bold py-4 px-6 rounded-xl text-base transition-all shadow-lg shadow-amber-900/20">
-          Continue to Signing <ArrowRight className="w-5 h-5" />
+          className="group w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 disabled:shadow-none text-[#0E1319] font-bold py-4 px-6 rounded-xl text-base transition-all shadow-lg shadow-amber-950/30">
+          Continue to Signing <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
         </button>
         {!bankingComplete && (
           <p className="text-center text-xs text-amber-600/80">

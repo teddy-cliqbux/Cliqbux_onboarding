@@ -63,6 +63,14 @@ module.exports = {
         pane: 'hsl(var(--pane))',
         'pane-amber': 'hsl(var(--pane-amber))',
         'amber-dash': 'hsl(var(--amber-dashboard))',
+        // Brand gold — retint Tailwind's amber scale to the Cliqbux dashboard
+        // accent (#F0AD4E) so every existing amber-* class lands on-brand.
+        amber: {
+          300: '#FFD189',
+          400: '#F6B453',
+          500: '#F0AD4E',
+          600: '#DB8F28',
+        },
       },
       fontFamily: {
         heading: ['var(--font-heading)'],

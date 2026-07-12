@@ -10,11 +10,12 @@ import SelfServePricing from '@/components/onboarding/SelfServePricing';
 import OnboardingLocations from './OnboardingLocations';
 import OnboardingBanking from './OnboardingBanking';
 import OnboardingVerification from './OnboardingVerification';
-import OnboardingSummary from './OnboardingSummary';
+// OnboardingSummary import removed — the summary step was retired 2026-07-10
 import MobilePricing from '@/components/onboarding/MobilePricing';
 import PortalEntry from '@/components/onboarding/PortalEntry';
 import ApplicationTracker from '@/components/onboarding/ApplicationTracker';
 import { Lock, Check } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
 // 2026-07-06: fixed a real bug here — this array checked for 'Self_CashDiscount'
@@ -55,22 +56,27 @@ const TIER_CLASSES = {
   Self_CashDiscount: 'bg-green-500/20 text-green-400 border border-green-500/30',
 };
 
-function MilestoneCard({ index, title, description, done, unlocked, ctaLabel, onCta, ctaDisabled, attention, attentionItems = [] }) {
+// Named export so /dev/portal-preview can render the card states in isolation
+export function MilestoneCard({ index, title, description, done, unlocked, ctaLabel, onCta, ctaDisabled, attention, attentionItems = [] }) {
   return (
-    <div
-      className={`flex items-start gap-4 rounded-xl border px-5 py-4 transition-colors ${
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: index * 0.07, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={unlocked && !done ? { y: -2 } : undefined}
+      className={`flex items-start gap-4 rounded-2xl border px-5 py-4 transition-colors ${
         done
-          ? 'bg-green-500/10 border-green-500/30'
+          ? 'bg-green-500/[0.07] border-green-500/25'
           : attention
-            ? 'bg-amber-500/10 border-amber-500/30'
+            ? 'bg-amber-500/[0.07] border-amber-500/30'
             : unlocked
-              ? 'bg-white/5 border-white/10'
-              : 'bg-white/[0.02] border-white/5 opacity-60'
+              ? 'bg-white/[0.03] border-white/10 hover:border-white/20'
+              : 'bg-white/[0.015] border-white/5 opacity-55'
       }`}
     >
       <div
         className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold ${
-          done ? 'bg-green-500 text-white' : attention ? 'bg-amber-500 text-black' : unlocked ? 'bg-blue-500 text-white' : 'bg-white/10 text-gray-500'
+          done ? 'bg-green-500 text-white' : attention ? 'bg-amber-500 text-[#0E1319]' : unlocked ? 'bg-amber-500/15 text-amber-400 border border-amber-500/50' : 'bg-white/5 text-gray-600'
         }`}
       >
         {done ? <Check className="w-4 h-4" strokeWidth={3} /> : unlocked ? index : <Lock className="w-3.5 h-3.5" />}
@@ -113,15 +119,17 @@ function MilestoneCard({ index, title, description, done, unlocked, ctaLabel, on
           <button
             onClick={onCta}
             disabled={!unlocked || ctaDisabled}
-            className={`text-xs font-semibold px-4 py-2 rounded-lg transition-colors disabled:bg-white/5 disabled:text-gray-600 disabled:cursor-not-allowed ${
-              attention ? 'bg-amber-500 hover:bg-amber-400 text-black' : 'bg-blue-600 hover:bg-blue-700 text-white'
+            className={`text-xs font-bold px-4 py-2 rounded-lg transition-all disabled:bg-none disabled:bg-white/5 disabled:text-gray-600 disabled:shadow-none disabled:cursor-not-allowed ${
+              attention
+                ? 'bg-amber-500 hover:bg-amber-400 text-[#0E1319]'
+                : 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-[#0E1319] shadow-lg shadow-amber-950/30'
             }`}
           >
             {ctaLabel}
           </button>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -487,9 +495,9 @@ export default function OnboardingPortal() {
       return (
         <div className="px-6 sm:px-8 py-8 flex flex-col gap-6">
           <div>
-            <p className="text-gray-500 text-xs font-medium uppercase tracking-widest mb-1">Welcome back,</p>
-            <h2 className="text-2xl font-bold text-white leading-tight">{profile.legalName}</h2>
-            <p className="text-gray-400 text-sm mt-1">
+            <p className="text-amber-500/80 text-xs font-semibold uppercase tracking-[0.18em] mb-1.5">Welcome back</p>
+            <h2 className="font-display text-[26px] font-semibold text-white leading-tight tracking-tight">{profile.legalName}</h2>
+            <p className="text-gray-400 text-sm mt-1.5 max-w-xl">
               Here's where things stand with your Cliqbux onboarding. Work through each milestone below to get processing.
             </p>
           </div>
@@ -616,8 +624,8 @@ export default function OnboardingPortal() {
         <div className="w-full max-w-4xl mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
-              <p className="text-gray-500 text-xs font-medium uppercase tracking-widest mb-1">Welcome,</p>
-              <h1 className="text-xl font-bold text-white leading-tight">{profile.legalName}</h1>
+              <p className="text-gray-500 text-xs font-semibold uppercase tracking-[0.18em] mb-1">Welcome</p>
+              <h1 className="font-display text-2xl font-semibold text-white leading-tight tracking-tight">{profile.legalName}</h1>
               <p className="text-gray-400 text-sm mt-0.5">{profile.signerEmail}</p>
             </div>
             <div className="flex flex-col items-end gap-1">
@@ -636,9 +644,19 @@ export default function OnboardingPortal() {
           </div>
         </div>
 
-        {/* Main card */}
+        {/* Main card — steps cross-fade/slide via framer-motion */}
         <div className="w-full max-w-4xl portal-card overflow-hidden">
-          {renderStep()}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={step}
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {renderStep()}
+            </motion.div>
+          </AnimatePresence>
         </div>
 
         <div className="mt-8 text-center">

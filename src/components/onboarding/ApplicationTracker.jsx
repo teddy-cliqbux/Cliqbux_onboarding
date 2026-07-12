@@ -1,6 +1,4 @@
 import { FileText, Send, Clock, AlertTriangle, CheckCircle2, Check } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { cn } from '@/lib/utils';
 
 // Mocked, self-contained step definitions — this component owns its own
@@ -18,8 +16,8 @@ export default function ApplicationTracker({ currentStatus = 'DRAFT' }) {
   const isHold = currentStatus === 'UNDERWRITING_HOLD';
 
   return (
-    <Card>
-      <CardContent className="p-6">
+    <div className="rounded-2xl border border-white/8 bg-white/[0.02]">
+      <div className="p-6">
         <div className="flex items-start">
           {STEPS.map((step, idx) => {
             const isComplete = idx < activeIdx;
@@ -27,15 +25,15 @@ export default function ApplicationTracker({ currentStatus = 'DRAFT' }) {
             const isHoldStep = isActive && isHold;
             const Icon = step.icon;
 
-            let circleClass = 'border-2 border-gray-200 text-gray-400 bg-white';
-            if (isComplete) circleClass = 'bg-amber-500 text-white border-amber-500';
-            else if (isHoldStep) circleClass = 'bg-amber-100 text-amber-600 border-2 border-amber-500 ring-4 ring-amber-500/20';
-            else if (isActive) circleClass = 'bg-blue-500 text-white border-blue-500 ring-4 ring-blue-500/20';
+            let circleClass = 'border border-white/12 text-gray-500 bg-white/[0.03]';
+            if (isComplete) circleClass = 'bg-amber-500 text-[#0E1319] border-amber-500 shadow-lg shadow-amber-500/20';
+            else if (isHoldStep) circleClass = 'bg-amber-500/15 text-amber-400 border border-amber-500/60 ring-4 ring-amber-500/15';
+            else if (isActive) circleClass = 'bg-amber-500/15 text-amber-400 border border-amber-500/60 ring-4 ring-amber-500/15';
 
-            let labelClass = 'text-gray-400';
-            if (isComplete) labelClass = 'text-amber-600';
-            else if (isHoldStep) labelClass = 'text-amber-600';
-            else if (isActive) labelClass = 'text-blue-600';
+            let labelClass = 'text-gray-600';
+            if (isComplete) labelClass = 'text-amber-400';
+            else if (isHoldStep) labelClass = 'text-amber-400';
+            else if (isActive) labelClass = 'text-white';
 
             return (
               <div key={step.key} className={cn('flex items-center', idx < STEPS.length - 1 && 'flex-1')}>
@@ -50,12 +48,12 @@ export default function ApplicationTracker({ currentStatus = 'DRAFT' }) {
                     )}
                   </div>
                   <span className={cn('text-xs font-semibold', labelClass)}>{step.label}</span>
-                  <span className="text-[11px] text-gray-400 leading-tight">{step.description}</span>
+                  <span className="text-[11px] text-gray-500 leading-tight">{step.description}</span>
                 </div>
                 {idx < STEPS.length - 1 && (
                   <div
                     className="h-0.5 flex-1 mx-1 mb-8 rounded-full transition-colors duration-500"
-                    style={{ background: idx < activeIdx ? '#F59E0B' : '#E5E7EB' }}
+                    style={{ background: idx < activeIdx ? '#F0AD4E' : 'rgba(255,255,255,0.08)' }}
                   />
                 )}
               </div>
@@ -64,16 +62,18 @@ export default function ApplicationTracker({ currentStatus = 'DRAFT' }) {
         </div>
 
         {isHold && (
-          <Alert className="mt-6 border-amber-500/50 bg-amber-50 text-amber-800 [&>svg]:text-amber-600">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Action Required</AlertTitle>
-            <AlertDescription className="text-amber-700">
-              Underwriting has placed this application on hold. Please review the outstanding
-              items and respond so processing can continue.
-            </AlertDescription>
-          </Alert>
+          <div className="mt-6 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3.5">
+            <AlertTriangle className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-bold text-amber-300">Action Required</p>
+              <p className="text-xs text-amber-200/80 mt-0.5">
+                Underwriting has placed this application on hold. Please review the outstanding
+                items and respond so processing can continue.
+              </p>
+            </div>
+          </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
