@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
-import { Link } from 'react-router-dom';
 import {
-  Plus, Loader2, Send, Trash2, Check, X, Copy, ExternalLink,
+  Pencil, Loader2, Send, Trash2, Check, X, Copy, ExternalLink,
   Clock, Store, Users, FileText, Search, Building2, CreditCard,
-  ArrowLeft, CheckCircle2, AlertCircle, Eye, BarChart2, Zap,
+  CheckCircle2, AlertCircle, Eye, BarChart2, Zap,
   ChevronDown, ChevronRight, XCircle, RefreshCw
 } from 'lucide-react';
 
@@ -584,8 +583,8 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 px-6 py-4 border-b border-white/8">
-        <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-lg transition-colors">
-          <ArrowLeft className="w-4 h-4" />
+        <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-lg transition-colors" title="Close">
+          <X className="w-4 h-4" />
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider">{merchantName}</p>
@@ -997,9 +996,10 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             <Send className="w-3 h-3" /> Send
           </button>
           <button onClick={() => onEdit(corporateId, merchantName, linkStage)}
-            title={linkStage ? 'Edit locations & signers for this application' : 'Configure locations & signers'}
-            className="p-1.5 text-gray-600 hover:text-amber-400 rounded-lg transition-colors">
-            <Plus className="w-3.5 h-3.5" />
+            title="Edit locations, signers & prefill"
+            className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all bg-white/5 text-gray-300 border-white/10 hover:bg-amber-500/10 hover:text-amber-300 hover:border-amber-500/25">
+            <Pencil className="w-3 h-3" />
+            Edit
           </button>
           {trackStage && (
             <button onClick={() => onDelete(trackStage)} title="Delete tracking record"
@@ -1253,8 +1253,8 @@ export default function ApplicationManager() {
       <PipelineOverview profiles={profiles} stages={allStages} loading={loading} onRefresh={load} onQuickCreate={handleQuickCreate} />
 
       <div className="flex flex-1 min-h-0">
-        {/* Left panel */}
-        <div className={`flex flex-col transition-all duration-300 ${showEditor ? 'w-[440px] flex-shrink-0' : 'flex-1'} border-r border-white/8`}>
+        {/* Full-width list — editor is an overlay so it never crushes this column */}
+        <div className="flex flex-col flex-1 min-w-0 border-r border-white/8">
           <div className="px-6 py-4 border-b border-white/8 flex-shrink-0">
             <p className="text-[10px] font-mono text-amber-500 uppercase tracking-widest mb-1">Admin Tool</p>
             <h1 className="text-xl font-bold text-white">Applications</h1>
@@ -1310,10 +1310,15 @@ export default function ApplicationManager() {
             )}
           </div>
         </div>
+      </div>
 
-        {/* Right panel — editor */}
-        {showEditor && (
-          <div className="flex-1 flex flex-col bg-[#161b23] overflow-hidden">
+      {/* Edit overlay — does not shrink the applications list */}
+      {showEditor && (
+        <div className="fixed inset-0 z-[9000] flex justify-end bg-black/60 backdrop-blur-sm" onClick={() => setEditing(null)}>
+          <div
+            className="w-full max-w-xl h-full bg-[#161b23] border-l border-white/10 shadow-2xl flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
             <StageEditor
               stage={editing.stage}
               corporateId={editing.corporateId}
@@ -1322,8 +1327,8 @@ export default function ApplicationManager() {
               onClose={() => setEditing(null)}
             />
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {sending && (
         <SendModal
