@@ -33,11 +33,10 @@ function normalizeTrackStep(step) {
 }
 
 function formatDuration(totalSeconds) {
+  // Admin UI shows minutes only (per Teddy 2026-07-13) — seconds are too noisy.
   const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
-  if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
-  const rem = s % 60;
-  if (m < 60) return rem ? `${m}m ${rem}s` : `${m}m`;
+  if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
   const mins = m % 60;
   return mins ? `${h}h ${mins}m` : `${h}h`;
@@ -65,9 +64,9 @@ function PortalActivityPanel({ activity }) {
   const stats = [
     { label: 'Invites sent', value: a.invitesSent || 0, sub: a.lastInviteAt ? `Last ${formatActivityAt(a.lastInviteAt)}` : 'None yet' },
     { label: 'Merchant opens', value: a.merchantOpens || 0, sub: a.merchantLastOpenAt ? `Last ${formatActivityAt(a.merchantLastOpenAt)}` : 'None yet' },
-    { label: 'Merchant time', value: formatDuration(a.merchantSeconds), sub: 'Time in portal' },
+    { label: 'Merchant time', value: formatDuration(a.merchantSeconds), sub: 'Minutes in portal' },
     { label: 'Agent opens', value: a.agentOpens || 0, sub: a.agentLastOpenAt ? `Last ${formatActivityAt(a.agentLastOpenAt)}` : 'None yet' },
-    { label: 'Agent time', value: formatDuration(a.agentSeconds), sub: 'Impersonation' },
+    { label: 'Agent time', value: formatDuration(a.agentSeconds), sub: 'Minutes impersonating' },
   ];
 
   return (
@@ -225,7 +224,9 @@ function StepTracker({ currentStep, completedSteps, missingByStep }) {
   );
 }
 
-/** Infer funnel position from track record + live entity data (track alone can lag). */
+/** Infer funnel position from track record + live entity data (track alone can lag).
+ *  Sign (verification) is COMPLETE only after submit — identity verified + bank linked
+ *  means ready to sign, not signed. */
 function resolvePipelineProgress({ profile, track, locations, signers }) {
   const p = track?.prefilledData || {};
   const appStatus = p.applicationStatus || profile?.applicationStatus || 'Incomplete';
@@ -239,25 +240,30 @@ function resolvePipelineProgress({ profile, track, locations, signers }) {
     };
   }
 
+  // Never treat signing as done from stale track flags — only Submitted means signed
+  delete completed.verification;
+  delete completed.verify;
+  delete completed.submitted;
+
   const locs = locations || [];
-  const sigs = signers || [];
-  const detailLoaded = locs.length > 0 || sigs.length > 0;
+  const detailLoaded = locs.length > 0 || (signers || []).length > 0;
   const hasLocs = locs.length > 0;
   const allBanked = hasLocs && locs.every(l => l.bankDetails?.routingNumber);
-  const primaryOk = sigs.some(s => s.isPrimarySigner && s.identityStatus === 'Verified');
 
   if (hasLocs) completed.locations = true;
   if (allBanked) completed.banking = true;
-  if (primaryOk && allBanked) completed.verification = true;
+  // verification stays incomplete until Submitted
 
   let step = normalizeTrackStep(p.currentStep || 'locations');
 
   // Only upgrade from live data once detail has been loaded for this row
   if (detailLoaded) {
-    if (allBanked && primaryOk) step = 'verification';
-    else if (allBanked) step = 'verification';
+    if (allBanked) step = 'verification'; // ready to sign (or mid-signing) — active, not done
     else if (hasLocs) step = 'banking';
     else step = 'locations';
+  } else if (step === 'submitted' || completed.verification || completed.verify) {
+    // Stale track claimed signing done without Submitted — hold on Sign
+    step = 'verification';
   }
 
   return { currentStep: step, completedSteps: completed, appStatus };
