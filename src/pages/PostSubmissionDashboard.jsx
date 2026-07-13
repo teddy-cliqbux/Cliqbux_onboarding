@@ -9,7 +9,6 @@ import EquipmentShippingModal from '@/components/onboarding/EquipmentShippingMod
 import EquipmentOrderPanel from '@/components/onboarding/EquipmentOrderPanel';
 import InventoryUpload from '@/components/onboarding/InventoryUpload';
 import ConnectLegacyPOS from '@/components/onboarding/ConnectLegacyPOS';
-import LocationStatusTable from '@/components/onboarding/LocationStatusTable';
 import { base44 } from '@/api/base44Client';
 import {
   invokePortalFunction,
@@ -202,22 +201,6 @@ export default function PostSubmissionDashboard() {
 
           {/* Tracker */}
           {merchantIDs.length > 0 && <UnderwritingTracker locations={locations} merchantIDs={merchantIDs} />}
-
-          {/* Location Status Table */}
-          <LocationStatusTable
-            locations={locations}
-            merchantIDs={merchantIDs}
-            corporateId={profile.corporateId}
-            onStatusChanged={async () => {
-              try {
-                const res = await invokePortalFunction('getMerchantData', { corporateId: profile.corporateId });
-                if (!res.data?.error) {
-                  setLocations(res.data.locations || []);
-                  setMerchantIDs(res.data.merchantIDs || []);
-                }
-              } catch (_) {}
-            }}
-          />
 
           {/* Checklist */}
           <div>
