@@ -221,7 +221,8 @@ Deno.serve(async (req) => {
       const emailHtml = `
 <div style="font-family: Inter, sans-serif; background: #111318; color: #e5e7eb; padding: 40px; max-width: 600px; margin: 0 auto; border-radius: 16px;">
   <div style="margin-bottom: 24px;">
-    <span style="font-size: 24px; font-weight: 800; color: #f0ad4e;">cliqbux</span>
+    <img src="${publicUrl}/brand/cliqbux-mark.png" alt="Cliqbux" width="28" height="31" style="display:inline-block;vertical-align:middle;margin-right:12px;" />
+    <span style="display:inline-block;vertical-align:middle;color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.03em;">cliqbux</span>
   </div>
   <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">Your merchant application is ready</h2>
   <p style="color: #9ca3af; margin-bottom: 24px;">Click the button below to complete your onboarding. The link is secure and unique to your account.</p>

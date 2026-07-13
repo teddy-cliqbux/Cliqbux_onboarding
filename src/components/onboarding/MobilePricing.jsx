@@ -79,9 +79,9 @@ export default function MobilePricing({ onComplete }) {
     <div className="min-h-screen portal-bg text-white px-4 pb-24">
       {/* Top bar */}
       <div className="sticky top-0 z-50 bg-cb-bg/95 backdrop-blur border-b border-cb-border px-1 py-3 flex items-center gap-3">
-        <svg viewBox="0 0 28 32" className="w-6 h-7 flex-shrink-0" fill="none"><path d="M14 0L0 8v16l14 8 14-8V8L14 0z" fill="var(--cb-accent)"/><path d="M14 5l-9 5v12l9 5 9-5V10l-9-5z" fill="var(--cb-bg)"/><path d="M14 8l-6 3.5v7L14 22l6-3.5v-7L14 8z" fill="var(--cb-accent)"/><path d="M10 13.5h8M14 13.5V18" stroke="var(--cb-bg)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+        <img src="/brand/cliqbux-mark.png" alt="Cliqbux" className="w-7 h-8 flex-shrink-0 object-contain" draggable={false} />
         <div className="flex-1">
-          <p className="text-cb-body font-semibold text-white tracking-tight">cliqbux</p>
+          <p className="text-cb-body font-semibold text-white tracking-tight" style={{ fontFamily: "'Poppins', 'Inter', sans-serif", fontWeight: 700, letterSpacing: '-0.03em' }}>cliqbux</p>
           <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Secure Merchant Onboarding</p>
         </div>
       </div>

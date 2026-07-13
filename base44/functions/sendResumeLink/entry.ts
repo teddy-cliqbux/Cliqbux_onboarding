@@ -34,6 +34,7 @@ async function sendViaResend(to: string, subject: string, html: string): Promise
 }
 
 function buildResumeEmail(firstName: string, resumeUrl: string, businessName: string): string {
+  const logoUrl = `${getPortalBaseUrl()}/brand/cliqbux-mark.png`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -43,7 +44,8 @@ function buildResumeEmail(firstName: string, resumeUrl: string, businessName: st
       <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
         <tr>
           <td style="background:#111827;padding:28px 40px;text-align:center;">
-            <span style="color:#F59E0B;font-size:22px;font-weight:800;letter-spacing:-0.5px;">⬡ cliqbux</span>
+            <img src="${logoUrl}" alt="Cliqbux" width="28" height="31" style="display:inline-block;vertical-align:middle;margin-right:12px;" />
+            <span style="display:inline-block;vertical-align:middle;color:#ffffff;font-size:20px;font-weight:700;letter-spacing:-0.03em;font-family:Poppins,Inter,Arial,sans-serif;">cliqbux</span>
           </td>
         </tr>
         <tr>

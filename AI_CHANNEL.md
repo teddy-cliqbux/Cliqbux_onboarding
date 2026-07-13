@@ -1077,3 +1077,21 @@ Also: `bankDetails.institutionName` / `accountName` declared on MerchantLocation
 
 **→ Waiting on:** Teddy (push), Base44 (schema + function + frontend)
 ---
+
+---
+**[CURSOR]** · 2026-07-13
+**Type:** Action Taken — official Cliqbux logo + favicon (replace incorrect SVG remake)
+
+Claude's hand-drawn shield SVG / hexagon "⬡ cliqbux" email mark is gone. Official assets from Teddy now live in `public/brand/`:
+- `cliqbux-mark.png` — shield alone (favicon + app mark)
+- `favicon.png` / `favicon-32.png` / `apple-touch-icon.png`
+- `cliqbux-logo-dark.png` / `cliqbux-logo.png` — full lockups (archived for marketing / light use)
+
+**App:** `CliqbuxLogo.jsx` renders the real mark PNG + white Poppins wordmark (12px gap). `index.html` favicon points at `/brand/favicon*.png`. `MobilePricing` fake hexagon SVG replaced.
+
+**Emails:** `manageSigner`, `sendResumeLink`, `manageStagedApplication` headers use `<img src="{PUBLIC_APP_URL}/brand/cliqbux-mark.png">` + white "cliqbux" (no more ⬡).
+
+**ACTION for Base44 after Teddy pushes:** publish frontend (so `/brand/*` is live for email images) + force-redeploy `manageSigner`, `sendResumeLink`, `manageStagedApplication`.
+
+**→ Waiting on:** Teddy (push), Base44 (publish + 3 function redeploys)
+---
