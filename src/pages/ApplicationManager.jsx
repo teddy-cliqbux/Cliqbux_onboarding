@@ -434,7 +434,8 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
         includedMidIds: [...selMids],
         includedSignerIds: [...selSigners],
         prefilledData: prefill,
-        status: 'ready',
+        // Preserve sent status when editing an already-sent invite; only new/draft → ready
+        status: stage?.status === 'sent' ? 'sent' : 'ready',
       };
       const res = stage?.id
         ? await base44.functions.invoke('manageStagedApplication', { action: 'update', stageId: stage.id, data: payload })
@@ -459,7 +460,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-[10px] text-gray-500 uppercase tracking-wider">{merchantName}</p>
-          <p className="text-sm font-bold text-white">{stage?.id ? 'Edit Stage' : 'New Stage'}</p>
+          <p className="text-sm font-bold text-white">{stage?.id ? 'Edit Application' : 'Configure Application'}</p>
         </div>
         <button onClick={handleHubspotSync} disabled={loading || saving} title="Pull the latest deal, contact, and company data from HubSpot"
           className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 hover:text-white border border-white/10 hover:border-white/20 px-2.5 py-2 rounded-xl transition-all disabled:opacity-40">
@@ -468,7 +469,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
         <button onClick={handleSave} disabled={saving}
           className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold text-sm px-4 py-2 rounded-xl transition-all">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-          {saving ? 'Saving…' : 'Save Stage'}
+          {saving ? 'Saving…' : 'Save'}
         </button>
       </div>
 
@@ -480,8 +481,8 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
       ) : (
         <div className="flex-1 overflow-y-auto">
           <div className="px-6 pt-5 pb-4 border-b border-white/5">
-            <label className={labelCls}>Stage Label (internal)</label>
-            <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Downtown Locations — Phase 1" className={inputCls} />
+            <label className={labelCls}>Internal label (optional)</label>
+            <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Main application" className={inputCls} />
           </div>
           <div className="flex border-b border-white/8 px-6 gap-1 pt-2">
             {tabs.map(t => (
@@ -708,7 +709,10 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     ? new Date(p.lastSeenAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : null;
 
-  const linkStage = adminStages[0] || null;
+  const linkStage = adminStages.find(s => s.status === 'sent')
+    || adminStages.find(s => s.status === 'ready')
+    || adminStages[0]
+    || null;
 
   const isSubmitted = appStatus === 'Submitted' || currentStep === 'submitted';
   const isStuck = !isSubmitted && p.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) > 3 * 24 * 60 * 60 * 1000;
@@ -855,7 +859,8 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all bg-white/5 text-gray-400 border-white/10 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/20">
             <Send className="w-3 h-3" /> Send
           </button>
-          <button onClick={() => onEdit(corporateId, merchantName)} title="New stage"
+          <button onClick={() => onEdit(corporateId, merchantName, linkStage)}
+            title={linkStage ? 'Edit locations & signers for this application' : 'Configure locations & signers'}
             className="p-1.5 text-gray-600 hover:text-amber-400 rounded-lg transition-colors">
             <Plus className="w-3.5 h-3.5" />
           </button>
@@ -872,24 +877,33 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
         </div>
       </div>
 
-      {/* Admin stages chips */}
-      {adminStages.length > 0 && (
+      {/* Existing application config chip — one per merchant; click label to edit */}
+      {linkStage && (
         <div className="border-t border-white/5 px-4 py-2 flex flex-wrap gap-2">
-          {adminStages.map(s => (
-            <div key={s.id} className="flex items-center gap-1.5 bg-[#111318] border border-white/8 rounded-lg px-2.5 py-1.5">
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_STYLES[s.status] || STATUS_STYLES.draft}`}>{s.status}</span>
-              <span className="text-xs text-gray-300 font-medium truncate max-w-[120px]">{s.label}</span>
-              <button onClick={(e) => copyInviteLink(e, s)}
-                className={`ml-1 ${copied === s.id ? 'text-green-400' : 'text-gray-600 hover:text-blue-400'} transition-colors`}>
-                {copied === s.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-              </button>
-              <button onClick={openMerchantView} title="View as merchant" className="text-gray-600 hover:text-amber-300">
-                <Eye className="w-3 h-3" />
-              </button>
-              <button onClick={() => onSend(s, corporateId, s.sentToEmail || p.signerEmail || '')} className="text-gray-600 hover:text-green-400 transition-colors"><Send className="w-3 h-3" /></button>
-              <button onClick={() => onDelete(s)} className="text-gray-600 hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
-            </div>
-          ))}
+          <div className="flex items-center gap-1.5 bg-[#111318] border border-white/8 rounded-lg px-2.5 py-1.5">
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_STYLES[linkStage.status] || STATUS_STYLES.draft}`}>{linkStage.status}</span>
+            <button
+              onClick={() => onEdit(corporateId, merchantName, linkStage)}
+              title="Edit which locations and signers appear in the portal"
+              className="text-xs text-gray-300 font-medium truncate max-w-[160px] hover:text-amber-300 transition-colors text-left"
+            >
+              {linkStage.label || 'Application'}
+            </button>
+            <button onClick={(e) => copyInviteLink(e, linkStage)}
+              className={`ml-1 ${copied === linkStage.id ? 'text-green-400' : 'text-gray-600 hover:text-blue-400'} transition-colors`}>
+              {copied === linkStage.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            </button>
+            <button onClick={openMerchantView} title="View as merchant" className="text-gray-600 hover:text-amber-300">
+              <Eye className="w-3 h-3" />
+            </button>
+            <button onClick={() => onSend(linkStage, corporateId, linkStage.sentToEmail || p.signerEmail || '')} className="text-gray-600 hover:text-green-400 transition-colors"><Send className="w-3 h-3" /></button>
+            <button onClick={() => onDelete(linkStage)} className="text-gray-600 hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
+          </div>
+          {adminStages.length > 1 && (
+            <p className="text-[10px] text-amber-400/80 self-center">
+              {adminStages.length - 1} extra stage record{adminStages.length > 2 ? 's' : ''} — edit uses the primary one; delete extras if leftover
+            </p>
+          )}
         </div>
       )}
 
@@ -1031,7 +1045,12 @@ export default function ApplicationManager() {
   useEffect(() => { load(); }, [load]);
 
   const handleQuickCreate = (id) => {
-    setEditing({ corporateId: id, merchantName: merchantNames[id] || id, stage: null });
+    const adminForCorp = allStages.filter(s => s.corporateId === id && s.label !== '__auto_track__');
+    const existing = adminForCorp.find(s => s.status === 'sent')
+      || adminForCorp.find(s => s.status === 'ready')
+      || adminForCorp[0]
+      || null;
+    setEditing({ corporateId: id, merchantName: merchantNames[id] || id, stage: existing });
   };
 
   const handleStageSaved = (stage) => {
@@ -1172,7 +1191,7 @@ export default function ApplicationManager() {
                     trackStage={trackMap[profile.corporateId] || null}
                     adminStages={adminMap[profile.corporateId] || []}
                     publicUrl={publicUrl}
-                    onEdit={(corpId, name) => setEditing({ corporateId: corpId, merchantName: name, stage: null })}
+                    onEdit={(corpId, name, stage) => setEditing({ corporateId: corpId, merchantName: name, stage: stage || null })}
                     onSend={(stage, corpId, email) => setSending({ stage, corporateId: corpId, prefillEmail: email })}
                     onDelete={setDeleteConfirm}
                     onDeleteMerchant={(info) => { setDeleteMerchantConfirm(info); setDeleteMerchantTyped(''); setDeleteMerchantError(''); }}
