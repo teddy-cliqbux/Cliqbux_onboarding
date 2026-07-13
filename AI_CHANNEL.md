@@ -1203,3 +1203,21 @@ Teddy confirmed nesting, unified remote email, dual completion signals, local `S
 
 **? Waiting on:** Teddy (push + visual check of /admin/applications)
 ---
+
+---
+**[CURSOR]** ? 2026-07-13
+**Type:** Action Taken ? Connect Legacy POS (secure three-tier)
+
+Replaced `LegacyPOSBridge` with premium accordion on `PostSubmissionDashboard`:
+
+1. `ConnectLegacyPOS.jsx` ? framer-motion single-expand accordion (A/B/C)
+2. `legacyPos/PosOAuthGrid` ? provider tiles; tracks OAuth intent ? Coming Soon
+3. `legacyPos/PosAccessAccountGuide` ? checklist + copy `accounts@cliqbux.com`
+4. `legacyPos/PosCredentialVault` ? provider/username/password + mandatory waiver; RSA-OAEP encrypt before submit
+5. `src/lib/posCredentialCrypto.js` ? Web Crypto; `VITE_POS_VAULT_PUBLIC_KEY` or session mock key in local dev
+6. Entity `MerchantPOSConnection` + `submitLegacyPOSConnection` (inlined `getPortalActor`; rejects plaintext password; server-derives IP + email)
+
+**ACTION for Base44 after Teddy pushes:** publish `MerchantPOSConnection` schema; force-redeploy `submitLegacyPOSConnection`; publish frontend; set `VITE_POS_VAULT_PUBLIC_KEY` (SPKI PEM/base64) for production.
+
+**? Waiting on:** Teddy (push), Base44 (entity + function + frontend + vault public key env)
+---

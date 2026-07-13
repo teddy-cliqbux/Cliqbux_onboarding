@@ -1,0 +1,77 @@
+{
+  "name": "MerchantPOSConnection",
+  "type": "object",
+  "properties": {
+    "corporateId": {
+      "type": "string",
+      "description": "FK \u2192 MerchantCorporateProfile.corporateId (HubSpot dealId)"
+    },
+    "connectionMethod": {
+      "type": "string",
+      "enum": [
+        "oauth",
+        "access_account",
+        "credential_vault"
+      ],
+      "description": "How the merchant shared POS access: OAuth intent, accounts@ invite, or encrypted credential vault"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "clover",
+        "square",
+        "lightspeed",
+        "shopify",
+        "toast",
+        "other"
+      ]
+    },
+    "username": {
+      "type": "string",
+      "description": "Option C only \u2014 POS admin username. Not a secret by itself."
+    },
+    "passwordCiphertext": {
+      "type": "string",
+      "description": "Option C only \u2014 RSA-OAEP ciphertext (base64). NEVER store plaintext passwords."
+    },
+    "consentAccepted": {
+      "type": "boolean",
+      "description": "Must be true for credential_vault submissions"
+    },
+    "consentTextVersion": {
+      "type": "string",
+      "description": "Version id of the legal waiver text the merchant accepted e.g. 2026-07-13-v1"
+    },
+    "consentTimestamp": {
+      "type": "string",
+      "description": "ISO timestamp when consent was accepted"
+    },
+    "authorizedUserEmail": {
+      "type": "string",
+      "description": "Derived server-side from merchant JWT or profile \u2014 never trust client-only value"
+    },
+    "ipAddress": {
+      "type": "string",
+      "description": "Derived server-side from request headers (x-forwarded-for / cf-connecting-ip)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_review",
+        "connected",
+        "rejected"
+      ],
+      "default": "pending_review"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional internal note (e.g. OAuth coming-soon intent tracking)"
+    }
+  },
+  "required": [
+    "corporateId",
+    "connectionMethod",
+    "provider",
+    "status"
+  ]
+}

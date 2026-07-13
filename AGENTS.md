@@ -314,7 +314,7 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 | `getHubspotQuote` | Portal-auth'd HubSpot quote + line items for EquipmentOrderPanel. Read-only; payment stays on HubSpot Payments / quote iframe. |
 
 ### Other active functions
-`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `handleHubspotWebhook`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`
+`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `handleHubspotWebhook`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `submitLegacyPOSConnection`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`
 
 ### Debug/admin-only functions (do not call from merchant portal)
 `checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`, `cleanupTestHubspot`
@@ -942,7 +942,7 @@ A formal token layer now lives in `src/styles/tokens.css` (imported first in `in
 
 **Motion layer pass (2026-07-13):** Principles — motion communicates state, never decorates; spring `{ stiffness: 150, damping: 20 }`. (1) Step transitions via `AnimatePresence mode="wait"` + directional `goToStep`. (2) ProgressTracker: single `layoutId="cb-progress-capsule"` gold capsule glides under the active step; connectors grow with the same spring. (3) Org tree (`OnboardingLocations`): spring height accordions on MID edit / location MIDs / entity details / mailing; `layout` on EntitySection, LocationCard, MidCard so siblings displace smoothly. Banking accordion uses the same spring. (4) Async fetch states use `.skeleton` placeholders (Locations, Banking, Verification signing prep, LocationStatusTable, PostSubmissionDashboard, LoadingScreen). No mouse-tracking, canvases, or shimmer borders.
 
-**Still optional / not blocking:** ~~full `cb-*` restyle of remaining post-dashboard widgets~~ **DONE 2026-07-13 (Prompt 5/6):** `UnderwritingTracker`, `LocationStatusTable` (status → dot+caption), `InventoryUpload`, `LegacyPOSBridge`, `FormCard`, quote "Open in new tab" link; plus entry/pricing: `PortalEntry`, `SelfServePricing`, `MobilePricing`. Cash Discount remains the only self-serve card; pricing keys / createHubspotDeal payloads unchanged. Quote iframe card stays white for document readability.
+**Still optional / not blocking:** ~~full `cb-*` restyle of remaining post-dashboard widgets~~ **DONE 2026-07-13 (Prompt 5/6):** `UnderwritingTracker`, `LocationStatusTable` (status → dot+caption), `InventoryUpload`, `ConnectLegacyPOS` (replaced `LegacyPOSBridge` 2026-07-13), `FormCard`, quote "Open in new tab" link; plus entry/pricing: `PortalEntry`, `SelfServePricing`, `MobilePricing`. Cash Discount remains the only self-serve card; pricing keys / createHubspotDeal payloads unchanged. Quote iframe card stays white for document readability.
 
 All merchant-facing onboarding surfaces (steps + ProgressTracker + post-submit dashboard chrome + entry/pricing) are now on the token system.
 
@@ -950,3 +950,10 @@ All merchant-facing onboarding surfaces (steps + ProgressTracker + post-submit d
 
 ### Post-signing Equipment Order (2026-07-13)
 `EquipmentOrderPanel` on `PostSubmissionDashboard`: native invoice from `getHubspotQuote` (TanStack `staleTime` 10 min) + HubSpot custom-domain iframe for sign/pay. HubSpot Payments only — no Stripe checkout in this flow.
+
+### Connect Legacy POS (2026-07-13)
+Replaces `LegacyPOSBridge`. `ConnectLegacyPOS` on post-submit dashboard with three accordion options:
+- A OAuth intent (Coming Soon + notify via `submitLegacyPOSConnection`)
+- B Invite `accounts@cliqbux.com` (recommended)
+- C Credential vault — RSA-OAEP client encrypt (`VITE_POS_VAULT_PUBLIC_KEY`), legal waiver, `MerchantPOSConnection` audit trail
+Never accept plaintext `password` in the API (400). `ipAddress` / `authorizedUserEmail` derived server-side only.

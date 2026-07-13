@@ -8,7 +8,7 @@ import UnderwritingTracker from '@/components/onboarding/UnderwritingTracker';
 import EquipmentShippingModal from '@/components/onboarding/EquipmentShippingModal';
 import EquipmentOrderPanel from '@/components/onboarding/EquipmentOrderPanel';
 import InventoryUpload from '@/components/onboarding/InventoryUpload';
-import LegacyPOSBridge from '@/components/onboarding/LegacyPOSBridge';
+import ConnectLegacyPOS from '@/components/onboarding/ConnectLegacyPOS';
 import LocationStatusTable from '@/components/onboarding/LocationStatusTable';
 import { base44 } from '@/api/base44Client';
 import {
@@ -247,8 +247,8 @@ export default function PostSubmissionDashboard() {
               {/* B: Inventory & Menu */}
               <InventoryUpload corporateId={profile.corporateId} />
 
-              {/* C: Legacy POS Bridge */}
-              <LegacyPOSBridge />
+              {/* C: Legacy POS — three-tier secure connect */}
+              <ConnectLegacyPOS corporateId={profile.corporateId} />
             </div>
           </div>
 
