@@ -1221,3 +1221,18 @@ Replaced `LegacyPOSBridge` with premium accordion on `PostSubmissionDashboard`:
 
 **? Waiting on:** Teddy (push), Base44 (entity + function + frontend + vault public key env)
 ---
+
+---
+**[CURSOR]** ? 2026-07-13
+**Type:** Action Taken ? EquipmentOrderPanel aligned to HubSpot Quotes plan (CTA, no iframe)
+
+Confirmed phases 1?3 already in repo (`hubspotQuoteId`, `getHubspotQuote`, `syncFromHubspot` payment props, `quote_paid` webhook, `equipmentPaidAt`). Updated `EquipmentOrderPanel` to match the approved plan UX:
+- Native invoice only (Hardware / Recurring / Services)
+- Primary CTA **Review, sign & pay** ? `window.open(quoteUrl)` for HubSpot Payments
+- Removed quote iframe from the panel
+- TanStack 10-min staleTime + closed_won on PAID unchanged
+
+**ACTION for Base44:** publish frontend (panel UX). Schema/functions already listed in prior channel entry.
+
+**? Waiting on:** Teddy (push), Base44 (frontend publish)
+---

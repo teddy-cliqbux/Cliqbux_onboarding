@@ -223,9 +223,8 @@ export default function PostSubmissionDashboard() {
           <div>
             <h2 className="text-cb-caption uppercase text-gray-400 mb-4">Complete Your Setup</h2>
             <div className="flex flex-col gap-4">
-              {/* Equipment & Services — hybrid: native invoice (API) + HubSpot
-                  iframe for e-sign / HubSpot Payments when quote is on
-                  www.cliqbux.com. See EquipmentOrderPanel. */}
+              {/* Equipment & Services — native invoice via getHubspotQuote;
+                  sign/pay on HubSpot Payments (quote URL, new tab). */}
               <EquipmentOrderPanel corporateId={profile.corporateId} />
 
               {/* A: Equipment Shipping */}

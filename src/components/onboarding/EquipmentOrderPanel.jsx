@@ -5,21 +5,6 @@ import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const STALE_MS = 10 * 60 * 1000; // 10 minutes — do not re-hit HubSpot on every re-render
 
-function isFrameableQuoteUrl(url) {
-  if (!url) return false;
-  try {
-    const host = new URL(url).hostname.toLowerCase();
-    // Custom-domain quotes (verified frameable 2026-07-10). HubSpot hs-sites are not.
-    if (host === 'www.cliqbux.com' || host === 'cliqbux.com' || host.endsWith('.cliqbux.com')) {
-      return true;
-    }
-    if (host.includes('hs-sites')) return false;
-    return false;
-  } catch {
-    return false;
-  }
-}
-
 function formatMoney(n) {
   if (n == null || Number.isNaN(Number(n))) return '—';
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(n));
@@ -71,9 +56,8 @@ function LineSection({ title, icon: Icon, items }) {
 }
 
 /**
- * Hybrid Equipment & Services panel:
- * 1) Native invoice from getHubspotQuote (TanStack 10-min cache)
- * 2) HubSpot quote iframe for e-sign + HubSpot Payments when URL is on cliqbux.com
+ * Native Equipment & Services invoice from getHubspotQuote (TanStack 10-min cache).
+ * Sign & pay happen on HubSpot Payments via the quote URL (new tab) — not Stripe, not iframe.
  */
 export default function EquipmentOrderPanel({ corporateId }) {
   const closedWonFired = useRef(false);
@@ -94,7 +78,6 @@ export default function EquipmentOrderPanel({ corporateId }) {
   const esignStatus = String(data?.esignStatus || '').toUpperCase();
   const isPaid = paymentStatus === 'PAID';
   const quoteUrl = data?.quoteUrl || '';
-  const canFrame = isFrameableQuoteUrl(quoteUrl);
 
   // Fire-and-forget closed_won once when HubSpot Payments reports PAID.
   // Does NOT set MerchantMID to Active — payment ≠ Elavon go-live.
@@ -112,19 +95,24 @@ export default function EquipmentOrderPanel({ corporateId }) {
     invokePortalFunction('pushStatusToHubspot', { corporateId, milestone: 'closed_won' }).catch(() => {});
   }, [corporateId, isPaid]);
 
-  // After returning from new-tab sign/pay, refresh once (cooldown avoids HubSpot spam)
+  // After returning from HubSpot sign/pay tab, refresh once (cooldown avoids API spam)
   useEffect(() => {
     let lastFocusFetch = 0;
     const onVisibility = () => {
       if (document.visibilityState !== 'visible' || isPaid) return;
       const now = Date.now();
-      if (now - lastFocusFetch < 60_000) return; // at most once per minute on focus
+      if (now - lastFocusFetch < 60_000) return;
       lastFocusFetch = now;
       refetch();
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
   }, [isPaid, refetch]);
+
+  const openQuote = () => {
+    if (!quoteUrl) return;
+    window.open(quoteUrl, '_blank', 'noopener,noreferrer');
+  };
 
   if (isLoading) {
     return (
@@ -230,46 +218,30 @@ export default function EquipmentOrderPanel({ corporateId }) {
             </p>
           </div>
         </div>
-      ) : (
-        <>
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-cb-caption normal-case tracking-normal text-gray-500">
-              Sign and pay securely on your HubSpot quote{data.paymentEnabled ? ' (HubSpot Payments)' : ''}.
-            </p>
-            {quoteUrl && (
-              <a
-                href={quoteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-cb-caption normal-case tracking-normal font-medium text-cb-accent hover:opacity-90 underline shrink-0"
-              >
-                Open in new tab
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
-          </div>
-
-          {canFrame && quoteUrl ? (
-            <div className="bg-white rounded-cb border border-gray-100 overflow-hidden">
-              <iframe
-                src={quoteUrl}
-                title="Equipment & Services Quote — Sign & Pay"
-                className="w-full rounded-cb border-0 bg-white"
-                style={{ height: 900 }}
-              />
-            </div>
-          ) : quoteUrl ? (
+      ) : quoteUrl ? (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={openQuote}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-cb bg-cb-accent text-cb-bg font-semibold text-cb-body py-3 hover:opacity-95 transition-opacity"
+          >
+            Review, sign &amp; pay
+            <ExternalLink className="w-4 h-4" />
+          </button>
+          <p className="text-center text-cb-caption normal-case tracking-normal text-gray-500">
+            Opens your HubSpot quote{data.paymentEnabled ? ' (HubSpot Payments)' : ''} in a new tab.
+            {' '}
             <a
               href={quoteUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center w-full rounded-cb bg-cb-accent text-cb-bg font-semibold text-cb-body py-3 hover:opacity-95 transition-opacity"
+              className="text-cb-accent hover:opacity-90 underline font-medium"
             >
-              Open to sign &amp; pay
+              Open in new tab
             </a>
-          ) : null}
-        </>
-      )}
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
