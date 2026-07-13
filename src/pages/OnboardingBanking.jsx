@@ -30,6 +30,7 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
   const [accountType, setAccountType] = useState(bankDetails?.authMethod === 'Manual' ? (bankDetails?.accountType || '') : '');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(!!(bankDetails?.routingNumber));
+  const [justSaved, setJustSaved] = useState(false);
   const [connecting, setConnecting] = useState(false);
   const [plaidError, setPlaidError] = useState('');
 
@@ -41,6 +42,7 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
     setSaving(true);
     try {
       await invokePortalFunction('saveLocationBankDetails', { locations: [{ id: location.id, bankDetails: details }] });
+      setJustSaved(true);
       setSaved(true);
       onBankSaved(location.id, details, entityId);
     } catch (err) {
@@ -92,22 +94,36 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
     await saveBank({ routingNumber: acct.routingNumber, accountNumber: acct.accountNumber, authMethod: 'Plaid', accountNumberMasked: `••••${acct.mask || ''}`, accountType: acct.subtype || null });
   };
 
-  // Saved state — quiet summary row, success carried by a small check, not fill
+  // Saved state — quiet summary row; spring check only when the merchant just linked
   if (saved) {
     const displayAccount = bankDetails?.accountNumberMasked || '••••';
     return (
-      <div className="flex items-center justify-between rounded-cb border border-cb-border bg-cb-bg px-4 py-3.5">
+      <motion.div
+        className="flex items-center justify-between rounded-cb border border-cb-border bg-cb-bg px-4 py-3.5"
+        initial={justSaved ? { opacity: 0.6, scale: 0.98 } : false}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+      >
         <div className="flex items-center gap-3">
-          <Check className="w-4 h-4 text-cb-success flex-shrink-0" />
+          <motion.span
+            className="flex items-center justify-center w-7 h-7 rounded-full bg-cb-success/15 flex-shrink-0"
+            initial={justSaved ? { scale: 0 } : false}
+            animate={{ scale: 1 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 16 }}
+          >
+            <Check className="w-3.5 h-3.5 text-cb-success" strokeWidth={3} />
+          </motion.span>
           <div>
             <p className="text-cb-body font-medium text-white">
-              {bankDetails?.authMethod === 'Plaid' ? 'Bank Linked via Plaid' : 'Manual Bank Entry'}
+              {justSaved
+                ? 'Bank connected'
+                : (bankDetails?.authMethod === 'Plaid' ? 'Bank Linked via Plaid' : 'Manual Bank Entry')}
             </p>
             <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 font-mono mt-0.5">{displayAccount} · Routing ••••{bankDetails?.routingNumber?.slice(-4)}</p>
           </div>
         </div>
-        <button onClick={() => { setSaved(false); setMode('connect'); }} className="text-cb-caption normal-case tracking-normal text-gray-400 hover:text-white border border-cb-border hover:border-cb-border-strong rounded-cb px-2.5 py-1.5 transition-colors">Change</button>
-      </div>
+        <button onClick={() => { setSaved(false); setJustSaved(false); setMode('connect'); }} className="text-cb-caption normal-case tracking-normal text-gray-400 hover:text-white border border-cb-border hover:border-cb-border-strong rounded-cb px-2.5 py-1.5 transition-colors">Change</button>
+      </motion.div>
     );
   }
 

@@ -32,6 +32,9 @@ const STEP_BANKING      = 'banking';
 const STEP_VERIFICATION = 'verification';
 const STEP_SUCCESS      = 'success';
 
+// Order used for directional step transitions (forward = slide left, back = slide right)
+const STEP_ORDER = [STEP_WELCOME, STEP_LOCATIONS, STEP_BANKING, STEP_VERIFICATION];
+
 // pricingTier simplified 2026-07-06 to CUSTOM_FLAT_RATE / CUSTOM_INTERCHANGE_PLUS /
 // SELF_SERVE_CASH_DISCOUNT (see AGENTS.md Critical Lesson #12). Legacy labels kept
 // so any not-yet-migrated record still renders sensibly instead of showing a raw enum.
@@ -137,6 +140,21 @@ export default function OnboardingPortal() {
   // true when a Base44 workspace user (agent) is viewing via a direct dealId/corporateId
   // link with no merchant token — read-only, view-only access, not a merchant session.
   const [isImpersonating, setIsImpersonating] = useState(false);
+  // Directional step motion: 1 = forward (slide left), -1 = back (slide right)
+  const [stepDir, setStepDir] = useState(1);
+  const stepRef = useRef(step);
+
+  const goToStep = (next) => {
+    const from = STEP_ORDER.indexOf(stepRef.current);
+    const to = STEP_ORDER.indexOf(next);
+    if (from >= 0 && to >= 0 && from !== to) {
+      setStepDir(to > from ? 1 : -1);
+    } else {
+      setStepDir(1);
+    }
+    stepRef.current = next;
+    setStep(next);
+  };
 
   const handleSignersVerified = (v) => {
     setSignersVerified(v);
@@ -390,7 +408,7 @@ export default function OnboardingPortal() {
   const handleLocationsContinue = ({ locations: updatedLocations, legalEntities }) => {
     setLocations(updatedLocations);
     setCompletedSteps(prev => ({ ...prev, locations: true }));
-    setStep(STEP_BANKING);
+    goToStep(STEP_BANKING);
     pushMilestoneToHubspot(profile?.corporateId, 'locations_added');
     trackProgress(profile?.corporateId, { currentStep: 'banking', completedSteps: { agreement: true, locations: true } });
   };
@@ -398,17 +416,17 @@ export default function OnboardingPortal() {
   const handleBankingContinue = ({ locations: updatedLocations }) => {
     setLocations(updatedLocations);
     setCompletedSteps(prev => ({ ...prev, banking: true }));
-    setStep(STEP_VERIFICATION);
+    goToStep(STEP_VERIFICATION);
     trackProgress(profile?.corporateId, { currentStep: 'verification', completedSteps: { agreement: true, locations: true, banking: true } });
   };
 
-  const onBackStep = () => setStep(STEP_WELCOME);
+  const onBackStep = () => goToStep(STEP_WELCOME);
 
   // Step key → internal step constant
   const handleNavigate = (stepKey) => {
     const map = { quote: null, locations: STEP_LOCATIONS, banking: STEP_BANKING, verify: STEP_VERIFICATION };
     const target = map[stepKey];
-    if (target) setStep(target);
+    if (target) goToStep(target);
   };
 
   const handleSigningComplete = async () => {
@@ -499,7 +517,7 @@ export default function OnboardingPortal() {
               attentionItems={attentionItems}
               unlocked={true}
               ctaLabel={m1Attention ? 'Finish Details' : 'Configure Locations & MIDs'}
-              onCta={() => setStep(STEP_LOCATIONS)}
+              onCta={() => goToStep(STEP_LOCATIONS)}
             />
             <MilestoneCard
               index={2}
@@ -508,7 +526,7 @@ export default function OnboardingPortal() {
               done={m2Done}
               unlocked={m2Unlocked}
               ctaLabel="Set Up Banking"
-              onCta={() => setStep(STEP_BANKING)}
+              onCta={() => goToStep(STEP_BANKING)}
             />
             <MilestoneCard
               index={3}
@@ -517,7 +535,7 @@ export default function OnboardingPortal() {
               done={m3Done}
               unlocked={m3Unlocked}
               ctaLabel="Continue to Verification"
-              onCta={() => setStep(STEP_VERIFICATION)}
+              onCta={() => goToStep(STEP_VERIFICATION)}
             />
             <MilestoneCard
               index={4}
@@ -551,7 +569,7 @@ export default function OnboardingPortal() {
           <OnboardingBanking
             profile={profile}
             onContinue={handleBankingContinue}
-            onBack={() => setStep(STEP_LOCATIONS)}
+            onBack={() => goToStep(STEP_LOCATIONS)}
           />
         );
       }
@@ -562,7 +580,7 @@ export default function OnboardingPortal() {
             locations={locations}
             initialSignersVerified={signersVerified}
             onSignersVerified={handleSignersVerified}
-            onBack={() => setStep(STEP_BANKING)}
+            onBack={() => goToStep(STEP_BANKING)}
             onComplete={handleSigningComplete}
             onNavigate={handleNavigate}
           />
@@ -627,14 +645,15 @@ export default function OnboardingPortal() {
           </div>
         </div>
 
-        {/* Main card — steps cross-fade/slide via framer-motion */}
+        {/* Main card — directional step transitions via framer-motion */}
         <div className="w-full max-w-4xl portal-card overflow-hidden">
-          <AnimatePresence mode="wait" initial={false}>
+          <AnimatePresence mode="wait" initial={false} custom={stepDir}>
             <motion.div
               key={step}
-              initial={{ opacity: 0, y: 18 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
+              custom={stepDir}
+              initial={(dir) => ({ opacity: 0, x: dir * 28 })}
+              animate={{ opacity: 1, x: 0 }}
+              exit={(dir) => ({ opacity: 0, x: dir * -20 })}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             >
               {renderStep()}

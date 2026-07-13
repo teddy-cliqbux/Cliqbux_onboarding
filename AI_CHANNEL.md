@@ -1013,3 +1013,23 @@ Full visual redesign of the onboarding portal to mirror dashboard.cliqbux.com: b
 
 **→ Waiting on:** Teddy (push via GitHub Desktop), then Base44 (publish + quoted evidence)
 ---
+
+---
+**[CURSOR]** · 2026-07-13
+**Type:** Action Taken — portal UI redesign sequence completed (tokens → screens → motion → signature moments)
+
+Picked up the Stripe/Linear restraint redesign after Claude's mid-pass cut-off. What was already done (tokens + Locations/Banking/Welcome/Verification) left only ProgressTracker + motion polish + the two signature moments.
+
+**Shipped in this session (frontend-only, no field/key/validation/save/fetch changes):**
+1. `ProgressTracker.jsx` → full `cb-*` tokens; glow/shadow rings removed; spring capsule retained.
+2. `OnboardingPortal.jsx` → directional step slides (forward left / back right) via `goToStep` + `STEP_ORDER`.
+3. `OnboardingBanking.jsx` → bank-connected signature moment (spring check + "Bank connected" only on just-saved).
+4. `PostSubmissionDashboard.jsx` → "You're all set" hero + one gold `canvas-confetti` burst per session; nav/shipping tokenized; quote iframe card stays white.
+5. `tokens.css` status comment updated to APPLIED; AGENTS.md "Portal UI Overhaul" section updated.
+
+**Optional next Claude Code prompts** (not blocking — dashboard widgets + entry/pricing screens): see Cursor chat with Teddy for copy-paste Prompt 5 (dashboard widgets) and Prompt 6 (PortalEntry/SelfServePricing).
+
+**ACTION for Base44 after Teddy pushes:** publish frontend; verify live bundle hash changed and grep for `"You're all set"` (≥1) and absence of old ProgressTracker glow patterns if useful.
+
+**→ Waiting on:** Teddy (review + push via GitHub Desktop), then Base44 (publish + quoted evidence)
+---

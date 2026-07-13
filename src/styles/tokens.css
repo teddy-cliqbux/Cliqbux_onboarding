@@ -4,7 +4,8 @@
    index.css. Utilities are exposed through tailwind.config.js as cb-* classes
    (bg-cb-surface, border-cb-border, shadow-cb-raised, rounded-cb, text-cb-title).
 
-   Status: DEFINED, NOT YET APPLIED to components. Approved values here are the
+   Status: APPLIED across the merchant portal (Locations, Banking, Welcome Hub,
+   Verification, ProgressTracker) as of 2026-07-13. Approved values here are the
    only place to change the system — never hardcode these hex values in JSX.
    ──────────────────────────────────────────────────────────────────────────── */
 

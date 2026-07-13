@@ -15,25 +15,26 @@ export default function ProgressTracker({ currentStep, completedSteps = {}, onNa
   const keyToIdx = { locations: 0, banking: 1, verify: 2, quote: 3 };
   const activeIdx = keyToIdx[currentStep] ?? 0;
   const completedCount = STEPS.filter(s => completedSteps[s.key]).length;
+  const progressPct = Math.max(completedCount, activeIdx + 0.5) / STEPS.length * 100;
 
   return (
     <>
-      {/* Compact mobile variant — "Step N of 4" with a mini progress bar */}
+      {/* Compact mobile variant — "Step N of 4" with a mini progress capsule */}
       <div className="flex sm:hidden items-center gap-2.5">
         <div className="flex flex-col items-end gap-1">
-          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+          <span className="text-cb-caption uppercase text-gray-500">
             Step {activeIdx + 1} of {STEPS.length}
           </span>
-          <div className="w-20 h-1 rounded-full bg-white/10 overflow-hidden">
+          <div className="w-20 h-1 rounded-full bg-cb-bg overflow-hidden border border-cb-border">
             <motion.div
-              className="h-full rounded-full bg-amber-500"
+              className="h-full rounded-full bg-cb-accent"
               initial={false}
-              animate={{ width: `${Math.max(completedCount, activeIdx + 0.5) / STEPS.length * 100}%` }}
-              transition={{ type: 'spring', stiffness: 120, damping: 20 }}
+              animate={{ width: `${progressPct}%` }}
+              transition={{ type: 'spring', stiffness: 150, damping: 22 }}
             />
           </div>
         </div>
-        <div className="w-7 h-7 rounded-full bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-[11px] font-bold text-amber-400">
+        <div className="w-7 h-7 rounded-full bg-cb-accent-muted border border-cb-accent/40 flex items-center justify-center text-cb-caption font-bold text-cb-accent normal-case tracking-normal">
           {activeIdx + 1}
         </div>
       </div>
@@ -43,16 +44,15 @@ export default function ProgressTracker({ currentStep, completedSteps = {}, onNa
         {STEPS.map((step, idx) => {
           const isComplete = !!completedSteps[step.key];
           const isActive   = idx === activeIdx && !isComplete;
-          const isUpcoming = idx > activeIdx && !isComplete;
           const canClick   = onNavigate && (isComplete || idx <= activeIdx);
 
           let circleClass = '';
-          if (isComplete)  circleClass = 'bg-amber-500 text-[#0E1319] shadow-lg shadow-amber-500/25';
-          else if (isActive)  circleClass = 'bg-amber-500/15 text-amber-400 border border-amber-500/60 ring-4 ring-amber-500/15';
-          else circleClass = 'border border-white/15 text-gray-500';
+          if (isComplete)  circleClass = 'bg-cb-accent text-cb-bg';
+          else if (isActive)  circleClass = 'bg-cb-accent-muted text-cb-accent border border-cb-accent/50';
+          else circleClass = 'border border-cb-border text-gray-500';
 
           let labelClass = '';
-          if (isComplete) labelClass = 'text-amber-400';
+          if (isComplete) labelClass = 'text-cb-accent';
           else if (isActive) labelClass = 'text-white';
           else labelClass = 'text-gray-600';
 
@@ -65,7 +65,7 @@ export default function ProgressTracker({ currentStep, completedSteps = {}, onNa
                 title={canClick ? `Go to ${step.label}` : step.label}
               >
                 <motion.div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors duration-300 ${circleClass} ${canClick ? 'group-hover:ring-4 group-hover:ring-white/5' : ''}`}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-cb-body font-semibold transition-colors duration-300 ${circleClass}`}
                   whileTap={canClick ? { scale: 0.92 } : undefined}
                 >
                   {isComplete ? (
@@ -81,17 +81,17 @@ export default function ProgressTracker({ currentStep, completedSteps = {}, onNa
                     <span>{step.id}</span>
                   )}
                 </motion.div>
-                <span className={`text-xs font-medium whitespace-nowrap transition-colors duration-300 ${labelClass} ${canClick ? 'group-hover:text-white' : ''}`}>
+                <span className={`text-cb-caption normal-case tracking-normal font-medium whitespace-nowrap transition-colors duration-300 ${labelClass} ${canClick ? 'group-hover:text-white' : ''}`}>
                   {step.label}
                 </span>
               </button>
               {idx < STEPS.length - 1 && (
-                <div className="relative w-10 lg:w-16 h-px mx-2 mb-5 bg-white/10 overflow-hidden rounded-full">
+                <div className="relative w-10 lg:w-16 h-px mx-2 mb-5 bg-cb-border overflow-hidden rounded-full">
                   <motion.div
-                    className="absolute inset-y-0 left-0 bg-amber-500"
+                    className="absolute inset-y-0 left-0 bg-cb-accent"
                     initial={false}
                     animate={{ width: isComplete ? '100%' : '0%' }}
-                    transition={{ duration: 0.5, ease: 'easeOut' }}
+                    transition={{ duration: 0.45, ease: 'easeOut' }}
                   />
                 </div>
               )}
