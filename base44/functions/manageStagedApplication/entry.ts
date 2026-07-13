@@ -112,7 +112,7 @@ function emptyActivity() {
     merchantSeconds: 0,
     agentOpens: 0,
     agentLastOpenAt: null as string | null,
-    agentSeconds: 0,
+    // agentSeconds intentionally omitted — impersonation time is not tracked
     recent: [] as Array<{ type: string; at: string; actor?: string; detail?: string }>,
   };
 }
@@ -143,10 +143,11 @@ function applyActivityEvent(prevActivity: any, event: any) {
     }
     push();
   } else if (type === 'session_tick') {
-    const secs = Math.max(0, Math.min(300, Number(event?.seconds) || 0)); // cap 5 min per tick
-    if (secs > 0) {
-      if (actor === 'agent') a.agentSeconds = (a.agentSeconds || 0) + secs;
-      else a.merchantSeconds = (a.merchantSeconds || 0) + secs;
+    // Merchant time only — agent/impersonation minutes are not tracked.
+    // Cap is a safety ceiling (max credit per request), not the heartbeat interval.
+    if (actor === 'merchant') {
+      const secs = Math.max(0, Math.min(300, Number(event?.seconds) || 0));
+      if (secs > 0) a.merchantSeconds = (a.merchantSeconds || 0) + secs;
     }
     // ticks are frequent — don't spam recent[]
   }

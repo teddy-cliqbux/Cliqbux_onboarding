@@ -32,8 +32,9 @@ function normalizeTrackStep(step) {
 }
 
 function formatDuration(totalSeconds) {
-  // Admin UI shows minutes only (per Teddy 2026-07-13) — seconds are too noisy.
+  // Adaptive units: seconds under 1m, then minutes, then hours.
   const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
   if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
@@ -59,19 +60,18 @@ const ACTIVITY_EVENT_LABELS = {
 function PortalActivityPanel({ activity }) {
   const a = activity || {};
   const recent = Array.isArray(a.recent) ? a.recent : [];
-  const hasAny = (a.invitesSent || a.merchantOpens || a.agentOpens || a.merchantSeconds || a.agentSeconds);
+  const hasAny = (a.invitesSent || a.merchantOpens || a.agentOpens || a.merchantSeconds);
   const stats = [
     { label: 'Invites sent', value: a.invitesSent || 0, sub: a.lastInviteAt ? `Last ${formatActivityAt(a.lastInviteAt)}` : 'None yet' },
     { label: 'Merchant opens', value: a.merchantOpens || 0, sub: a.merchantLastOpenAt ? `Last ${formatActivityAt(a.merchantLastOpenAt)}` : 'None yet' },
-    { label: 'Merchant time', value: formatDuration(a.merchantSeconds), sub: 'Minutes in portal' },
+    { label: 'Merchant time', value: formatDuration(a.merchantSeconds), sub: 'Time in portal' },
     { label: 'Agent opens', value: a.agentOpens || 0, sub: a.agentLastOpenAt ? `Last ${formatActivityAt(a.agentLastOpenAt)}` : 'None yet' },
-    { label: 'Agent time', value: formatDuration(a.agentSeconds), sub: 'Minutes impersonating' },
   ];
 
   return (
     <div>
       <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Portal activity</p>
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
         {stats.map(st => (
           <div key={st.label} className="rounded-xl border border-white/8 bg-white/[0.02] px-2.5 py-2">
             <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">{st.label}</p>
@@ -891,7 +891,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
 }
 
 // ── Application Row ───────────────────────────────────────────────────────────
-function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onSend, onDelete, onDeleteMerchant }) {
+function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onSend, onDeleteMerchant }) {
   const [expanded, setExpanded]         = useState(false);
   const [mids, setMids]                 = useState([]);
   const [locations, setLocations]       = useState([]);
@@ -1071,12 +1071,6 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             <Pencil className="w-3 h-3" />
             Edit
           </button>
-          {trackStage && (
-            <button onClick={() => onDelete(trackStage)} title="Delete tracking record"
-              className="p-1.5 text-gray-600 hover:text-red-400 rounded-lg transition-colors">
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
           <button onClick={() => onDeleteMerchant({ corporateId, merchantName })} title="Delete merchant permanently (all data)"
             className="p-1.5 text-gray-700 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
             <Trash2 className="w-3.5 h-3.5" />
@@ -1193,7 +1187,6 @@ export default function ApplicationManager() {
   const [searching, setSearching]         = useState(false);
   const [editing, setEditing]             = useState(null);
   const [sending, setSending]             = useState(null);
-  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [deleteMerchantConfirm, setDeleteMerchantConfirm] = useState(null); // { corporateId, merchantName }
   const [deleteMerchantTyped, setDeleteMerchantTyped]     = useState('');
   const [deletingMerchant, setDeletingMerchant]           = useState(false);
@@ -1239,14 +1232,6 @@ export default function ApplicationManager() {
       return [stage, ...prev];
     });
     setEditing(null);
-  };
-
-  const handleDelete = async (stage) => {
-    setDeleteConfirm(null);
-    try {
-      await base44.functions.invoke('manageStagedApplication', { action: 'delete', stageId: stage.id });
-      setAllStages(prev => prev.filter(s => s.id !== stage.id));
-    } catch (_) {}
   };
 
   const handleDeleteMerchant = async () => {
@@ -1372,7 +1357,6 @@ export default function ApplicationManager() {
                     publicUrl={publicUrl}
                     onEdit={(corpId, name, stage) => setEditing({ corporateId: corpId, merchantName: name, stage: stage || null })}
                     onSend={(stage, corpId, email) => setSending({ stage, corporateId: corpId, prefillEmail: email })}
-                    onDelete={setDeleteConfirm}
                     onDeleteMerchant={(info) => { setDeleteMerchantConfirm(info); setDeleteMerchantTyped(''); setDeleteMerchantError(''); }}
                   />
                 ))}
@@ -1414,19 +1398,6 @@ export default function ApplicationManager() {
             } catch (_) { /* keep local state */ }
           }}
           onClose={() => setSending(null)} />
-      )}
-
-      {deleteConfirm && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4" onClick={() => setDeleteConfirm(null)}>
-          <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-white mb-2">Delete this stage?</h3>
-            <p className="text-sm text-gray-400 mb-5">"{deleteConfirm.label}" will be removed permanently. Any sent links will stop working.</p>
-            <div className="flex gap-3">
-              <button onClick={() => handleDelete(deleteConfirm)} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-bold text-sm py-2.5 rounded-xl transition-all">Delete</button>
-              <button onClick={() => setDeleteConfirm(null)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white">Cancel</button>
-            </div>
-          </div>
-        </div>
       )}
 
       {deleteMerchantConfirm && (

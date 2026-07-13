@@ -435,24 +435,37 @@ export default function OnboardingPortal() {
     }).catch(() => {});
   };
 
-  // Accumulate time-in-portal while the tab is visible (60s heartbeats).
-  // Distinguishes merchant vs agent (impersonation) for the admin activity panel.
+  // Merchant time-in-portal (visible-tab heartbeats). Credits real elapsed
+  // seconds since the last credit (capped at 5 min) so a delayed/throttled
+  // interval still lands as e.g. 5m in the admin UI, not a flat +1m.
+  // Agent/impersonation sessions are not timed — opens are enough for admin.
   useEffect(() => {
     if (mode !== 'sales' || !dealId) return undefined;
     if (profile?.applicationStatus === 'Submitted') return undefined;
-    const TICK_SECS = 60;
+    const isAgent = (
+      isImpersonating
+      || sessionStorage.getItem('portal_impersonating') === String(dealId)
+      || merchantTokenHasImp()
+    );
+    if (isAgent) return undefined;
+    const INTERVAL_MS = 60 * 1000;
+    const MAX_CREDIT_SECS = 300; // must match backend session_tick cap
+    let lastCreditAt = Date.now();
     const tick = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      const actor = (
-        isImpersonating
-        || sessionStorage.getItem('portal_impersonating') === String(dealId)
-        || merchantTokenHasImp()
-      ) ? 'agent' : 'merchant';
+      const now = Date.now();
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        // Freeze the clock while hidden — don't credit background time.
+        lastCreditAt = now;
+        return;
+      }
+      const secs = Math.min(MAX_CREDIT_SECS, Math.max(0, Math.round((now - lastCreditAt) / 1000)));
+      lastCreditAt = now;
+      if (secs < 1) return;
       trackProgress(dealId, {
-        activityEvent: { type: 'session_tick', actor, seconds: TICK_SECS },
+        activityEvent: { type: 'session_tick', actor: 'merchant', seconds: secs },
       });
     };
-    const id = setInterval(tick, TICK_SECS * 1000);
+    const id = setInterval(tick, INTERVAL_MS);
     return () => clearInterval(id);
   }, [mode, dealId, isImpersonating, profile?.applicationStatus]);
 
