@@ -15,7 +15,7 @@ const inputStyle = {
   fontFamily: 'Inter, sans-serif', color: '#111827',
 };
 
-export default function EquipmentShippingModal({ profile, locations, onClose }) {
+export default function EquipmentShippingModal({ profile = {}, locations = [], onClose }) {
   const [shippingSelections, setShippingSelections] = useState({});
   const [customAddresses, setCustomAddresses] = useState({});
   const [globalMode, setGlobalMode] = useState(null);
@@ -23,12 +23,12 @@ export default function EquipmentShippingModal({ profile, locations, onClose }) 
 
   useEffect(() => {
     const initial = {};
-    locations.forEach((l) => { initial[l.id || l.locationId] = null; });
+    (locations || []).forEach((l) => { initial[l.id || l.locationId] = null; });
     setShippingSelections(initial);
   }, [locations]);
 
   // Corporate mailing — defaults to profile home address as our mailing proxy
-  const corporateAddress = `${profile.homeStreet || ''}, ${profile.homeCity || ''}, ${profile.homeState || ''} ${profile.homeZip || ''}`.replace(/^,\s*|,\s*$/g, '') || 'Not set';
+  const corporateAddress = `${profile?.homeStreet || ''}, ${profile?.homeCity || ''}, ${profile?.homeState || ''} ${profile?.homeZip || ''}`.replace(/^,\s*|,\s*$/g, '').trim() || 'Not set';
 
   const setSelection = (locId, key) => {
     setShippingSelections((prev) => ({ ...prev, [locId]: key }));

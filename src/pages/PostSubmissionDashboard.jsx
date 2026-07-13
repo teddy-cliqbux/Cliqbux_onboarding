@@ -215,6 +215,7 @@ export default function PostSubmissionDashboard() {
                 <div className="flex items-center justify-between mb-1">
                   <h3 className="text-cb-body font-semibold text-white">Equipment Shipping Router</h3>
                   <button
+                    type="button"
                     onClick={() => setShowShipping(true)}
                     className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent hover:opacity-90 underline"
                   >
@@ -245,6 +246,7 @@ export default function PostSubmissionDashboard() {
 
       {showShipping && (
         <EquipmentShippingModal
+          profile={profile}
           locations={locations}
           onClose={() => setShowShipping(false)}
         />
