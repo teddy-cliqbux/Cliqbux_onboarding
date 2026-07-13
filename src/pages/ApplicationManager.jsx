@@ -137,18 +137,6 @@ function signerMissingFields(s) {
   return miss;
 }
 
-const PREFILL_FIELDS = [
-  // 2026-07-06: simplified to match Cliqbux's 4-template model (see AGENTS.md
-  // Critical Lesson #12). Self_Swiped/Self_Keyed kept as-is — dormant/on hold,
-  // not deprecated (Elavon doesn't support self-serve flat rate yet).
-  { key: 'pricingTier', label: 'Pricing Tier', type: 'select', options: ['CUSTOM_FLAT_RATE', 'CUSTOM_INTERCHANGE_PLUS', 'SELF_SERVE_CASH_DISCOUNT', 'Self_Swiped', 'Self_Keyed'] },
-  { key: 'legalName', label: 'Legal Business Name', type: 'text', placeholder: 'Override legal name…' },
-  { key: 'productDescription', label: 'Product Description', type: 'text', placeholder: 'Override product description…' },
-  { key: 'establishmentYear', label: 'Year Established', type: 'text', placeholder: 'e.g. 2018' },
-  { key: 'ownershipType', label: 'Ownership Type', type: 'select', options: ['SOLE_PROPRIETOR', 'LIMITED_COMPANY', 'CORPORATION', 'GENERAL_PARTNERSHIP', 'LIMITED_PARTNERSHIP', 'NON_PROFIT'] },
-  { key: 'taxClassType', label: 'Tax Classification', type: 'select', options: ['SOLE_PROP', 'LLC_CORPORATION', 'LLC_PARTNERSHIP', 'CORPORATION', 'PARTNERSHIP'] },
-];
-
 // ── Shared Badges ─────────────────────────────────────────────────────────────
 function MidStatusBadge({ status }) {
   const map = {
@@ -472,7 +460,10 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
   const [selLocs, setSelLocs]         = useState(new Set(stage?.includedLocationIds || []));
   const [selMids, setSelMids]         = useState(new Set(stage?.includedMidIds || []));
   const [selSigners, setSelSigners]   = useState(new Set(stage?.includedSignerIds || []));
-  const [prefill, setPrefill]         = useState(stage?.prefilledData || {});
+  const [quotes, setQuotes]           = useState([]);
+  const [selectedQuoteId, setSelectedQuoteId] = useState(null);
+  const [loadingQuotes, setLoadingQuotes] = useState(false);
+  const [selectingQuote, setSelectingQuote] = useState(false);
   const [loading, setLoading]         = useState(true);
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
@@ -496,6 +487,20 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
     return { locs, mids, sigs };
   };
 
+  const fetchQuotes = async () => {
+    setLoadingQuotes(true);
+    try {
+      const res = await base44.functions.invoke('getHubspotQuote', { action: 'list', corporateId });
+      if (res.data?.error) throw new Error(res.data.error);
+      setQuotes(res.data?.quotes || []);
+      setSelectedQuoteId(res.data?.selectedQuoteId || null);
+    } catch (err) {
+      setError(err.message || 'Failed to load HubSpot quotes');
+    } finally {
+      setLoadingQuotes(false);
+    }
+  };
+
   const selectAll = ({ locs, mids, sigs }) => {
     setSelLocs(new Set(locs.map(l => l.id || l.locationId)));
     setSelMids(new Set(mids.map(c => c.id)));
@@ -506,10 +511,6 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
     setLoading(true); setError('');
     try {
       let lists = await fetchLists();
-      // Nothing in Base44 yet — this corporateId is most likely a HubSpot deal
-      // that has never been synced. Pull it now so staging starts from CRM data
-      // (profile + primary signer from the deal contact, locations/MIDs from
-      // the company hierarchy).
       if (!lists.locs.length && !lists.sigs.length) {
         setSyncMsg('Nothing in Base44 yet — pulling this deal from HubSpot…');
         const syncRes = await base44.functions.invoke('syncFromHubspot', { dealId: corporateId });
@@ -517,8 +518,8 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
         lists = await fetchLists();
       }
       if (!stage) selectAll(lists);
+      await fetchQuotes();
     } catch (err) {
-      // Surface the backend's real error body, not axios's generic status message
       setError(err.response?.data?.error || err.message || 'Failed to load merchant data');
     } finally {
       setSyncMsg('');
@@ -526,7 +527,6 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
     }
   };
 
-  // Manual re-pull from HubSpot (e.g. the deal was updated after this editor opened)
   const handleHubspotSync = async () => {
     setLoading(true); setError('');
     setSyncMsg('Syncing from HubSpot…');
@@ -535,6 +535,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
       if (res.data?.error) throw new Error(res.data.error);
       const lists = await fetchLists();
       if (!stage) selectAll(lists);
+      await fetchQuotes();
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'HubSpot sync failed');
     } finally {
@@ -549,20 +550,31 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
     return next;
   });
 
-  const setPrefillField = (key, value) => {
-    setPrefill(prev => { const n = { ...prev }; if (!value) delete n[key]; else n[key] = value; return n; });
+  const handleSelectQuote = async (quoteId) => {
+    setSelectingQuote(true); setError('');
+    try {
+      const res = await base44.functions.invoke('getHubspotQuote', {
+        action: 'select',
+        corporateId,
+        quoteId,
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      setSelectedQuoteId(quoteId);
+    } catch (err) {
+      setError(err.message || 'Failed to select quote');
+    } finally {
+      setSelectingQuote(false);
+    }
   };
 
   const handleSave = async () => {
     setSaving(true); setError('');
     try {
       const payload = {
-        label: label || 'Staged Application',
+        label: label || 'Application',
         includedLocationIds: [...selLocs],
         includedMidIds: [...selMids],
         includedSignerIds: [...selSigners],
-        prefilledData: prefill,
-        // Preserve sent status when editing an already-sent invite; only new/draft → ready
         status: stage?.status === 'sent' ? 'sent' : 'ready',
       };
       const res = stage?.id
@@ -577,8 +589,10 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
   const tabs = [
     { key: 'locations', label: 'Locations', count: selLocs.size, total: locations.length, icon: Store },
     { key: 'signers',   label: 'Signers',   count: selSigners.size, total: signers.length, icon: Users },
-    { key: 'prefill',   label: 'Prefill',   count: Object.keys(prefill).length, icon: FileText },
+    { key: 'quotes',    label: 'Quotes',    count: selectedQuoteId ? 1 : 0, total: quotes.length, icon: FileText },
   ];
+
+  const formatMoney = (n) => (n == null || Number.isNaN(n) ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`);
 
   return (
     <div className="flex flex-col h-full">
@@ -644,13 +658,13 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                           <span className="text-[9px] text-gray-600 flex-shrink-0">{locMids.length} MID{locMids.length !== 1 ? 's' : ''}</span>
                         </CheckRow>
                         {selLocs.has(id) && locMids.length > 0 && (
-                          <div className="ml-8 mt-1 space-y-1">
-                            {locMids.map(c => (
-                              <CheckRow key={c.id} checked={selMids.has(c.id)} onChange={() => toggle(c.id, setSelMids)} color="blue">
-                                <CreditCard className="w-3 h-3 text-blue-400 flex-shrink-0" />
+                          <div className="ml-6 mt-1.5 space-y-1.5">
+                            {locMids.map(mid => (
+                              <CheckRow key={mid.id} checked={selMids.has(mid.id)} onChange={() => toggle(mid.id, setSelMids)} color="blue">
+                                <CreditCard className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-white truncate">{c.dbaName || c.merchantName}</p>
-                                  <p className="text-[10px] text-gray-500">{c.mccCode || 'No MCC'} · {c.applicationStepStatus || 'In Review'}</p>
+                                  <p className="text-xs font-semibold text-white truncate">{mid.dbaName || mid.merchantName}</p>
+                                  <p className="text-[10px] text-gray-500">{mid.mccCode ? `MCC ${mid.mccCode}` : 'No MCC'} · {mid.applicationStepStatus || 'In Review'}</p>
                                 </div>
                               </CheckRow>
                             ))}
@@ -658,60 +672,107 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                         )}
                       </div>
                     );
-                  })
-                }
+                  })}
               </>
             )}
             {activeTab === 'signers' && (
               <>
-                <p className="text-[11px] text-gray-500">Only selected signers will be required to verify their identity.</p>
+                <p className="text-[11px] text-gray-500">Selected signers are included in this application's invite scope.</p>
                 {signers.length === 0
                   ? <p className="text-xs text-gray-600 italic py-4 text-center">No signers found.</p>
                   : signers.map(s => (
                     <CheckRow key={s.id} checked={selSigners.has(s.id)} onChange={() => toggle(s.id, setSelSigners)} color="purple">
                       <Users className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-white">{s.firstName} {s.lastName}</p>
-                        <p className="text-[10px] text-gray-500">{s.signerEmail}</p>
+                        <p className="text-sm font-semibold text-white truncate">{s.firstName} {s.lastName}</p>
+                        <p className="text-[10px] text-gray-500 truncate">{s.signerEmail}</p>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {s.isPrimarySigner && <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">Primary</span>}
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${s.identityStatus === 'Verified' ? 'text-green-400 border-green-500/30 bg-green-500/10' : 'text-gray-500 border-gray-500/20 bg-gray-500/10'}`}>
-                          {s.identityStatus || 'Pending'}
-                        </span>
-                      </div>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${s.identityStatus === 'Verified' ? 'text-green-400 border-green-500/30' : 'text-gray-500 border-gray-500/20'}`}>
+                        {s.identityStatus || 'Pending'}
+                      </span>
                     </CheckRow>
                   ))
                 }
               </>
             )}
-            {activeTab === 'prefill' && (
+            {activeTab === 'quotes' && (
               <>
-                <p className="text-[11px] text-gray-500">These values override the merchant's profile when they open the portal.</p>
-                <div className="space-y-3">
-                  {PREFILL_FIELDS.map(field => (
-                    <div key={field.key}>
-                      <label className={labelCls}>{field.label}</label>
-                      {field.type === 'select' ? (
-                        <select value={prefill[field.key] || ''} onChange={e => setPrefillField(field.key, e.target.value)} className={inputCls} style={{ colorScheme: 'dark' }}>
-                          <option value="">(no override)</option>
-                          {field.options.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                      ) : (
-                        <input type="text" value={prefill[field.key] || ''} onChange={e => setPrefillField(field.key, e.target.value)} placeholder={field.placeholder || ''} className={inputCls} />
-                      )}
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] text-gray-500">
+                    Pick which HubSpot quote appears in the merchant portal for equipment signing.
+                  </p>
+                  <button
+                    onClick={fetchQuotes}
+                    disabled={loadingQuotes || selectingQuote}
+                    className="flex items-center gap-1 text-[10px] font-semibold text-gray-400 hover:text-white border border-white/10 px-2 py-1 rounded-lg disabled:opacity-40"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${loadingQuotes ? 'animate-spin' : ''}`} /> Refresh
+                  </button>
                 </div>
-                {Object.keys(prefill).length > 0 && (
-                  <div className="mt-4 bg-[#111318] border border-white/10 rounded-xl px-4 py-3">
-                    <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Active Overrides</p>
-                    {Object.entries(prefill).map(([k, v]) => (
-                      <div key={k} className="flex items-center justify-between py-0.5">
-                        <span className="text-xs text-gray-400 font-mono">{k}</span>
-                        <span className="text-xs text-amber-400 font-semibold">{String(v)}</span>
-                      </div>
-                    ))}
+                {loadingQuotes ? (
+                  <div className="flex items-center justify-center py-8 gap-2">
+                    <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
+                    <span className="text-xs text-gray-500">Loading quotes…</span>
+                  </div>
+                ) : quotes.length === 0 ? (
+                  <p className="text-xs text-gray-600 italic py-4 text-center">
+                    No quotes associated with this HubSpot deal yet. Create/publish a quote in HubSpot, then Refresh.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {quotes.map(q => {
+                      const selected = String(selectedQuoteId) === String(q.id);
+                      return (
+                        <button
+                          key={q.id}
+                          type="button"
+                          disabled={selectingQuote}
+                          onClick={() => handleSelectQuote(q.id)}
+                          className={`w-full text-left rounded-xl border px-3 py-3 transition-all ${
+                            selected
+                              ? 'border-amber-500/40 bg-amber-500/10'
+                              : 'border-white/10 hover:border-white/20 bg-white/[0.02]'
+                          } disabled:opacity-50`}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 ${
+                              selected ? 'border-amber-400 bg-amber-500' : 'border-white/30'
+                            }`}>
+                              {selected && <Check className="w-2.5 h-2.5 text-black" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-semibold text-white truncate">{q.title}</p>
+                                {selected && (
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                    Selected
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-gray-500 mt-0.5">
+                                {formatMoney(q.amount)}
+                                {q.esignStatus ? ` · ${q.esignStatus}` : ''}
+                                {q.paymentStatus ? ` · Pay ${q.paymentStatus}` : ''}
+                                {q.status ? ` · ${q.status}` : ''}
+                              </p>
+                              {q.quoteUrl ? (
+                                <a
+                                  href={q.quoteUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  onClick={e => e.stopPropagation()}
+                                  className="inline-flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 mt-1"
+                                >
+                                  Open quote <ExternalLink className="w-3 h-3" />
+                                </a>
+                              ) : (
+                                <p className="text-[10px] text-amber-500/80 mt-1">No public signing link yet</p>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </>
@@ -727,7 +788,6 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
     </div>
   );
 }
-
 // ── Send Modal ────────────────────────────────────────────────────────────────
 function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClose }) {
   const [email, setEmail]     = useState(stage?.sentToEmail || stage?.prefilledData?.signerEmail || prefillEmail || '');

@@ -41,13 +41,14 @@ async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merc
 
 // ─── getHubspotQuote ──────────────────────────────────────────────────────────
 // Pulls a HubSpot quote + line items for the post-signing Equipment Order panel.
-// Payment collection stays on HubSpot Payments (quote page / iframe) — this
-// function is read-only display data.
+// Also supports admin quote selection for a deal:
+//   { action: 'list',   corporateId } → all quotes on the deal
+//   { action: 'select', corporateId, quoteId } → pin that quote on profile + locations
+// Default (no action / action 'get'): existing equipment-panel payload.
 //
 // POST /functions/getHubspotQuote
-// Body: { corporateId, locationId? }
-//
 // Auth: merchant JWT must match corporateId; admin workspace session allowed.
+//       action 'select' is ADMIN ONLY.
 
 const QUOTE_PROPS = [
   'hs_quote_link',
@@ -156,12 +157,48 @@ async function backfillQuoteIdOnLocations(base44: any, corporateId: string, quot
   }
 }
 
+async function listDealQuotes(corporateId: string, headers: Record<string, string>) {
+  const deal = await hsGet(
+    `/crm/v3/objects/deals/${corporateId}?properties=dealname&associations=quotes`,
+    headers
+  );
+  const quoteAssocs = deal.associations?.quotes?.results || [];
+  const quotes: any[] = [];
+  for (const qa of quoteAssocs) {
+    try {
+      const q = await hsGet(`/crm/v3/objects/quotes/${qa.id}?properties=${QUOTE_PROPS}`, headers);
+      const qp = q.properties || {};
+      quotes.push({
+        id: String(q.id),
+        title: qp.hs_title || `Quote ${q.id}`,
+        quoteUrl: qp.hs_quote_link || '',
+        esignStatus: qp.hs_quote_esign_status || '',
+        paymentStatus: qp.hs_payment_status || '',
+        paymentEnabled: qp.hs_payment_enabled === 'true' || qp.hs_payment_enabled === true,
+        amount: qp.hs_quote_amount != null ? Number(qp.hs_quote_amount) : null,
+        status: qp.hs_status || '',
+        expirationDate: qp.hs_expiration_date || '',
+        createdAt: qp.hs_createdate || '',
+      });
+    } catch (e: any) {
+      console.warn(`[getHubspotQuote] list quote ${qa.id} failed: ${e.message}`);
+    }
+  }
+  quotes.sort((a, b) => {
+    const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return tb - ta;
+  });
+  return quotes;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json().catch(() => ({}));
     const bodyCorporateId = body.corporateId != null ? String(body.corporateId) : '';
     const locationId = body.locationId != null ? String(body.locationId) : '';
+    const action = body.action || 'get';
 
     const actor = await getPortalActor(req, base44);
     if (!actor) return Response.json({ error: 'Unauthorized' }, { status: 401 });
@@ -184,7 +221,55 @@ Deno.serve(async (req) => {
       Accept: 'application/json',
     };
 
-    // ── Resolve quote id ────────────────────────────────────────────────────
+    // ── list — all quotes associated with this deal ─────────────────────────
+    if (action === 'list') {
+      const quotes = await listDealQuotes(corporateId, headers);
+      const locs = await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }) || [];
+      const selectedQuoteId = String(locs.find((l: any) => l.hubspotQuoteId)?.hubspotQuoteId || '');
+      const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId }) || [];
+      return Response.json({
+        success: true,
+        quotes,
+        selectedQuoteId: selectedQuoteId || null,
+        hubspotQuoteUrl: profiles[0]?.hubspotQuoteUrl || null,
+      });
+    }
+
+    // ── select — admin pins a deal quote onto profile + locations ───────────
+    if (action === 'select') {
+      if (actor.actor !== 'admin') {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      const quoteId = body.quoteId != null ? String(body.quoteId) : '';
+      if (!quoteId) return Response.json({ error: 'quoteId required' }, { status: 400 });
+
+      const quotes = await listDealQuotes(corporateId, headers);
+      const chosen = quotes.find((q) => q.id === quoteId);
+      if (!chosen) {
+        return Response.json({ error: 'Quote is not associated with this HubSpot deal' }, { status: 404 });
+      }
+
+      const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId }) || [];
+      if (!profiles[0]) {
+        return Response.json({ error: 'Merchant profile not found — sync from HubSpot first' }, { status: 404 });
+      }
+      await base44.asServiceRole.entities.MerchantCorporateProfile.update(profiles[0].id, {
+        hubspotQuoteUrl: chosen.quoteUrl || profiles[0].hubspotQuoteUrl || '',
+      });
+      await backfillQuoteIdOnLocations(base44, corporateId, quoteId);
+
+      return Response.json({
+        success: true,
+        quoteId: chosen.id,
+        quoteUrl: chosen.quoteUrl || null,
+        title: chosen.title,
+        esignStatus: chosen.esignStatus || null,
+        amount: chosen.amount,
+      });
+    }
+
+    // ── get (default) — equipment panel payload ─────────────────────────────
+    // Resolve quote id
     let quoteId = '';
     if (locationId) {
       const locs = await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }) || [];
