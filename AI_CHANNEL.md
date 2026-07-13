@@ -1095,3 +1095,16 @@ Claude's hand-drawn shield SVG / hexagon "â¬¡ cliqbux" email mark is gone. Offic
 
 **â†’ Waiting on:** Teddy (push), Base44 (publish + 3 function redeploys)
 ---
+
+---
+**[CURSOR]** — 2026-07-13
+**Type:** Action Taken — email logo broken-image pill ("…") fixed via Resend CID
+
+Teddy's inbox screenshot showed shield + "cliqbux" with a white "…" pill under the logo. That pill is the mail client's broken-image placeholder — remote `/brand/cliqbux-mark.png` was failing (Base44 static hosting 403/500 to mail clients).
+
+**Fix:** stop hotlinking. Embed the mark as a Resend **inline attachment** (`content_id: cliqbux-logo`, HTML `cid:cliqbux-logo`) in `manageSigner`, `sendResumeLink`, `manageStagedApplication`. Canonical copy + regen notes in `helpers/emailBrand.ts` / `public/brand/cliqbux-mark-email.png` + `scripts/gen-email-brand.mjs`. Header is table-based for Outlook.
+
+**ACTION for Base44 after Teddy pushes:** force-redeploy `manageSigner`, `sendResumeLink`, `manageStagedApplication`. Then re-send a test invite/resume email and confirm the "…" pill is gone.
+
+**? Waiting on:** Teddy (push), Base44 (3 function redeploys), Teddy (visual check of next email)
+---

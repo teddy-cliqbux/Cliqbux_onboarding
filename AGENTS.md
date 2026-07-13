@@ -697,6 +697,8 @@ All transactional emails use Resend via `RESEND_API_KEY` env var. From address: 
 
 Do NOT use Base44's built-in `SendEmail` — it only works for registered workspace users, not external merchants.
 
+**Logo in email HTML (2026-07-13):** Do NOT hotlink `/brand/cliqbux-mark.png` (or any app URL). Mail clients often get 403/500 from Base44 static hosting and render a white "…" broken-image pill under the wordmark. Embed the mark as a Resend inline attachment (`content_id: cliqbux-logo`, HTML `cid:cliqbux-logo`). Canonical source: `helpers/emailBrand.ts` + `public/brand/cliqbux-mark-email.png` (regen via `scripts/gen-email-brand.mjs`). Copy the block into each email function — Base44 cannot import helpers.
+
 ---
 
 ## Rate Limiting — Critical Warning
