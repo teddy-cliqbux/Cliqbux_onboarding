@@ -295,8 +295,12 @@ Deno.serve(async (req) => {
     // milestone 1 never unlocked. Newest quote with a live link wins. Also
     // captures the esign status so a sync after signing upgrades the profile
     // to 'Quote Signed' even if the HubSpot quote_signed workflow is missing.
+    // 2026-07-13: keep quote id (for MerchantLocations.hubspotQuoteId) and
+    // payment props (HubSpot Payments — hs_payment_status is read-only).
     let quoteUrl = dealProps.hs_quote_link || '';
     let quoteEsignStatus = '';
+    let resolvedQuoteId = '';
+    let quotePaymentStatus = '';
     const quoteAssocs = deal.associations?.quotes?.results || [];
     const seenQuoteIds = new Set<string>();
     const dealQuotes: any[] = [];
@@ -305,8 +309,9 @@ Deno.serve(async (req) => {
       seenQuoteIds.add(String(qa.id));
       if (dealQuotes.length >= 5) break;
       try {
-        const q = await hsGet(`/crm/v3/objects/quotes/${qa.id}?properties=hs_quote_link,hs_status,hs_quote_esign_status,hs_expiration_date,hs_createdate`, hsHeaders);
-        dealQuotes.push(q.properties || {});
+        const q = await hsGet(`/crm/v3/objects/quotes/${qa.id}?properties=hs_quote_link,hs_status,hs_quote_esign_status,hs_expiration_date,hs_createdate,hs_payment_status,hs_payment_date,hs_payment_enabled,hs_quote_amount`, hsHeaders);
+        // Keep id — properties alone drop it and hubspotQuoteId cannot be persisted
+        dealQuotes.push({ id: String(qa.id), ...(q.properties || {}) });
       } catch (e: any) {
         // A 403 here means the HubSpot private app lacks crm.objects.quotes.read
         (result.quoteErrors = result.quoteErrors || []).push(`quote ${qa.id}: ${e.message}`);
@@ -318,9 +323,13 @@ Deno.serve(async (req) => {
     if (linkedQuotes.length) {
       quoteUrl = linkedQuotes[0].hs_quote_link;
       quoteEsignStatus = linkedQuotes[0].hs_quote_esign_status || '';
+      resolvedQuoteId = String(linkedQuotes[0].id || '');
+      quotePaymentStatus = linkedQuotes[0].hs_payment_status || '';
     }
     result.quoteUrl = quoteUrl || null;
     result.quoteEsignStatus = quoteEsignStatus || null;
+    result.quoteId = resolvedQuoteId || null;
+    result.quotePaymentStatus = quotePaymentStatus || null;
 
     // ── 4. Upsert MerchantCorporateProfile ────────────────────────────────────
     const industryClass = mapHubspotIndustry(pc.industry || '');
@@ -402,6 +411,10 @@ Deno.serve(async (req) => {
         industryClass:   industryClass || existing.industryClass,
         mccCode:         mccCode || existing.mccCode,
       };
+      // HubSpot Payments: stamp equipmentPaidAt once when quote is PAID (never clears)
+      if (quotePaymentStatus === 'PAID' && !existing.equipmentPaidAt) {
+        safeUpdate.equipmentPaidAt = new Date().toISOString();
+      }
       if (force || !existing.taxId)            safeUpdate.taxId            = profileData.taxId;
       if (force || !existing.ownershipType)    safeUpdate.ownershipType    = profileData.ownershipType;
       if (force || !existing.signerEmail)      safeUpdate.signerEmail      = profileData.signerEmail;
@@ -420,6 +433,9 @@ Deno.serve(async (req) => {
       profileId = existing.id;
       result.profileAction = 'updated';
     } else {
+      if (quotePaymentStatus === 'PAID') {
+        profileData.equipmentPaidAt = new Date().toISOString();
+      }
       const created = await base44.asServiceRole.entities.MerchantCorporateProfile.create(profileData);
       profileId = created.id;
       result.profileAction = 'created';
@@ -532,6 +548,7 @@ Deno.serve(async (req) => {
             businessState:   existingLocs[0].businessState  || state,
             businessZip:     existingLocs[0].businessZip    || zip,
             businessAddress: existingLocs[0].businessAddress || [street, city, state, zip].filter(Boolean).join(', '),
+            ...(resolvedQuoteId ? { hubspotQuoteId: resolvedQuoteId } : {}),
           });
           locationId = existingLocs[0].id;
           result.locations.push({ dbaName, action: 'updated', locationId });
@@ -546,6 +563,7 @@ Deno.serve(async (req) => {
             businessZip:     zip,
             businessAddress: [street, city, state, zip].filter(Boolean).join(', '),
             applicationStepStatus: 'In Review',
+            ...(resolvedQuoteId ? { hubspotQuoteId: resolvedQuoteId } : {}),
           });
           locationId = newLoc.id;
           result.locations.push({ dbaName, action: 'created', locationId });
@@ -587,6 +605,23 @@ Deno.serve(async (req) => {
       } catch (locErr: any) {
         console.error(`[syncFromHubspot] Error processing location ${assoc.id}:`, locErr.message);
         result.locations.push({ id: assoc.id, action: 'error', error: locErr.message });
+      }
+    }
+
+    // Backfill hubspotQuoteId on any location for this deal that the loop missed
+    // (e.g. merchant-added locations not mirrored as HubSpot child companies).
+    if (resolvedQuoteId) {
+      try {
+        const allLocs = await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }) || [];
+        let backfilled = 0;
+        for (const loc of allLocs) {
+          if (String(loc.hubspotQuoteId || '') === resolvedQuoteId) continue;
+          await base44.asServiceRole.entities.MerchantLocations.update(loc.id, { hubspotQuoteId: resolvedQuoteId });
+          backfilled++;
+        }
+        if (backfilled) result.quoteIdBackfilled = backfilled;
+      } catch (e: any) {
+        console.warn(`[syncFromHubspot] hubspotQuoteId backfill failed: ${e.message}`);
       }
     }
 

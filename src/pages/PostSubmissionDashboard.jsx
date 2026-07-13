@@ -6,6 +6,7 @@ import confetti from 'canvas-confetti';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
 import UnderwritingTracker from '@/components/onboarding/UnderwritingTracker';
 import EquipmentShippingModal from '@/components/onboarding/EquipmentShippingModal';
+import EquipmentOrderPanel from '@/components/onboarding/EquipmentOrderPanel';
 import InventoryUpload from '@/components/onboarding/InventoryUpload';
 import LegacyPOSBridge from '@/components/onboarding/LegacyPOSBridge';
 import LocationStatusTable from '@/components/onboarding/LocationStatusTable';
@@ -168,31 +169,10 @@ export default function PostSubmissionDashboard() {
           <div>
             <h2 className="text-cb-caption uppercase text-gray-400 mb-4">Complete Your Setup</h2>
             <div className="flex flex-col gap-4">
-              {/* Equipment & Services Quote — per the 2026-07-10 flow reorder, the
-                  quote is signed HERE, after the merchant application is submitted.
-                  Embedding works because the quote serves from www.cliqbux.com
-                  (HubSpot custom domain) with no X-Frame-Options/frame-ancestors —
-                  verified 2026-07-10. HubSpot's own hs-sites URLs are NOT frameable. */}
-              {profile.hubspotQuoteUrl && (
-                <div className="bg-white rounded-cb border border-gray-100 p-5">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="text-sm font-bold text-gray-900">Review &amp; Sign Your Equipment Quote</h3>
-                    <a href={profile.hubspotQuoteUrl} target="_blank" rel="noopener noreferrer"
-                      className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent hover:opacity-90 underline">
-                      Open in new tab
-                    </a>
-                  </div>
-                  <p className="text-xs text-gray-500 mb-3">
-                    Your equipment and services order. Review the line items and sign below to finalize.
-                  </p>
-                  <iframe
-                    src={profile.hubspotQuoteUrl}
-                    title="Equipment & Services Quote"
-                    className="w-full rounded-lg border border-gray-200 bg-white"
-                    style={{ height: 900 }}
-                  />
-                </div>
-              )}
+              {/* Equipment & Services — hybrid: native invoice (API) + HubSpot
+                  iframe for e-sign / HubSpot Payments when quote is on
+                  www.cliqbux.com. See EquipmentOrderPanel. */}
+              <EquipmentOrderPanel corporateId={profile.corporateId} />
 
               {/* A: Equipment Shipping */}
               <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-5">

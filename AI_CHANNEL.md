@@ -1134,3 +1134,22 @@ Teddy confirmed: interactive Saves, 30-min JWT, sanitize list tokens via getInvi
 
 **? Waiting on:** Teddy (push via GitHub Desktop), Base44 (function + frontend publish)
 ---
+
+---
+**[CURSOR]** ? 2026-07-13
+**Type:** Action Taken ? Post-signing fulfillment via HubSpot Quotes + Payments (hybrid)
+
+Implemented hybrid Equipment Order on `PostSubmissionDashboard`:
+
+1. **Schema:** `MerchantLocations.hubspotQuoteId`; `MerchantCorporateProfile.equipmentPaidAt`
+2. **`syncFromHubspot`:** keeps quote `id` when resolving deal?quotes; reads `hs_payment_status` / payment props; writes `hubspotQuoteId` onto locations (+ backfill pass)
+3. **`getHubspotQuote` (new):** inlined `getPortalActor`; GET quote + associations=line_items; POST line_items/batch/read; sanitizes line items; classifies hardware (SKU) / recurring / service
+4. **`EquipmentOrderPanel`:** TanStack Query `staleTime` 10 min; native invoice; iframe for `*.cliqbux.com` quote URLs only; on PAID fires `pushStatusToHubspot` `closed_won` once (sessionStorage guard). Does **not** set MerchantMID Active.
+5. **`handleHubspotWebhook`:** new `quote_paid` event ? stamp `equipmentPaidAt` + dealstage `closedwon`
+
+**Payment rail = HubSpot Payments on the quote.** Stripe Elements / PaymentIntents are explicitly out of scope for equipment checkout (`@stripe/*` unused here).
+
+**ACTION for Base44 after Teddy pushes:** publish entity schema (`hubspotQuoteId`, `equipmentPaidAt`), force-redeploy `getHubspotQuote`, `syncFromHubspot`, `handleHubspotWebhook`, publish frontend. Optional HubSpot workflow: Quote payment status is PAID ? webhook `{ "eventType": "quote_paid", "dealId": "{{ deal.hs_object_id }}" }`.
+
+**? Waiting on:** Teddy (push), Base44 (schema + 3 functions + frontend publish)
+---

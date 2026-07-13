@@ -164,6 +164,10 @@
       "type": "string",
       "description": "Percentage of sales that are phone/mail order (MOTO)",
       "default": "0"
+    },
+    "hubspotQuoteId": {
+      "type": "string",
+      "description": "HubSpot Quote object ID for this location's equipment/services order. Nullable until sync resolves a deal-associated quote. Same quote id is typically written to all locations for a corporateId (deal-scoped quotes)."
     }
   },
   "required": [

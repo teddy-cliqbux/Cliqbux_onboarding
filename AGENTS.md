@@ -311,9 +311,10 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 | `manageMSPTemplate` | Reads/fills MSPWare templates. Actions: `read`, `fill_icpls`, `fill_cd`, `create_cd`. Template #6 = ICPLS, Template #154 = Cash Discount (pricing_method: `"CLEAR"`). |
 | `uploadSignerIDsToMSP` | Uploads signer ID document files to all pending MSPWare applications for a corporateId. Call after signers upload their IDs via the portal. |
 | `getMSPFormStatus` | Merchant-facing form status check (no admin required). Returns completion %, errors, and raw form fields for a given `mspApplicationNo`. |
+| `getHubspotQuote` | Portal-auth'd HubSpot quote + line items for EquipmentOrderPanel. Read-only; payment stays on HubSpot Payments / quote iframe. |
 
 ### Other active functions
-`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `handleHubspotWebhook`, `syncFromHubspot`, `pushStatusToHubspot`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`
+`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `handleHubspotWebhook`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`
 
 ### Debug/admin-only functions (do not call from merchant portal)
 `checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`, `cleanupTestHubspot`
@@ -343,7 +344,7 @@ When a new `MerchantMID` is created via `manageMerchantID` (action="add"), the f
 | `MSP_SALESPERSON_ID` | `76764` |
 | `MSP_SUBMIT_ENABLED` | `true` to actually submit to Elavon; omit for safe draft-only mode |
 | `ELAVON_USERNAME` / `ELAVON_PASSWORD` | Only used by `getDocuments`/`listDocuments` (direct Elavon doc API) |
-| `HUBSPOT_API_KEY` | HubSpot Private App token — used by `createHubspotDeal`, `pushStatusToHubspot`, `handleHubspotWebhook`, `syncFromHubspot`, `cleanupTestHubspot` |
+| `HUBSPOT_API_KEY` | HubSpot Private App token — used by `createHubspotDeal`, `pushStatusToHubspot`, `handleHubspotWebhook`, `syncFromHubspot`, `getHubspotQuote`, `cleanupTestHubspot` |
 
 **Production credentials live in Base44 env vars only — never in code or committed files.**
 
@@ -362,8 +363,8 @@ Parent Company (Corporation)  →  MerchantCorporateProfile
   └─ Child Company (Brand)    →  (brand grouping — no entity yet)
        └─ Child Company (Loc) →  MerchantLocations
 Deal (on Location company)    →  corporateId = dealId (the link)
-Quote (on Deal)               →  hubspotQuoteId on MerchantLocations (planned)
-Line Items (on Quote)         →  fetched live via HubSpot API
+Quote (on Deal)               →  hubspotQuoteId on MerchantLocations (+ hubspotQuoteUrl on profile)
+Line Items (on Quote)         →  getHubspotQuote (live HubSpot API, TanStack 10-min cache in UI)
 ```
 
 ### 3-tier company hierarchy
@@ -392,9 +393,15 @@ Quote-level: `hs_quote_link`, `hs_quote_esign_status`, `hs_esign_num_signers_com
 
 **To pull line items:** `GET /crm/v3/objects/quotes/{quoteId}?associations=line_items` then `POST /crm/v3/objects/line_items/batch/read`
 
-### Post-signing dashboard (planned)
-After MSP signing, `PostSubmissionDashboard` gains an equipment order panel pulling HubSpot quote line items natively (not via iframe — HubSpot blocks iframing via X-Frame-Options).
-Needs: `hubspotQuoteId` field on `MerchantLocations` + `getHubspotQuote` backend function.
+### Post-signing dashboard (hybrid quote UX — shipped 2026-07-13)
+After application submit, `PostSubmissionDashboard` shows underwriting + `EquipmentOrderPanel`:
+1. **Native invoice** via `getHubspotQuote` (portal-auth'd) — hardware (SKU) vs recurring SaaS vs one-time services
+2. **HubSpot iframe** for e-sign + **HubSpot Payments** when `quoteUrl` is on `*.cliqbux.com` (frameable); otherwise new-tab CTA only
+3. On `hs_payment_status === PAID`: collapse iframe, stamp `equipmentPaidAt`, fire `pushStatusToHubspot` milestone `closed_won` (also `handleHubspotWebhook` event `quote_paid`)
+
+**Do not** set `MerchantMID.applicationStepStatus` to Active on quote payment — that means Elavon MID received. Payment ≠ processor go-live.
+
+**Do not** build Stripe Elements for equipment checkout — Cliqbux uses HubSpot Payments on the quote. `@stripe/*` client libs remain unused for this flow.
 
 ---
 
@@ -776,8 +783,8 @@ Parent Company (Corporation)  →  MerchantCorporateProfile
   └─ Child Company (Brand)    →  (brand grouping field on Locations — no entity yet)
        └─ Child Company (Loc) →  MerchantLocations
 Deal (on Location company)    →  corporateId = dealId (the link between systems)
-Quote (on Deal)               →  hubspotQuoteId on MerchantLocations (planned)
-Line Items (on Quote)         →  fetched live via HubSpot API
+Quote (on Deal)               →  hubspotQuoteId on MerchantLocations (+ hubspotQuoteUrl on profile)
+Line Items (on Quote)         →  getHubspotQuote (live HubSpot API, TanStack 10-min cache in UI)
 ```
 
 ### 3-tier company hierarchy
@@ -848,21 +855,23 @@ GET /crm/v3/objects/quotes/{quoteId}?associations=line_items
 POST /crm/v3/objects/line_items/batch/read  (batch-fetch the line item details)
 ```
 
-### Post-signing dashboard — planned architecture
-After the merchant completes portal signing, the `PostSubmissionDashboard` should show:
+### Post-signing dashboard — hybrid architecture (shipped 2026-07-13)
+After the merchant completes portal signing, `PostSubmissionDashboard` shows:
 1. MID/underwriting status (existing)
-2. Equipment & services order panel — pulls HubSpot quote line items live
+2. `EquipmentOrderPanel` — native HubSpot line items via `getHubspotQuote` + conditional quote iframe for HubSpot Payments / e-sign
 
-**What's needed to implement:**
-- `hubspotQuoteId` field on `MerchantLocations` (store the numeric quote ID, e.g., `305636118240`)
-- `getHubspotQuote` backend function: takes `corporateId`, looks up `MerchantLocations.hubspotQuoteId`, calls HubSpot API for line items + esign status
-- `HUBSPOT_API_KEY` is already configured as a Base44 env var (used by `createHubspotDeal` and `pushStatusToHubspot`)
-- Dashboard panel renders line items natively in Cliqbux UI — not as an iframe (HubSpot blocks iframing via X-Frame-Options)
+**Implemented:**
+- `hubspotQuoteId` on `MerchantLocations` (synced from deal→quote associations)
+- `equipmentPaidAt` on `MerchantCorporateProfile` (set when `hs_payment_status` is PAID)
+- `getHubspotQuote` — portal `getPortalActor` gate; GET quote + batch/read line items
+- Payment rail = **HubSpot Payments** on the quote page — not Stripe Elements
+- `handleHubspotWebhook` event `quote_paid` → stamps `equipmentPaidAt` + dealstage `closedwon`
+- Do **not** mark MerchantMID Active on quote payment
 
 ### Environment variables (HubSpot)
 | Var | Purpose |
 |---|---|
-| `HUBSPOT_API_KEY` | HubSpot Private App token — already set. Used by `createHubspotDeal`, `pushStatusToHubspot`, `handleHubspotWebhook`, `syncFromHubspot`. |
+| `HUBSPOT_API_KEY` | HubSpot Private App token — already set. Used by `createHubspotDeal`, `pushStatusToHubspot`, `handleHubspotWebhook`, `syncFromHubspot`, `getHubspotQuote`. |
 
 ---
 
@@ -922,3 +931,6 @@ A formal token layer now lives in `src/styles/tokens.css` (imported first in `in
 **Still optional / not blocking:** ~~full `cb-*` restyle of remaining post-dashboard widgets~~ **DONE 2026-07-13 (Prompt 5/6):** `UnderwritingTracker`, `LocationStatusTable` (status → dot+caption), `InventoryUpload`, `LegacyPOSBridge`, `FormCard`, quote "Open in new tab" link; plus entry/pricing: `PortalEntry`, `SelfServePricing`, `MobilePricing`. Cash Discount remains the only self-serve card; pricing keys / createHubspotDeal payloads unchanged. Quote iframe card stays white for document readability.
 
 All merchant-facing onboarding surfaces (steps + ProgressTracker + post-submit dashboard chrome + entry/pricing) are now on the token system.
+
+### Post-signing Equipment Order (2026-07-13)
+`EquipmentOrderPanel` on `PostSubmissionDashboard`: native invoice from `getHubspotQuote` (TanStack `staleTime` 10 min) + HubSpot custom-domain iframe for sign/pay. HubSpot Payments only — no Stripe checkout in this flow.

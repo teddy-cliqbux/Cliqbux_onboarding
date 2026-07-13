@@ -14,6 +14,10 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //   quote_signed     — Merchant signed the Cliqbux equipment quote.
 //                      Updates applicationStatus → 'Quote Signed'.
 //
+//   quote_paid       — HubSpot Payments confirmed on the quote (hs_payment_status PAID).
+//                      Stamps equipmentPaidAt; advances HubSpot deal to closedwon.
+//                      Does NOT set MerchantMID to Active (Elavon underwriting is separate).
+//
 //   (default)        — Legacy upsert: creates/updates profile from explicit fields.
 //                      Used by older HubSpot workflow automations.
 //
@@ -223,6 +227,68 @@ Deno.serve(async (req) => {
       });
 
       return Response.json({ success: true, action: 'status_updated', status: 'Quote Signed' });
+    }
+
+    // ── Event: quote_paid ─────────────────────────────────────────────────────
+    // HubSpot workflow: Quote payment status is PAID → webhook with dealId.
+    // Commerce fulfillment only — never mutates MerchantMID.applicationStepStatus.
+    if (eventType === 'quote_paid') {
+      const { dealId } = payload;
+      if (!dealId) return Response.json({ error: 'quote_paid requires dealId' }, { status: 400 });
+
+      const existing = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId: dealId });
+      if (!existing?.length) return Response.json({ error: 'Corporate profile not found' }, { status: 404 });
+
+      const paidAt = existing[0].equipmentPaidAt || new Date().toISOString();
+      if (!existing[0].equipmentPaidAt) {
+        await base44.asServiceRole.entities.MerchantCorporateProfile.update(existing[0].id, {
+          equipmentPaidAt: paidAt,
+        });
+      }
+
+      let hubspotSynced = false;
+      let hubspotError = null;
+      const hsKey = Deno.env.get('HUBSPOT_API_KEY');
+      if (hsKey) {
+        try {
+          const res = await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}`, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${hsKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              properties: {
+                dealstage: 'closedwon',
+                closedate: new Date().toISOString().split('T')[0],
+              },
+            }),
+          });
+          if (res.ok) {
+            hubspotSynced = true;
+          } else if (res.status === 404) {
+            hubspotSynced = false;
+            hubspotError = 'Deal not found in HubSpot';
+          } else {
+            const err = await res.text();
+            hubspotError = `HubSpot PATCH ${res.status}: ${err.slice(0, 200)}`;
+          }
+        } catch (e: any) {
+          hubspotError = e.message;
+        }
+      } else {
+        hubspotError = 'HUBSPOT_API_KEY not set';
+      }
+
+      return Response.json({
+        success: true,
+        action: 'quote_paid',
+        corporateId: dealId,
+        equipmentPaidAt: paidAt,
+        hubspotSynced,
+        hubspotError,
+        note: 'MerchantMID statuses unchanged — payment ≠ Elavon Active',
+      });
     }
 
     // ── Legacy default: explicit-field upsert ─────────────────────────────────

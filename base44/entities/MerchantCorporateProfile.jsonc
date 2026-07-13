@@ -45,6 +45,10 @@
     "hubspotQuoteUrl": {
       "type": "string"
     },
+    "equipmentPaidAt": {
+      "type": "string",
+      "description": "ISO timestamp when HubSpot quote hs_payment_status first became PAID. Commerce fulfillment only \u2014 does NOT mean Elavon MID is Active."
+    },
     "taxId": {
       "type": "string"
     },
