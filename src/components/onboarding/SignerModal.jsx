@@ -13,9 +13,9 @@ const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')
 const currentYear = new Date().getFullYear();
 const YEARS = Array.from({ length: 80 }, (_, i) => String(currentYear - 18 - i));
 
-const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
+const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const selectCls = `${inputCls}`;
-const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
+const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 
 function useAddressAutocomplete(onParsed) {
   const acRef = useRef(null);
@@ -95,40 +95,38 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
 
   const modal = (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-lg max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
+        <div className="flex items-start justify-between px-6 py-5 border-b border-cb-border">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/15 flex items-center justify-center flex-shrink-0">
-              <UserPlus className="w-4 h-4 text-blue-400" />
-            </div>
+            <UserPlus className="w-4 h-4 text-cb-accent flex-shrink-0" />
             <div>
-              <h3 className="font-bold text-white text-base">Add Another Owner or Signer</h3>
-              <p className="text-xs text-gray-500 mt-0.5">For someone other than yourself — all data is encrypted and used only for underwriting</p>
+              <h3 className="font-display text-cb-title text-white">Add Another Owner or Signer</h3>
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-0.5">For someone other than yourself — all data is encrypted and used only for underwriting</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white p-1.5 rounded-lg transition-colors">
+          <button onClick={onClose} className="text-gray-500 hover:text-white p-1.5 rounded-cb transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="px-6 py-5">
-          {/* Mode toggle */}
-          <div className="flex rounded-xl bg-white/5 border border-white/10 p-1 mb-6 gap-1">
+          {/* Mode toggle — segmented control */}
+          <div className="flex rounded-cb bg-cb-bg border border-cb-border p-1 mb-6 gap-1">
             <button
               type="button"
               onClick={() => setMode('now')}
-              className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold py-2.5 rounded-lg transition-all ${mode === 'now' ? 'bg-amber-500 text-black shadow' : 'text-gray-400 hover:text-white'}`}
+              className={`flex-1 flex items-center justify-center gap-2 text-cb-body font-medium py-2.5 rounded-cb transition-colors ${mode === 'now' ? 'bg-cb-accent-muted text-cb-accent' : 'text-gray-400 hover:text-white'}`}
             >
               <ShieldCheck className="w-3.5 h-3.5" /> Verify Now
             </button>
             <button
               type="button"
               onClick={() => setMode('invite')}
-              className={`flex-1 flex items-center justify-center gap-2 text-xs font-semibold py-2.5 rounded-lg transition-all ${mode === 'invite' ? 'bg-amber-500 text-black shadow' : 'text-gray-400 hover:text-white'}`}
+              className={`flex-1 flex items-center justify-center gap-2 text-cb-body font-medium py-2.5 rounded-cb transition-colors ${mode === 'invite' ? 'bg-cb-accent-muted text-cb-accent' : 'text-gray-400 hover:text-white'}`}
             >
               <Mail className="w-3.5 h-3.5" /> Send Email Invite
             </button>
@@ -158,8 +156,8 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
             {/* Self-verification fields */}
             {mode === 'now' && (
               <>
-                <div className="border-t border-white/8 pt-4">
-                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Identity Details</p>
+                <div className="border-t border-cb-border pt-4">
+                  <p className="text-cb-caption uppercase text-gray-500 mb-4">Identity Details</p>
                 </div>
                 <div>
                   <label className={labelCls}>Date of Birth *</label>
@@ -185,9 +183,9 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
                 <div>
                   <label className={labelCls}>Home Address *</label>
                   {addressVerified ? (
-                    <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-3.5 py-2.5">
-                      <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
-                      <span className="text-sm text-green-300 flex-1 truncate">{addressDisplay}</span>
+                    <div className="flex items-center gap-2.5 bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5">
+                      <CheckCircle2 className="w-4 h-4 text-cb-success flex-shrink-0" />
+                      <span className="text-cb-body text-gray-300 flex-1 truncate">{addressDisplay}</span>
                       <button type="button" onClick={() => { setAddressVerified(false); setAddressDisplay(''); setForm(p => ({ ...p, homeStreet: '', homeCity: '', homeState: '', homeZip: '' })); }}
                         className="text-gray-500 hover:text-white">
                         <X className="w-3.5 h-3.5" />
@@ -216,28 +214,28 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
 
             {/* Invite mode notice */}
             {mode === 'invite' && (
-              <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-3 flex items-start gap-3">
-                <Mail className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-blue-300">
-                  A secure, tokenized verification link will be emailed to <strong className="text-white">{form.signerEmail || 'this signer'}</strong>. They will complete their own identity verification independently.
+              <div className="bg-cb-bg border border-cb-border border-l-2 border-l-cb-accent rounded-cb px-4 py-3 flex items-start gap-3">
+                <Mail className="w-4 h-4 text-cb-accent flex-shrink-0 mt-0.5" />
+                <p className="text-cb-body text-gray-400">
+                  A secure, tokenized verification link will be emailed to <strong className="text-white font-medium">{form.signerEmail || 'this signer'}</strong>. They will complete their own identity verification independently.
                 </p>
               </div>
             )}
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300">{error}</div>
+              <div className="bg-cb-bg border border-cb-border border-l-2 border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-cb-danger">{error}</div>
             )}
 
             <div className="flex gap-3 pt-1">
               <button
                 type="submit"
                 disabled={saving}
-                className="flex-1 flex items-center justify-center gap-2 text-sm font-bold text-black bg-amber-500 hover:bg-amber-400 disabled:bg-gray-600 disabled:text-gray-400 px-5 py-3 rounded-xl transition-all"
+                className="flex-1 flex items-center justify-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 px-5 py-3 rounded-cb transition-all"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : mode === 'invite' ? <Send className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
                 {saving ? 'Saving...' : mode === 'invite' ? 'Send KYC Invite' : 'Add & Verify Signer'}
               </button>
-              <button type="button" onClick={onClose} className="px-4 py-3 text-sm font-medium text-gray-400 border border-white/15 hover:text-white hover:border-white/30 rounded-xl transition-colors">
+              <button type="button" onClick={onClose} className="px-4 py-3 text-cb-body font-medium text-gray-400 border border-cb-border hover:text-white hover:border-cb-border-strong rounded-cb transition-colors">
                 Cancel
               </button>
             </div>

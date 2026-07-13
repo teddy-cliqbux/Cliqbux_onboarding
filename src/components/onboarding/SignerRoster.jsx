@@ -1,25 +1,21 @@
 import { useState, useEffect } from 'react';
-import { UserPlus, CheckCircle2, AlertCircle, Clock, Mail, Trash2, Send, Loader2, Users, Pencil, ShieldCheck } from 'lucide-react';
+import { UserPlus, Trash2, Send, Loader2, Pencil, ShieldCheck } from 'lucide-react';
 import SignerModal from './SignerModal';
 import SignerDetailsModal from './SignerDetailsModal';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 function StatusBadge({ status }) {
-  const map = {
-    'Verified':            'bg-green-500/15 text-green-300 border-green-500/30',
-    'Sent':                'bg-blue-500/15 text-blue-300 border-blue-500/30',
-    'Pending Invitation':  'bg-white/[0.06] text-gray-400 border-white/10',
-    'Action Required':     'bg-red-500/15 text-red-300 border-red-500/30',
-  };
-  const icons = {
-    'Verified':           <CheckCircle2 className="w-3 h-3" />,
-    'Sent':               <Mail className="w-3 h-3" />,
-    'Pending Invitation': <Clock className="w-3 h-3" />,
-    'Action Required':    <AlertCircle className="w-3 h-3" />,
+  // Dot + caption — success/error carried by dot color, not a tinted pill.
+  const dot = {
+    'Verified':            'bg-cb-success',
+    'Sent':                'bg-cb-accent',
+    'Pending Invitation':  'bg-cb-border-strong',
+    'Action Required':     'bg-cb-danger',
   };
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full border whitespace-nowrap ${map[status] || map['Pending Invitation']}`}>
-      {icons[status]} {status}
+    <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot[status] || dot['Pending Invitation']}`} />
+      {status}
     </span>
   );
 }
@@ -138,52 +134,47 @@ export default function SignerRoster({ profile, onValidChange }) {
   const soleSignerVerified = isSoleSigner && signers[0]?.identityStatus === 'Verified';
 
   return (
-    <div className="border border-white/10 rounded-xl overflow-hidden">
+    <div className="border border-cb-border rounded-cb overflow-hidden">
       {/* Panel header */}
-      <div className="bg-white/[0.05] border-b border-white/10 px-5 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-blue-500/15 flex items-center justify-center">
-            <Users className="w-4 h-4 text-blue-400" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-white">
-              {isSoleSigner ? (soleSignerVerified ? 'Your Identity' : 'Verify Your Identity') : 'Beneficial Owners & Signers'}
-            </p>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {isSoleSigner
-                ? (soleSignerVerified
-                    ? "You're verified as the sole owner and signer on this application."
-                    : "You're completing this application yourself as the sole owner — confirm a few details below to continue.")
-                : 'Owners with ≥25% stake must verify or receive an invitation'}
-            </p>
-          </div>
+      <div className="bg-cb-surface-raised border-b border-cb-border px-5 py-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-cb-body font-semibold text-white">
+            {isSoleSigner ? (soleSignerVerified ? 'Your Identity' : 'Verify Your Identity') : 'Beneficial Owners & Signers'}
+          </p>
+          <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-0.5">
+            {isSoleSigner
+              ? (soleSignerVerified
+                  ? "You're verified as the sole owner and signer on this application."
+                  : "You're completing this application yourself as the sole owner — confirm a few details below to continue.")
+              : 'Owners with ≥25% stake must verify or receive an invitation'}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-shrink-0">
           {signers.length > 0 && (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-white/10 text-gray-300 border-white/10">
+            <span className="text-cb-caption text-gray-400">
               {totalPct}% ownership
             </span>
           )}
           {allRequiredCleared ? (
-            <span className="text-xs font-semibold text-green-300 bg-green-500/15 border border-green-500/30 px-2.5 py-1 rounded-full flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Ready to Submit
+            <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-cb-success flex-shrink-0" /> Ready to submit
             </span>
           ) : requiredSigners.length > 0 ? (
-            <span className="text-xs font-semibold text-orange-300 bg-orange-500/15 border border-orange-500/30 px-2.5 py-1 rounded-full">
-              Verification Needed
+            <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-accent whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-cb-accent flex-shrink-0" /> Verification needed
             </span>
           ) : null}
         </div>
       </div>
 
       {/* Roster rows */}
-      <div className="divide-y divide-white/10">
+      <div className="divide-y divide-cb-border">
         {loading ? (
-          <div className="flex items-center justify-center py-10 gap-2 text-gray-500 text-sm">
+          <div className="flex items-center justify-center py-10 gap-2 text-gray-500 text-cb-body">
             <Loader2 className="w-4 h-4 animate-spin" /> Loading signers...
           </div>
         ) : signers.length === 0 ? (
-          <div className="py-10 text-center text-gray-500 text-sm">
+          <div className="py-10 text-center text-gray-500 text-cb-body">
             No signers added yet — add the primary beneficial owner below.
           </div>
         ) : (
@@ -193,34 +184,34 @@ export default function SignerRoster({ profile, onValidChange }) {
             const inviteBtnLabel = signer.identityStatus === 'Sent' ? 'Resend' : 'Send Invite';
 
             return (
-              <div key={signer.id} className="px-5 py-3.5">
+              <div key={signer.id} className="px-5 py-4">
                 {/* Row main */}
                 <div className="flex items-center gap-4">
                   {/* Avatar */}
-                  <div className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0 text-sm font-bold text-gray-400">
+                  <div className="w-9 h-9 rounded-full bg-cb-bg border border-cb-border flex items-center justify-center flex-shrink-0 text-cb-caption font-semibold text-gray-400">
                     {signer.firstName?.[0]}{signer.lastName?.[0]}
                   </div>
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-semibold text-white">{signer.firstName} {signer.lastName}</p>
+                      <p className="text-cb-body font-semibold text-white">{signer.firstName} {signer.lastName}</p>
                       {isPrimary && (
-                        <span className="text-xs bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-semibold">Primary</span>
+                        <span className="text-cb-caption normal-case tracking-normal text-gray-500 border border-cb-border px-1.5 py-0.5 rounded">Primary</span>
                       )}
                     </div>
-                    <p className="text-xs text-gray-500 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
+                    <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
                   </div>
                   {/* Status badge — hidden for unverified primary (verifies via the modal instead) */}
                   {!(isPrimary && signer.identityStatus === 'Pending Invitation') && (
                     <StatusBadge status={signer.identityStatus} />
                   )}
                   {/* Actions */}
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     {!isPrimary && needsInvite && (
                       <button
                         onClick={() => handleResendInvite(signer)}
                         disabled={resendingId === signer.id}
-                        className="text-xs text-blue-300 hover:text-blue-200 border border-blue-500/30 bg-blue-500/15 hover:bg-blue-500/25 px-2.5 py-1.5 rounded-lg font-semibold transition-colors flex items-center gap-1 disabled:opacity-50"
+                        className="text-cb-body text-gray-300 hover:text-white border border-cb-border hover:border-cb-border-strong px-2.5 py-1.5 rounded-cb font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50"
                         title="Send verification invite"
                       >
                         {resendingId === signer.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
@@ -229,13 +220,13 @@ export default function SignerRoster({ profile, onValidChange }) {
                     )}
                     {/* One modal for everything — contact info + identity verification */}
                     <button onClick={() => setDetailSigner(signer)}
-                      className="text-xs text-gray-300 hover:text-white font-semibold px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors whitespace-nowrap"
+                      className="text-cb-body text-gray-400 hover:text-white font-medium px-2 py-1.5 rounded-cb flex items-center gap-1.5 transition-colors whitespace-nowrap"
                       title="Edit details">
                       <Pencil className="w-3.5 h-3.5" /> Edit
                     </button>
                     <button
                       onClick={() => handleDelete(signer.id)}
-                      className="text-gray-300 hover:text-red-500 p-1.5 rounded-lg transition-colors"
+                      className="text-gray-500 hover:text-cb-danger p-1.5 rounded-cb transition-colors"
                       title="Remove signer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -246,7 +237,7 @@ export default function SignerRoster({ profile, onValidChange }) {
                     can't be missed in favor of "+ Add Another Owner" (2026-07-07 lesson) */}
                 {isPrimary && signer.identityStatus !== 'Verified' && (
                   <button onClick={() => setDetailSigner(signer)}
-                    className="mt-3 w-full flex items-center justify-center gap-2 text-sm font-bold text-black bg-amber-500 hover:bg-amber-400 py-3 rounded-xl transition-all">
+                    className="mt-4 w-full flex items-center justify-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 py-3 rounded-cb transition-colors">
                     <ShieldCheck className="w-4 h-4" /> Complete Identity Verification
                   </button>
                 )}
@@ -260,11 +251,11 @@ export default function SignerRoster({ profile, onValidChange }) {
           verified yet, so it doesn't visually compete with the verify action above
           and get mistaken for "verify myself". Restored to a normal-weight button
           once verified or once there's already more than one signer. 2026-07-07. */}
-      <div className="px-5 py-4 border-t border-white/10">
+      <div className="px-5 py-4 border-t border-cb-border">
         {isSoleSigner && !soleSignerVerified ? (
           <button
             onClick={() => setShowModal(true)}
-            className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-gray-500 hover:text-gray-300 py-1.5 transition-colors"
+            className="w-full flex items-center justify-center gap-1.5 text-cb-body font-normal text-gray-500 hover:text-white py-1.5 transition-colors"
           >
             <UserPlus className="w-3.5 h-3.5" />
             Have a different owner with 25%+ stake? Add them instead
@@ -272,13 +263,13 @@ export default function SignerRoster({ profile, onValidChange }) {
         ) : (
           <>
             {isSoleSigner && (
-              <p className="text-[11px] text-gray-500 mb-2 text-center">
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mb-2 text-center">
                 Only use this if there's another owner with 25%+ stake — not for yourself.
               </p>
             )}
             <button
               onClick={() => setShowModal(true)}
-              className="w-full flex items-center justify-center gap-2 text-sm font-semibold text-gray-400 border border-dashed border-white/10 hover:border-white/30 hover:bg-white/[0.04] rounded-xl py-2.5 transition-all"
+              className="w-full flex items-center justify-center gap-2 text-cb-body font-medium text-gray-400 border border-cb-border hover:border-cb-border-strong hover:text-white rounded-cb py-2.5 transition-colors"
             >
               <UserPlus className="w-4 h-4" />
               + Add Another Owner

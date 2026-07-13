@@ -1,0 +1,66 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Cliqbux Design Tokens — single source of truth for the onboarding portal.
+   Namespaced --cb-* to avoid colliding with the shadcn/ui variables in
+   index.css. Utilities are exposed through tailwind.config.js as cb-* classes
+   (bg-cb-surface, border-cb-border, shadow-cb-raised, rounded-cb, text-cb-title).
+
+   Status: DEFINED, NOT YET APPLIED to components. Approved values here are the
+   only place to change the system — never hardcode these hex values in JSX.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Spacing — 4px base ─────────────────────────────────────────────────────
+     Tailwind's default scale is already 4px-based (p-1 = 4px … p-12 = 48px),
+     so components use standard utilities; these vars exist for inline styles
+     and non-Tailwind contexts. Do not invent off-scale values. */
+  --cb-space-1: 4px;
+  --cb-space-2: 8px;
+  --cb-space-3: 12px;
+  --cb-space-4: 16px;
+  --cb-space-5: 20px;
+  --cb-space-6: 24px;
+  --cb-space-8: 32px;
+  --cb-space-10: 40px;
+  --cb-space-12: 48px;
+
+  /* ── Color — dark fintech, one gold accent ─────────────────────────────────
+     Gold measured live from cliqbux.com/home hero CTA (rgb 254,172,39).
+     Alternative: dashboard.cliqbux.com uses the softer #F0AD4E — swap the two
+     accent lines below to switch the entire system. */
+  --cb-bg: #0E1319;                        /* page background */
+  --cb-surface: #161C26;                   /* cards, main panels */
+  --cb-surface-raised: #1A212C;            /* nested panels, modals, popovers */
+  --cb-border: rgba(255, 255, 255, 0.07);  /* hairline dividers, resting cards */
+  --cb-border-strong: rgba(255, 255, 255, 0.16); /* hover states, focused cards */
+  --cb-accent: #FEAC27;                    /* brand gold — CTAs, active states */
+  --cb-accent-muted: rgba(254, 172, 39, 0.14);   /* gold tint — pills, selected rows */
+  --cb-success: #4ADE80;                   /* saved, complete, verified */
+  --cb-danger: #F87171;                    /* errors, destructive actions */
+
+  /* ── Elevation — exactly two levels ────────────────────────────────────────
+     raised: cards resting on the page. overlay: modals, dropdowns, popovers.
+     Nothing else. Depth beyond this comes from surface color, not shadow. */
+  --cb-shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --cb-shadow-overlay: 0 24px 48px -12px rgba(0, 0, 0, 0.55);
+
+  /* ── Radius — one token ────────────────────────────────────────────────────
+     12px everywhere: cards, inputs, buttons, modals. Full-round (pills,
+     avatars, step circles) uses rounded-full, which is a shape, not a radius. */
+  --cb-radius: 12px;
+}
+
+/* ── Typography — the five sizes (wired as cb-* fontSize in tailwind.config)
+   ┌──────────────┬──────┬────────┬────────┬──────────┬──────────────────────┐
+   │ token        │ size │ line   │ weight │ tracking │ use                  │
+   ├──────────────┼──────┼────────┼────────┼──────────┼──────────────────────┤
+   │ cb-caption   │ 12px │ 16px   │ 600    │ +0.04em  │ uppercase labels,    │
+   │              │      │        │        │          │ field captions       │
+   │ cb-body      │ 14px │ 20px   │ 400    │ 0        │ default UI text      │
+   │ cb-body-lg   │ 16px │ 24px   │ 400    │ −0.006em │ lead paragraphs      │
+   │ cb-title     │ 20px │ 28px   │ 600    │ −0.015em │ section headings     │
+   │              │      │        │        │          │ (Poppins)            │
+   │ cb-display   │ 28px │ 34px   │ 600    │ −0.025em │ page headline        │
+   │              │      │        │        │          │ (Poppins)            │
+   └──────────────┴──────┴────────┴────────┴──────────┴──────────────────────┘
+   Headings (cb-title, cb-display) pair with font-display (Poppins);
+   everything else stays Inter. No other font sizes in the portal. */

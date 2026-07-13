@@ -2,10 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import {
-  Plus, ArrowRight, Loader2, Store, Trash2, CheckCircle2,
-  MapPin, Building2, CreditCard, ChevronDown, ChevronRight, X,
+  Plus, ArrowRight, Loader2, Trash2,
+  ChevronDown, ChevronRight, X,
   AlertTriangle, Check, ArrowLeft, Pencil, GripVertical, Cloud, Mail, Lock, Info
-
 } from 'lucide-react';
 import { isLocked as getMidLocked, isImported as getMidImported } from '@/utils/statusUtils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -51,8 +50,8 @@ function mccToIndustry(mcc) {
   return 'RE';
 }
 
-const inputCls = 'w-full bg-[#10151C] border border-white/12 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 transition-colors hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-500/70 focus:border-transparent';
-const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
+const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
+const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 
 function formatEIN(raw) {
   const d = (raw || '').replace(/\D/g, '');
@@ -86,16 +85,18 @@ function usePlacesCallbackRef(onParsed) {
 }
 
 function StatusBadge({ status }) {
-  const map = {
-    'Active':            'bg-green-500/15 text-green-400 border-green-500/30',
-    'Active (Existing)': 'bg-green-500/15 text-green-400 border-green-500/30',
-    'Pending MID':       'bg-amber-500/15 text-amber-400 border-amber-500/30',
-    'Ready to Submit':   'bg-blue-500/15 text-blue-400 border-blue-500/30',
-    'In Review':         'bg-white/5 text-gray-400 border-white/10',
-    'Error':             'bg-red-500/15 text-red-400 border-red-500/30',
+  // Status reads as a small colored dot + plain caption — no tinted pills.
+  const dot = {
+    'Active':            'bg-cb-success',
+    'Active (Existing)': 'bg-cb-success',
+    'Pending MID':       'bg-cb-accent',
+    'Ready to Submit':   'bg-gray-300',
+    'In Review':         'bg-cb-border-strong',
+    'Error':             'bg-cb-danger',
   };
   return (
-    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${map[status] || map['In Review']}`}>
+    <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot[status] || dot['In Review']}`} />
       {status || 'In Review'}
     </span>
   );
@@ -150,23 +151,21 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
-          className={`rounded-xl border transition-all ${snapshot.isDragging ? 'border-blue-500/60 bg-[#1a2235] shadow-xl' : locked ? 'border-white/5 bg-white/[0.01] opacity-70' : isComplete ? 'border-blue-500/20 bg-blue-500/5' : 'border-white/10 bg-white/[0.02]'}`}
+          className={`rounded-cb border transition-all ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locked ? 'border-cb-border bg-transparent opacity-60' : 'border-cb-border bg-transparent hover:border-cb-border-strong'}`}
         >
-          <div className="flex items-center gap-2 px-3 py-2.5">
+          <div className="flex items-center gap-2.5 px-3 py-2.5">
             <span {...provided.dragHandleProps} className={`text-gray-600 flex-shrink-0 ${locked ? 'cursor-not-allowed' : 'hover:text-gray-400 cursor-grab active:cursor-grabbing'}`}>
               <GripVertical className="w-3.5 h-3.5" />
             </span>
-            <CreditCard className={`w-3.5 h-3.5 flex-shrink-0 ${locked ? 'text-gray-600' : isComplete ? 'text-blue-400' : 'text-gray-500'}`} />
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-white truncate">{form.merchantName || dbaName}</p>
+              <p className="text-cb-body font-medium text-white truncate">{form.merchantName || dbaName}</p>
               {isComplete
-                ? <p className="text-[10px] text-blue-400/70 font-mono">{mid.mccCode} · ${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo</p>
-                : <p className="text-[10px] text-amber-400/80">Needs MCC &amp; volume →</p>
+                ? <p className="text-cb-caption normal-case tracking-normal text-gray-500 font-mono">{mid.mccCode} · ${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo</p>
+                : <p className="text-cb-caption normal-case tracking-normal text-cb-accent font-normal">Needs MCC &amp; volume</p>
               }
             </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              {imported && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-gray-500/10 text-gray-400 border border-gray-500/20">Imported</span>}
-              {!imported && !locked && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">New</span>}
+            <div className="flex items-center gap-2.5 flex-shrink-0">
+              {imported && <span className="text-cb-caption text-gray-500">Imported</span>}
               <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
               {locked && (
                 <TooltipProvider>
@@ -183,10 +182,10 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
             </div>
             {!locked && (
               <>
-                <button onClick={() => setEditing(e => !e)} className="p-1 text-gray-500 hover:text-amber-400 transition-colors">
+                <button onClick={() => setEditing(e => !e)} className="p-1 text-gray-500 hover:text-white transition-colors">
                   <Pencil className="w-3 h-3" />
                 </button>
-                <button onClick={() => onDelete(mid)} className="p-1 text-gray-600 hover:text-red-400 transition-colors">
+                <button onClick={() => onDelete(mid)} className="p-1 text-gray-600 hover:text-cb-danger transition-colors">
                   <Trash2 className="w-3 h-3" />
                 </button>
               </>
@@ -194,13 +193,13 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
           </div>
 
           {editing && !locked && (
-            <div className="border-t border-white/5 px-3 pb-3 pt-2 space-y-2">
+            <div className="border-t border-cb-border px-4 pb-4 pt-3 space-y-3">
               <div>
                 <label className={labelCls}>MID Label</label>
                 <input value={form.merchantName} onChange={e => setField('merchantName', e.target.value)}
                   placeholder={`e.g. ${dbaName} – Bar`} className={inputCls} />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>MCC Code *</label>
                   <select value={form.mccCode}
@@ -240,31 +239,31 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
               </div>
               <div>
                 <label className={labelCls}>Card Split (must total 100%)</label>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-3 gap-3">
                   {[['cardPresentPct', 'In-Person'], ['internetPct', 'Online'], ['motoPct', 'MOTO']].map(([k, lbl]) => (
                     <div key={k}>
-                      <span className="text-[10px] text-gray-500 mb-1 block">{lbl}</span>
+                      <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mb-1 block">{lbl}</span>
                       <input type="number" min="0" max="100" value={form[k]}
                         onChange={e => setField(k, e.target.value)} className={inputCls} />
                     </div>
                   ))}
                 </div>
-                {pctSum !== 100 && <p className="text-[11px] text-amber-400 mt-1">Total: {pctSum}% (must be 100%)</p>}
+                {pctSum !== 100 && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">Total: {pctSum}% (must be 100%)</p>}
               </div>
               {/* Save button + collapse */}
-              <div className="flex items-center justify-between pt-1">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between pt-2">
+                <div className="flex items-center gap-3">
                   <button
                     onClick={async () => { await doSave(); setEditing(false); }}
                     disabled={saving || !canSave}
-                    className="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold px-4 py-1.5 rounded-lg transition-all"
+                    className="flex items-center gap-1.5 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface-raised disabled:text-gray-600 disabled:cursor-not-allowed disabled:opacity-100 text-cb-bg text-cb-body font-semibold px-4 py-2 rounded-cb transition-all"
                   >
                     {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : savedAt ? <Cloud className="w-3 h-3" /> : null}
                     {saving ? 'Saving…' : savedAt ? 'Saved' : 'Save'}
                   </button>
-                  {!canSave && <span className="text-[11px] text-gray-600">Fill MCC &amp; card split to save</span>}
+                  {!canSave && <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">Fill MCC &amp; card split to save</span>}
                 </div>
-                <button onClick={() => setEditing(false)} className="text-xs text-gray-500 hover:text-white transition-colors">Cancel</button>
+                <button onClick={() => setEditing(false)} className="text-cb-body text-gray-500 hover:text-white transition-colors">Cancel</button>
               </div>
             </div>
           )}
@@ -362,36 +361,35 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
-          className={`rounded-2xl border transition-all ${snapshot.isDragging ? 'border-amber-500/70 shadow-2xl' : allMidsComplete ? 'border-green-500/25 bg-[#151B24]' : locationError ? 'border-red-500/40 bg-[#151B24]' : 'border-white/10 bg-[#151B24] hover:border-white/20'}`}
+          className={`rounded-cb border transition-all ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locationError ? 'border-cb-danger bg-cb-surface-raised' : 'border-cb-border bg-cb-surface-raised hover:border-cb-border-strong'}`}
         >
           {/* Location header */}
-          <div className="flex items-center gap-2.5 px-4 py-3">
+          <div className="flex items-center gap-3 px-4 py-3">
             <span {...provided.dragHandleProps} className="text-gray-600 hover:text-gray-300 cursor-grab active:cursor-grabbing flex-shrink-0">
               <GripVertical className="w-4 h-4" />
             </span>
-            <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${allMidsComplete ? 'bg-green-500/15' : 'bg-amber-500/10'}`}>
-              <Store className={`w-3.5 h-3.5 ${allMidsComplete ? 'text-green-400' : 'text-amber-400'}`} />
-            </div>
             <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(e => !e)}>
               <div className="flex items-center gap-2">
-                <p className="text-sm font-bold text-white truncate">{location.dbaName}</p>
-                {locationError && <span className="text-[9px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded-full whitespace-nowrap">Needs info</span>}
+                <p className="text-cb-body font-semibold text-white truncate">{location.dbaName}</p>
+                {locationError && (
+                  <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cb-danger flex-shrink-0" />Needs info
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-gray-400 truncate flex items-center gap-1">
-                <MapPin className="w-3 h-3 flex-shrink-0" />{location.businessAddress}
-              </p>
+              <p className="text-cb-body text-gray-500 truncate">{location.businessAddress}</p>
             </div>
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              {allMidsComplete && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
-              <span className="text-[10px] font-semibold text-gray-500 bg-white/5 rounded-full px-2 py-0.5">
+            <div className="flex items-center gap-2.5 flex-shrink-0">
+              {allMidsComplete && <Check className="w-3.5 h-3.5 text-cb-success" />}
+              <span className="text-cb-caption text-gray-500">
                 {locMids.length} MID{locMids.length !== 1 ? 's' : ''}
               </span>
               <button onClick={e => { e.stopPropagation(); startLocEdit(); }} title="Edit location name / address"
-                className="p-1.5 text-gray-600 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-all">
+                className="p-1.5 text-gray-600 hover:text-white rounded-cb transition-colors">
                 <Pencil className="w-3.5 h-3.5" />
               </button>
               <button onClick={e => { e.stopPropagation(); onDelete(location); }}
-                className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all">
+                className="p-1.5 text-gray-600 hover:text-cb-danger rounded-cb transition-colors">
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
               <button onClick={() => setExpanded(e => !e)} className="p-1.5 text-gray-500 hover:text-white transition-colors">
@@ -402,82 +400,84 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
 
           {/* Inline location edit — quick correction of prefilled data (2026-07-10) */}
           {editingLoc && (
-            <div className="mx-4 mb-3 bg-[#10151C] border border-amber-500/25 rounded-xl p-3 space-y-2">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="mx-4 mb-4 bg-cb-bg border border-cb-border rounded-cb p-4 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <input value={locForm.dbaName} onChange={e => setLocForm(f => ({ ...f, dbaName: e.target.value }))} placeholder="Location name" autoFocus className={inputCls} />
                 <input ref={editPlacesRef} value={locForm.street}
                   onChange={e => { setLocForm(f => ({ ...f, street: e.target.value })); setLocVerified(false); }}
                   placeholder="Start typing your address…" className={inputCls} />
                 <input value={locForm.city} onChange={e => setLocForm(f => ({ ...f, city: e.target.value }))} placeholder="City" className={inputCls} />
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   <input value={locForm.state} onChange={e => setLocForm(f => ({ ...f, state: e.target.value }))} placeholder="State" maxLength={2} className={inputCls} />
                   <input value={locForm.zip} onChange={e => setLocForm(f => ({ ...f, zip: e.target.value }))} placeholder="ZIP" className={inputCls} />
                 </div>
               </div>
               {locVerified ? (
-                <p className="text-[11px] text-green-400 flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Address verified via Google Maps</p>
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-success flex items-center gap-1"><Check className="w-3 h-3" /> Address verified via Google Maps</p>
               ) : (
-                <p className="text-[11px] text-gray-500">Tip: pick your address from the suggestions to verify it via Google Maps.</p>
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Tip: pick your address from the suggestions to verify it via Google Maps.</p>
               )}
-              {locEditError && <p className="text-xs text-red-400">{locEditError}</p>}
-              <div className="flex items-center gap-2">
+              {locEditError && <p className="text-cb-body text-cb-danger">{locEditError}</p>}
+              <div className="flex items-center gap-3">
                 <button onClick={saveLocEdit} disabled={locSaving}
-                  className="text-xs font-bold bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#0E1319] px-4 py-2 rounded-lg transition-colors">
+                  className="text-cb-body font-semibold bg-cb-accent hover:opacity-90 disabled:opacity-50 text-cb-bg px-4 py-2 rounded-cb transition-colors">
                   {locSaving ? 'Saving…' : 'Save Changes'}
                 </button>
-                <button onClick={() => setEditingLoc(false)} className="text-xs font-semibold text-gray-400 hover:text-white px-2 py-2">Cancel</button>
+                <button onClick={() => setEditingLoc(false)} className="text-cb-body text-gray-400 hover:text-white px-2 py-2">Cancel</button>
               </div>
             </div>
           )}
 
-          {/* MIDs — nested droppable */}
+          {/* MIDs — nested droppable, indented off a hairline rail */}
           {expanded && (
-            <div className="border-t border-white/5 px-4 pb-3 pt-2">
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">
+            <div className="border-t border-cb-border px-4 pb-4 pt-3">
+              <p className="text-cb-caption uppercase text-gray-500 mb-2">
                 Merchant Applications (MIDs)
               </p>
-              <Droppable droppableId={`mids-${location.id}`} type="MID">
-                {(drop, dropSnap) => (
-                  <div
-                    ref={drop.innerRef}
-                    {...drop.droppableProps}
-                    className={`space-y-1.5 min-h-[32px] rounded-xl transition-colors ${dropSnap.isDraggingOver ? 'bg-blue-500/5 ring-1 ring-blue-500/20' : ''}`}
-                  >
-                    {locMids.map((mid, idx) => (
-                      <MidCard
-                        key={mid.id}
-                        mid={mid}
-                        index={idx}
-                        locationId={location.id}
-                        corporateId={corporateId}
-                        dbaName={location.dbaName}
-                        onUpdated={onMerchantIDUpdated}
-                        onDelete={getMidLocked(mid) ? () => {} : onMerchantIDDeleted}
-                      />
-                    ))}
-                    {drop.placeholder}
-                  </div>
-                )}
-              </Droppable>
+              <div className="ml-1.5 pl-4 border-l border-cb-border">
+                <Droppable droppableId={`mids-${location.id}`} type="MID">
+                  {(drop, dropSnap) => (
+                    <div
+                      ref={drop.innerRef}
+                      {...drop.droppableProps}
+                      className={`space-y-2 min-h-[32px] rounded-cb transition-colors ${dropSnap.isDraggingOver ? 'bg-cb-accent-muted' : ''}`}
+                    >
+                      {locMids.map((mid, idx) => (
+                        <MidCard
+                          key={mid.id}
+                          mid={mid}
+                          index={idx}
+                          locationId={location.id}
+                          corporateId={corporateId}
+                          dbaName={location.dbaName}
+                          onUpdated={onMerchantIDUpdated}
+                          onDelete={getMidLocked(mid) ? () => {} : onMerchantIDDeleted}
+                        />
+                      ))}
+                      {drop.placeholder}
+                    </div>
+                  )}
+                </Droppable>
 
-              {addingMid ? (
-                <div className="mt-2 flex gap-2 items-center">
-                  <input value={addMidName} onChange={e => setAddMidName(e.target.value)}
-                    placeholder={`e.g. ${location.dbaName} – Bar`}
-                    className={`${inputCls} text-xs py-2`} autoFocus
-                    onKeyDown={e => { if (e.key === 'Enter') handleAddMid(); if (e.key === 'Escape') setAddingMid(false); }} />
-                  <button onClick={handleAddMid} disabled={addMidSaving}
-                    className="flex-shrink-0 flex items-center gap-1 bg-blue-500/20 border border-blue-500/30 text-blue-300 text-xs font-semibold px-3 py-2 rounded-lg hover:bg-blue-500/30 disabled:opacity-50">
-                    {addMidSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Add
+                {addingMid ? (
+                  <div className="mt-2 flex gap-3 items-center">
+                    <input value={addMidName} onChange={e => setAddMidName(e.target.value)}
+                      placeholder={`e.g. ${location.dbaName} – Bar`}
+                      className={`${inputCls} py-2`} autoFocus
+                      onKeyDown={e => { if (e.key === 'Enter') handleAddMid(); if (e.key === 'Escape') setAddingMid(false); }} />
+                    <button onClick={handleAddMid} disabled={addMidSaving}
+                      className="flex-shrink-0 flex items-center gap-1 bg-cb-accent hover:opacity-90 text-cb-bg text-cb-body font-semibold px-3 py-2 rounded-cb disabled:opacity-50 transition-colors">
+                      {addMidSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Add
+                    </button>
+                    <button onClick={() => setAddingMid(false)} className="p-2 text-gray-500 hover:text-white flex-shrink-0"><X className="w-3 h-3" /></button>
+                  </div>
+                ) : (
+                  <button onClick={() => setAddingMid(true)}
+                    className="mt-1 w-full flex items-center gap-1.5 py-2 text-cb-caption text-gray-500 hover:text-white transition-colors text-left">
+                    <Plus className="w-3 h-3" /> Add MID (same address, different Merchant ID)
                   </button>
-                  <button onClick={() => setAddingMid(false)} className="p-2 text-gray-500 hover:text-white flex-shrink-0"><X className="w-3 h-3" /></button>
-                </div>
-              ) : (
-                <button onClick={() => setAddingMid(true)}
-                  className="mt-2 w-full flex items-center justify-center gap-1.5 border border-dashed border-white/10 hover:border-blue-500/30 hover:text-blue-400 rounded-lg py-2 text-xs font-semibold text-gray-600 transition-all">
-                  <Plus className="w-3 h-3" /> Add MID (same address, different Merchant ID)
-                </button>
-              )}
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -592,27 +592,28 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
   const showComplete = saved && canSave;
 
   return (
-    <div className="border-t border-white/5 px-4 py-2">
+    <div className="border-t border-cb-border px-5 py-2.5">
       <button
         onClick={() => setExpanded(e => !e)}
-        className="flex items-center gap-2 text-[11px] font-semibold w-full text-left py-1 transition-colors"
+        className="flex items-center gap-2.5 text-cb-body w-full text-left py-1 transition-colors"
       >
-        <Building2 className={`w-3 h-3 flex-shrink-0 ${showComplete ? 'text-green-400' : 'text-amber-400'}`} />
-        <span className={`flex-1 ${showComplete ? 'text-gray-400' : 'text-amber-400'}`}>
+        {showComplete
+          ? <Check className="w-3.5 h-3.5 flex-shrink-0 text-cb-success" />
+          : <span className="w-1.5 h-1.5 rounded-full bg-cb-accent flex-shrink-0" />}
+        <span className="flex-1">
           {showComplete
-            ? <><span className="text-gray-300">{OWNERSHIP_TYPES.find(o => o.value === ownershipType)?.label || ownershipType}</span><span className="text-gray-600 font-normal ml-1.5">· Est. {estYear}</span></>
-            : 'Business details required →'}
+            ? <><span className="text-gray-300 font-medium">{OWNERSHIP_TYPES.find(o => o.value === ownershipType)?.label || ownershipType}</span><span className="text-gray-600 ml-1.5">· Est. {estYear}</span></>
+            : <span className="text-white font-medium">Business details</span>}
         </span>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {!showComplete && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">Required</span>}
-          {showComplete && <Check className="w-3 h-3 text-green-400" />}
-          {expanded ? <ChevronDown className="w-3 h-3 text-gray-500" /> : <ChevronRight className="w-3 h-3 text-gray-500" />}
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          {!showComplete && <span className="text-cb-caption uppercase text-cb-accent">Required</span>}
+          {expanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-500" />}
         </div>
       </button>
 
       {expanded && (
-        <div className="mt-2 mb-2 space-y-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="mt-3 mb-3 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Business Entity Type *</label>
               <select value={ownershipType} onChange={e => setOwnershipType(e.target.value)}
@@ -631,7 +632,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
               </select>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Year Established *</label>
               <input type="number" value={estYear}
@@ -639,27 +640,27 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
                 placeholder="e.g. 2018" min="1900" max={new Date().getFullYear()} className={inputCls} />
               {estYear && (() => {
                 const { years, months } = deriveOwnership(estYear);
-                return <p className="text-[10px] text-gray-500 mt-1">{years} yr{years !== '1' ? 's' : ''}{months !== '0' ? ` ${months} mo` : ''} in operation</p>;
+                return <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1.5">{years} yr{years !== '1' ? 's' : ''}{months !== '0' ? ` ${months} mo` : ''} in operation</p>;
               })()}
             </div>
             <div>
               <label className={labelCls}>Federal EIN *</label>
               <input value={federalEIN} onChange={e => setFederalEIN(e.target.value.replace(/\D/g, '').slice(0, 9))}
                 placeholder="9 digits" className={`${inputCls} font-mono`} />
-              {federalEIN.length > 0 && einDigits.length !== 9 && <p className="text-[10px] text-amber-400 mt-1">{einDigits.length}/9 digits</p>}
+              {federalEIN.length > 0 && einDigits.length !== 9 && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">{einDigits.length}/9 digits</p>}
             </div>
           </div>
           <div className="flex items-center gap-3 pt-1">
             <button
               onClick={handleSave}
               disabled={!canSave || saving}
-              className="flex items-center gap-1.5 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-xs font-bold px-4 py-2 rounded-lg transition-all"
+              className="flex items-center gap-1.5 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface-raised disabled:text-gray-600 disabled:cursor-not-allowed text-cb-bg text-cb-body font-semibold px-4 py-2 rounded-cb transition-all"
             >
               {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : saved ? <Check className="w-3 h-3" /> : null}
               {saving ? 'Saving…' : saved ? 'Saved' : 'Save Details'}
             </button>
-            {!canSave && <p className="text-[10px] text-gray-600">Fill all fields to save</p>}
-            {saveError && <p className="text-[10px] text-red-400">⚠ {saveError}</p>}
+            {!canSave && <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">Fill all fields to save</p>}
+            {saveError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">⚠ {saveError}</p>}
           </div>
         </div>
       )}
@@ -731,30 +732,30 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
   };
 
   return (
-    <div className="border-t border-white/5 px-4 py-2">
+    <div className="border-t border-cb-border px-5 py-2.5">
       <button
         onClick={() => setExpanded(e => !e)}
-        className="flex items-center gap-2 text-[11px] font-semibold text-gray-500 hover:text-gray-300 transition-colors w-full text-left py-1"
+        className="flex items-center gap-2.5 text-cb-body text-gray-500 hover:text-gray-300 transition-colors w-full text-left py-1"
       >
-        <Mail className="w-3 h-3 flex-shrink-0" />
+        <Mail className="w-3.5 h-3.5 flex-shrink-0" />
         <span className="flex-1">
           {hasMailingAddress ? (
-            <><span className="text-blue-400">Mailing Address</span><span className="font-normal text-gray-600 ml-1.5">{entity.mailingStreet}, {entity.mailingCity}, {entity.mailingState}</span></>
+            <><span className="text-gray-300 font-medium">Mailing Address</span><span className="text-gray-600 ml-1.5">{entity.mailingStreet}, {entity.mailingCity}, {entity.mailingState}</span></>
           ) : 'Add Mailing Address (optional)'}
         </span>
-        {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+        {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
       </button>
 
       {expanded && (
-        <div className="mt-2 mb-1 space-y-2">
-          <p className="text-[10px] text-gray-500">Applies to all MIDs under <span className="text-gray-400">{entity.legalBusinessName}</span>. If set, overrides the location address for the legal/mailing address on MSPWare applications.</p>
+        <div className="mt-3 mb-2 space-y-3">
+          <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Applies to all MIDs under <span className="text-gray-400">{entity.legalBusinessName}</span>. If set, overrides the location address for the legal/mailing address on MSPWare applications.</p>
           {parsedAddress ? (
-            <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-xl px-3.5 py-2.5">
-              <Mail className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
-              <span className="text-sm text-blue-300 flex-1 truncate">{addressDisplay}</span>
+            <div className="flex items-center gap-2.5 bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5">
+              <Mail className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+              <span className="text-cb-body text-gray-300 flex-1 truncate">{addressDisplay}</span>
               <div className="flex items-center gap-1.5 flex-shrink-0">
-                {saving && <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />}
-                {!saving && savedAt && <Cloud className="w-3 h-3 text-green-400" title="Saved" />}
+                {saving && <Loader2 className="w-3 h-3 text-gray-400 animate-spin" />}
+                {!saving && savedAt && <Cloud className="w-3 h-3 text-cb-success" title="Saved" />}
               </div>
               <button type="button" onClick={handleClear} className="text-gray-500 hover:text-white ml-1">
                 <X className="w-3.5 h-3.5" />
@@ -819,47 +820,44 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
   };
 
   return (
-    <div className={`rounded-2xl border overflow-hidden ${allComplete ? 'border-green-500/20' : highlightError ? 'border-red-500/40' : 'border-white/10'} bg-[#1A212C]`}>
-      {/* Entity header bar */}
-      <div className="flex items-center gap-3 px-5 py-3 bg-white/[0.03] border-b border-white/8">
-        <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center flex-shrink-0">
-          <Building2 className="w-3.5 h-3.5 text-amber-400" />
-        </div>
+    <div className={`rounded-cb border overflow-hidden ${highlightError ? 'border-cb-danger' : 'border-cb-border'}`}>
+      {/* Entity header — hierarchy carried by type weight, not color */}
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-cb-border">
         {editingHeader ? (
-          <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-2 py-0.5">
+          <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-3 py-0.5">
             <input value={hdrName} onChange={e => setHdrName(e.target.value)} placeholder="Legal business name" autoFocus
-              className="flex-1 min-w-0 bg-[#10151C] border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-amber-500" />
+              className="flex-1 min-w-0 bg-cb-bg border border-cb-border rounded-cb px-3 py-1.5 text-cb-body text-white focus:outline-none focus:ring-2 focus:ring-cb-accent" />
             <input value={hdrEIN} onChange={e => setHdrEIN(e.target.value)} placeholder="EIN (9 digits)"
-              className="w-full sm:w-36 bg-[#10151C] border border-white/20 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:ring-2 focus:ring-amber-500" />
-            <div className="flex items-center gap-1.5 flex-shrink-0">
+              className="w-full sm:w-36 bg-cb-bg border border-cb-border rounded-cb px-3 py-1.5 text-cb-body text-white font-mono focus:outline-none focus:ring-2 focus:ring-cb-accent" />
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button onClick={saveHeaderEdit} disabled={hdrSaving}
-                className="text-[11px] font-bold bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-[#0E1319] px-3 py-1.5 rounded-lg transition-colors">
+                className="text-cb-body font-semibold bg-cb-accent hover:opacity-90 disabled:opacity-50 text-cb-bg px-3 py-1.5 rounded-cb transition-colors">
                 {hdrSaving ? 'Saving…' : 'Save'}
               </button>
-              <button onClick={() => setEditingHeader(false)} className="text-[11px] font-semibold text-gray-400 hover:text-white px-2 py-1.5">Cancel</button>
+              <button onClick={() => setEditingHeader(false)} className="text-cb-body text-gray-400 hover:text-white px-2 py-1.5">Cancel</button>
             </div>
-            {hdrError && <p className="text-[10px] text-red-400">{hdrError}</p>}
+            {hdrError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">{hdrError}</p>}
           </div>
         ) : (
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-amber-300 uppercase tracking-wider truncate">{entity.legalBusinessName}</p>
+          <div className="flex-1 min-w-0 flex items-baseline gap-2.5 flex-wrap">
+            <p className="font-display text-cb-title text-white truncate">{entity.legalBusinessName}</p>
             {entity.federalEIN && (
-              <p className="text-[10px] text-gray-500 font-mono">EIN {formatEIN(entity.federalEIN)}</p>
+              <p className="text-cb-caption text-gray-500 font-mono normal-case tracking-normal">EIN {formatEIN(entity.federalEIN)}</p>
             )}
           </div>
         )}
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          <span className="text-cb-caption text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''} · {entityMids.length} MID{entityMids.length !== 1 ? 's' : ''}</span>
+          {allComplete && entityLocs.length > 0 && <Check className="w-3.5 h-3.5 text-cb-success" />}
           {!editingHeader && (
             <button onClick={startHeaderEdit} title="Edit legal entity name / EIN"
-              className="p-1.5 text-gray-600 hover:text-amber-400 hover:bg-amber-500/10 rounded-lg transition-all">
+              className="p-1.5 text-gray-600 hover:text-white rounded-cb transition-colors">
               <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
-          <span className="text-[10px] text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''} · {entityMids.length} MID{entityMids.length !== 1 ? 's' : ''}</span>
-          {allComplete && entityLocs.length > 0 && <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />}
           {!isOnly && (
             <button onClick={() => onDeleteEntity(entity)} title="Delete legal entity"
-              className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all">
+              className="p-1.5 text-gray-600 hover:text-cb-danger rounded-cb transition-colors">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
@@ -872,13 +870,13 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
       {/* Mailing address panel */}
       <EntityMailingAddress entity={entity} corporateId={corporateId} onUpdated={onEntityUpdated} />
 
-      {/* Locations droppable */}
+      {/* Locations droppable — indented off a hairline rail under the entity */}
       <Droppable droppableId={entity.entityId} type="LOCATION">
         {(drop, dropSnap) => (
           <div
             ref={drop.innerRef}
             {...drop.droppableProps}
-            className={`p-3 space-y-2 min-h-[48px] transition-colors ${dropSnap.isDraggingOver ? 'bg-amber-500/5' : ''}`}
+            className={`py-4 pr-4 pl-4 ml-6 border-l border-cb-border space-y-2 min-h-[48px] transition-colors ${dropSnap.isDraggingOver ? 'bg-cb-accent-muted' : ''}`}
           >
             {entityLocs.map((loc, idx) => (
               <LocationCard
@@ -897,16 +895,16 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
             ))}
             {drop.placeholder}
             {entityLocs.length === 0 && !dropSnap.isDraggingOver && (
-              <p className="text-center text-xs text-gray-600 py-2">No locations yet — add one below or drag here</p>
+              <p className="text-cb-body text-gray-600 py-2">No locations yet — add one below or drag here</p>
             )}
           </div>
         )}
       </Droppable>
 
       {/* Add location to this entity */}
-      <div className="px-3 pb-3">
+      <div className="ml-6 pl-4 pr-4 pb-4 border-l border-cb-border">
         <button onClick={() => onAddLocation(entity.entityId)}
-          className="w-full flex items-center justify-center gap-1.5 border border-dashed border-white/10 hover:border-amber-500/30 hover:text-amber-400 rounded-xl py-2.5 text-xs font-semibold text-gray-600 transition-all">
+          className="w-full flex items-center gap-1.5 py-2 text-cb-caption text-gray-500 hover:text-white transition-colors text-left">
           <Plus className="w-3 h-3" /> Add Location{isOnly ? '' : ` to ${entity.legalBusinessName}`}
         </button>
       </div>
@@ -943,20 +941,15 @@ function AddEntityModal({ corporateId, onSaved, onClose }) {
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 animate-in fade-in-0 duration-200" onClick={onClose}>
-      <div className="bg-[#1A212C] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center">
-              <Building2 className="w-4 h-4 text-amber-400" />
-            </div>
-            <div>
-              <h3 className="font-bold text-white text-sm">Add Legal Entity</h3>
-              <p className="text-[10px] text-gray-500">New EIN / separate legal business</p>
-            </div>
+      <div className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-md p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <h3 className="font-display text-cb-title text-white">Add Legal Entity</h3>
+            <p className="text-cb-body text-gray-500 mt-0.5">New EIN / separate legal business</p>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="text-gray-500 hover:text-white p-1.5 rounded-cb"><X className="w-4 h-4" /></button>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div>
             <label className={labelCls}>Legal Business Name *</label>
             <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Northside LLC" className={inputCls} autoFocus />
@@ -965,17 +958,17 @@ function AddEntityModal({ corporateId, onSaved, onClose }) {
             <label className={labelCls}>Federal EIN *</label>
             <input value={ein} onChange={e => setEin(e.target.value.replace(/\D/g, '').slice(0, 9))}
               placeholder="9 digits" className={`${inputCls} font-mono`} />
-            {ein.length > 0 && einDigits.length !== 9 && <p className="text-[10px] text-amber-400 mt-1">{einDigits.length}/9 digits</p>}
-            {einDigits.length === 9 && <p className="text-[10px] text-green-400 mt-1 flex items-center gap-1"><Check className="w-3 h-3" /> Valid EIN</p>}
+            {ein.length > 0 && einDigits.length !== 9 && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">{einDigits.length}/9 digits</p>}
+            {einDigits.length === 9 && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-success mt-1.5 flex items-center gap-1"><Check className="w-3 h-3" /> Valid EIN</p>}
           </div>
-          {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300">{error}</div>}
+          {error && <div className="bg-cb-surface border border-cb-border border-l-2 border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-cb-danger">{error}</div>}
           <div className="flex gap-3 pt-1">
             <button onClick={handleSave} disabled={saving || !canSave}
-              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-[#0E1319] font-bold text-sm py-2.5 rounded-xl transition-all">
+              className="flex-1 flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 text-cb-bg font-semibold text-cb-body py-2.5 rounded-cb transition-all">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               {saving ? 'Creating…' : 'Create Entity'}
             </button>
-            <button onClick={onClose} className="px-4 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white">Cancel</button>
+            <button onClick={onClose} className="px-4 border border-cb-border text-gray-300 font-medium text-cb-body py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong transition-colors">Cancel</button>
           </div>
         </div>
       </div>
@@ -1044,13 +1037,10 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
   };
 
   return (
-    <div className="bg-[#1A212C] border border-amber-500/30 rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center"><Plus className="w-4 h-4 text-amber-400" /></div>
-          <h3 className="text-sm font-bold text-white">New Location</h3>
-        </div>
-        <button onClick={onCancel} className="text-gray-500 hover:text-white p-1.5 rounded-lg"><X className="w-4 h-4" /></button>
+    <div className="bg-cb-surface-raised border border-cb-border rounded-cb p-6">
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="text-cb-caption uppercase text-gray-500">New Location</h3>
+        <button onClick={onCancel} className="text-gray-500 hover:text-white p-1.5 rounded-cb"><X className="w-4 h-4" /></button>
       </div>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1061,9 +1051,9 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
           <div>
             <label className={labelCls}>Physical Address *</label>
             {parsedAddress ? (
-              <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-3.5 py-2.5">
-                <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
-                <span className="text-sm text-green-300 flex-1 truncate">{addressDisplay}</span>
+              <div className="flex items-center gap-2.5 bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5">
+                <Check className="w-4 h-4 text-cb-success flex-shrink-0" />
+                <span className="text-cb-body text-gray-300 flex-1 truncate">{addressDisplay}</span>
                 <button type="button" onClick={() => { setAddressDisplay(''); setParsedAddress(null); }}><X className="w-3.5 h-3.5 text-gray-500 hover:text-white" /></button>
               </div>
             ) : (
@@ -1073,14 +1063,14 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
                   onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
                   placeholder="Start typing to search…" autoComplete="off" className={inputCls} />
                 {unverifiedWarning && (
-                  <div className="mt-2 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
-                    <p className="text-[11px] text-amber-300 font-semibold mb-2">Address not verified — delays may occur.</p>
-                    <div className="flex gap-2">
+                  <div className="mt-2 bg-cb-surface border border-cb-border border-l-2 border-l-cb-accent rounded-cb p-3">
+                    <p className="text-cb-body font-medium text-white mb-2">Address not verified — delays may occur.</p>
+                    <div className="flex gap-3">
                       <button type="button" onClick={() => doSave(null)} disabled={saving}
-                        className="text-xs text-amber-300 border border-amber-500/30 rounded-lg px-3 py-1.5 hover:bg-amber-500/10">
+                        className="text-cb-body text-gray-300 border border-cb-border rounded-cb px-3 py-1.5 hover:border-cb-border-strong hover:text-white transition-colors">
                         {saving ? 'Saving…' : 'Continue Anyway'}
                       </button>
-                      <button type="button" onClick={() => setUnverifiedWarning(false)} className="text-xs text-gray-400 hover:text-white">← Fix</button>
+                      <button type="button" onClick={() => setUnverifiedWarning(false)} className="text-cb-body text-gray-400 hover:text-white">← Fix</button>
                     </div>
                   </div>
                 )}
@@ -1094,23 +1084,23 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
           <div className="flex items-center justify-between mb-1.5">
             <label className={labelCls + ' mb-0'}>Legal Entity</label>
             <button type="button" onClick={() => setShowAddEntity(e => !e)}
-              className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors">
+              className="text-cb-caption normal-case tracking-normal text-cb-accent hover:text-white flex items-center gap-1 transition-colors">
               <Plus className="w-3 h-3" /> New Legal Entity
             </button>
           </div>
           {showAddEntity ? (
-            <div className="bg-[#10151C] border border-amber-500/30 rounded-xl p-3 space-y-2">
-              <p className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">New Legal Entity</p>
+            <div className="bg-cb-bg border border-cb-border rounded-cb p-4 space-y-3">
+              <p className="text-cb-caption uppercase text-gray-500">New Legal Entity</p>
               <input value={newEntityName} onChange={e => setNewEntityName(e.target.value)}
                 placeholder="Legal Business Name" className={inputCls} autoFocus />
               <input value={newEntityEIN} onChange={e => setNewEntityEIN(e.target.value.replace(/\D/g,'').slice(0,9))}
                 placeholder="Federal EIN (9 digits)" className={`${inputCls} font-mono`} />
               {newEntityEIN.length > 0 && newEntityEinDigits.length !== 9 && (
-                <p className="text-[10px] text-amber-400">{newEntityEinDigits.length}/9 digits</p>
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent">{newEntityEinDigits.length}/9 digits</p>
               )}
-              <p className="text-[10px] text-gray-500">This entity will be created when you submit the location below.</p>
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">This entity will be created when you submit the location below.</p>
               <button type="button" onClick={() => { setShowAddEntity(false); setNewEntityName(''); setNewEntityEIN(''); }}
-                className="text-xs text-gray-500 hover:text-white border border-white/10 px-3 py-2 rounded-lg transition-colors">Cancel</button>
+                className="text-cb-body text-gray-500 hover:text-white border border-cb-border px-3 py-2 rounded-cb transition-colors">Cancel</button>
             </div>
           ) : (
             <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)}
@@ -1124,14 +1114,14 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
           )}
         </div>
 
-        {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300">{error}</div>}
+        {error && <div className="bg-cb-surface border border-cb-border border-l-2 border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-cb-danger">{error}</div>}
         <div className="flex gap-3 pt-1">
           <button type="submit" disabled={saving}
-            className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-600 disabled:to-gray-600 disabled:text-gray-400 text-[#0E1319] font-bold text-sm px-5 py-3 rounded-xl transition-all">
+            className="flex items-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 text-cb-bg font-semibold text-cb-body px-5 py-3 rounded-cb transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
             {saving ? 'Adding…' : 'Add Location'}
           </button>
-          <button type="button" onClick={onCancel} className="text-sm text-gray-400 hover:text-white border border-white/10 px-5 py-3 rounded-xl transition-colors">Cancel</button>
+          <button type="button" onClick={onCancel} className="text-cb-body text-gray-400 hover:text-white border border-cb-border px-5 py-3 rounded-cb transition-colors">Cancel</button>
         </div>
       </form>
     </div>
@@ -1353,55 +1343,47 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   return (
     <div className="flex flex-col">
       {/* Header */}
-      <div className="px-8 pt-8 pb-6 border-b border-white/10">
-        <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-bold tracking-wider px-3 py-1.5 rounded-full mb-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-          STEP 2 OF 4 — LOCATIONS &amp; MIDS
-        </div>
+      <div className="px-8 pt-10 pb-8 border-b border-cb-border">
+        <p className="text-cb-caption uppercase text-gray-500 mb-2">Step 2 of 4 — Locations &amp; MIDs</p>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-display text-2xl font-semibold tracking-tight text-white mb-1.5">Locations &amp; Processing Setup</h2>
-            <p className="text-gray-400 text-sm">Add locations under each legal entity, then fill in each MID's processing details.</p>
+            <h2 className="font-display text-cb-display text-white mb-2">Locations &amp; Processing Setup</h2>
+            <p className="text-cb-body-lg text-gray-400 max-w-xl">Add locations under each legal entity, then fill in each MID's processing details.</p>
           </div>
           <button onClick={() => setShowBackConfirm(true)}
-            className="flex-shrink-0 flex items-center gap-2 text-sm font-medium text-gray-300 border border-white/15 hover:border-white/30 hover:bg-white/5 px-4 py-2 rounded-xl transition-all">
+            className="flex-shrink-0 flex items-center gap-2 text-cb-body text-gray-300 border border-cb-border hover:border-cb-border-strong hover:text-white px-4 py-2 rounded-cb transition-colors">
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
         </div>
       </div>
 
-      {/* Stats bar */}
+      {/* Summary — one quiet line, no chrome */}
       {locations.length > 0 && (
-        <div className="px-8 py-4 border-b border-white/5 grid grid-cols-3 sm:flex sm:flex-wrap gap-2 sm:gap-3">
-          <div className="rounded-xl border border-white/8 bg-white/[0.025] px-4 py-2.5 sm:min-w-[110px]">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Locations</p>
-            <p className="font-display text-lg font-semibold text-white leading-snug">{locations.length}</p>
-          </div>
-          <div className="rounded-xl border border-white/8 bg-white/[0.025] px-4 py-2.5 sm:min-w-[110px]">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">MIDs</p>
-            <p className="font-display text-lg font-semibold text-white leading-snug">{totalMids}</p>
-          </div>
-          <div className="rounded-xl border border-white/8 bg-white/[0.025] px-4 py-2.5 sm:min-w-[110px]">
-            <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">MIDs Complete</p>
-            <p className={`font-display text-lg font-semibold leading-snug ${completeMids === totalMids && totalMids > 0 ? 'text-green-400' : 'text-amber-400'}`}>{completeMids}/{totalMids}</p>
-          </div>
-          {entities.length > 1 && (
-            <div className="rounded-xl border border-white/8 bg-white/[0.025] px-4 py-2.5 sm:min-w-[110px]">
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Legal Entities</p>
-              <p className="font-display text-lg font-semibold text-amber-300 leading-snug">{entities.length}</p>
-            </div>
-          )}
+        <div className="px-8 py-4 border-b border-cb-border">
+          <p className="text-cb-body text-gray-500">
+            <span className="text-white font-semibold">{locations.length}</span> location{locations.length !== 1 ? 's' : ''}
+            <span className="mx-2 text-gray-700">·</span>
+            <span className="text-white font-semibold">{totalMids}</span> MID{totalMids !== 1 ? 's' : ''}
+            <span className="mx-2 text-gray-700">·</span>
+            <span className={`font-semibold ${completeMids === totalMids && totalMids > 0 ? 'text-cb-success' : 'text-white'}`}>{completeMids} of {totalMids}</span> complete
+            {entities.length > 1 && (
+              <>
+                <span className="mx-2 text-gray-700">·</span>
+                <span className="text-white font-semibold">{entities.length}</span> legal entities
+              </>
+            )}
+          </p>
         </div>
       )}
 
       {/* Hierarchy: Entity → Locations → MIDs */}
-      <div className="px-8 py-6 space-y-4">
+      <div className="px-8 py-8 space-y-6">
         {/* Prefill verification notice (2026-07-10, Teddy: applicants must be
             prompted to verify prefilled data and be able to correct it here) */}
-        <div className="flex items-start gap-2.5 bg-amber-500/10 border border-amber-500/25 rounded-xl px-4 py-3">
-          <Info className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-200/90 leading-relaxed">
-            <span className="font-semibold">Please verify everything below before continuing.</span>{' '}
+        <div className="flex items-start gap-3 bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-accent rounded-cb px-5 py-4">
+          <Info className="w-4 h-4 text-cb-accent flex-shrink-0 mt-0.5" />
+          <p className="text-cb-body text-gray-400 leading-relaxed">
+            <span className="font-medium text-white">Please verify everything below before continuing.</span>{' '}
             Some details were prefilled by your Cliqbux representative and may be incomplete or out of date.
             Use the <Pencil className="w-3 h-3 inline -mt-0.5" /> edit icons to correct your legal entity name,
             EIN, or a location&apos;s name and address.
@@ -1410,13 +1392,13 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
         {/* Toolbar */}
         <div className="flex items-center justify-between">
-          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
+          <p className="text-cb-caption uppercase text-gray-500">
             {entities.length > 1 ? `${entities.length} Legal Entities` : 'Org Structure'}
           </p>
         </div>
 
         <DragDropContext onDragEnd={onDragEnd}>
-          <div className="space-y-4">
+          <div className="space-y-6">
             {entities.map(entity => (
               <EntitySection
                 key={entity.entityId}
@@ -1455,24 +1437,19 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       </div>
 
       {/* Footer */}
-      <div className="px-8 pt-2 pb-8 border-t border-white/10 space-y-3">
+      <div className="px-8 pt-6 pb-10 border-t border-cb-border space-y-4">
         {/* Validation error banner — shown only after user attempts to continue */}
         {showValidation && !allMidsComplete && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-4">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-bold text-red-300 mb-2">Please fix the following before continuing:</p>
-                <ul className="space-y-1">
-                  {validationIssues.map((issue, i) => (
-                    <li key={i} className="text-xs text-red-400 flex items-start gap-1.5">
-                      <span className="mt-0.5 w-1 h-1 rounded-full bg-red-400 flex-shrink-0" />
-                      {issue}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
+          <div className="bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-danger rounded-cb px-5 py-4">
+            <p className="text-cb-body font-medium text-cb-danger mb-2">Please fix the following before continuing:</p>
+            <ul className="space-y-1.5">
+              {validationIssues.map((issue, i) => (
+                <li key={i} className="text-cb-body text-gray-400 flex items-start gap-2">
+                  <span className="mt-2 w-1 h-1 rounded-full bg-gray-500 flex-shrink-0" />
+                  {issue}
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         <button
@@ -1480,18 +1457,18 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             if (!allMidsComplete) { setShowValidation(true); return; }
             onContinue({ locations, legalEntities: entities, profile: currentProfile });
           }}
-          className={`group w-full flex items-center justify-center gap-3 font-bold py-4 px-6 rounded-xl text-base transition-all shadow-lg ${
+          className={`w-full flex items-center justify-center gap-3 font-semibold py-4 px-6 rounded-cb text-cb-body-lg transition-colors ${
             allMidsComplete
-              ? 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-[#0E1319] shadow-amber-950/30'
+              ? 'bg-cb-accent hover:opacity-90 text-cb-bg'
               : showValidation
-              ? 'bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/25'
-              : 'bg-white/5 border border-white/10 text-gray-500'
+              ? 'bg-cb-surface-raised border border-cb-danger text-cb-danger'
+              : 'bg-cb-surface-raised border border-cb-border text-gray-500'
           }`}
         >
-          Continue to Banking <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+          Continue to Banking <ArrowRight className="w-5 h-5" />
         </button>
         {!showValidation && !allMidsComplete && (
-          <p className="text-center text-xs text-gray-600">
+          <p className="text-center text-cb-body text-gray-500">
             {!businessComplete
               ? 'Complete business details for each entity to continue.'
               : locations.length === 0
@@ -1504,17 +1481,17 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       {/* Delete location confirm */}
       {deleteConfirm && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in-0 duration-200" onClick={() => setDeleteConfirm(null)}>
-          <div className="bg-[#1A212C] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
+          <div className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-red-400" /></div>
+              <div className="w-10 h-10 rounded-full bg-cb-surface border border-cb-border flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-cb-danger" /></div>
               <div>
-                <h3 className="font-bold text-white">Remove Location?</h3>
-                <p className="text-xs text-gray-400 mt-0.5">"{deleteConfirm.dbaName}" and all its MIDs will be deleted.</p>
+                <h3 className="text-cb-body-lg font-semibold text-white">Remove Location?</h3>
+                <p className="text-cb-body text-gray-400 mt-0.5">"{deleteConfirm.dbaName}" and all its MIDs will be deleted.</p>
               </div>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => handleDeleteLocation(deleteConfirm)} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-bold text-sm py-2.5 rounded-xl transition-all">Remove</button>
-              <button onClick={() => setDeleteConfirm(null)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl">Keep</button>
+              <button onClick={() => handleDeleteLocation(deleteConfirm)} className="flex-1 bg-cb-danger hover:opacity-90 text-white font-semibold text-cb-body py-2.5 rounded-cb transition-colors">Remove</button>
+              <button onClick={() => setDeleteConfirm(null)} className="flex-1 border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong font-medium text-cb-body py-2.5 rounded-cb transition-colors">Keep</button>
             </div>
           </div>
         </div>, document.body
@@ -1523,17 +1500,17 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       {/* Delete MID confirm */}
       {deleteMidConfirm && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in-0 duration-200" onClick={() => setDeleteMidConfirm(null)}>
-          <div className="bg-[#1A212C] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
+          <div className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-red-400" /></div>
+              <div className="w-10 h-10 rounded-full bg-cb-surface border border-cb-border flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-cb-danger" /></div>
               <div>
-                <h3 className="font-bold text-white">Remove MID?</h3>
-                <p className="text-xs text-gray-400 mt-0.5">"{deleteMidConfirm.merchantName || deleteMidConfirm.dbaName}" will be permanently deleted.</p>
+                <h3 className="text-cb-body-lg font-semibold text-white">Remove MID?</h3>
+                <p className="text-cb-body text-gray-400 mt-0.5">"{deleteMidConfirm.merchantName || deleteMidConfirm.dbaName}" will be permanently deleted.</p>
               </div>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => handleDeleteMid(deleteMidConfirm)} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-bold text-sm py-2.5 rounded-xl transition-all">Remove</button>
-              <button onClick={() => setDeleteMidConfirm(null)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl">Keep</button>
+              <button onClick={() => handleDeleteMid(deleteMidConfirm)} className="flex-1 bg-cb-danger hover:opacity-90 text-white font-semibold text-cb-body py-2.5 rounded-cb transition-colors">Remove</button>
+              <button onClick={() => setDeleteMidConfirm(null)} className="flex-1 border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong font-medium text-cb-body py-2.5 rounded-cb transition-colors">Keep</button>
             </div>
           </div>
         </div>, document.body
@@ -1542,17 +1519,17 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       {/* Delete entity confirm */}
       {deleteEntityConfirm && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in-0 duration-200" onClick={() => setDeleteEntityConfirm(null)}>
-          <div className="bg-[#1A212C] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
+          <div className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-red-400" /></div>
+              <div className="w-10 h-10 rounded-full bg-cb-surface border border-cb-border flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-cb-danger" /></div>
               <div>
-                <h3 className="font-bold text-white">Remove Legal Entity?</h3>
-                <p className="text-xs text-gray-400 mt-0.5">"{deleteEntityConfirm.legalBusinessName}" will be removed. Its locations will become unassigned.</p>
+                <h3 className="text-cb-body-lg font-semibold text-white">Remove Legal Entity?</h3>
+                <p className="text-cb-body text-gray-400 mt-0.5">"{deleteEntityConfirm.legalBusinessName}" will be removed. Its locations will become unassigned.</p>
               </div>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => handleDeleteEntity(deleteEntityConfirm)} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-bold text-sm py-2.5 rounded-xl transition-all">Remove</button>
-              <button onClick={() => setDeleteEntityConfirm(null)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl">Keep</button>
+              <button onClick={() => handleDeleteEntity(deleteEntityConfirm)} className="flex-1 bg-cb-danger hover:opacity-90 text-white font-semibold text-cb-body py-2.5 rounded-cb transition-colors">Remove</button>
+              <button onClick={() => setDeleteEntityConfirm(null)} className="flex-1 border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong font-medium text-cb-body py-2.5 rounded-cb transition-colors">Keep</button>
             </div>
           </div>
         </div>, document.body
@@ -1561,12 +1538,12 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       {/* Back confirm */}
       {showBackConfirm && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in-0 duration-200" onClick={() => setShowBackConfirm(false)}>
-          <div className="bg-[#1A212C] border border-white/10 rounded-2xl shadow-2xl w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-white mb-2">Go Back?</h3>
-            <p className="text-sm text-gray-400 mb-5">Your locations and MIDs are saved.</p>
+          <div className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
+            <h3 className="font-display text-cb-title text-white mb-1">Go Back?</h3>
+            <p className="text-cb-body text-gray-400 mb-5">Your locations and MIDs are saved.</p>
             <div className="flex gap-3">
-              <button onClick={() => { setShowBackConfirm(false); onBack(); }} className="flex-1 bg-white/10 hover:bg-white/15 text-white font-bold text-sm py-2.5 rounded-xl">Go Back</button>
-              <button onClick={() => setShowBackConfirm(false)} className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl">Stay</button>
+              <button onClick={() => { setShowBackConfirm(false); onBack(); }} className="flex-1 bg-cb-surface border border-cb-border-strong hover:text-white text-gray-200 font-medium text-cb-body py-2.5 rounded-cb transition-colors">Go Back</button>
+              <button onClick={() => setShowBackConfirm(false)} className="flex-1 border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong font-medium text-cb-body py-2.5 rounded-cb transition-colors">Stay</button>
             </div>
           </div>
         </div>, document.body

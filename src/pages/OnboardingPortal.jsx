@@ -43,18 +43,9 @@ const TIER_LABELS = {
   Standard: 'Standard', Premium: 'Premium', Custom: 'Custom', TRADITIONAL: 'Traditional',
   Self_Swiped: 'Traditional Swiped', Self_Keyed: 'Traditional Keyed', Self_CashDiscount: 'Cash Discount',
 };
-const TIER_CLASSES = {
-  CUSTOM_FLAT_RATE:         'bg-purple-500/20 text-purple-400 border border-purple-500/30',
-  CUSTOM_INTERCHANGE_PLUS: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
-  SELF_SERVE_CASH_DISCOUNT: 'bg-green-500/20 text-green-400 border border-green-500/30',
-  // Legacy
-  Premium:         'bg-amber-500/20 text-amber-400 border border-amber-500/30',
-  Custom:          'bg-purple-500/20 text-purple-400 border border-purple-500/30',
-  Standard:        'bg-gray-700 text-gray-300 border border-gray-600',
-  Self_Swiped:     'bg-blue-500/20 text-blue-400 border border-blue-500/30',
-  Self_Keyed:      'bg-purple-500/20 text-purple-400 border border-purple-500/30',
-  Self_CashDiscount: 'bg-green-500/20 text-green-400 border border-green-500/30',
-};
+// Tier badge color-coding retired 2026-07-13 (token restraint pass): the plan
+// name is a label, not a status, so it renders as one quiet token badge
+// regardless of tier. TIER_LABELS above still supplies the display text.
 
 // Named export so /dev/portal-preview can render the card states in isolation
 export function MilestoneCard({ index, title, description, done, unlocked, ctaLabel, onCta, ctaDisabled, attention, attentionItems = [] }) {
@@ -64,37 +55,34 @@ export function MilestoneCard({ index, title, description, done, unlocked, ctaLa
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: index * 0.07, ease: [0.22, 1, 0.36, 1] }}
       whileHover={unlocked && !done ? { y: -2 } : undefined}
-      className={`flex items-start gap-4 rounded-2xl border px-5 py-4 transition-colors ${
-        done
-          ? 'bg-green-500/[0.07] border-green-500/25'
-          : attention
-            ? 'bg-amber-500/[0.07] border-amber-500/30'
-            : unlocked
-              ? 'bg-white/[0.03] border-white/10 hover:border-white/20'
-              : 'bg-white/[0.015] border-white/5 opacity-55'
+      className={`flex items-start gap-4 rounded-cb border px-5 py-4 transition-colors ${
+        unlocked || done
+          ? 'bg-cb-surface-raised border-cb-border hover:border-cb-border-strong'
+          : 'bg-cb-surface-raised border-cb-border opacity-55'
       }`}
     >
       <div
-        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-sm font-bold ${
-          done ? 'bg-green-500 text-white' : attention ? 'bg-amber-500 text-[#0E1319]' : unlocked ? 'bg-amber-500/15 text-amber-400 border border-amber-500/50' : 'bg-white/5 text-gray-600'
+        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-cb-body font-semibold ${
+          done ? 'bg-cb-success text-cb-bg' : attention ? 'bg-cb-accent text-cb-bg' : unlocked ? 'bg-cb-accent-muted text-cb-accent border border-cb-accent/40' : 'bg-cb-bg text-gray-600 border border-cb-border'
         }`}
       >
         {done ? <Check className="w-4 h-4" strokeWidth={3} /> : unlocked ? index : <Lock className="w-3.5 h-3.5" />}
       </div>
 
       <div className="flex-1 min-w-0">
-        <h3 className={`text-sm font-semibold ${unlocked || done ? 'text-white' : 'text-gray-500'}`}>{title}</h3>
-        <p className={`text-xs mt-0.5 ${unlocked || done ? 'text-gray-400' : 'text-gray-600'}`}>{description}</p>
+        <h3 className={`text-cb-body font-semibold ${unlocked || done ? 'text-white' : 'text-gray-500'}`}>{title}</h3>
+        <p className={`text-cb-body mt-0.5 ${unlocked || done ? 'text-gray-400' : 'text-gray-600'}`}>{description}</p>
         {/* Per-record list of what the applicant still needs to fill in */}
         {attention && attentionItems.length > 0 && (
-          <ul className="mt-2 flex flex-col gap-1">
+          <ul className="mt-2.5 flex flex-col gap-1.5">
             {attentionItems.slice(0, 5).map((it, i) => (
-              <li key={i} className="text-xs text-amber-300/90">
-                <span className="font-semibold">{it.label}:</span> {it.missing.join(', ')}
+              <li key={i} className="text-cb-body text-gray-400 flex items-start gap-2">
+                <span className="mt-1.5 w-1 h-1 rounded-full bg-cb-accent flex-shrink-0" />
+                <span><span className="font-medium text-gray-300">{it.label}:</span> {it.missing.join(', ')}</span>
               </li>
             ))}
             {attentionItems.length > 5 && (
-              <li className="text-xs text-amber-300/60">…and {attentionItems.length - 5} more</li>
+              <li className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 pl-3">…and {attentionItems.length - 5} more</li>
             )}
           </ul>
         )}
@@ -102,15 +90,15 @@ export function MilestoneCard({ index, title, description, done, unlocked, ctaLa
 
       <div className="flex-shrink-0">
         {done ? (
-          <span className="inline-flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 text-xs font-bold text-green-400 bg-green-500/15 border border-green-500/30 px-3 py-1.5 rounded-full">
-              Complete <Check className="w-3.5 h-3.5" strokeWidth={3} />
+          <span className="inline-flex items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 text-cb-caption normal-case tracking-normal text-gray-400">
+              <Check className="w-3.5 h-3.5 text-cb-success" strokeWidth={3} /> Complete
             </span>
             {/* Completed steps stay reachable for review/edits — prefilled data
                 especially needs merchant eyes on it before submission */}
             {onCta && unlocked && (
               <button onClick={onCta}
-                className="text-xs font-semibold px-3 py-1.5 rounded-lg border border-white/15 text-gray-300 hover:text-white hover:border-white/30 transition-colors">
+                className="text-cb-body font-medium px-3 py-1.5 rounded-cb border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong transition-colors">
                 Review
               </button>
             )}
@@ -119,11 +107,7 @@ export function MilestoneCard({ index, title, description, done, unlocked, ctaLa
           <button
             onClick={onCta}
             disabled={!unlocked || ctaDisabled}
-            className={`text-xs font-bold px-4 py-2 rounded-lg transition-all disabled:bg-none disabled:bg-white/5 disabled:text-gray-600 disabled:shadow-none disabled:cursor-not-allowed ${
-              attention
-                ? 'bg-amber-500 hover:bg-amber-400 text-[#0E1319]'
-                : 'bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-[#0E1319] shadow-lg shadow-amber-950/30'
-            }`}
+            className="text-cb-body font-semibold px-4 py-2 rounded-cb transition-colors bg-cb-accent hover:opacity-90 text-cb-bg disabled:bg-cb-bg disabled:text-gray-600 disabled:border disabled:border-cb-border disabled:cursor-not-allowed"
           >
             {ctaLabel}
           </button>
@@ -460,7 +444,6 @@ export default function OnboardingPortal() {
   const { applicationStatus, pricingTier } = profile;
   const isSelfServe = SELF_SERVE_TIERS.includes(pricingTier);
   const pricingTierLabel = TIER_LABELS[pricingTier] || pricingTier;
-  const pricingTierClass = TIER_CLASSES[pricingTier] || 'bg-gray-700 text-gray-300 border border-gray-600';
 
   const renderStep = () => {
     // Welcome Hub — macro-level landing page merchants see immediately upon
@@ -493,11 +476,11 @@ export default function OnboardingPortal() {
       const m3Unlocked = m1Done && m2Done;
 
       return (
-        <div className="px-6 sm:px-8 py-8 flex flex-col gap-6">
+        <div className="px-6 sm:px-8 py-10 flex flex-col gap-8">
           <div>
-            <p className="text-amber-500/80 text-xs font-semibold uppercase tracking-[0.18em] mb-1.5">Welcome back</p>
-            <h2 className="font-display text-[26px] font-semibold text-white leading-tight tracking-tight">{profile.legalName}</h2>
-            <p className="text-gray-400 text-sm mt-1.5 max-w-xl">
+            <p className="text-cb-caption uppercase text-gray-500 mb-2">Welcome back</p>
+            <h2 className="font-display text-cb-display text-white">{profile.legalName}</h2>
+            <p className="text-cb-body-lg text-gray-400 mt-2 max-w-xl">
               Here's where things stand with your Cliqbux onboarding. Work through each milestone below to get processing.
             </p>
           </div>
@@ -616,7 +599,7 @@ export default function OnboardingPortal() {
 
       <div className="pt-16 min-h-screen flex flex-col items-center justify-start px-4 py-10">
         {isImpersonating && (
-          <div className="w-full max-w-4xl mb-4 bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold px-4 py-2.5 rounded-xl text-center">
+          <div className="w-full max-w-4xl mb-4 bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-accent text-gray-300 text-cb-body px-4 py-2.5 rounded-cb">
             Viewing as workspace agent — read-only mode. This is not a merchant session.
           </div>
         )}
@@ -624,22 +607,22 @@ export default function OnboardingPortal() {
         <div className="w-full max-w-4xl mb-6">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
             <div>
-              <p className="text-gray-500 text-xs font-semibold uppercase tracking-[0.18em] mb-1">Welcome</p>
-              <h1 className="font-display text-2xl font-semibold text-white leading-tight tracking-tight">{profile.legalName}</h1>
-              <p className="text-gray-400 text-sm mt-0.5">{profile.signerEmail}</p>
+              <p className="text-cb-caption uppercase text-gray-500 mb-1">Welcome</p>
+              <h1 className="font-display text-cb-title text-white">{profile.legalName}</h1>
+              <p className="text-cb-body text-gray-500 mt-0.5">{profile.signerEmail}</p>
             </div>
-            <div className="flex flex-col items-end gap-1">
+            <div className="flex flex-col items-end gap-1.5">
               {pricingTier && (
-                <span className={`text-xs font-bold px-3 py-1 rounded-full ${pricingTierClass}`}>
+                <span className="text-cb-caption normal-case tracking-normal font-medium text-gray-300 border border-cb-border px-3 py-1 rounded-full">
                   {pricingTierLabel} Plan
                 </span>
               )}
               {isSelfServe && (
-                <span className="text-xs text-gray-500 font-medium bg-gray-800 px-2.5 py-0.5 rounded-full border border-gray-700">
+                <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
                   Self-Serve
                 </span>
               )}
-              <span className="text-xs text-gray-600 font-mono">ID: {profile.corporateId}</span>
+              <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-600 font-mono">ID: {profile.corporateId}</span>
             </div>
           </div>
         </div>
@@ -660,8 +643,8 @@ export default function OnboardingPortal() {
         </div>
 
         <div className="mt-8 text-center">
-          <p className="text-gray-600 text-xs">
-            Secured by <span className="text-amber-500 font-semibold">Cliqbux</span> &nbsp;·&nbsp; onboarding.cliqbux.com &nbsp;·&nbsp; {new Date().getFullYear()}
+          <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">
+            Secured by <span className="text-cb-accent font-medium">Cliqbux</span> &nbsp;·&nbsp; onboarding.cliqbux.com &nbsp;·&nbsp; {new Date().getFullYear()}
           </p>
         </div>
       </div>

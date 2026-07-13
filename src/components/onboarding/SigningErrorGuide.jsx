@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { AlertCircle, ArrowLeft, Loader2, ChevronDown, ChevronRight, Wrench, ShieldAlert } from 'lucide-react';
+import { AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, ShieldAlert } from 'lucide-react';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 // Maps MSPWare field names → human-readable labels + which onboarding step fixes them
@@ -112,15 +112,12 @@ function primaryStep(byStep, rawIssues) {
   return 'locations';
 }
 
+// Step color-coding retired (token restraint pass): the container already frames
+// this as an error, so each affected step reads as one quiet neutral group.
 const STEP_COLORS = {
-  locations: 'text-amber-400 bg-amber-500/10 border-amber-500/30',
-  banking:   'text-blue-400 bg-blue-500/10 border-blue-500/30',
-  verify:    'text-purple-400 bg-purple-500/10 border-purple-500/30',
-};
-
-const SEVERITY_COLORS = {
-  critical: 'text-red-300 bg-red-500/10 border-red-500/30',
-  error:    'text-amber-300 bg-amber-500/10 border-amber-500/30',
+  locations: 'text-gray-300 bg-cb-bg border-cb-border',
+  banking:   'text-gray-300 bg-cb-bg border-cb-border',
+  verify:    'text-gray-300 bg-cb-bg border-cb-border',
 };
 
 export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
@@ -183,38 +180,38 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
   }
 
   return (
-    <div className="border border-red-500/30 bg-red-500/8 rounded-xl overflow-hidden">
+    <div className="border border-cb-border border-l-2 border-l-cb-danger bg-cb-surface-raised rounded-cb overflow-hidden">
       {/* Header */}
       <div className="flex items-start gap-3 px-5 py-4">
-        <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+        <AlertCircle className="w-5 h-5 text-cb-danger flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-red-300">
+          <p className="text-cb-body font-semibold text-white">
             {app.merchantName} — Form Incomplete
           </p>
-          <p className="text-xs text-red-400/80 mt-0.5">
+          <p className="text-cb-body text-gray-400 mt-0.5">
             {app.error || 'Unable to prepare signing package: Merchant application is not complete.'}
           </p>
 
           {checking && (
             <div className="flex items-center gap-1.5 mt-2">
               <Loader2 className="w-3 h-3 text-gray-400 animate-spin" />
-              <span className="text-xs text-gray-500">Checking what's missing…</span>
+              <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Checking what's missing…</span>
             </div>
           )}
 
           {/* Actual processor rejections — shown first and always, since they are
               the true cause; the heuristic lists below can be rollback noise */}
           {processorErrors.length > 0 && (
-            <div className="mt-3 rounded-lg border px-3 py-2 text-red-300 bg-red-500/10 border-red-500/30">
-              <p className="text-[11px] font-bold uppercase tracking-wider mb-1.5">Processor Validation Errors</p>
+            <div className="mt-3 rounded-cb border px-3 py-2 text-cb-danger bg-cb-bg border-cb-border">
+              <p className="text-cb-caption uppercase mb-1.5">Processor Validation Errors</p>
               <ul className="space-y-1">
                 {processorErrors.map((e, i) => (
-                  <li key={i} className="text-[11px] flex items-start gap-1.5">
+                  <li key={i} className="text-cb-caption normal-case tracking-normal font-normal flex items-start gap-1.5">
                     <ShieldAlert className="w-3 h-3 flex-shrink-0 mt-0.5" /> {e}
                   </li>
                 ))}
               </ul>
-              <p className="text-[10px] opacity-70 mt-1.5">
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1.5">
                 Note: when the processor rejects any value, it may temporarily report other
                 fields as missing below — fix the errors above first, then retry.
               </p>
@@ -225,16 +222,16 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
             <div className="mt-3 space-y-2">
               {/* Raw issues detected from form data — most actionable, shown first */}
               {Object.entries(rawByStep).map(([step, { stepLabel, issues }]) => (
-                <div key={`raw-${step}`} className={`rounded-lg border px-3 py-2 ${STEP_COLORS[step] || 'text-gray-400 bg-white/5 border-white/10'}`}>
-                  <p className="text-[11px] font-bold uppercase tracking-wider mb-1.5">{stepLabel}</p>
+                <div key={`raw-${step}`} className={`rounded-cb border px-3 py-2 ${STEP_COLORS[step] || 'text-gray-300 bg-cb-bg border-cb-border'}`}>
+                  <p className="text-cb-caption uppercase text-gray-500 mb-1.5">{stepLabel}</p>
                   <ul className="space-y-1.5">
                     {issues.map((issue, i) => (
                       <li key={i}>
                         <div className="flex items-start gap-1.5">
-                          <ShieldAlert className="w-3 h-3 flex-shrink-0 mt-0.5 text-current" />
+                          <ShieldAlert className="w-3 h-3 flex-shrink-0 mt-0.5 text-cb-danger" />
                           <div>
-                            <p className="text-[11px] font-semibold">{issue.label}</p>
-                            {issue.detail && <p className="text-[10px] opacity-80 mt-0.5">{issue.detail}</p>}
+                            <p className="text-cb-caption normal-case tracking-normal font-medium">{issue.label}</p>
+                            {issue.detail && <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-0.5">{issue.detail}</p>}
                           </div>
                         </div>
                       </li>
@@ -245,12 +242,12 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
 
               {/* MSPWare field errors (when surfaced) */}
               {Object.entries(byStep).map(([step, { stepLabel, fields }]) => (
-                <div key={step} className={`rounded-lg border px-3 py-2 ${STEP_COLORS[step] || 'text-gray-400 bg-white/5 border-white/10'}`}>
-                  <p className="text-[11px] font-bold uppercase tracking-wider mb-1">{stepLabel}</p>
+                <div key={step} className={`rounded-cb border px-3 py-2 ${STEP_COLORS[step] || 'text-gray-300 bg-cb-bg border-cb-border'}`}>
+                  <p className="text-cb-caption uppercase text-gray-500 mb-1">{stepLabel}</p>
                   <ul className="space-y-0.5">
                     {fields.map((f, i) => (
-                      <li key={i} className="text-[11px] flex items-center gap-1">
-                        <span className="w-1 h-1 rounded-full bg-current flex-shrink-0" />
+                      <li key={i} className="text-cb-caption normal-case tracking-normal font-normal flex items-center gap-1.5">
+                        <span className="w-1 h-1 rounded-full bg-gray-500 flex-shrink-0" />
                         {f.label}
                       </li>
                     ))}
@@ -262,14 +259,14 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
               {unknown.length > 0 && (
                 <div>
                   <button onClick={() => setExpanded(e => !e)}
-                    className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-300 transition-colors">
+                    className="flex items-center gap-1 text-cb-caption normal-case tracking-normal font-normal text-gray-500 hover:text-white transition-colors">
                     {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                     {unknown.length} additional validation issue{unknown.length > 1 ? 's' : ''}
                   </button>
                   {expanded && (
                     <ul className="mt-1 space-y-0.5 pl-2">
                       {unknown.map((e, i) => (
-                        <li key={i} className="text-[10px] text-gray-500 font-mono break-all">{e}</li>
+                        <li key={i} className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 font-mono break-all">{e}</li>
                       ))}
                     </ul>
                   )}
@@ -277,7 +274,7 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
               )}
 
               {details.percentComplete !== null && (
-                <p className="text-[11px] text-gray-500">
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
                   Form {Math.round(details.percentComplete)}% complete — fix the issues above, then retry signing.
                 </p>
               )}
@@ -286,17 +283,17 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
 
           {/* No field errors but MSPWare still blocked signing */}
           {!checking && !hasDetails && details?.signaturesError && (
-            <div className="mt-2 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-              <p className="text-[11px] text-red-300 font-semibold">MSPWare validation error:</p>
-              <p className="text-[11px] text-red-400/80 mt-0.5">{details.signaturesError}</p>
-              <p className="text-[11px] text-gray-500 mt-1">
+            <div className="mt-2 bg-cb-bg border border-cb-border rounded-cb px-3 py-2">
+              <p className="text-cb-caption normal-case tracking-normal font-medium text-cb-danger">MSPWare validation error:</p>
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-400 mt-0.5">{details.signaturesError}</p>
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1">
                 Contact Cliqbux support if this persists after verifying all fields are correct.
               </p>
             </div>
           )}
 
           {!checking && !hasDetails && !details?.signaturesError && (
-            <p className="text-xs text-red-400/70 mt-1">
+            <p className="text-cb-body text-gray-400 mt-1">
               Some required fields are missing. Go back to Locations &amp; MIDs or Banking to complete them.
             </p>
           )}
@@ -305,12 +302,12 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
 
       {/* Fix buttons — one per affected step */}
       {!checking && (hasDetails || details?.signaturesError) && (
-        <div className="border-t border-red-500/20 px-5 py-3 flex flex-wrap items-center gap-2">
+        <div className="border-t border-cb-border px-5 py-3 flex flex-wrap items-center gap-2">
           {onNavigate && STEP_ORDER.filter(s => rawByStep[s] || byStep[s]).map(step => (
             step === 'verify' ? (
               <button key={step}
                 onClick={() => onNavigate('verify')}
-                className="flex items-center gap-2 text-xs font-bold text-black bg-purple-500 hover:bg-purple-400 px-4 py-2 rounded-lg transition-all"
+                className="flex items-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 px-4 py-2 rounded-cb transition-opacity"
               >
                 <Wrench className="w-3.5 h-3.5" />
                 Update Identity Info Above
@@ -318,7 +315,7 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
             ) : (
               <button key={step}
                 onClick={() => onNavigate(step)}
-                className="flex items-center gap-2 text-xs font-bold text-black bg-amber-500 hover:bg-amber-400 px-4 py-2 rounded-lg transition-all"
+                className="flex items-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 px-4 py-2 rounded-cb transition-opacity"
               >
                 <Wrench className="w-3.5 h-3.5" />
                 Fix in {rawByStep[step]?.stepLabel || byStep[step]?.stepLabel}
@@ -328,7 +325,7 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
           {onRetry && (
             <button
               onClick={onRetry}
-              className="flex items-center gap-2 text-xs font-bold text-gray-200 bg-white/10 hover:bg-white/20 border border-white/15 px-4 py-2 rounded-lg transition-all"
+              className="flex items-center gap-2 text-cb-body font-medium text-gray-200 border border-cb-border-strong hover:text-white px-4 py-2 rounded-cb transition-colors"
             >
               Retry Signing
             </button>

@@ -139,19 +139,16 @@ export default function OnboardingVerification({ profile, locations, initialSign
   return (
     <div className="flex flex-col">
       {/* Header */}
-      <div className="px-8 pt-8 pb-6 border-b border-white/10">
-        <div className="inline-flex items-center gap-2 bg-purple-500/15 text-purple-300 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
-          STEP 4 OF 4 — IDENTITY &amp; SIGNING
-        </div>
-        <div className="flex items-center justify-between gap-4">
+      <div className="px-8 pt-10 pb-8 border-b border-cb-border">
+        <p className="text-cb-caption uppercase text-gray-500 mb-2">Step 4 of 4 — Identity &amp; Signing</p>
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-1.5">Principal &amp; Corporate Verification</h2>
-            <p className="text-gray-400 text-sm">Verify all beneficial owners, then review and sign your Merchant Processing Agreement.</p>
+            <h2 className="font-display text-cb-display text-white mb-2">Principal &amp; Corporate Verification</h2>
+            <p className="text-cb-body-lg text-gray-400 max-w-xl">Verify all beneficial owners, then review and sign your Merchant Processing Agreement.</p>
           </div>
           <button
             onClick={onBack}
-            className="flex-shrink-0 flex items-center gap-2 text-sm font-medium text-gray-400 border border-white/15 hover:border-white/30 hover:bg-white/5 px-4 py-2 rounded-xl transition-all"
+            className="flex-shrink-0 flex items-center gap-2 text-cb-body text-gray-300 border border-cb-border hover:border-cb-border-strong hover:text-white px-4 py-2 rounded-cb transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             Back
@@ -159,30 +156,28 @@ export default function OnboardingVerification({ profile, locations, initialSign
         </div>
       </div>
 
-      <div className="px-8 py-6 flex flex-col gap-8">
+      <div className="px-8 py-8 flex flex-col gap-8">
         {/* Signer Roster */}
         <SignerRoster profile={profile} onValidChange={handleVerifiedChange} />
 
         {/* E-Sign Section */}
         <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${allVerified ? 'bg-purple-500/15' : 'bg-white/10'}`}>
-              <PenLine className={`w-4 h-4 ${allVerified ? 'text-purple-400' : 'text-gray-500'}`} />
-            </div>
+          <div className="flex items-center gap-2.5">
+            <PenLine className={`w-4 h-4 ${allVerified ? 'text-cb-accent' : 'text-gray-500'}`} />
             <div>
-              <p className="text-sm font-semibold text-white">Review &amp; Sign Merchant Processing Agreement</p>
-              <p className="text-xs text-gray-400">Powered by MSPWare — your agreement is generated directly from your application data</p>
+              <p className="text-cb-body font-semibold text-white">Review &amp; Sign Merchant Processing Agreement</p>
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Powered by MSPWare — your agreement is generated directly from your application data</p>
             </div>
           </div>
 
           {/* Locked until signers verified */}
           {!allVerified && (
-            <div className="border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center py-14 gap-3 bg-white/5">
-              <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center">
+            <div className="border border-cb-border rounded-cb flex flex-col items-center justify-center py-14 gap-3 bg-cb-surface-raised">
+              <div className="w-12 h-12 rounded-full bg-cb-bg border border-cb-border flex items-center justify-center">
                 <Lock className="w-6 h-6 text-gray-500" />
               </div>
-              <p className="text-sm font-semibold text-gray-400">Signing Locked</p>
-              <p className="text-xs text-gray-500 text-center max-w-xs">
+              <p className="text-cb-body font-semibold text-gray-300">Signing Locked</p>
+              <p className="text-cb-body text-gray-500 text-center max-w-xs">
                 All beneficial owners with ≥25% ownership must be verified or have a pending invitation before proceeding.
               </p>
             </div>
@@ -190,21 +185,21 @@ export default function OnboardingVerification({ profile, locations, initialSign
 
           {/* Loading */}
           {allVerified && loadingSigning && (
-            <div className="border border-white/10 rounded-xl flex flex-col items-center justify-center py-14 gap-3 bg-white/5">
+            <div className="border border-cb-border rounded-cb flex flex-col items-center justify-center py-14 gap-3 bg-cb-surface-raised">
               <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
-              <p className="text-sm font-semibold text-gray-500">Preparing your signing documents…</p>
-              <p className="text-xs text-gray-400">This may take a few seconds</p>
+              <p className="text-cb-body font-semibold text-gray-300">Preparing your signing documents…</p>
+              <p className="text-cb-body text-gray-500">This may take a few seconds</p>
             </div>
           )}
 
           {/* Error fetching signing state */}
           {allVerified && !loadingSigning && signingError && (
-            <div className="border border-red-500/30 bg-red-500/10 rounded-xl flex items-start gap-3 px-5 py-4">
-              <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="border border-cb-border border-l-2 border-l-cb-danger bg-cb-surface-raised rounded-cb flex items-start gap-3 px-5 py-4">
+              <AlertCircle className="w-5 h-5 text-cb-danger flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-red-300">Unable to Load Signing Documents</p>
-                <p className="text-xs text-red-400 mt-1">{signingError}</p>
-                <button onClick={fetchSigningState} className="mt-2 text-xs font-semibold text-red-400 underline hover:text-red-300">
+                <p className="text-cb-body font-semibold text-white">Unable to Load Signing Documents</p>
+                <p className="text-cb-body text-gray-400 mt-1">{signingError}</p>
+                <button onClick={fetchSigningState} className="mt-2 text-cb-body font-medium text-cb-accent hover:opacity-80 transition-opacity">
                   Try again
                 </button>
               </div>
@@ -219,18 +214,18 @@ export default function OnboardingVerification({ profile, locations, initialSign
                   <button
                     key={app.mspApplicationNo}
                     onClick={() => !app.error && setActiveIndex(i)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-cb text-cb-body font-medium transition-colors border ${
                       app.allSigned
-                        ? 'border-green-500/40 bg-green-500/10 text-green-300'
+                        ? 'border-cb-border bg-cb-surface-raised text-gray-300'
                         : i === activeIndex
-                        ? 'border-purple-500/50 bg-purple-500/15 text-purple-200'
+                        ? 'border-cb-accent/50 bg-cb-accent-muted text-cb-accent'
                         : app.error
-                        ? 'border-red-500/30 bg-red-500/10 text-red-400 cursor-default'
-                        : 'border-white/10 bg-white/5 text-gray-400 hover:border-white/25'
+                        ? 'border-cb-border bg-cb-surface-raised text-cb-danger cursor-default'
+                        : 'border-cb-border bg-cb-surface-raised text-gray-400 hover:border-cb-border-strong'
                     }`}
                   >
                     {app.allSigned
-                      ? <CheckCircle2 className="w-3.5 h-3.5" />
+                      ? <CheckCircle2 className="w-3.5 h-3.5 text-cb-success" />
                       : app.error
                       ? <AlertCircle className="w-3.5 h-3.5" />
                       : <span className="w-4 h-4 rounded-full border border-current flex items-center justify-center text-[10px] leading-none">{i + 1}</span>
@@ -239,7 +234,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
                   </button>
                 ))}
               </div>
-              <p className="text-xs text-gray-500">
+              <p className="text-cb-body text-gray-500">
                 {totalSigned} of {totalCount} agreement{totalCount !== 1 ? 's' : ''} signed
               </p>
             </div>
@@ -247,11 +242,11 @@ export default function OnboardingVerification({ profile, locations, initialSign
 
           {/* All signed banner */}
           {allVerified && allSigned && !loadingSigning && (
-            <div className="border border-green-500/30 bg-green-500/10 rounded-xl flex items-start gap-3 px-5 py-4">
-              <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
+            <div className="border border-cb-border border-l-2 border-l-cb-success bg-cb-surface-raised rounded-cb flex items-start gap-3 px-5 py-4">
+              <CheckCircle2 className="w-5 h-5 text-cb-success flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-green-300">All Agreements Signed</p>
-                <p className="text-xs text-green-400 mt-1">
+                <p className="text-cb-body font-semibold text-white">All Agreements Signed</p>
+                <p className="text-cb-body text-gray-400 mt-1">
                   {totalCount} agreement{totalCount !== 1 ? 's' : ''} complete. Click below to submit your application for processing.
                 </p>
               </div>
@@ -260,11 +255,11 @@ export default function OnboardingVerification({ profile, locations, initialSign
 
           {/* Active signing iframe */}
           {allVerified && activeApp && !activeApp.allSigned && !activeApp.error && activeApp.signingUrl && !loadingSigning && (
-            <div className="border border-white/10 rounded-xl overflow-hidden shadow-lg">
-              <div className="bg-white/[0.05] border-b border-white/10 px-5 py-3 flex items-center justify-between">
+            <div className="border border-cb-border rounded-cb overflow-hidden">
+              <div className="bg-cb-surface-raised border-b border-cb-border px-5 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
-                  <span className="text-xs font-semibold text-gray-200">
+                  <div className="w-1.5 h-1.5 rounded-full bg-cb-accent" />
+                  <span className="text-cb-body font-medium text-gray-200">
                     {activeApp.merchantIDName}
                     {totalCount > 1 && (
                       <span className="text-gray-500 font-normal"> — Agreement {activeIndex + 1} of {totalCount}</span>
@@ -272,7 +267,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
                   </span>
                 </div>
                 {activeApp.signers?.length > 0 && (
-                  <span className="text-xs text-gray-500">
+                  <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
                     {activeApp.signers.filter(s => s.signed).length}/{activeApp.signers.length} signed
                   </span>
                 )}
@@ -284,15 +279,15 @@ export default function OnboardingVerification({ profile, locations, initialSign
                 style={{ height: 680, border: 'none', display: 'block' }}
                 allow="same-origin"
               />
-              <div className="bg-white/[0.03] border-t border-white/10 px-5 py-3 flex items-center justify-between">
-                <p className="text-xs text-gray-500">
+              <div className="bg-cb-surface-raised border-t border-cb-border px-5 py-3 flex items-center justify-between">
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
                   Scroll through the full agreement, then click the signature fields to sign.
                   This page updates automatically when signing is complete.
                 </p>
                 {totalCount > 1 && activeIndex < totalCount - 1 && (
                   <button
                     onClick={() => setActiveIndex(i => i + 1)}
-                    className="flex-shrink-0 flex items-center gap-1 text-xs font-semibold text-gray-400 hover:text-white transition-colors ml-4"
+                    className="flex-shrink-0 flex items-center gap-1 text-cb-body font-medium text-gray-400 hover:text-white transition-colors ml-4"
                   >
                     Next <ChevronRight className="w-3.5 h-3.5" />
                   </button>
@@ -321,15 +316,15 @@ export default function OnboardingVerification({ profile, locations, initialSign
           {allVerified && allSigned && (
             <div className="flex flex-col gap-2">
               {submitError && (
-                <div className="flex items-start gap-3 bg-red-500/10 border border-red-500/30 rounded-xl px-5 py-4">
-                  <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-red-300">{submitError}</p>
+                <div className="flex items-start gap-3 bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-danger rounded-cb px-5 py-4">
+                  <AlertCircle className="w-4 h-4 text-cb-danger flex-shrink-0 mt-0.5" />
+                  <p className="text-cb-body text-gray-300">{submitError}</p>
                 </div>
               )}
               <button
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="w-full flex items-center justify-center gap-2 text-sm font-bold text-white bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 disabled:from-gray-600 disabled:to-gray-600 disabled:text-gray-400 py-3.5 rounded-xl transition-all shadow-lg shadow-green-900/30"
+                className="w-full flex items-center justify-center gap-2 text-cb-body-lg font-semibold text-cb-bg bg-cb-accent hover:opacity-90 disabled:bg-cb-surface-raised disabled:border disabled:border-cb-border disabled:text-gray-500 py-3.5 rounded-cb transition-colors"
               >
                 {submitting ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Submitting application…</>
@@ -337,7 +332,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
                   <><ShieldCheck className="w-4 h-4" /> Submit Application for Processing</>
                 )}
               </button>
-              <p className="text-center text-xs text-gray-500">
+              <p className="text-center text-cb-body text-gray-500">
                 Your signed application{totalCount > 1 ? 's' : ''} will be submitted to Elavon for underwriting review
               </p>
             </div>

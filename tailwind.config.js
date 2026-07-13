@@ -4,11 +4,6 @@ module.exports = {
   content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
   theme: {
     extend: {
-      borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)'
-      },
       colors: {
         background: 'hsl(var(--background))',
         foreground: 'hsl(var(--foreground))',
@@ -71,12 +66,50 @@ module.exports = {
           500: '#F0AD4E',
           600: '#DB8F28',
         },
+        // ── Design tokens (src/styles/tokens.css) — semantic cb-* utilities.
+        // Defined but not yet applied; approved token values live in the CSS
+        // file, never here. Usage: bg-cb-surface, border-cb-border, text-cb-accent.
+        'cb-bg': 'var(--cb-bg)',
+        'cb-surface': {
+          DEFAULT: 'var(--cb-surface)',
+          raised: 'var(--cb-surface-raised)',
+        },
+        'cb-border': {
+          DEFAULT: 'var(--cb-border)',
+          strong: 'var(--cb-border-strong)',
+        },
+        'cb-accent': {
+          DEFAULT: 'var(--cb-accent)',
+          muted: 'var(--cb-accent-muted)',
+        },
+        'cb-success': 'var(--cb-success)',
+        'cb-danger': 'var(--cb-danger)',
       },
       fontFamily: {
         heading: ['var(--font-heading)'],
         body: ['var(--font-body)'],
         display: ['var(--font-display)'],
         mono: ['var(--font-mono)']
+      },
+      // ── Token type scale — the portal's only five sizes (see tokens.css table)
+      fontSize: {
+        'cb-caption': ['12px', { lineHeight: '16px', letterSpacing: '0.04em', fontWeight: '600' }],
+        'cb-body': ['14px', { lineHeight: '20px', letterSpacing: '0', fontWeight: '400' }],
+        'cb-body-lg': ['16px', { lineHeight: '24px', letterSpacing: '-0.006em', fontWeight: '400' }],
+        'cb-title': ['20px', { lineHeight: '28px', letterSpacing: '-0.015em', fontWeight: '600' }],
+        'cb-display': ['28px', { lineHeight: '34px', letterSpacing: '-0.025em', fontWeight: '600' }],
+      },
+      // ── Token elevation — exactly two levels (cards vs overlays)
+      boxShadow: {
+        'cb-raised': 'var(--cb-shadow-raised)',
+        'cb-overlay': 'var(--cb-shadow-overlay)',
+      },
+      // ── Token radius — the one radius (rounded-cb); pills use rounded-full
+      borderRadius: {
+        cb: 'var(--cb-radius)',
+        lg: 'var(--radius)',
+        md: 'calc(var(--radius) - 2px)',
+        sm: 'calc(var(--radius) - 4px)'
       },
       keyframes: {
         'accordion-down': {

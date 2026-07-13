@@ -26,8 +26,8 @@ const TITLE_TYPES = [
   { value: 'TREASURER', label: 'Treasurer' },
 ];
 
-const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
-const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
+const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
+const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 
 function useAddressAutocomplete(onParsed) {
   const acRef = useRef(null);
@@ -212,28 +212,26 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
 
   const modal = (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+      <div className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-lg max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-white/10">
+        <div className="flex items-start justify-between px-6 py-5 border-b border-cb-border">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/15 flex items-center justify-center flex-shrink-0">
-              <ShieldCheck className="w-4 h-4 text-amber-400" />
-            </div>
+            <ShieldCheck className="w-4 h-4 text-cb-accent flex-shrink-0" />
             <div>
-              <h3 className="font-bold text-white text-base">
+              <h3 className="font-display text-cb-title text-white">
                 {isPrimary ? 'Your Details & Identity Verification' : 'Edit Signer'}
               </h3>
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-0.5">
                 {isPrimary
                   ? 'All data is encrypted and used only for underwriting'
                   : 'Identity verification is completed by this signer via their email invite'}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white p-1.5 rounded-lg transition-colors">
+          <button onClick={onClose} className="text-gray-500 hover:text-white p-1.5 rounded-cb transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -246,19 +244,19 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
             </div>
           )}
           {priorData && !lookingUp && (
-            <div className="bg-blue-500/10 border border-blue-500/25 rounded-xl px-4 py-3 flex items-start gap-3">
-              <Sparkles className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="bg-cb-bg border border-cb-border border-l-2 border-l-cb-accent rounded-cb px-4 py-3 flex items-start gap-3">
+              <Sparkles className="w-4 h-4 text-cb-accent flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-xs font-bold text-blue-300 mb-0.5">Returning signer detected</p>
-                <p className="text-[11px] text-blue-400/80">This email was previously verified on another application. Use your saved info to skip re-entry.</p>
+                <p className="text-cb-body font-medium text-white mb-0.5">Returning signer detected</p>
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-400">This email was previously verified on another application. Use your saved info to skip re-entry.</p>
               </div>
               <div className="flex flex-col gap-1.5 flex-shrink-0">
                 <button onClick={() => applyPriorData(priorData)}
-                  className="text-xs font-bold text-blue-300 bg-blue-500/20 border border-blue-500/30 hover:bg-blue-500/30 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                  className="text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 px-3 py-1.5 rounded-cb transition-opacity whitespace-nowrap">
                   Use Saved Info
                 </button>
                 <button onClick={() => setPriorData(null)}
-                  className="text-[11px] text-gray-500 hover:text-white text-center transition-colors">
+                  className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 hover:text-white text-center transition-colors">
                   Start fresh
                 </button>
               </div>
@@ -289,8 +287,8 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
           {/* Identity verification — primary signer only */}
           {isPrimary && (
             <>
-              <div className="border-t border-white/10 pt-4">
-                <p className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">Identity Verification</p>
+              <div className="border-t border-cb-border pt-4">
+                <p className="text-cb-caption uppercase text-gray-500">Identity Verification</p>
               </div>
 
               {/* DOB */}
@@ -335,9 +333,9 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
               <div>
                 <label className={labelCls}>Home Address *</label>
                 {addressVerified ? (
-                  <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-3.5 py-2.5">
-                    <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
-                    <span className="text-sm text-green-300 flex-1 truncate">{addressDisplay}</span>
+                  <div className="flex items-center gap-2.5 bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-cb-success flex-shrink-0" />
+                    <span className="text-cb-body text-gray-300 flex-1 truncate">{addressDisplay}</span>
                     <button type="button" onClick={() => { setAddressVerified(false); setAddressDisplay(''); setForm(p => ({ ...p, homeStreet: '', homeCity: '', homeState: '', homeZip: '' })); }}
                       className="text-gray-500 hover:text-white"><X className="w-3.5 h-3.5" /></button>
                   </div>
@@ -371,16 +369,16 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
           )}
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300">{error}</div>
+            <div className="bg-cb-bg border border-cb-border border-l-2 border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-cb-danger">{error}</div>
           )}
 
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={handleSave} disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 text-sm font-bold text-black bg-amber-500 hover:bg-amber-400 disabled:bg-gray-600 disabled:text-gray-400 px-5 py-3 rounded-xl transition-all">
+              className="flex-1 flex items-center justify-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 px-5 py-3 rounded-cb transition-all">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (isPrimary ? <ShieldCheck className="w-4 h-4" /> : <Save className="w-4 h-4" />)}
               {saving ? 'Saving...' : (isPrimary ? 'Save & Verify' : 'Save')}
             </button>
-            <button type="button" onClick={onClose} className="px-4 py-3 text-sm font-medium text-gray-400 border border-white/15 hover:text-white hover:border-white/30 rounded-xl transition-colors">
+            <button type="button" onClick={onClose} className="px-4 py-3 text-cb-body font-medium text-gray-400 border border-cb-border hover:text-white hover:border-cb-border-strong rounded-cb transition-colors">
               Cancel
             </button>
           </div>

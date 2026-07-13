@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import {
-  ArrowRight, ArrowLeft, Loader2, Store, Landmark, CheckCircle2,
-  MapPin, Building2, CreditCard, Banknote, Check, ChevronDown
+  ArrowRight, ArrowLeft, Loader2, Landmark,
+  CreditCard, Banknote, Check, ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
-const inputCls = 'w-full bg-[#10151C] border border-white/12 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 transition-colors hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-500/70 focus:border-transparent';
-const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
+const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
+const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 
 function formatEIN(raw) {
   const d = (raw || '').replace(/\D/g, '');
@@ -92,30 +92,22 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
     await saveBank({ routingNumber: acct.routingNumber, accountNumber: acct.accountNumber, authMethod: 'Plaid', accountNumberMasked: `••••${acct.mask || ''}`, accountType: acct.subtype || null });
   };
 
-  // Saved state — show summary styled as a mini bank card
+  // Saved state — quiet summary row, success carried by a small check, not fill
   if (saved) {
     const displayAccount = bankDetails?.accountNumberMasked || '••••';
     return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-        className="relative overflow-hidden flex items-center justify-between rounded-2xl border border-green-500/25 bg-gradient-to-br from-green-500/[0.12] via-white/[0.02] to-transparent px-4 py-3.5"
-      >
+      <div className="flex items-center justify-between rounded-cb border border-cb-border bg-cb-bg px-4 py-3.5">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-green-500/15 border border-green-500/25 flex items-center justify-center flex-shrink-0">
-            <Landmark className="w-4 h-4 text-green-400" />
-          </div>
+          <Check className="w-4 h-4 text-cb-success flex-shrink-0" />
           <div>
-            <p className="text-xs font-bold text-green-300 flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" />
+            <p className="text-cb-body font-medium text-white">
               {bankDetails?.authMethod === 'Plaid' ? 'Bank Linked via Plaid' : 'Manual Bank Entry'}
             </p>
-            <p className="text-[11px] text-green-400/70 font-mono mt-0.5">{displayAccount} · Routing ••••{bankDetails?.routingNumber?.slice(-4)}</p>
+            <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 font-mono mt-0.5">{displayAccount} · Routing ••••{bankDetails?.routingNumber?.slice(-4)}</p>
           </div>
         </div>
-        <button onClick={() => { setSaved(false); setMode('connect'); }} className="text-[10px] font-semibold text-gray-400 hover:text-white border border-white/10 hover:border-white/25 rounded-lg px-2.5 py-1.5 transition-colors">Change</button>
-      </motion.div>
+        <button onClick={() => { setSaved(false); setMode('connect'); }} className="text-cb-caption normal-case tracking-normal text-gray-400 hover:text-white border border-cb-border hover:border-cb-border-strong rounded-cb px-2.5 py-1.5 transition-colors">Change</button>
+      </div>
     );
   }
 
@@ -125,29 +117,29 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
     <div className="space-y-3">
       {/* Reuse banner */}
       {canReuse && (
-        <div className="flex items-center justify-between bg-blue-500/10 border border-blue-500/20 rounded-xl px-3.5 py-2.5">
-          <div className="flex items-center gap-2">
-            <Banknote className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+        <div className="flex items-center justify-between bg-cb-bg border border-cb-border rounded-cb px-4 py-2.5">
+          <div className="flex items-center gap-2.5">
+            <Banknote className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
             <div>
-              <p className="text-xs font-semibold text-blue-300">Another location in this entity uses this account</p>
-              <p className="text-[11px] text-blue-400/70 font-mono">{reuseDetails.accountNumberMasked} · Routing ••••{reuseDetails.routingNumber?.slice(-4)}</p>
+              <p className="text-cb-body font-medium text-white">Another location in this entity uses this account</p>
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 font-mono">{reuseDetails.accountNumberMasked} · Routing ••••{reuseDetails.routingNumber?.slice(-4)}</p>
             </div>
           </div>
           <button onClick={() => saveBank(reuseDetails)} disabled={saving}
-            className="text-xs font-bold text-blue-300 border border-blue-500/30 rounded-lg px-2.5 py-1.5 hover:bg-blue-500/15 transition-colors disabled:opacity-50">
+            className="text-cb-body font-medium text-gray-200 border border-cb-border-strong rounded-cb px-3 py-1.5 hover:text-white transition-colors disabled:opacity-50">
             {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Use Same'}
           </button>
         </div>
       )}
 
       {/* Mode toggle — segmented control */}
-      <div className="flex gap-1 bg-white/[0.04] border border-white/10 rounded-xl p-1">
+      <div className="flex gap-1 bg-cb-bg border border-cb-border rounded-cb p-1">
         <button onClick={() => setMode('connect')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold border transition-all ${mode === 'connect' || mode === 'plaid' ? 'bg-amber-500/15 border-amber-500/35 text-amber-300 shadow-sm' : 'border-transparent text-gray-400 hover:text-white'}`}>
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-cb text-cb-body font-medium transition-colors ${mode === 'connect' || mode === 'plaid' ? 'bg-cb-accent-muted text-cb-accent' : 'text-gray-400 hover:text-white'}`}>
           <Landmark className="w-3.5 h-3.5" /> Plaid (Instant)
         </button>
         <button onClick={() => setMode('manual')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold border transition-all ${mode === 'manual' ? 'bg-white/10 border-white/15 text-white shadow-sm' : 'border-transparent text-gray-400 hover:text-white'}`}>
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-cb text-cb-body font-medium transition-colors ${mode === 'manual' ? 'bg-cb-surface text-white' : 'text-gray-400 hover:text-white'}`}>
           <Banknote className="w-3.5 h-3.5" /> Manual Entry
         </button>
       </div>
@@ -161,18 +153,18 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
             </select>
           ) : (
             <button onClick={handlePlaidConnect} disabled={connecting}
-              className="w-full flex items-center justify-center gap-2 border border-dashed border-amber-500/40 hover:border-amber-400 hover:bg-amber-500/10 rounded-xl py-3 text-sm font-semibold text-amber-400 transition-all disabled:opacity-50">
+              className="w-full flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 rounded-cb py-3 text-cb-body font-semibold text-cb-bg transition-all disabled:opacity-50">
               {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Landmark className="w-4 h-4" />}
               {connecting ? 'Connecting…' : 'Link Bank Account via Plaid'}
             </button>
           )}
-          {plaidError && <p className="text-[11px] text-red-400">{plaidError}</p>}
+          {plaidError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">{plaidError}</p>}
         </div>
       )}
 
       {mode === 'manual' && (
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Routing # (9 digits)</label>
               <input type="text" value={routing} maxLength={9}
@@ -197,7 +189,7 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
           </div>
           <button onClick={() => saveBank({ routingNumber: routing, accountNumber: account, authMethod: 'Manual', accountNumberMasked: `••••${account.slice(-4)}`, accountType })}
             disabled={saving || routing.length !== 9 || account.length < 4 || !accountType}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 text-[#0E1319] font-bold text-sm py-2.5 rounded-xl transition-all shadow-lg shadow-amber-950/20">
+            className="w-full flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 text-cb-bg font-semibold text-cb-body py-2.5 rounded-cb transition-all">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
             {saving ? 'Saving…' : 'Save Bank Details'}
           </button>
@@ -214,31 +206,28 @@ function LocationBankingRow({ location, corporateId, merchantIDs, bankDetails, r
   const hasBanking = !!(bankDetails?.routingNumber);
 
   return (
-    <div className={`rounded-2xl border transition-all ${isExpanded ? 'border-amber-500/30 bg-[#1A212C]' : hasBanking ? 'border-green-500/20 bg-[#1A212C]' : 'border-white/10 bg-[#1A212C] hover:border-white/20'}`}>
+    <div className={`rounded-cb border transition-colors ${isExpanded ? 'border-cb-border-strong bg-cb-surface-raised' : 'border-cb-border bg-cb-surface-raised hover:border-cb-border-strong'}`}>
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-4 cursor-pointer" onClick={onToggleExpand}>
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${hasBanking ? 'bg-green-500/15' : 'bg-amber-500/10'}`}>
-          {hasBanking ? <CheckCircle2 className="w-4.5 h-4.5 text-green-400" /> : <Store className="w-4.5 h-4.5 text-amber-400" />}
-        </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-white truncate">{location.dbaName}</p>
-          <p className="text-[11px] text-gray-400 truncate flex items-center gap-1">
-            <MapPin className="w-3 h-3 flex-shrink-0" />{location.businessAddress}
-          </p>
+          <p className="text-cb-body font-semibold text-white truncate">{location.dbaName}</p>
+          <p className="text-cb-body text-gray-500 truncate">{location.businessAddress}</p>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-3 flex-shrink-0">
           {locMids.length > 0 && (
-            <span className="text-[10px] text-gray-500 bg-white/5 rounded-full px-2 py-0.5">
+            <span className="text-cb-caption text-gray-500">
               {locMids.length} MID{locMids.length !== 1 ? 's' : ''}
             </span>
           )}
           {hasBanking ? (
-            <span className="text-[10px] font-bold text-green-400 bg-green-500/10 border border-green-500/20 rounded-full px-2 py-0.5">
-              {bankDetails.authMethod === 'Plaid' ? '✓ Plaid' : '✓ Manual'}
+            <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-cb-success flex-shrink-0" />
+              {bankDetails.authMethod === 'Plaid' ? 'Plaid' : 'Manual'}
             </span>
           ) : (
-            <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">
-              Needs Bank
+            <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-accent whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-cb-accent flex-shrink-0" />
+              Needs bank
             </span>
           )}
           <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
@@ -256,13 +245,13 @@ function LocationBankingRow({ location, corporateId, merchantIDs, bankDetails, r
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             className="overflow-hidden"
           >
-            <div className="border-t border-white/5 px-5 py-5">
+            <div className="border-t border-cb-border px-5 py-5">
               {/* MIDs reference */}
               {locMids.length > 0 && (
-                <div className="mb-4 flex flex-wrap gap-1.5">
+                <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1.5">
                   {locMids.map(m => (
-                    <span key={m.id} className="flex items-center gap-1 text-[10px] text-blue-400/70 bg-blue-500/10 border border-blue-500/15 rounded-full px-2 py-0.5">
-                      <CreditCard className="w-2.5 h-2.5" /> {m.merchantName || m.dbaName} {m.mccCode && `· ${m.mccCode}`}
+                    <span key={m.id} className="inline-flex items-center gap-1.5 text-cb-caption normal-case tracking-normal font-normal text-gray-500">
+                      <CreditCard className="w-3 h-3 flex-shrink-0" /> {m.merchantName || m.dbaName}{m.mccCode && ` · ${m.mccCode}`}
                     </span>
                   ))}
                 </div>
@@ -376,44 +365,39 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
       <div className="skeleton h-6 w-40" />
       <div className="skeleton h-9 w-2/3" />
       <div className="skeleton h-4 w-1/2" />
-      <div className="skeleton h-16 w-full !rounded-2xl" />
-      <div className="skeleton h-16 w-full !rounded-2xl" />
-      <div className="skeleton h-14 w-full !rounded-xl" />
+      <div className="skeleton h-16 w-full !rounded-cb" />
+      <div className="skeleton h-16 w-full !rounded-cb" />
+      <div className="skeleton h-14 w-full !rounded-cb" />
     </div>
   );
 
   return (
     <div className="flex flex-col">
       {/* Header */}
-      <div className="px-8 pt-8 pb-6 border-b border-white/10">
-        <div className="inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/25 text-amber-300 text-[11px] font-bold tracking-wider px-3 py-1.5 rounded-full mb-3">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-          STEP 3 OF 4 — BANKING
-        </div>
+      <div className="px-8 pt-10 pb-8 border-b border-cb-border">
+        <p className="text-cb-caption uppercase text-gray-500 mb-2">Step 3 of 4 — Banking</p>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-display text-2xl font-semibold tracking-tight text-white mb-1.5">Link Bank Accounts</h2>
-            <p className="text-gray-400 text-sm">Connect a bank account to each location. Locations under the same legal entity can share an account.</p>
+            <h2 className="font-display text-cb-display text-white mb-2">Link Bank Accounts</h2>
+            <p className="text-cb-body-lg text-gray-400 max-w-xl">Connect a bank account to each location. Locations under the same legal entity can share an account.</p>
           </div>
           <button onClick={onBack}
-            className="flex-shrink-0 flex items-center gap-2 text-sm font-medium text-gray-300 border border-white/15 hover:border-white/30 hover:bg-white/5 px-4 py-2 rounded-xl transition-all">
+            className="flex-shrink-0 flex items-center gap-2 text-cb-body text-gray-300 border border-cb-border hover:border-cb-border-strong hover:text-white px-4 py-2 rounded-cb transition-colors">
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
         </div>
       </div>
 
-      {/* Progress bar */}
-      <div className="px-8 py-4 border-b border-white/5">
+      {/* Progress */}
+      <div className="px-8 py-4 border-b border-cb-border">
         <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-semibold text-gray-400">{bankingCount} of {locations.length} locations linked</p>
-          {bankingComplete && <span className="text-xs font-bold text-green-400 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5" /> All done</span>}
+          <p className="text-cb-body text-gray-400"><span className="text-white font-semibold">{bankingCount} of {locations.length}</span> locations linked</p>
+          {bankingComplete && <span className="text-cb-caption normal-case tracking-normal text-cb-success flex items-center gap-1.5"><Check className="w-3.5 h-3.5" /> All done</span>}
         </div>
-        <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
-          <motion.div
-            className="bg-gradient-to-r from-amber-600 to-amber-400 h-1.5 rounded-full"
-            initial={false}
-            animate={{ width: `${locations.length > 0 ? (bankingCount / locations.length) * 100 : 0}%` }}
-            transition={{ type: 'spring', stiffness: 90, damping: 20 }}
+        <div className="w-full bg-cb-border rounded-full h-1 overflow-hidden">
+          <div
+            className="bg-cb-accent h-1 rounded-full transition-[width] duration-500 ease-out"
+            style={{ width: `${locations.length > 0 ? (bankingCount / locations.length) * 100 : 0}%` }}
           />
         </div>
       </div>
@@ -426,11 +410,10 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
           return (
             <div key={entity.entityId}>
               {entities.length > 1 && (
-                <div className="flex items-center gap-2 mb-3 px-1">
-                  <Building2 className="w-3.5 h-3.5 text-amber-400/60" />
-                  <span className="text-[11px] font-bold text-amber-300/80 uppercase tracking-wider">{entity.legalBusinessName}</span>
-                  {entity.federalEIN && <span className="text-[10px] text-gray-600 font-mono">{formatEIN(entity.federalEIN)}</span>}
-                  <span className="text-[10px] text-gray-600 ml-1">· locations in this entity can share an account</span>
+                <div className="flex items-baseline gap-2.5 mb-3 px-1 flex-wrap">
+                  <span className="font-display text-cb-title text-white">{entity.legalBusinessName}</span>
+                  {entity.federalEIN && <span className="text-cb-caption text-gray-500 font-mono normal-case tracking-normal">EIN {formatEIN(entity.federalEIN)}</span>}
+                  <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">· locations here can share an account</span>
                 </div>
               )}
               <div className="space-y-2">
@@ -489,14 +472,14 @@ export default function OnboardingBanking({ profile, onContinue, onBack }) {
       </div>
 
       {/* Footer */}
-      <div className="px-8 pt-2 pb-8 border-t border-white/10 space-y-3">
+      <div className="px-8 pt-6 pb-10 border-t border-cb-border space-y-4">
         <button onClick={() => onContinue({ locations, legalEntities: entities })}
           disabled={!bankingComplete}
-          className="group w-full flex items-center justify-center gap-3 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 disabled:shadow-none text-[#0E1319] font-bold py-4 px-6 rounded-xl text-base transition-all shadow-lg shadow-amber-950/30">
-          Continue to Signing <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+          className="w-full flex items-center justify-center gap-3 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface-raised disabled:border disabled:border-cb-border disabled:text-gray-500 text-cb-bg font-semibold py-4 px-6 rounded-cb text-cb-body-lg transition-colors">
+          Continue to Signing <ArrowRight className="w-5 h-5" />
         </button>
         {!bankingComplete && (
-          <p className="text-center text-xs text-amber-600/80">
+          <p className="text-center text-cb-body text-gray-500">
             {locations.length - bankingCount} location{locations.length - bankingCount !== 1 ? 's' : ''} still need{locations.length - bankingCount === 1 ? 's' : ''} a bank account.
           </p>
         )}
