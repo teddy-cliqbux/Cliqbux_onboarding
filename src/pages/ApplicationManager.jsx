@@ -32,6 +32,83 @@ function normalizeTrackStep(step) {
   return STEP_ORDER.includes(step) ? step : 'locations';
 }
 
+function formatDuration(totalSeconds) {
+  const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const rem = s % 60;
+  if (m < 60) return rem ? `${m}m ${rem}s` : `${m}m`;
+  const h = Math.floor(m / 60);
+  const mins = m % 60;
+  return mins ? `${h}h ${mins}m` : `${h}h`;
+}
+
+function formatActivityAt(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '—';
+  }
+}
+
+const ACTIVITY_EVENT_LABELS = {
+  invite_sent: 'Invite email sent',
+  portal_open: 'Portal opened',
+  session_tick: 'Session time',
+};
+
+function PortalActivityPanel({ activity }) {
+  const a = activity || {};
+  const recent = Array.isArray(a.recent) ? a.recent : [];
+  const hasAny = (a.invitesSent || a.merchantOpens || a.agentOpens || a.merchantSeconds || a.agentSeconds);
+  const stats = [
+    { label: 'Invites sent', value: a.invitesSent || 0, sub: a.lastInviteAt ? `Last ${formatActivityAt(a.lastInviteAt)}` : 'None yet' },
+    { label: 'Merchant opens', value: a.merchantOpens || 0, sub: a.merchantLastOpenAt ? `Last ${formatActivityAt(a.merchantLastOpenAt)}` : 'None yet' },
+    { label: 'Merchant time', value: formatDuration(a.merchantSeconds), sub: 'Time in portal' },
+    { label: 'Agent opens', value: a.agentOpens || 0, sub: a.agentLastOpenAt ? `Last ${formatActivityAt(a.agentLastOpenAt)}` : 'None yet' },
+    { label: 'Agent time', value: formatDuration(a.agentSeconds), sub: 'Impersonation' },
+  ];
+
+  return (
+    <div>
+      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Portal activity</p>
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
+        {stats.map(st => (
+          <div key={st.label} className="rounded-xl border border-white/8 bg-white/[0.02] px-2.5 py-2">
+            <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">{st.label}</p>
+            <p className="text-sm font-bold text-white mt-0.5">{st.value}</p>
+            <p className="text-[9px] text-gray-600 mt-0.5 truncate">{st.sub}</p>
+          </div>
+        ))}
+      </div>
+      {recent.length > 0 && (
+        <div className="rounded-xl border border-white/8 bg-[#111318]/50 divide-y divide-white/5 max-h-40 overflow-y-auto">
+          {recent.slice(0, 12).map((ev, i) => (
+            <div key={`${ev.at}-${i}`} className="flex items-center gap-2 px-3 py-1.5">
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
+                ev.actor === 'agent'
+                  ? 'text-amber-400 border-amber-500/30 bg-amber-500/10'
+                  : 'text-blue-400 border-blue-500/30 bg-blue-500/10'
+              }`}>
+                {ev.actor === 'agent' ? 'Agent' : 'Merchant'}
+              </span>
+              <p className="text-[11px] text-gray-300 flex-1 truncate">
+                {ACTIVITY_EVENT_LABELS[ev.type] || ev.type}
+                {ev.detail ? ` · ${ev.detail}` : ''}
+              </p>
+              <p className="text-[10px] text-gray-600 flex-shrink-0">{formatActivityAt(ev.at)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {!hasAny && (
+        <p className="text-[11px] text-gray-600">No portal activity recorded yet. Sends, opens, and time-in-app will appear here.</p>
+      )}
+    </div>
+  );
+}
+
 function humanizeMspError(err) {
   const raw = typeof err === 'string' ? err : (err?.message || err?.description || JSON.stringify(err));
   const s = String(raw).toLowerCase();
@@ -108,36 +185,82 @@ function ProgressBar({ pct }) {
 }
 
 // ── Step Tracker ──────────────────────────────────────────────────────────────
+// Portal funnel: Locations → Banking → Signing → Submitted
 function StepTracker({ currentStep, completedSteps, missingByStep }) {
   const activeStep = normalizeTrackStep(currentStep);
+  const SHORT = { locations: 'Loc', banking: 'Bank', verification: 'Sign', submitted: 'Done' };
   return (
-    <div className="flex items-center gap-0.5">
+    <div className="flex items-start gap-0">
       {STEP_ORDER.map((step, i) => {
         const done = !!(completedSteps?.[step] || completedSteps?.[step === 'verification' ? 'verify' : step])
           || activeStep === 'submitted';
         const active = activeStep === step && !done;
         const miss = missingByStep?.[step] || 0;
         return (
-          <div
-            key={step}
-            className="flex items-center"
-            title={`${STEP_LABELS_MAP[step]}${active ? ' · current bottleneck' : ''}${miss ? ` · ${miss} missing` : ''}`}
-          >
-            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold border transition-all ${
-              done   ? 'bg-green-500 border-green-500 text-white' :
-              active ? 'bg-amber-500 border-amber-400 text-black ring-2 ring-amber-400/50' :
-                       'bg-transparent border-gray-700 text-gray-700'
-            }`}>
-              {done ? '✓' : (miss > 0 ? miss : i + 1)}
+          <div key={step} className="flex items-start">
+            <div
+              className="flex flex-col items-center w-9"
+              title={`${STEP_LABELS_MAP[step]}${active ? ' · current' : ''}${miss ? ` · ${miss} missing` : ''}`}
+            >
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold border transition-all ${
+                done   ? 'bg-green-500 border-green-500 text-white' :
+                active ? 'bg-amber-500 border-amber-400 text-black ring-2 ring-amber-400/50' :
+                         'bg-transparent border-gray-700 text-gray-600'
+              }`}>
+                {done ? '✓' : (miss > 0 ? miss : i + 1)}
+              </div>
+              <span className={`mt-0.5 text-[8px] font-semibold leading-none ${
+                active ? 'text-amber-400' : done ? 'text-green-500/80' : 'text-gray-600'
+              }`}>
+                {SHORT[step]}
+              </span>
             </div>
             {i < STEP_ORDER.length - 1 && (
-              <div className={`w-3 h-0.5 ${done ? 'bg-green-500/40' : active ? 'bg-amber-500/60' : 'bg-gray-700'}`} />
+              <div className={`w-3 h-0.5 mt-2.5 flex-shrink-0 ${done ? 'bg-green-500/40' : active ? 'bg-amber-500/60' : 'bg-gray-700'}`} />
             )}
           </div>
         );
       })}
     </div>
   );
+}
+
+/** Infer funnel position from track record + live entity data (track alone can lag). */
+function resolvePipelineProgress({ profile, track, locations, signers }) {
+  const p = track?.prefilledData || {};
+  const appStatus = p.applicationStatus || profile?.applicationStatus || 'Incomplete';
+  const completed = { ...(p.completedSteps || {}) };
+
+  if (appStatus === 'Submitted' || p.currentStep === 'submitted') {
+    return {
+      currentStep: 'submitted',
+      completedSteps: { locations: true, banking: true, verification: true, submitted: true },
+      appStatus,
+    };
+  }
+
+  const locs = locations || [];
+  const sigs = signers || [];
+  const detailLoaded = locs.length > 0 || sigs.length > 0;
+  const hasLocs = locs.length > 0;
+  const allBanked = hasLocs && locs.every(l => l.bankDetails?.routingNumber);
+  const primaryOk = sigs.some(s => s.isPrimarySigner && s.identityStatus === 'Verified');
+
+  if (hasLocs) completed.locations = true;
+  if (allBanked) completed.banking = true;
+  if (primaryOk && allBanked) completed.verification = true;
+
+  let step = normalizeTrackStep(p.currentStep || 'locations');
+
+  // Only upgrade from live data once detail has been loaded for this row
+  if (detailLoaded) {
+    if (allBanked && primaryOk) step = 'verification';
+    else if (allBanked) step = 'verification';
+    else if (hasLocs) step = 'banking';
+    else step = 'locations';
+  }
+
+  return { currentStep: step, completedSteps: completed, appStatus };
 }
 
 // ── MID Row with MSP progress bar ─────────────────────────────────────────────
@@ -622,6 +745,12 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
         const directLink = `${publicUrl}/?corporateId=${corporateId}`;
         const res = await base44.functions.invoke('sendResumeLink', { email, corporateId, link: directLink });
         if (res.data?.error) throw new Error(res.data.error);
+        // Resume-link path doesn't go through manageStagedApplication send — log invite here
+        await base44.functions.invoke('manageStagedApplication', {
+          action: 'trackProgress',
+          corporateId,
+          data: { activityEvent: { type: 'invite_sent', actor: 'agent', email } },
+        }).catch(() => {});
         setLink(directLink);
         onSent(null);
       }
@@ -690,6 +819,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
 function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onSend, onDelete, onDeleteMerchant }) {
   const [expanded, setExpanded]         = useState(false);
   const [mids, setMids]                 = useState([]);
+  const [locations, setLocations]       = useState([]);
   const [signers, setSigners]           = useState([]);
   const [mspStatuses, setMspStatuses]   = useState({});
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -698,12 +828,6 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const [impersonating, setImpersonating] = useState(false);
 
   const p = trackStage?.prefilledData || {};
-  const appStatus = p.applicationStatus || profile?.applicationStatus || 'Incomplete';
-  const currentStep = normalizeTrackStep(p.currentStep || (
-    appStatus === 'Submitted' ? 'submitted' :
-    (appStatus === 'Quote Signed' || appStatus === 'Pricing Selected') ? 'locations' : 'locations'
-  ));
-  const completedSteps = p.completedSteps || { ...(appStatus !== 'Incomplete' ? { locations: true } : {}) };
   const missingByStep = p.missingByStep || p.missingCounts || {};
   const lastSeen = p.lastSeenAt
     ? new Date(p.lastSeenAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -713,6 +837,14 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     || adminStages.find(s => s.status === 'ready')
     || adminStages[0]
     || null;
+
+  const pipeline = resolvePipelineProgress({
+    profile,
+    track: trackStage,
+    locations,
+    signers,
+  });
+  const { currentStep, completedSteps, appStatus } = pipeline;
 
   const isSubmitted = appStatus === 'Submitted' || currentStep === 'submitted';
   const isStuck = !isSubmitted && p.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) > 3 * 24 * 60 * 60 * 1000;
@@ -730,13 +862,15 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     if (next && mids.length === 0) {
       setLoadingDetail(true);
       try {
-        const [midRes, sigRes] = await Promise.all([
+        const [midRes, sigRes, locRes] = await Promise.all([
           base44.functions.invoke('manageMerchantID', { action: 'list', corporateId }),
           base44.functions.invoke('manageSigner', { action: 'list', corporateId }),
+          base44.functions.invoke('listLocations', { corporateId }),
         ]);
         const loadedMids = midRes.data?.merchantIDs || [];
         setMids(loadedMids);
         setSigners(sigRes.data?.signers || []);
+        setLocations(locRes.data?.locations || []);
 
         const midsWithApp = loadedMids.filter(m => m.mspApplicationNo);
         if (midsWithApp.length > 0) {
@@ -829,11 +963,8 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
         </div>
 
         {/* Step tracker */}
-        <div className="hidden md:flex flex-col items-end gap-1 flex-shrink-0">
+        <div className="hidden md:flex flex-col items-center gap-0.5 flex-shrink-0 px-1">
           <StepTracker currentStep={currentStep} completedSteps={completedSteps} missingByStep={missingByStep} />
-          <p className={`text-[10px] ${!isSubmitted && currentStep === 'banking' ? 'text-amber-400 font-semibold' : 'text-gray-500'}`}>
-            {STEP_LABELS_MAP[currentStep] || currentStep}
-          </p>
         </div>
 
         {/* Health + actions */}
@@ -877,36 +1008,6 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
         </div>
       </div>
 
-      {/* Existing application config chip — one per merchant; click label to edit */}
-      {linkStage && (
-        <div className="border-t border-white/5 px-4 py-2 flex flex-wrap gap-2">
-          <div className="flex items-center gap-1.5 bg-[#111318] border border-white/8 rounded-lg px-2.5 py-1.5">
-            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_STYLES[linkStage.status] || STATUS_STYLES.draft}`}>{linkStage.status}</span>
-            <button
-              onClick={() => onEdit(corporateId, merchantName, linkStage)}
-              title="Edit which locations and signers appear in the portal"
-              className="text-xs text-gray-300 font-medium truncate max-w-[160px] hover:text-amber-300 transition-colors text-left"
-            >
-              {linkStage.label || 'Application'}
-            </button>
-            <button onClick={(e) => copyInviteLink(e, linkStage)}
-              className={`ml-1 ${copied === linkStage.id ? 'text-green-400' : 'text-gray-600 hover:text-blue-400'} transition-colors`}>
-              {copied === linkStage.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            </button>
-            <button onClick={openMerchantView} title="View as merchant" className="text-gray-600 hover:text-amber-300">
-              <Eye className="w-3 h-3" />
-            </button>
-            <button onClick={() => onSend(linkStage, corporateId, linkStage.sentToEmail || p.signerEmail || '')} className="text-gray-600 hover:text-green-400 transition-colors"><Send className="w-3 h-3" /></button>
-            <button onClick={() => onDelete(linkStage)} className="text-gray-600 hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
-          </div>
-          {adminStages.length > 1 && (
-            <p className="text-[10px] text-amber-400/80 self-center">
-              {adminStages.length - 1} extra stage record{adminStages.length > 2 ? 's' : ''} — edit uses the primary one; delete extras if leftover
-            </p>
-          )}
-        </div>
-      )}
-
       {/* Expanded detail */}
       {expanded && (
         <div className="border-t border-white/5 bg-[#111318]/60">
@@ -917,6 +1018,8 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             </div>
           ) : (
             <div className="p-4 space-y-4">
+              <PortalActivityPanel activity={p.activity} />
+
               {/* MIDs */}
               {mids.length > 0 && (
                 <div>
@@ -1222,7 +1325,13 @@ export default function ApplicationManager() {
           corporateId={sending.corporateId}
           prefillEmail={sending.prefillEmail}
           publicUrl={publicUrl}
-          onSent={s => s && setAllStages(prev => prev.map(x => x.id === s.id ? s : x))}
+          onSent={async (s) => {
+            if (s) setAllStages(prev => prev.map(x => x.id === s.id ? s : x));
+            try {
+              const stagesRes = await base44.functions.invoke('manageStagedApplication', { action: 'list' });
+              if (stagesRes.data?.stages) setAllStages(stagesRes.data.stages);
+            } catch (_) { /* keep local state */ }
+          }}
           onClose={() => setSending(null)} />
       )}
 

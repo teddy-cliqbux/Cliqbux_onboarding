@@ -367,15 +367,23 @@ export default function OnboardingPortal() {
       setProfile(mergedProfile);
       setLocations(filteredLocations);
       setReadiness(data.readiness || null);
-      // Track that merchant opened the portal — creates a record if none exists
+      // Heartbeat metadata + portal_open activity (once per browser tab session).
+      // Do NOT send currentStep here — that was rewinding the admin funnel bar.
       if (mergedProfile?.corporateId && mergedProfile?.applicationStatus !== 'Submitted') {
+        const corp = String(mergedProfile.corporateId);
+        const actor = isImpersonating || sessionStorage.getItem('portal_impersonating') === corp
+          ? 'agent'
+          : 'merchant';
+        const openKey = `portal_open_logged_${actor}_${corp}`;
+        const already = sessionStorage.getItem(openKey);
         trackProgress(mergedProfile.corporateId, {
-          currentStep: 'locations',
           merchantName: mergedProfile.legalName,
           signerEmail: mergedProfile.signerEmail,
           pricingTier: mergedProfile.pricingTier,
           applicationStatus: mergedProfile.applicationStatus,
+          ...(already ? {} : { activityEvent: { type: 'portal_open', actor } }),
         });
+        if (!already) sessionStorage.setItem(openKey, '1');
       }
       if (data.profile?.applicationStatus === 'Submitted') {
         setRedirected(true);
@@ -409,6 +417,25 @@ export default function OnboardingPortal() {
       data: progressData,
     }).catch(() => {});
   };
+
+  // Accumulate time-in-portal while the tab is visible (60s heartbeats).
+  // Distinguishes merchant vs agent (impersonation) for the admin activity panel.
+  useEffect(() => {
+    if (mode !== 'sales' || !dealId) return undefined;
+    if (profile?.applicationStatus === 'Submitted') return undefined;
+    const TICK_SECS = 60;
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const actor = isImpersonating || sessionStorage.getItem('portal_impersonating') === String(dealId)
+        ? 'agent'
+        : 'merchant';
+      trackProgress(dealId, {
+        activityEvent: { type: 'session_tick', actor, seconds: TICK_SECS },
+      });
+    };
+    const id = setInterval(tick, TICK_SECS * 1000);
+    return () => clearInterval(id);
+  }, [mode, dealId, isImpersonating, profile?.applicationStatus]);
 
   // (2026-07-10 flow reorder: the old quote-signing poll and Step1Agreement
   // status handler were removed — the equipment quote is now signed on the

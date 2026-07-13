@@ -1153,3 +1153,19 @@ Implemented hybrid Equipment Order on `PostSubmissionDashboard`:
 
 **? Waiting on:** Teddy (push), Base44 (schema + 3 functions + frontend publish)
 ---
+
+---
+**[CURSOR]** · 2026-07-13
+**Type:** Action Taken — Portal activity telemetry (invites / opens / time)
+
+Added activity tracking on `__auto_track__.prefilledData.activity`:
+- invite_sent (manageStagedApplication send + resume-link path)
+- portal_open (merchant vs agent, once per tab session)
+- session_tick (60s visible-tab heartbeats → merchantSeconds / agentSeconds)
+
+Admin Applications expanded row shows a Portal activity panel (counts + recent events).
+
+**ACTION for Base44:** force-redeploy manageStagedApplication + publish frontend.
+
+**Waiting on:** Teddy (push), Base44 (publish)
+---
