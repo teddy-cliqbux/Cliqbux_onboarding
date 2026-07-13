@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Pencil, Loader2, Send, Trash2, Check, X, Copy, ExternalLink,
   Clock, Store, Users, FileText, Search, Building2, CreditCard,
-  CheckCircle2, AlertCircle, Eye, BarChart2, Zap,
+  CheckCircle2, AlertCircle, Eye, BarChart2, Zap, LayoutDashboard,
   ChevronDown, ChevronRight, XCircle, RefreshCw
 } from 'lucide-react';
 
@@ -892,6 +892,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const [loadingMsp, setLoadingMsp]     = useState(false);
   const [copied, setCopied]             = useState(null);
   const [impersonating, setImpersonating] = useState(false);
+  const [openingDashboard, setOpeningDashboard] = useState(false);
 
   const p = trackStage?.prefilledData || {};
   const missingByStep = p.missingByStep || p.missingCounts || {};
@@ -963,6 +964,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       const res = await base44.functions.invoke('manageStagedApplication', {
         action: 'impersonate',
         corporateId,
+        destination: 'portal',
       });
       if (res.data?.error || !res.data?.portalUrl) {
         throw new Error(res.data?.error || 'Impersonation failed');
@@ -973,6 +975,27 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       alert(err.message || 'Could not open merchant portal');
     } finally {
       setImpersonating(false);
+    }
+  };
+
+  const openPostSignDashboard = async (e) => {
+    e?.stopPropagation?.();
+    setOpeningDashboard(true);
+    try {
+      const res = await base44.functions.invoke('manageStagedApplication', {
+        action: 'impersonate',
+        corporateId,
+        destination: 'dashboard',
+      });
+      if (res.data?.error || !res.data?.portalUrl) {
+        throw new Error(res.data?.error || 'Could not open dashboard');
+      }
+      window.open(res.data.portalUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      console.error('[impersonate dashboard]', err);
+      alert(err.message || 'Could not open post-signing dashboard');
+    } finally {
+      setOpeningDashboard(false);
     }
   };
 
@@ -1049,10 +1072,16 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           )}
           {avgMspPct !== null && <HealthBadge score={avgMspPct} />}
           {isSubmitted && <CheckCircle2 className="w-4 h-4 text-cb-success" />}
-          <button onClick={openMerchantView} disabled={impersonating} title="Open merchant portal (30-min session)"
+          <button onClick={openMerchantView} disabled={impersonating || openingDashboard} title="Open merchant portal (30-min session)"
             className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40">
             {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
             View
+          </button>
+          <button onClick={openPostSignDashboard} disabled={impersonating || openingDashboard}
+            title="Open post-signing dashboard (agents can preview before merchant signs)"
+            className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-300 hover:text-cb-accent hover:border-cb-accent/40 disabled:opacity-40">
+            {openingDashboard ? <Loader2 className="w-3 h-3 animate-spin" /> : <LayoutDashboard className="w-3 h-3" />}
+            Dashboard
           </button>
           <button onClick={(e) => copyInviteLink(e, linkStage)} title="Copy invite link"
             className={`flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all ${copied === (linkStage?.id || 'link') ? 'border-cb-success/30 text-cb-success' : 'border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong'}`}>

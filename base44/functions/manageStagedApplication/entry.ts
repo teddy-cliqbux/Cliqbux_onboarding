@@ -304,6 +304,8 @@ Deno.serve(async (req) => {
 
     // ── impersonate — mint a short-lived merchant JWT for live sales guidance ─
     // Opens the real portal with Saves enabled. Never returns stage accessToken.
+    // destination: 'portal' (default) | 'dashboard' — post-signing setup screen
+    // (agents may open dashboard before the merchant has Submitted; merchants cannot).
     if (action === 'impersonate') {
       if (!corporateId) return Response.json({ error: 'corporateId required' }, { status: 400 });
       const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter(
@@ -319,11 +321,16 @@ Deno.serve(async (req) => {
         expiresAt,
         { imp: true }
       );
-      const portalUrl = `${publicUrl}/?corporateId=${encodeURIComponent(String(corporateId))}&impersonateToken=${encodeURIComponent(merchantToken)}`;
+      const dest = String(body.destination || 'portal').toLowerCase() === 'dashboard'
+        ? 'dashboard'
+        : 'portal';
+      const portalUrl = dest === 'dashboard'
+        ? `${publicUrl}/onboarding/dashboard?dealId=${encodeURIComponent(String(corporateId))}&impersonateToken=${encodeURIComponent(merchantToken)}`
+        : `${publicUrl}/?corporateId=${encodeURIComponent(String(corporateId))}&impersonateToken=${encodeURIComponent(merchantToken)}`;
       // Count the agent open here (View click) — more reliable than the portal
       // inferring actor from a merchant-shaped JWT after load.
       await upsertAutoTrack(base44, String(corporateId), {}, { type: 'portal_open', actor: 'agent' }).catch(() => null);
-      return Response.json({ success: true, merchantToken, expiresAt, portalUrl });
+      return Response.json({ success: true, merchantToken, expiresAt, portalUrl, destination: dest });
     }
 
     // ── getInviteLink — return the staged magic link without listing tokens ───

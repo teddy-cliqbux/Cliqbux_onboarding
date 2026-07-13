@@ -10,7 +10,12 @@ import EquipmentOrderPanel from '@/components/onboarding/EquipmentOrderPanel';
 import InventoryUpload from '@/components/onboarding/InventoryUpload';
 import LegacyPOSBridge from '@/components/onboarding/LegacyPOSBridge';
 import LocationStatusTable from '@/components/onboarding/LocationStatusTable';
-import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+import { base44 } from '@/api/base44Client';
+import {
+  invokePortalFunction,
+  setMerchantToken,
+  merchantTokenHasImp,
+} from '@/lib/merchantAuthFetch';
 
 /** One tasteful gold burst — signature moment for application submitted. */
 function fireSubmissionCelebration(corporateId) {
@@ -33,6 +38,18 @@ function fireSubmissionCelebration(corporateId) {
   });
 }
 
+/** Agent/admin may preview this screen before the merchant has Submitted. */
+async function resolveAgentAccess(corporateId) {
+  if (merchantTokenHasImp()) return true;
+  if (sessionStorage.getItem('portal_impersonating') === String(corporateId)) return true;
+  try {
+    await base44.auth.me();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export default function PostSubmissionDashboard() {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
@@ -40,11 +57,23 @@ export default function PostSubmissionDashboard() {
   const [merchantIDs, setMerchantIDs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showShipping, setShowShipping] = useState(false);
+  const [agentPreview, setAgentPreview] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       const params = new URLSearchParams(window.location.search);
       let corporateId = params.get('dealId') || params.get('corporateId');
+      const impersonateToken = params.get('impersonateToken');
+
+      // Admin Applications "Dashboard" opens with a 30-min impersonation JWT.
+      if (impersonateToken && corporateId) {
+        setMerchantToken(impersonateToken);
+        sessionStorage.setItem('portal_impersonating', String(corporateId));
+        sessionStorage.setItem(`portal_agent_open_server_${corporateId}`, '1');
+        const clean = new URL(window.location.href);
+        clean.searchParams.delete('impersonateToken');
+        window.history.replaceState({}, '', clean.pathname + clean.search);
+      }
 
       if (!corporateId) {
         setLoading(false);
@@ -52,6 +81,7 @@ export default function PostSubmissionDashboard() {
       }
 
       try {
+        const isAgent = await resolveAgentAccess(corporateId);
         const res = await invokePortalFunction('getMerchantData', { corporateId });
         const data = res.data;
         if (data?.error) {
@@ -61,12 +91,17 @@ export default function PostSubmissionDashboard() {
         setProfile(data.profile);
         setLocations(data.locations || []);
         setMerchantIDs(data.merchantIDs || []);
-        if (data.profile?.applicationStatus !== 'Submitted') {
+
+        const submitted = data.profile?.applicationStatus === 'Submitted';
+        // Merchants cannot skip signing — only agents/admins may preview early.
+        if (!submitted && !isAgent) {
           navigate(`/?dealId=${corporateId}`, { replace: true });
           return;
         }
-        // Signature moment — fire after we know this is a real submitted session
-        fireSubmissionCelebration(corporateId);
+        setAgentPreview(isAgent && !submitted);
+        if (submitted && !isAgent) {
+          fireSubmissionCelebration(corporateId);
+        }
       } catch (_) {
         // Stay on page if load fails
       } finally {
@@ -114,16 +149,29 @@ export default function PostSubmissionDashboard() {
           <CliqbuxLogo />
           <div className="flex items-center gap-3">
             <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-400">{profile.legalName}</span>
-            <span className="inline-flex items-center gap-1.5 text-cb-caption normal-case tracking-normal font-medium text-cb-success border border-cb-border px-2.5 py-1 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-cb-success" />
-              Submitted
-            </span>
+            {agentPreview ? (
+              <span className="inline-flex items-center gap-1.5 text-cb-caption normal-case tracking-normal font-medium text-cb-accent border border-cb-border px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-cb-accent" />
+                Agent preview
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-cb-caption normal-case tracking-normal font-medium text-cb-success border border-cb-border px-2.5 py-1 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-cb-success" />
+                Submitted
+              </span>
+            )}
           </div>
         </div>
       </div>
 
       <div className="pt-16 min-h-screen px-4 py-8">
         <div className="max-w-3xl mx-auto flex flex-col gap-8">
+          {agentPreview && (
+            <div className="bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-accent text-gray-300 text-cb-body px-4 py-2.5 rounded-cb">
+              Agent preview · merchant has not finished signing yet · Saves write to the live record · session ~30 min
+            </div>
+          )}
+
           {/* Welcome — signature calm celebration */}
           <motion.div
             className="text-center mb-2"
@@ -132,17 +180,23 @@ export default function PostSubmissionDashboard() {
             transition={{ type: 'spring', stiffness: 150, damping: 20 }}
           >
             <motion.span
-              className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-cb-success/15 mb-4"
+              className={`inline-flex items-center justify-center w-12 h-12 rounded-full mb-4 ${agentPreview ? 'bg-cb-accent-muted' : 'bg-cb-success/15'}`}
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: 'spring', stiffness: 150, damping: 20, delay: 0.05 }}
             >
-              <Check className="w-6 h-6 text-cb-success" strokeWidth={2.5} />
+              <Check className={`w-6 h-6 ${agentPreview ? 'text-cb-accent' : 'text-cb-success'}`} strokeWidth={2.5} />
             </motion.span>
-            <p className="text-cb-caption uppercase text-gray-500 mb-2">Application submitted</p>
-            <h1 className="font-display text-cb-display text-white">You&apos;re all set</h1>
+            <p className="text-cb-caption uppercase text-gray-500 mb-2">
+              {agentPreview ? 'Post-signing dashboard' : 'Application submitted'}
+            </p>
+            <h1 className="font-display text-cb-display text-white">
+              {agentPreview ? 'Setup preview' : "You're all set"}
+            </h1>
             <p className="text-cb-body-lg text-gray-400 mt-2 max-w-md mx-auto">
-              Finish storefront setup below while Elavon reviews your application.
+              {agentPreview
+                ? 'Review equipment quote, shipping, and storefront setup before the merchant completes signing.'
+                : 'Finish storefront setup below while Elavon reviews your application.'}
             </p>
           </motion.div>
 
@@ -209,7 +263,6 @@ export default function PostSubmissionDashboard() {
 
       {showShipping && (
         <EquipmentShippingModal
-          profile={profile}
           locations={locations}
           onClose={() => setShowShipping(false)}
         />

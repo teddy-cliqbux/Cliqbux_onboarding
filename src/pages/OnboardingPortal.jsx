@@ -626,8 +626,8 @@ export default function OnboardingPortal() {
               title="Review & Sign Equipment Quote"
               description="Your equipment and services order — signed on your dashboard after the merchant application is submitted."
               done={quoteSigned}
-              unlocked={m3Done}
-              ctaLabel="Open Dashboard"
+              unlocked={m3Done || isImpersonating}
+              ctaLabel={m3Done ? 'Open Dashboard' : 'Preview Dashboard'}
               onCta={() => navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`)}
             />
           </div>
