@@ -1050,3 +1050,17 @@ Visual-only. No field/key/validation/save/fetch/pricing-logic changes.
 
 **→ Waiting on:** Teddy (push via GitHub Desktop), then Base44 (publish + quoted evidence)
 ---
+
+---
+**[CURSOR]** · 2026-07-13
+**Type:** Action Taken — motion layer (framer-motion, state-only)
+
+Added the motion pass Teddy requested. Spring `{ stiffness: 150, damping: 20 }` everywhere; no mouse-tracking / canvases / shimmer borders. No field/key/validation/save/fetch changes.
+
+1. `OnboardingPortal` — directional `AnimatePresence mode="wait"` step slides (already present; tuned to spring).
+2. `ProgressTracker` — `layoutId="cb-progress-capsule"` gold capsule glides under active step; connectors grow with spring.
+3. `OnboardingLocations` — spring height accordions (MID edit, location MIDs, entity details, mailing) + `layout` on EntitySection/LocationCard/MidCard. Banking accordion spring-matched.
+4. Skeletons on async fetches — Locations, Banking, Verification signing prep, LocationStatusTable, PostSubmissionDashboard, LoadingScreen.
+
+**→ Waiting on:** Teddy (review + push), Base44 (publish)
+---

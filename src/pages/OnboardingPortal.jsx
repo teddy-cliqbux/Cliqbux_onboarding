@@ -54,10 +54,9 @@ const TIER_LABELS = {
 export function MilestoneCard({ index, title, description, done, unlocked, ctaLabel, onCta, ctaDisabled, attention, attentionItems = [] }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 14 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: index * 0.07, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={unlocked && !done ? { y: -2 } : undefined}
+      transition={{ type: 'spring', stiffness: 150, damping: 20, delay: index * 0.05 }}
       className={`flex items-start gap-4 rounded-cb border px-5 py-4 transition-colors ${
         unlocked || done
           ? 'bg-cb-surface-raised border-cb-border hover:border-cb-border-strong'
@@ -651,10 +650,10 @@ export default function OnboardingPortal() {
             <motion.div
               key={step}
               custom={stepDir}
-              initial={(dir) => ({ opacity: 0, x: dir * 28 })}
+              initial={(dir) => ({ opacity: 0, x: dir * 24 })}
               animate={{ opacity: 1, x: 0 }}
-              exit={(dir) => ({ opacity: 0, x: dir * -20 })}
-              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+              exit={(dir) => ({ opacity: 0, x: dir * -24 })}
+              transition={{ type: 'spring', stiffness: 150, damping: 20 }}
             >
               {renderStep()}
             </motion.div>

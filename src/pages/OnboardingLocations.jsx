@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Plus, ArrowRight, Loader2, Trash2,
   ChevronDown, ChevronRight, X,
@@ -9,6 +10,15 @@ import {
 import { isLocked as getMidLocked, isImported as getMidImported } from '@/utils/statusUtils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+
+// Motion communicates expand/collapse state — never decoration.
+const SPRING = { type: 'spring', stiffness: 150, damping: 20 };
+const accordionProps = {
+  initial: { height: 0, opacity: 0 },
+  animate: { height: 'auto', opacity: 1 },
+  exit: { height: 0, opacity: 0 },
+  transition: SPRING,
+};
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -148,7 +158,9 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
   return (
     <Draggable draggableId={`mid-${mid.id}`} index={index}>
       {(provided, snapshot) => (
-        <div
+        <motion.div
+          layout
+          transition={SPRING}
           ref={provided.innerRef}
           {...provided.draggableProps}
           className={`rounded-cb border transition-all ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locked ? 'border-cb-border bg-transparent opacity-60' : 'border-cb-border bg-transparent hover:border-cb-border-strong'}`}
@@ -192,7 +204,13 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
             )}
           </div>
 
+          <AnimatePresence initial={false}>
           {editing && !locked && (
+            <motion.div
+              key="mid-edit"
+              {...accordionProps}
+              className="overflow-hidden"
+            >
             <div className="border-t border-cb-border px-4 pb-4 pt-3 space-y-3">
               <div>
                 <label className={labelCls}>MID Label</label>
@@ -266,8 +284,10 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
                 <button onClick={() => setEditing(false)} className="text-cb-body text-gray-500 hover:text-white transition-colors">Cancel</button>
               </div>
             </div>
+            </motion.div>
           )}
-        </div>
+          </AnimatePresence>
+        </motion.div>
       )}
     </Draggable>
   );
@@ -358,7 +378,9 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
   return (
     <Draggable draggableId={`loc-${location.id}`} index={index}>
       {(provided, snapshot) => (
-        <div
+        <motion.div
+          layout
+          transition={SPRING}
           ref={provided.innerRef}
           {...provided.draggableProps}
           className={`rounded-cb border transition-all ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locationError ? 'border-cb-danger bg-cb-surface-raised' : 'border-cb-border bg-cb-surface-raised hover:border-cb-border-strong'}`}
@@ -429,7 +451,13 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
           )}
 
           {/* MIDs — nested droppable, indented off a hairline rail */}
+          <AnimatePresence initial={false}>
           {expanded && (
+            <motion.div
+              key="loc-mids"
+              {...accordionProps}
+              className="overflow-hidden"
+            >
             <div className="border-t border-cb-border px-4 pb-4 pt-3">
               <p className="text-cb-caption uppercase text-gray-500 mb-2">
                 Merchant Applications (MIDs)
@@ -479,8 +507,10 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
                 )}
               </div>
             </div>
+            </motion.div>
           )}
-        </div>
+          </AnimatePresence>
+        </motion.div>
       )}
     </Draggable>
   );
@@ -611,7 +641,9 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
         </div>
       </button>
 
+      <AnimatePresence initial={false}>
       {expanded && (
+        <motion.div key="entity-details" {...accordionProps} className="overflow-hidden">
         <div className="mt-3 mb-3 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
@@ -663,7 +695,9 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
             {saveError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">⚠ {saveError}</p>}
           </div>
         </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -746,7 +780,9 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
         {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
       </button>
 
+      <AnimatePresence initial={false}>
       {expanded && (
+        <motion.div key="entity-mailing" {...accordionProps} className="overflow-hidden">
         <div className="mt-3 mb-2 space-y-3">
           <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Applies to all MIDs under <span className="text-gray-400">{entity.legalBusinessName}</span>. If set, overrides the location address for the legal/mailing address on MSPWare applications.</p>
           {parsedAddress ? (
@@ -774,7 +810,9 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
             />
           )}
         </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -820,7 +858,11 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
   };
 
   return (
-    <div className={`rounded-cb border overflow-hidden ${highlightError ? 'border-cb-danger' : 'border-cb-border'}`}>
+    <motion.div
+      layout
+      transition={SPRING}
+      className={`rounded-cb border overflow-hidden ${highlightError ? 'border-cb-danger' : 'border-cb-border'}`}
+    >
       {/* Entity header — hierarchy carried by type weight, not color */}
       <div className="flex items-center gap-3 px-5 py-4 border-b border-cb-border">
         {editingHeader ? (
@@ -908,7 +950,7 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
           <Plus className="w-3 h-3" /> Add Location{isOnly ? '' : ` to ${entity.legalBusinessName}`}
         </button>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -1331,12 +1373,12 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
   if (loading) return (
     <div className="px-8 py-8 space-y-4" aria-busy="true" aria-label="Loading locations">
-      <div className="skeleton h-6 w-40" />
-      <div className="skeleton h-9 w-2/3" />
-      <div className="skeleton h-4 w-1/2" />
-      <div className="skeleton h-24 w-full !rounded-2xl" />
-      <div className="skeleton h-40 w-full !rounded-2xl" />
-      <div className="skeleton h-14 w-full !rounded-xl" />
+      <div className="skeleton h-6 w-40 !rounded-cb" />
+      <div className="skeleton h-9 w-2/3 !rounded-cb" />
+      <div className="skeleton h-4 w-1/2 !rounded-cb" />
+      <div className="skeleton h-24 w-full !rounded-cb" />
+      <div className="skeleton h-40 w-full !rounded-cb" />
+      <div className="skeleton h-14 w-full !rounded-cb" />
     </div>
   );
 

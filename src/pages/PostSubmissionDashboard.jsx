@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
@@ -77,10 +77,15 @@ export default function PostSubmissionDashboard() {
 
   if (loading) {
     return (
-      <div className="portal-bg flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
-          <p className="text-cb-body text-gray-500">Loading your dashboard...</p>
+      <div className="portal-bg min-h-screen px-4 py-16" aria-busy="true" aria-label="Loading dashboard">
+        <div className="max-w-3xl mx-auto space-y-4 pt-16">
+          <div className="skeleton h-12 w-12 !rounded-full mx-auto" />
+          <div className="skeleton h-4 w-40 !rounded-cb mx-auto" />
+          <div className="skeleton h-8 w-56 !rounded-cb mx-auto" />
+          <div className="skeleton h-4 w-72 !rounded-cb mx-auto" />
+          <div className="skeleton h-28 w-full !rounded-cb mt-8" />
+          <div className="skeleton h-40 w-full !rounded-cb" />
+          <div className="skeleton h-24 w-full !rounded-cb" />
         </div>
       </div>
     );
@@ -123,13 +128,13 @@ export default function PostSubmissionDashboard() {
             className="text-center mb-2"
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ type: 'spring', stiffness: 150, damping: 20 }}
           >
             <motion.span
               className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-cb-success/15 mb-4"
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
-              transition={{ type: 'spring', stiffness: 380, damping: 18, delay: 0.08 }}
+              transition={{ type: 'spring', stiffness: 150, damping: 20, delay: 0.05 }}
             >
               <Check className="w-6 h-6 text-cb-success" strokeWidth={2.5} />
             </motion.span>

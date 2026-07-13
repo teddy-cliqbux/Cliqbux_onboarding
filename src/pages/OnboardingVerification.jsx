@@ -183,12 +183,16 @@ export default function OnboardingVerification({ profile, locations, initialSign
             </div>
           )}
 
-          {/* Loading */}
+          {/* Loading — skeleton communicates async fetch, not a spinner decoration */}
           {allVerified && loadingSigning && (
-            <div className="border border-cb-border rounded-cb flex flex-col items-center justify-center py-14 gap-3 bg-cb-surface-raised">
-              <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
-              <p className="text-cb-body font-semibold text-gray-300">Preparing your signing documents…</p>
-              <p className="text-cb-body text-gray-500">This may take a few seconds</p>
+            <div className="border border-cb-border rounded-cb bg-cb-surface-raised p-5 space-y-3" aria-busy="true" aria-label="Preparing signing documents">
+              <div className="skeleton h-4 w-48 !rounded-cb" />
+              <div className="skeleton h-3 w-64 !rounded-cb" />
+              <div className="skeleton h-40 w-full !rounded-cb mt-2" />
+              <div className="flex gap-2">
+                <div className="skeleton h-8 w-28 !rounded-cb" />
+                <div className="skeleton h-8 w-28 !rounded-cb" />
+              </div>
             </div>
           )}
 

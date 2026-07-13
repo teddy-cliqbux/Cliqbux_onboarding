@@ -153,9 +153,17 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
 
   if (loading) {
     return (
-      <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-12 flex flex-col items-center justify-center gap-3">
-        <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
-        <p className="text-cb-body text-gray-400">Loading location data...</p>
+      <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-6 space-y-4" aria-busy="true" aria-label="Loading location data">
+        <div className="flex gap-8">
+          <div className="skeleton h-10 w-16 !rounded-cb" />
+          <div className="skeleton h-10 w-16 !rounded-cb" />
+          <div className="skeleton h-10 w-24 !rounded-cb" />
+          <div className="skeleton h-10 w-20 !rounded-cb" />
+        </div>
+        <div className="skeleton h-10 w-full !rounded-cb" />
+        <div className="skeleton h-12 w-full !rounded-cb" />
+        <div className="skeleton h-12 w-full !rounded-cb" />
+        <div className="skeleton h-12 w-full !rounded-cb" />
       </div>
     );
   }

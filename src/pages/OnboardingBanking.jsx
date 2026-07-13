@@ -102,14 +102,14 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
         className="flex items-center justify-between rounded-cb border border-cb-border bg-cb-bg px-4 py-3.5"
         initial={justSaved ? { opacity: 0.6, scale: 0.98 } : false}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+        transition={{ type: 'spring', stiffness: 150, damping: 20 }}
       >
         <div className="flex items-center gap-3">
           <motion.span
             className="flex items-center justify-center w-7 h-7 rounded-full bg-cb-success/15 flex-shrink-0"
             initial={justSaved ? { scale: 0 } : false}
             animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 420, damping: 16 }}
+            transition={{ type: 'spring', stiffness: 150, damping: 20 }}
           >
             <Check className="w-3.5 h-3.5 text-cb-success" strokeWidth={3} />
           </motion.span>
@@ -222,7 +222,11 @@ function LocationBankingRow({ location, corporateId, merchantIDs, bankDetails, r
   const hasBanking = !!(bankDetails?.routingNumber);
 
   return (
-    <div className={`rounded-cb border transition-colors ${isExpanded ? 'border-cb-border-strong bg-cb-surface-raised' : 'border-cb-border bg-cb-surface-raised hover:border-cb-border-strong'}`}>
+    <motion.div
+      layout
+      transition={{ type: 'spring', stiffness: 150, damping: 20 }}
+      className={`rounded-cb border transition-colors ${isExpanded ? 'border-cb-border-strong bg-cb-surface-raised' : 'border-cb-border bg-cb-surface-raised hover:border-cb-border-strong'}`}
+    >
       {/* Header */}
       <div className="flex items-center gap-3 px-5 py-4 cursor-pointer" onClick={onToggleExpand}>
         <div className="flex-1 min-w-0">
@@ -258,7 +262,7 @@ function LocationBankingRow({ location, corporateId, merchantIDs, bankDetails, r
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ type: 'spring', stiffness: 150, damping: 20 }}
             className="overflow-hidden"
           >
             <div className="border-t border-cb-border px-5 py-5">
@@ -286,7 +290,7 @@ function LocationBankingRow({ location, corporateId, merchantIDs, bankDetails, r
           </motion.div>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }
 
