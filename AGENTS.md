@@ -878,6 +878,7 @@ After the merchant completes portal signing, `PostSubmissionDashboard` shows:
 - `hubspotQuoteId` on `MerchantLocations` (synced from deal→quote associations)
 - `equipmentPaidAt` on `MerchantCorporateProfile` (set when `hs_payment_status` is PAID)
 - `getHubspotQuote` — portal `getPortalActor` gate; GET quote + batch/read line items
+- **HubSpot scope required for line items:** `crm.objects.line_items.read` on the private app. Without it, quote metadata + pay CTA still work; line items return empty with `lineItemsScopeHint` (soft-fail, not a hard 500).
 - Payment rail = **HubSpot Payments** on the quote page — not Stripe Elements; panel does not embed the quote iframe
 - `handleHubspotWebhook` event `quote_paid` → stamps `equipmentPaidAt` + dealstage `closedwon`
 - Do **not** mark MerchantMID Active on quote payment
@@ -953,7 +954,8 @@ All merchant-facing onboarding surfaces (steps + ProgressTracker + post-submit d
 
 ### Connect Legacy POS (2026-07-13)
 Replaces `LegacyPOSBridge`. `ConnectLegacyPOS` on post-submit dashboard with three accordion options:
-- A OAuth intent (Coming Soon + notify via `submitLegacyPOSConnection`)
+- A OAuth intent (Coming Soon + notify via `submitLegacyPOSConnection`) — real provider logos in `PosProviderLogo.jsx`
 - B Invite `accounts@cliqbux.com` (recommended)
 - C Credential vault — RSA-OAEP client encrypt (`VITE_POS_VAULT_PUBLIC_KEY`), legal waiver, `MerchantPOSConnection` audit trail
 Never accept plaintext `password` in the API (400). `ipAddress` / `authorizedUserEmail` derived server-side only.
+**Entity must be published in Base44** or creates return 503 `ENTITY_SCHEMA_MISSING`. Provider migration field maps: `docs/legacy-pos-schemas.md`.

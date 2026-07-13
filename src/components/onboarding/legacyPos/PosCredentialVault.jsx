@@ -6,6 +6,7 @@ import {
   POS_CONSENT_TEXT_VERSION,
   POS_CONSENT_WAIVER,
 } from '@/lib/posCredentialCrypto';
+import { friendlyPosError } from '@/components/onboarding/legacyPos/posErrors';
 
 const PROVIDERS = [
   { value: 'clover', label: 'Clover' },
@@ -60,7 +61,7 @@ export default function PosCredentialVault({ corporateId }) {
       });
       setSubmitted(true);
     } catch (err) {
-      setError(err?.message || 'Secure submit failed. Please try again or use Option B.');
+      setError(friendlyPosError(err?.message) || 'Secure submit failed. Please try again or use Option B.');
     } finally {
       setSubmitting(false);
     }

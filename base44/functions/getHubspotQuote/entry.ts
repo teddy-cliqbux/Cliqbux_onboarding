@@ -325,8 +325,12 @@ Deno.serve(async (req) => {
       || [];
 
     // ── 2. Batch-read line items ────────────────────────────────────────────
+    // Soft-fail on missing scopes (403): quote metadata + CTA still work.
+    // Required HubSpot private-app scope: crm.objects.line_items.read
     const lineIds = [...new Set(lineAssocs.map((a: any) => String(a.id)).filter(Boolean))];
     let rawItems: any[] = [];
+    let lineItemsError: string | null = null;
+    let lineItemsScopeHint: string | null = null;
     if (lineIds.length) {
       const batchRes = await fetch('https://api.hubapi.com/crm/v3/objects/line_items/batch/read', {
         method: 'POST',
@@ -338,10 +342,16 @@ Deno.serve(async (req) => {
       });
       if (!batchRes.ok) {
         const txt = await batchRes.text();
-        throw new Error(`HubSpot line_items batch/read → ${batchRes.status}: ${txt.slice(0, 200)}`);
+        lineItemsError = `HubSpot line_items batch/read → ${batchRes.status}: ${txt.slice(0, 200)}`;
+        console.warn(`[getHubspotQuote] ${lineItemsError}`);
+        if (batchRes.status === 403) {
+          lineItemsScopeHint =
+            'Add crm.objects.line_items.read to the HubSpot private app (Settings → Integrations → Private Apps), then retry.';
+        }
+      } else {
+        const batchJson = await batchRes.json();
+        rawItems = batchJson.results || [];
       }
-      const batchJson = await batchRes.json();
-      rawItems = batchJson.results || [];
     }
 
     const lineItems = rawItems.map((item: any) => sanitizeLineItem(item.id, item.properties || {}));
@@ -378,6 +388,9 @@ Deno.serve(async (req) => {
       hardware,
       recurring,
       oneTimeServices,
+      lineItemCount: lineIds.length,
+      lineItemsError,
+      lineItemsScopeHint,
       resolvedFromDeal,
     });
   } catch (error: any) {

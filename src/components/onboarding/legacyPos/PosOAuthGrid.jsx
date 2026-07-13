@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+import PosProviderLogo from '@/components/onboarding/legacyPos/PosProviderLogo';
+import { friendlyPosError } from '@/components/onboarding/legacyPos/posErrors';
 
 const PROVIDERS = [
-  { id: 'clover', label: 'Clover', mark: 'C' },
-  { id: 'square', label: 'Square', mark: '□' },
-  { id: 'lightspeed', label: 'Lightspeed', mark: 'L' },
-  { id: 'shopify', label: 'Shopify', mark: 'S' },
-  { id: 'toast', label: 'Toast', mark: 'T' },
+  { id: 'clover', label: 'Clover' },
+  { id: 'square', label: 'Square' },
+  { id: 'lightspeed', label: 'Lightspeed' },
+  { id: 'shopify', label: 'Shopify' },
+  { id: 'toast', label: 'Toast' },
 ];
 
 export default function PosOAuthGrid({ corporateId }) {
@@ -28,7 +30,7 @@ export default function PosOAuthGrid({ corporateId }) {
       });
       setDone(provider);
     } catch (e) {
-      setError(e?.message || 'Could not notify our team. Please try again.');
+      setError(friendlyPosError(e?.message));
     } finally {
       setBusy(null);
     }
@@ -60,21 +62,19 @@ export default function PosOAuthGrid({ corporateId }) {
             type="button"
             onClick={() => trackIntent(p.id)}
             disabled={!!busy}
-            className="flex flex-col items-center justify-center gap-2 rounded-cb border border-cb-border bg-cb-bg px-3 py-4 hover:border-cb-accent/60 hover:bg-cb-accent-muted/30 transition-colors disabled:opacity-60"
+            className="flex flex-col items-center justify-center gap-2.5 rounded-cb border border-cb-border bg-cb-bg px-3 py-4 hover:border-cb-accent/60 hover:bg-cb-accent-muted/30 transition-colors disabled:opacity-60"
           >
             {busy === p.id ? (
               <Loader2 className="w-5 h-5 text-cb-accent animate-spin" />
             ) : (
-              <span className="flex items-center justify-center w-10 h-10 rounded-cb bg-cb-surface-raised border border-cb-border font-display text-cb-title text-cb-accent">
-                {p.mark}
-              </span>
+              <PosProviderLogo provider={p.id} />
             )}
             <span className="text-cb-caption normal-case tracking-normal font-medium text-white">{p.label}</span>
           </button>
         ))}
       </div>
       {error && (
-        <p className="text-cb-caption normal-case tracking-normal text-cb-danger">{error}</p>
+        <p className="text-cb-caption normal-case tracking-normal text-cb-danger leading-relaxed">{error}</p>
       )}
     </div>
   );

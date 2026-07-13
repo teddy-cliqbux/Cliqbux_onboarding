@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Check, Copy, Loader2, ArrowRight } from 'lucide-react';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+import { friendlyPosError } from '@/components/onboarding/legacyPos/posErrors';
 
 const ACCESS_EMAIL = 'accounts@cliqbux.com';
 
@@ -48,7 +49,7 @@ export default function PosAccessAccountGuide({ corporateId, provider = 'other' 
       });
       setSubmitted(true);
     } catch (e) {
-      setError(e?.message || 'Could not notify our team. Please try again.');
+      setError(friendlyPosError(e?.message));
     } finally {
       setSubmitting(false);
     }

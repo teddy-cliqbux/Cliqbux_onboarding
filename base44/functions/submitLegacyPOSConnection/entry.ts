@@ -168,7 +168,19 @@ Deno.serve(async (req) => {
       record.consentTimestamp = consentTimestamp.slice(0, 64);
     }
 
-    const created = await base44.asServiceRole.entities.MerchantPOSConnection.create(record);
+    let created;
+    try {
+      created = await base44.asServiceRole.entities.MerchantPOSConnection.create(record);
+    } catch (e: any) {
+      const msg = String(e?.message || e || '');
+      if (/not found in app/i.test(msg) || /MerchantPOSConnection/i.test(msg) && /not found/i.test(msg)) {
+        return Response.json({
+          error: 'Entity schema MerchantPOSConnection not found in app. Publish MerchantPOSConnection in Base44 (see docs/legacy-pos-schemas.md), then retry.',
+          code: 'ENTITY_SCHEMA_MISSING',
+        }, { status: 503 });
+      }
+      throw e;
+    }
 
     console.log(
       `[submitLegacyPOSConnection] corporateId=${corporateId} method=${connectionMethod} provider=${provider} status=pending_review`

@@ -195,9 +195,29 @@ export default function EquipmentOrderPanel({ corporateId }) {
         <LineSection title="Recurring Software / SaaS" icon={RefreshCw} items={recurring} />
         <LineSection title="One-time Services" icon={Wrench} items={services} />
         {!hardware.length && !recurring.length && !services.length && (
-          <p className="text-cb-caption normal-case tracking-normal text-gray-500">
-            No line items on this quote yet.
-          </p>
+          data.lineItemsError ? (
+            <div className="rounded-cb border border-cb-border border-l-2 border-l-cb-accent bg-cb-bg px-3 py-3 space-y-1.5">
+              <p className="text-cb-body text-white font-medium">Line items unavailable</p>
+              <p className="text-cb-caption normal-case tracking-normal text-gray-400">
+                {data.lineItemsScopeHint ||
+                  'Your HubSpot private app can read the quote, but not its line items yet.'}
+              </p>
+              <p className="text-cb-caption normal-case tracking-normal text-gray-500">
+                You can still review, sign, and pay on the quote below. After the scope is added, hit Retry.
+              </p>
+              <button
+                type="button"
+                onClick={() => refetch()}
+                className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent hover:opacity-90 underline"
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            <p className="text-cb-caption normal-case tracking-normal text-gray-500">
+              No line items on this quote yet.
+            </p>
+          )
         )}
       </div>
 
