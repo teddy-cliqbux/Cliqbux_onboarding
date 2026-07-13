@@ -20,8 +20,47 @@ const STATUS_STYLES = {
 const STAGE_COLORS = { draft: '#6b7280', ready: '#3b82f6', sent: '#22c55e' };
 const STAGE_LABELS = { draft: 'Draft', ready: 'Ready', sent: 'Sent' };
 
-const STEP_ORDER = ['agreement', 'locations', 'banking', 'verification', 'submitted'];
-const STEP_LABELS_MAP = { agreement: 'Agreement', locations: 'Locations', banking: 'Banking', verification: 'Signing', submitted: 'Submitted' };
+// Align with live portal (2026-07-10): Locations → Banking → Signing → Submitted.
+// "agreement" / Step1Agreement is retired; map legacy track values in ApplicationRow.
+const STEP_ORDER = ['locations', 'banking', 'verification', 'submitted'];
+const STEP_LABELS_MAP = { locations: 'Locations', banking: 'Banking', verification: 'Signing', submitted: 'Submitted' };
+
+function normalizeTrackStep(step) {
+  if (!step) return 'locations';
+  if (step === 'agreement' || step === 'quote') return 'locations';
+  if (step === 'verify') return 'verification';
+  return STEP_ORDER.includes(step) ? step : 'locations';
+}
+
+function humanizeMspError(err) {
+  const raw = typeof err === 'string' ? err : (err?.message || err?.description || JSON.stringify(err));
+  const s = String(raw).toLowerCase();
+  if (s.includes('deposit') || s.includes('routing') || s.includes('bank') || s.includes('account_no')) return 'Missing Bank Details';
+  if (s.includes('highest_ticket') || s.includes('highest ticket')) return 'Highest Ticket Validation Failure';
+  if (s.includes('average_sales') || s.includes('average transaction') || s.includes('avg sale')) return 'Average Sale Validation Failure';
+  if (s.includes('monthly_sales') || s.includes('monthly volume')) return 'Monthly Volume Validation Failure';
+  if (s.includes('firearm')) return 'Firearm verification (template) — omit from PUT';
+  return raw;
+}
+
+function signerMissingFields(s) {
+  const miss = [];
+  if (!s.firstName || !s.lastName) miss.push('Name');
+  if (!s.signerEmail) miss.push('Email');
+  if (s.ownershipPercentage == null || s.ownershipPercentage === '') miss.push('Ownership %');
+  if (s.isPrimarySigner) {
+    if (!s.dobYear || !s.dobMonth || !s.dobDay) miss.push('DOB');
+    const ssnDigits = String(s.ssn || '').replace(/\D/g, '');
+    if (ssnDigits.length < 9) miss.push('SSN');
+    if (!s.homeStreet) miss.push('Home street');
+    if (!s.homeCity) miss.push('Home city');
+    if (!s.homeState) miss.push('Home state');
+    if (!s.homeZip) miss.push('Home ZIP');
+    if (!s.titleType && !s.title) miss.push('Title');
+    // corporatePhone is collected but not required for identityStatus Verified
+  }
+  return miss;
+}
 
 const PREFILL_FIELDS = [
   // 2026-07-06: simplified to match Cliqbux's 4-template model (see AGENTS.md
@@ -69,22 +108,31 @@ function ProgressBar({ pct }) {
 }
 
 // ── Step Tracker ──────────────────────────────────────────────────────────────
-function StepTracker({ currentStep, completedSteps }) {
+function StepTracker({ currentStep, completedSteps, missingByStep }) {
+  const activeStep = normalizeTrackStep(currentStep);
   return (
     <div className="flex items-center gap-0.5">
       {STEP_ORDER.map((step, i) => {
-        const done = completedSteps?.[step] || currentStep === 'submitted';
-        const active = currentStep === step && !done;
+        const done = !!(completedSteps?.[step] || completedSteps?.[step === 'verification' ? 'verify' : step])
+          || activeStep === 'submitted';
+        const active = activeStep === step && !done;
+        const miss = missingByStep?.[step] || 0;
         return (
-          <div key={step} className="flex items-center">
-            <div title={STEP_LABELS_MAP[step]} className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold border transition-all ${
+          <div
+            key={step}
+            className="flex items-center"
+            title={`${STEP_LABELS_MAP[step]}${active ? ' · current bottleneck' : ''}${miss ? ` · ${miss} missing` : ''}`}
+          >
+            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold border transition-all ${
               done   ? 'bg-green-500 border-green-500 text-white' :
-              active ? 'bg-blue-500 border-blue-500 text-white' :
+              active ? 'bg-amber-500 border-amber-400 text-black ring-2 ring-amber-400/50' :
                        'bg-transparent border-gray-700 text-gray-700'
             }`}>
-              {done ? '✓' : i + 1}
+              {done ? '✓' : (miss > 0 ? miss : i + 1)}
             </div>
-            {i < STEP_ORDER.length - 1 && <div className={`w-2 h-px ${done ? 'bg-green-500/40' : 'bg-gray-700'}`} />}
+            {i < STEP_ORDER.length - 1 && (
+              <div className={`w-3 h-0.5 ${done ? 'bg-green-500/40' : active ? 'bg-amber-500/60' : 'bg-gray-700'}`} />
+            )}
           </div>
         );
       })}
@@ -102,12 +150,14 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
     ...(mspStatus?.data_errors || []),
     ...(mspStatus?.rule_violations || []),
     ...(mspStatus?.errors || []),
-  ].map(e => typeof e === 'string' ? e : e?.message || e?.description || JSON.stringify(e)).filter(Boolean);
+  ].map(humanizeMspError).filter(Boolean);
 
   const localIssues = [];
   if (!mid.mccCode) localIssues.push('Missing MCC code');
   if (!mid.monthlyCardSales) localIssues.push('Missing monthly volume');
   if (!mid.avgSaleAmount) localIssues.push('Missing avg sale amount');
+  if (!mid.highestTicketAmount) localIssues.push('Missing highest ticket');
+  if (mid.cardPresentPct == null || mid.cardPresentPct === '') localIssues.push('Missing card split');
   const allErrors = [...new Set([...localIssues, ...errors])];
   const isDone = ['Active', 'Active (Existing)', 'Pending MID'].includes(mid.applicationStepStatus);
   const hasIssues = allErrors.length > 0 || (pct !== null && pct < 100 && !isDone);
@@ -565,7 +615,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
       if (stage) {
         const res = await base44.functions.invoke('manageStagedApplication', { action: 'send', stageId: stage.id, data: { email } });
         if (res.data?.error) throw new Error(res.data.error);
-        setLink(res.data.link || `${publicUrl}/?stageId=${stage.id}&token=${stage.accessToken}`);
+        setLink(res.data.link || '');
         onSent(res.data.stage);
       } else {
         const directLink = `${publicUrl}/?corporateId=${corporateId}`;
@@ -644,22 +694,21 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loadingMsp, setLoadingMsp]     = useState(false);
   const [copied, setCopied]             = useState(null);
+  const [impersonating, setImpersonating] = useState(false);
 
   const p = trackStage?.prefilledData || {};
   const appStatus = p.applicationStatus || profile?.applicationStatus || 'Incomplete';
-  const currentStep = p.currentStep || (
+  const currentStep = normalizeTrackStep(p.currentStep || (
     appStatus === 'Submitted' ? 'submitted' :
-    (appStatus === 'Quote Signed' || appStatus === 'Pricing Selected') ? 'locations' : 'agreement'
-  );
-  const completedSteps = p.completedSteps || { ...(appStatus !== 'Incomplete' ? { agreement: true } : {}) };
+    (appStatus === 'Quote Signed' || appStatus === 'Pricing Selected') ? 'locations' : 'locations'
+  ));
+  const completedSteps = p.completedSteps || { ...(appStatus !== 'Incomplete' ? { locations: true } : {}) };
+  const missingByStep = p.missingByStep || p.missingCounts || {};
   const lastSeen = p.lastSeenAt
     ? new Date(p.lastSeenAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
     : null;
 
   const linkStage = adminStages[0] || null;
-  const portalLink = linkStage
-    ? `${publicUrl}/?stageId=${linkStage.id}&token=${linkStage.accessToken}`
-    : `${publicUrl}/?corporateId=${corporateId}`;
 
   const isSubmitted = appStatus === 'Submitted' || currentStep === 'submitted';
   const isStuck = !isSubmitted && p.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) > 3 * 24 * 60 * 60 * 1000;
@@ -703,11 +752,46 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     }
   };
 
-  const copyLink = (e) => {
+  const openMerchantView = async (e) => {
+    e?.stopPropagation?.();
+    setImpersonating(true);
+    try {
+      const res = await base44.functions.invoke('manageStagedApplication', {
+        action: 'impersonate',
+        corporateId,
+      });
+      if (res.data?.error || !res.data?.portalUrl) {
+        throw new Error(res.data?.error || 'Impersonation failed');
+      }
+      window.open(res.data.portalUrl, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      console.error('[impersonate]', err);
+      alert(err.message || 'Could not open merchant portal');
+    } finally {
+      setImpersonating(false);
+    }
+  };
+
+  const copyInviteLink = async (e, stage) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(portalLink);
-    setCopied('link');
-    setTimeout(() => setCopied(null), 2000);
+    try {
+      if (stage?.id) {
+        const res = await base44.functions.invoke('manageStagedApplication', {
+          action: 'getInviteLink',
+          stageId: stage.id,
+        });
+        if (res.data?.error || !res.data?.link) throw new Error(res.data?.error || 'No invite link');
+        await navigator.clipboard.writeText(res.data.link);
+      } else {
+        // No staged invite — copy corporateId entry URL (admin must be logged in)
+        await navigator.clipboard.writeText(`${publicUrl}/?corporateId=${corporateId}`);
+      }
+      setCopied(stage?.id || 'link');
+      setTimeout(() => setCopied(null), 2000);
+    } catch (err) {
+      console.error('[getInviteLink]', err);
+      alert(err.message || 'Could not copy invite link');
+    }
   };
 
   const borderColor = isSubmitted ? 'border-green-500/25' : totalErrors > 0 ? 'border-red-500/30' : isStuck ? 'border-amber-500/25' : 'border-white/10';
@@ -727,6 +811,11 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             <p className="text-sm font-bold text-white truncate">{merchantName || corporateId}</p>
             <span className="text-[10px] font-mono text-gray-600">{corporateId}</span>
             {isStuck && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">Stuck</span>}
+            {!isSubmitted && currentStep === 'banking' && (
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                Bottleneck: Banking
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
             {(p.signerEmail || profile?.signerEmail) && <p className="text-[10px] text-gray-500 truncate">{p.signerEmail || profile?.signerEmail}</p>}
@@ -737,8 +826,10 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
 
         {/* Step tracker */}
         <div className="hidden md:flex flex-col items-end gap-1 flex-shrink-0">
-          <StepTracker currentStep={currentStep} completedSteps={completedSteps} />
-          <p className="text-[10px] text-gray-500">{STEP_LABELS_MAP[currentStep] || currentStep}</p>
+          <StepTracker currentStep={currentStep} completedSteps={completedSteps} missingByStep={missingByStep} />
+          <p className={`text-[10px] ${!isSubmitted && currentStep === 'banking' ? 'text-amber-400 font-semibold' : 'text-gray-500'}`}>
+            {STEP_LABELS_MAP[currentStep] || currentStep}
+          </p>
         </div>
 
         {/* Health + actions */}
@@ -750,10 +841,15 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           )}
           {avgMspPct !== null && <HealthBadge score={avgMspPct} />}
           {isSubmitted && <CheckCircle2 className="w-4 h-4 text-green-400" />}
-          <button onClick={copyLink} title="Copy portal link"
-            className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all ${copied === 'link' ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20'}`}>
-            {copied === 'link' ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            {copied === 'link' ? 'Copied!' : 'Copy'}
+          <button onClick={openMerchantView} disabled={impersonating} title="Open merchant portal (30-min session)"
+            className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all bg-amber-500/10 text-amber-300 border-amber-500/25 hover:bg-amber-500/20 disabled:opacity-40">
+            {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+            View
+          </button>
+          <button onClick={(e) => copyInviteLink(e, linkStage)} title="Copy invite link"
+            className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all ${copied === (linkStage?.id || 'link') ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20'}`}>
+            {copied === (linkStage?.id || 'link') ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {copied === (linkStage?.id || 'link') ? 'Copied!' : 'Copy'}
           </button>
           <button onClick={() => onSend(linkStage, corporateId, p.signerEmail || profile?.signerEmail || '')}
             className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all bg-white/5 text-gray-400 border-white/10 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/20">
@@ -779,22 +875,21 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       {/* Admin stages chips */}
       {adminStages.length > 0 && (
         <div className="border-t border-white/5 px-4 py-2 flex flex-wrap gap-2">
-          {adminStages.map(s => {
-            const link = `${publicUrl}/?stageId=${s.id}&token=${s.accessToken}`;
-            return (
-              <div key={s.id} className="flex items-center gap-1.5 bg-[#111318] border border-white/8 rounded-lg px-2.5 py-1.5">
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_STYLES[s.status] || STATUS_STYLES.draft}`}>{s.status}</span>
-                <span className="text-xs text-gray-300 font-medium truncate max-w-[120px]">{s.label}</span>
-                <button onClick={() => { navigator.clipboard.writeText(link); setCopied(s.id); setTimeout(() => setCopied(null), 2000); }}
-                  className={`ml-1 ${copied === s.id ? 'text-green-400' : 'text-gray-600 hover:text-blue-400'} transition-colors`}>
-                  {copied === s.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                </button>
-                <a href={link} target="_blank" rel="noreferrer" className="text-gray-600 hover:text-gray-300"><Eye className="w-3 h-3" /></a>
-                <button onClick={() => onSend(s, corporateId, s.sentToEmail || p.signerEmail || '')} className="text-gray-600 hover:text-green-400 transition-colors"><Send className="w-3 h-3" /></button>
-                <button onClick={() => onDelete(s)} className="text-gray-600 hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
-              </div>
-            );
-          })}
+          {adminStages.map(s => (
+            <div key={s.id} className="flex items-center gap-1.5 bg-[#111318] border border-white/8 rounded-lg px-2.5 py-1.5">
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${STATUS_STYLES[s.status] || STATUS_STYLES.draft}`}>{s.status}</span>
+              <span className="text-xs text-gray-300 font-medium truncate max-w-[120px]">{s.label}</span>
+              <button onClick={(e) => copyInviteLink(e, s)}
+                className={`ml-1 ${copied === s.id ? 'text-green-400' : 'text-gray-600 hover:text-blue-400'} transition-colors`}>
+                {copied === s.id ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+              </button>
+              <button onClick={openMerchantView} title="View as merchant" className="text-gray-600 hover:text-amber-300">
+                <Eye className="w-3 h-3" />
+              </button>
+              <button onClick={() => onSend(s, corporateId, s.sentToEmail || p.signerEmail || '')} className="text-gray-600 hover:text-green-400 transition-colors"><Send className="w-3 h-3" /></button>
+              <button onClick={() => onDelete(s)} className="text-gray-600 hover:text-red-400 transition-colors"><Trash2 className="w-3 h-3" /></button>
+            </div>
+          ))}
         </div>
       )}
 
@@ -840,21 +935,47 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                 <div>
                   <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Signers</p>
                   <div className="space-y-1.5">
-                    {signers.map(s => (
-                      <div key={s.id} className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border ${s.identityStatus === 'Verified' ? 'border-green-500/20 bg-green-500/5' : 'border-white/8 bg-white/[0.02]'}`}>
-                        <Users className={`w-3.5 h-3.5 flex-shrink-0 ${s.identityStatus === 'Verified' ? 'text-green-400' : 'text-gray-500'}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-white">{s.firstName} {s.lastName}</p>
-                          <p className="text-[10px] text-gray-500">{s.signerEmail}</p>
+                    {signers.map(s => {
+                      const miss = signerMissingFields(s);
+                      const verified = s.identityStatus === 'Verified';
+                      const hasIssues = !verified && miss.length > 0;
+                      return (
+                        <div key={s.id} className={`px-3 py-2 rounded-xl border ${
+                          verified ? 'border-green-500/20 bg-green-500/5' :
+                          hasIssues ? 'border-red-500/20 bg-red-500/5' :
+                          'border-white/8 bg-white/[0.02]'
+                        }`}>
+                          <div className="flex items-center gap-2.5">
+                            <Users className={`w-3.5 h-3.5 flex-shrink-0 ${verified ? 'text-green-400' : hasIssues ? 'text-red-400' : 'text-gray-500'}`} />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-white">{s.firstName} {s.lastName}</p>
+                              <p className="text-[10px] text-gray-500">{s.signerEmail}</p>
+                            </div>
+                            <div className="flex items-center gap-1.5 flex-shrink-0">
+                              {s.isPrimarySigner && <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">Primary</span>}
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${verified ? 'text-green-400 border-green-500/30 bg-green-500/10' : 'text-gray-500 border-gray-500/20 bg-gray-500/10'}`}>
+                                {s.identityStatus || 'Pending'}
+                              </span>
+                              {hasIssues && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+                                  {miss.length} missing
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {hasIssues && (
+                            <div className="mt-2 ml-6 space-y-1">
+                              {miss.map(m => (
+                                <div key={m} className="flex items-start gap-1.5">
+                                  <XCircle className="w-3 h-3 text-red-400 flex-shrink-0 mt-0.5" />
+                                  <p className="text-[11px] text-red-300">Missing {m}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {s.isPrimarySigner && <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">Primary</span>}
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${s.identityStatus === 'Verified' ? 'text-green-400 border-green-500/30 bg-green-500/10' : 'text-gray-500 border-gray-500/20 bg-gray-500/10'}`}>
-                            {s.identityStatus || 'Pending'}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

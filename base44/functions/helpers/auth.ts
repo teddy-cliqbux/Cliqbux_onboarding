@@ -105,8 +105,8 @@ export async function verifyMerchantToken(req: Request): Promise<{ corporateId: 
 //
 // Returns:
 //   { actor: 'merchant', corporateId }  — request carries a valid merchant JWT
-//     (issued by validateResumeToken, createHubspotDeal, or
-//     manageStagedApplication 'validate')
+//     (issued by validateResumeToken, createHubspotDeal,
+//     manageStagedApplication 'validate', or manageStagedApplication 'impersonate')
 //   { actor: 'admin' }                  — request carries a Base44 workspace session
 //   null                                — neither; callers must respond 401
 //

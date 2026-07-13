@@ -548,7 +548,7 @@ The `STEP_SUMMARY` (review step) was removed — it was redundant.
 Admin-created or auto-tracked application staging records. Supports:
 - Admin staging: pre-fill fields, select which locations/MIDs/signers appear
 - Auto-tracking: `trackProgress` action upserts a record when merchant opens the portal
-- Admin dashboard at `/admin/staged` (StagedApplicationManager.jsx)
+- Admin dashboard at `/admin/applications` (`ApplicationManager.jsx`). Tracks `__auto_track__` progress (currentStep / lastSeenAt), MSP form errors via `getMSPFormStatus`, and admin impersonation via `manageStagedApplication` action `impersonate`.
 - Labels: `__auto_track__` for auto-created tracking records; custom label for admin-created stages
 
 ### MerchantCorporateProfile.legalEntities schema (updated)
@@ -561,12 +561,12 @@ The `legalEntities` array items now include `ownershipType`, `taxClassType`, `es
 **As of 2026-07-09, every merchant-facing backend function verifies the caller on every request.** The old model (trust whatever `corporateId` the browser sends) is gone — it let anyone who guessed a corporateId (= HubSpot deal ID, a guessable number) read/write another merchant's SSNs and bank details.
 
 **How it works now:**
-1. Merchant tokens (HMAC-signed JWTs bound to a `corporateId`) are issued by exactly three functions: `validateResumeToken` (magic resume links), `createHubspotDeal` (self-serve signup), and `manageStagedApplication` action `validate` (staged application links, 7-day expiry).
+1. Merchant tokens (HMAC-signed JWTs bound to a `corporateId`) are issued by: `validateResumeToken` (magic resume links), `createHubspotDeal` (self-serve signup), `manageStagedApplication` action `validate` (staged application links, 7-day expiry), and `manageStagedApplication` action `impersonate` (admin-only, **30-minute** TTL for live sales guidance).
 2. The frontend stores the token in sessionStorage (`merchant_jwt`) and attaches it as a Bearer header via `invokePortalFunction` (`src/lib/merchantAuthFetch.js`). When no merchant token exists, `invokePortalFunction` falls back to `base44.functions.invoke` so admin/workspace sessions still work through the same call sites.
 3. Every merchant-facing function contains an **inlined** `getPortalActor(req, base44)` block (canonical copy + usage docs in `base44/functions/helpers/auth.ts` — it cannot be imported because Base44 bundles each function in isolation). It resolves the caller to `{ actor: 'merchant', corporateId }` (valid merchant JWT), `{ actor: 'admin' }` (Base44 workspace session), or `null` (reject 401). Merchant actors are only allowed to touch their own `corporateId`; ownership checks use the **token's** corporateId, never the request body's.
 4. Functions keyed on something other than corporateId resolve ownership first: `removeSelfServeLocation` and `saveLocationBankDetails` load the location record and compare its corporateId to the token's; `getMSPFormStatus` checks the applicationNo belongs to one of the token's MIDs.
 5. Admin-only functions (`deleteMerchant`, `debugEnv`, `debugMSPForm`, `debugMSPFormRaw`, `debugMSPSignatures`, `refillMSPForms`, `importExistingMIDs`, `readMSPTemplate`) require a workspace session and deliberately reject merchant tokens. Note: curl-testing these against the published URL now requires a workspace session.
-6. `manageStagedApplication` no longer leaks `accessToken`: the `get` action is admin-only, and the new public `validate` action does the token comparison server-side and returns a sanitized stage + merchant JWT. `OnboardingPortal.validateStageToken` uses it.
+6. `manageStagedApplication` never leaks `accessToken` to list/get/create/update responses (`sanitizeStage`). Public `validate` compares the token server-side and returns a sanitized stage + merchant JWT. Admin invite URLs come from `getInviteLink` or `send` only. Admin portal "View" uses `impersonate` (30-min JWT via `?corporateId=&impersonateToken=`), not the long-lived staged link. `OnboardingPortal` strips `impersonateToken` from the URL after storing it and sets `portal_impersonating` + the gold banner ("Saves write to the live record").
 7. Still deliberately public: `validateResumeToken`, `verifySignerToken` (its own signer token), `sendResumeLink` (email-keyed, no data returned), `createHubspotDeal` (signup), `handleHubspotWebhook` (HubSpot webhook — TODO: verify HubSpot signatures).
 
 **Rules:**

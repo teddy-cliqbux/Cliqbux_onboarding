@@ -6,7 +6,13 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //                                             staged-link token; returns a signed merchant
 //                                             JWT + a sanitized stage record
 //   trackProgress                           — merchant token (matching corporateId) or admin
+//   impersonate                             — ADMIN ONLY: mint a 30-min merchant JWT so sales
+//                                             can open the live portal and Save on behalf of
+//                                             the merchant. Never returns stage accessToken.
+//   getInviteLink                           — ADMIN ONLY: return the staged magic link once
+//                                             (avoids leaking accessToken via list/get)
 //   list, get, create, update, delete, send — ADMIN ONLY (Base44 workspace session)
+//                                             list/get responses are sanitized (no accessToken)
 // POST /functions/manageStagedApplication
 
 // ─── Portal auth (inlined) ─────────────────────────────────────────────────────────────────────
@@ -183,18 +189,56 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // ── impersonate — mint a short-lived merchant JWT for live sales guidance ─
+    // Opens the real portal with Saves enabled. Never returns stage accessToken.
+    if (action === 'impersonate') {
+      if (!corporateId) return Response.json({ error: 'corporateId required' }, { status: 400 });
+      const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter(
+        { corporateId: String(corporateId) }, '-created_date', 1
+      );
+      if (!profiles.length) {
+        return Response.json({ error: 'Merchant not found' }, { status: 404 });
+      }
+      const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+      const merchantToken = await signMerchantToken(
+        String(corporateId),
+        profiles[0].signerEmail || undefined,
+        expiresAt
+      );
+      const portalUrl = `${publicUrl}/?corporateId=${encodeURIComponent(String(corporateId))}&impersonateToken=${encodeURIComponent(merchantToken)}`;
+      return Response.json({ success: true, merchantToken, expiresAt, portalUrl });
+    }
+
+    // ── getInviteLink — return the staged magic link without listing tokens ───
+    if (action === 'getInviteLink') {
+      if (!stageId) return Response.json({ error: 'stageId required' }, { status: 400 });
+      const stage = await base44.asServiceRole.entities.StagedApplication.get(stageId);
+      if (!stage) return Response.json({ error: 'Stage not found' }, { status: 404 });
+      if (stage.label === '__auto_track__') {
+        return Response.json({ error: 'Cannot invite via auto-track record' }, { status: 400 });
+      }
+      if (!stage.accessToken) {
+        return Response.json({ error: 'Stage has no invite token' }, { status: 400 });
+      }
+      return Response.json({
+        success: true,
+        link: `${publicUrl}/?stageId=${stage.id}&token=${stage.accessToken}`,
+      });
+    }
+
     if (action === 'list') {
-      // List all staged apps for a corporateId (or all if no filter given)
+      // List all staged apps for a corporateId (or all if no filter given).
+      // accessToken is stripped — use getInviteLink when an admin needs the URL.
       const filter: any = {};
       if (corporateId) filter.corporateId = corporateId;
       const stages = await base44.asServiceRole.entities.StagedApplication.filter(filter, '-created_date', 100);
-      return Response.json({ success: true, stages });
+      return Response.json({ success: true, stages: stages.map(sanitizeStage) });
     }
 
     if (action === 'get') {
       if (!stageId) return Response.json({ error: 'stageId required' }, { status: 400 });
       const stage = await base44.asServiceRole.entities.StagedApplication.get(stageId);
-      return Response.json({ success: true, stage });
+      return Response.json({ success: true, stage: sanitizeStage(stage) });
     }
 
     if (action === 'create') {
@@ -210,13 +254,13 @@ Deno.serve(async (req) => {
         prefilledData: data?.prefilledData || {},
         accessToken: token,
       });
-      return Response.json({ success: true, stage });
+      return Response.json({ success: true, stage: sanitizeStage(stage) });
     }
 
     if (action === 'update') {
       if (!stageId) return Response.json({ error: 'stageId required' }, { status: 400 });
       const updated = await base44.asServiceRole.entities.StagedApplication.update(stageId, data);
-      return Response.json({ success: true, stage: updated });
+      return Response.json({ success: true, stage: sanitizeStage(updated) });
     }
 
     if (action === 'delete') {
@@ -273,7 +317,7 @@ Deno.serve(async (req) => {
         sentToEmail: toEmail,
       });
 
-      return Response.json({ success: true, stage: updated, link });
+      return Response.json({ success: true, stage: sanitizeStage(updated), link });
     }
 
     return Response.json({ error: `Unknown action: ${action}` }, { status: 400 });

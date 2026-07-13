@@ -136,8 +136,9 @@ export default function OnboardingPortal() {
   const [completedSteps, setCompletedSteps] = useState({});
   // Track whether verification step had all signers verified (survives back navigation)
   const [signersVerified, setSignersVerified] = useState(false);
-  // true when a Base44 workspace user (agent) is viewing via a direct dealId/corporateId
-  // link with no merchant token — read-only, view-only access, not a merchant session.
+  // true when a workspace admin opened the portal via impersonate (30-min JWT)
+  // or via ?corporateId= with a workspace session. Saves are allowed — sales
+  // guides merchants live. Banner warns that writes hit the live merchant record.
   const [isImpersonating, setIsImpersonating] = useState(false);
   // Directional step motion: 1 = forward (slide left), -1 = back (slide right)
   const [stepDir, setStepDir] = useState(1);
@@ -166,6 +167,22 @@ export default function OnboardingPortal() {
     const id      = params.get('dealId') || params.get('corporateId');
     const token   = params.get('token');
     const stageId = params.get('stageId');
+    const impersonateToken = params.get('impersonateToken');
+
+    // Admin impersonation: short-lived merchant JWT minted by manageStagedApplication
+    // action "impersonate". Store it, strip from the address bar, open the live portal.
+    if (impersonateToken && id) {
+      setMerchantToken(impersonateToken);
+      sessionStorage.setItem('portal_impersonating', String(id));
+      setIsImpersonating(true);
+      setMode('sales');
+      setDealId(id);
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete('impersonateToken');
+      window.history.replaceState({}, '', clean.pathname + clean.search);
+      return;
+    }
+
     if (stageId && token) { validateStageToken(stageId, token); }
     else if (id)          { handleDirectAccess(id); }
     else if (token)       { validateResumeToken(token); }
@@ -178,8 +195,11 @@ export default function OnboardingPortal() {
   // an authenticated Base44 workspace session (agent) before allowing any access.
   const handleDirectAccess = async (id) => {
     // Already-established merchant session for this tab (e.g. resumed earlier
-    // via magic link) — trust it as before, no extra check needed.
+    // via magic link, or admin impersonation JWT still in sessionStorage).
     if (getMerchantToken()) {
+      if (sessionStorage.getItem('portal_impersonating') === String(id)) {
+        setIsImpersonating(true);
+      }
       setMode('sales');
       setDealId(id);
       return;
@@ -188,9 +208,10 @@ export default function OnboardingPortal() {
     setLoading(true);
     try {
       await base44.auth.me();
-      // Valid workspace session — allow read-only impersonation view, not a
-      // merchant session. Write actions still need to be gated per-screen in
-      // a follow-up pass; this only grants view access at the routing level.
+      // Valid workspace session without a merchant JWT — still allow interactive
+      // access (admin actor via invokePortalFunction fallback). Prefer the
+      // impersonate action for a proper 30-min merchant JWT when guiding Saves.
+      sessionStorage.setItem('portal_impersonating', String(id));
       setIsImpersonating(true);
       setMode('sales');
       setDealId(id);
@@ -202,6 +223,7 @@ export default function OnboardingPortal() {
       setDealId(null);
       setMode(null);
       clearMerchantToken();
+      sessionStorage.removeItem('portal_impersonating');
       base44.auth.redirectToLogin(window.location.href);
     }
   };
@@ -220,6 +242,8 @@ export default function OnboardingPortal() {
         return;
       }
       setMerchantToken(res.data.merchantToken);
+      sessionStorage.removeItem('portal_impersonating');
+      setIsImpersonating(false);
       setStagedApp(stage);
       stagedAppRef.current = stage;
       setMode('sales');
@@ -260,6 +284,8 @@ export default function OnboardingPortal() {
       // Store the signed merchant token for use by invokePortalFunction on
       // subsequent calls — persists in sessionStorage same as the corporateId above.
       setMerchantToken(data.merchantToken);
+      sessionStorage.removeItem('portal_impersonating');
+      setIsImpersonating(false);
       // Token valid — fetchMerchantData (triggered by dealId change) will set loading false
       setMode('sales');
       setDealId(data.corporateId);
@@ -617,7 +643,7 @@ export default function OnboardingPortal() {
       <div className="pt-16 min-h-screen flex flex-col items-center justify-start px-4 py-10">
         {isImpersonating && (
           <div className="w-full max-w-4xl mb-4 bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-accent text-gray-300 text-cb-body px-4 py-2.5 rounded-cb">
-            Viewing as workspace agent — read-only mode. This is not a merchant session.
+            Impersonating merchant · Corp {profile.corporateId} · Saves write to the live record · session ~30 min
           </div>
         )}
         {/* Merchant greeting */}
