@@ -995,9 +995,13 @@ Deno.serve(async (req) => {
         ['signed', 'complete', 'completed'].includes((s.localstatus || s.status || '').toLowerCase())
       );
 
+      // signingUrl = primary convenience link (legacy single-signer UI).
+      // Multi-signer coordinator MUST use signers[].signingUrl for the active owner
+      // (signer-outer / MID-inner). Never assume primarySigningUrl for co-signers.
       applications.push({
         mspApplicationNo,
         merchantName,
+        merchantIDName: merchantName, // OnboardingVerification alias
         signingUrl: primarySigningUrl,
         signers: signerLinks,
         allSigned: appAllSigned || overallSigned,

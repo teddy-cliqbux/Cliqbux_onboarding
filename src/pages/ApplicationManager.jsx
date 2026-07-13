@@ -697,7 +697,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                         <p className="text-sm font-semibold text-white truncate">{s.firstName} {s.lastName}</p>
                         <p className="text-[10px] text-gray-500 truncate">{s.signerEmail}</p>
                       </div>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${s.identityStatus === 'Verified' ? 'text-green-400 border-green-500/30' : 'text-gray-500 border-gray-500/20'}`}>
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${(s.identityStatus === 'Verified' || s.identityStatus === 'Signed') ? 'text-green-400 border-green-500/30' : 'text-gray-500 border-gray-500/20'}`}>
                         {s.identityStatus || 'Pending'}
                       </span>
                     </CheckRow>
@@ -1124,7 +1124,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                   <div className="space-y-1.5">
                     {signers.map(s => {
                       const miss = signerMissingFields(s);
-                      const verified = s.identityStatus === 'Verified';
+                      const verified = s.identityStatus === 'Verified' || s.identityStatus === 'Signed';
                       const hasIssues = !verified && miss.length > 0;
                       return (
                         <div key={s.id} className={`px-3 py-2 rounded-xl border ${

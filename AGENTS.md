@@ -424,6 +424,19 @@ After application submit, `PostSubmissionDashboard` shows underwriting + `Equipm
 
 `signApplication` packages MSPWare applications for BoldSign e-signature and returns iframe-embeddable signing URLs.
 
+### Multi-signer coordinator (shipped 2026-07-13)
+
+Portal signing is a **signer-outer / MID-inner** state machine in `OnboardingVerification.jsx`:
+
+1. **Required owners** = `ownershipPercentage >= 25` OR `isPrimarySigner`. Under-25% non-primaries stay on the roster but are **bypassed** by the signing loop (`src/lib/signerRules.js`).
+2. **Colocated:** primary (+ any co-owner who chose "Sign here") verify via `SignerDetailsModal` (`allowInlineKyc`), then each stays in the hot seat until they sign **all** MID packages before the device passes to the next human. Iframe URL comes from `app.signers[].signingUrl` for that email — never always-primary.
+3. **Remote:** one Resend email (`manageSigner` `sendInvite`) → `/verify?token=…&intent=sign`. `VerifyIdentity.jsx` runs KYC then `verifySignerToken` `getSigningSession` (token-scoped links only — no merchant JWT) → iframe → `markSigned`.
+4. **Completion signals:** BoldSign `postMessage` `onDocumentSigned` (origin `https://app.boldsign.com`) for snappy UI; **5s `signApplication` / `getSigningSession` poll is ground truth**.
+5. **Local status:** write `identityStatus: 'Signed'` via `manageSigner` `markSigned` / `verifySignerToken` `markSigned`. Do **not** poll MSPWare from admin list renders — that reintroduces rate-limit risk.
+6. Submit unlocks only when every required owner is `Signed` (or packages show allSigned and remotes are cleared).
+
+`signApplication` still: GET form first (skip refill at 100%), `POST /signatures` with `sendEmail: false`, per-email link fetch + **exactly one 1s retry**, clear `mspApplicationNo` **only on HTTP 404**.
+
 ### Flow
 1. Load profile, signers, MIDs, locations
 2. For all non-done MIDs (`Active`, `Active (Existing)`, `Pending MID` are skipped), verify their `mspApplicationNo` still exists in MSP — clear it **only on explicit 404** (not on network errors)
@@ -438,6 +451,7 @@ After application submit, `PostSubmissionDashboard` shows underwriting + `Equipm
 - **Always retry the link endpoint once after 1 second** if it returns null — BoldSign needs a moment after package creation
 - When `envelopeStatus` is `"new"` and signer `status` is `"new"`, the link IS available — do not skip it
 - Response `link` field is a full `https://app.boldsign.com/document/sign/?documentId=...` URL
+- Response includes `signers[]` with per-email `signingUrl` / `signed`; `signingUrl` top-level remains the primary convenience link. Multi-signer UI must use `signers[].signingUrl`.
 
 ### Signing URL debugging
 - Use `debugMSPSignatures` function: `{ appNo: 165, email: "user@example.com" }` — returns raw signatures response + link by email + link by signerid
@@ -685,29 +699,29 @@ Status locking: `manageMerchantID` blocks `update` and `delete` when `applicatio
 
 ---
 
-## Signer Verification UI + Persistence (reworked 2026-07-10)
+## Signer Verification UI + Persistence (reworked 2026-07-10; multi-signer 2026-07-13)
 
 **One modal per signer — `SignerDetailsModal.jsx`.** Teddy's direction 2026-07-10: splitting name/email/ownership editing (inline row fields) from identity verification (a separate expanding form) confused merchants, and ID upload/AI reading is unnecessary for now. Changes:
 
-- `InlineVerifyForm.jsx` and `SignerIdUpload.jsx` are **DELETED**. Do not recreate them. `SignerRoster` now opens `SignerDetailsModal` from a single "Edit" button per row (and from a full-width amber "Complete Identity Verification" CTA for the unverified primary — keep that CTA prominent, see the 2026-07-07 lesson about testers missing small verify pills).
-- The modal collects contact info (first/last/email/ownership %) plus, for the **primary signer only**, identity fields (DOB, SSN, address, title, phone). Saving the primary sets `identityStatus: 'Verified'` via one `manageSigner action: 'update'` call and syncs the profile's firstName/lastName via `updateMerchantProfile`. Non-primary signers get contact fields only — they verify themselves via the email invite (`/verify` page, `VerifyIdentity.jsx`, unchanged).
-- **ID upload is removed from the UI everywhere** (no upload phase, no AI extraction via `InvokeLLM`, no per-signer "Government ID Document" dropzone). The `idDocumentUrl` entity field, the `manageSigner` `inlineVerify` action, and the `uploadSignerIDsToMSP` backend function all still exist — dormant, not deleted — so re-enabling upload later is a frontend-only change.
+- `InlineVerifyForm.jsx` and `SignerIdUpload.jsx` are **DELETED**. Do not recreate them. `SignerRoster` opens `SignerDetailsModal` from Edit / "Complete Identity Verification" / **"Sign here"** (colocated co-owners).
+- Identity fields show when `isPrimary` **or** `allowInlineKyc` (colocated multi-signer). Saving sets `identityStatus: 'Verified'`. Remote co-owners use **"Send Verify & Sign Invite"** → `/verify?token=&intent=sign` (KYC then BoldSign in one page).
+- `MerchantSigners.identityStatus` enum includes **`Signed`** (written locally after BoldSign complete — never derive from live MSP polls in admin lists).
+- **ID upload remains dormant** (`idDocumentUrl`, `inlineVerify`, `uploadSignerIDsToMSP` exist but unused in UI).
 - The "returning signer detected" lookup (`manageSigner action: 'lookupByEmail'`) lives on in the modal.
 
-`verifySignerToken`'s `get` action still returns all previously saved fields so the invited-signer form pre-populates on revisit.
+`verifySignerToken` actions: `get`, `save` (→ Verified), `getSigningSession` (token-scoped BoldSign links only), `markSigned` (→ Signed).
 
 ---
 
 ## Email Sending (Resend)
 
-All transactional emails use Resend via `RESEND_API_KEY` env var. From address: `onboarding@onboarding.cliqbuxpos.com` (verified domain in Resend). Functions using Resend: `manageSigner` (KYC invite), `sendResumeLink` (portal resume), `manageStagedApplication` (staged app invite).
+All transactional emails use Resend via `RESEND_API_KEY` env var. From address: `onboarding@onboarding.cliqbuxpos.com` (verified domain in Resend). Functions using Resend: `manageSigner` (unified Verify & Sign invite), `sendResumeLink` (portal resume), `manageStagedApplication` (staged app invite).
 
 Do NOT use Base44's built-in `SendEmail` — it only works for registered workspace users, not external merchants.
 
 **Logo in email HTML (2026-07-13):** Do NOT hotlink `/brand/cliqbux-mark.png` (or any app URL). Mail clients often get 403/500 from Base44 static hosting and render a white "…" broken-image pill under the wordmark. Embed the mark as a Resend inline attachment (`content_id: cliqbux-logo`, HTML `cid:cliqbux-logo`). Canonical source: `helpers/emailBrand.ts` + `public/brand/cliqbux-mark-email.png` (regen via `scripts/gen-email-brand.mjs`). Copy the block into each email function — Base44 cannot import helpers.
 
----
-
+**Signer invite URL (2026-07-13):** `${PUBLIC_APP_URL}/verify?token=…&intent=sign` — single email for KYC + signing. Do not send a second BoldSign email (`sendEmail: false` on MSPWare packages).
 ## Rate Limiting — Critical Warning
 
 Base44 enforces a per-account API rate limit on `asServiceRole` entity calls. This limit applies across ALL functions in the account.

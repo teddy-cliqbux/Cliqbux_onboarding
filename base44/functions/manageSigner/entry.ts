@@ -96,6 +96,8 @@ async function sendViaResend(to: string, subject: string, html: string): Promise
   }
 }
 
+// Unified remote loop (2026-07-13): one email = identity KYC + BoldSign session.
+// Link uses intent=sign so /verify routes Verified signers straight into their iframe.
 function buildInviteEmail(firstName: string, verifyUrl: string, businessName: string | null): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -112,16 +114,16 @@ function buildInviteEmail(firstName: string, verifyUrl: string, businessName: st
         <tr>
           <td style="padding:36px 40px;">
             <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.06em;">Action Required</p>
-            <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">Complete Your Identity Verification</h1>
+            <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">Verify Identity &amp; Sign Your Agreement</h1>
             <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
               Hi ${firstName},<br><br>
-              You've been added as a <strong>beneficial owner</strong> on the <strong>${businessName || 'Cliqbux'}</strong> merchant application. To comply with financial regulations, we need to verify your identity before the application can be submitted.
+              You've been added as a <strong>beneficial owner</strong> on the <strong>${businessName || 'Cliqbux'}</strong> merchant application. One secure link covers both steps: confirm your identity, then sign the Merchant Processing Agreement — no second email.
             </p>
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td align="center" style="padding:8px 0 28px;">
                   <a href="${verifyUrl}" target="_blank" style="display:inline-block;background:#111827;color:#ffffff;font-size:15px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;letter-spacing:0.01em;">
-                    Verify My Identity →
+                    Verify &amp; Sign →
                   </a>
                 </td>
               </tr>
@@ -146,6 +148,10 @@ function buildInviteEmail(firstName: string, verifyUrl: string, businessName: st
   </table>
 </body>
 </html>`;
+}
+
+function buildSigningInviteUrl(token: string): string {
+  return `${getVerifyBaseUrl()}/verify?token=${encodeURIComponent(token)}&intent=sign`;
 }
 
 Deno.serve(async (req) => {
@@ -194,10 +200,10 @@ Deno.serve(async (req) => {
       let emailError: string | null = null;
       if (sendInvite) {
         try {
-          const verifyUrl = `${getVerifyBaseUrl()}/verify?token=${token}`;
+          const verifyUrl = buildSigningInviteUrl(token);
           await sendViaResend(
             signerData.signerEmail,
-            `Action Required: Verify Your Identity — ${signerData.legalName || 'Cliqbux'} Merchant Application`,
+            `Action Required: Verify & Sign — ${signerData.legalName || 'Cliqbux'} Merchant Application`,
             buildInviteEmail(signerData.firstName, verifyUrl, signerData.legalName)
           );
           await base44.asServiceRole.entities.MerchantSigners.update(record.id, { identityStatus: 'Sent', verifyTokenSentAt: new Date().toISOString() });
@@ -224,26 +230,50 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, signer: updated });
     }
 
-    // --- SEND INVITE ---
-    if (action === 'sendInvite') {
+    // --- SEND INVITE (unified Verify + Sign remote loop) ---
+    // Same action name as before — URL now includes intent=sign so /verify
+    // continues into the BoldSign iframe after KYC. Do not split into two emails.
+    if (action === 'sendInvite' || action === 'sendSigningInvite') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
       const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
       const signer = signers.find((s: any) => s.id === signerId);
       if (!signer) return Response.json({ error: 'Signer not found' }, { status: 404 });
 
+      // Resolve business name for the email subject/body
+      let businessName: string | null = null;
+      try {
+        const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
+        businessName = profiles?.[0]?.legalName || null;
+      } catch { /* non-fatal */ }
+
       const token = signer.verifyToken || generateToken();
-      const verifyUrl = `${getVerifyBaseUrl()}/verify?token=${token}`;
+      const verifyUrl = buildSigningInviteUrl(token);
 
       await sendViaResend(
         signer.signerEmail,
-        `Action Required: Verify Your Identity — Cliqbux Merchant Application`,
-        buildInviteEmail(signer.firstName, verifyUrl, null)
+        `Action Required: Verify & Sign — ${businessName || 'Cliqbux'} Merchant Application`,
+        buildInviteEmail(signer.firstName, verifyUrl, businessName)
       );
 
       const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, {
         identityStatus: 'Sent',
         verifyToken: token,
         verifyTokenSentAt: new Date().toISOString()
+      });
+      return Response.json({ success: true, signer: updated });
+    }
+
+    // --- MARK SIGNED (local persistence — never poll MSPWare from admin list UIs) ---
+    if (action === 'markSigned') {
+      if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
+      const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
+      const signer = signers.find((s: any) => s.id === signerId);
+      if (!signer) return Response.json({ error: 'Signer not found' }, { status: 404 });
+      if (signer.identityStatus === 'Signed') {
+        return Response.json({ success: true, signer });
+      }
+      const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, {
+        identityStatus: 'Signed',
       });
       return Response.json({ success: true, signer: updated });
     }

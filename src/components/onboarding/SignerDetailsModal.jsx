@@ -55,14 +55,12 @@ function useAddressAutocomplete(onParsed) {
 }
 
 // Single modal for everything about an existing signer: contact info (name /
-// email / ownership %) AND, for the primary signer, identity verification
-// (DOB / SSN / address / title / phone). Replaces the old split UX where the
-// row had inline Edit fields while verification lived in a separate expanding
-// form — merchants found the two surfaces confusing (Teddy, 2026-07-10).
-// Non-primary signers verify via their email invite, so they only get the
-// contact section here.
-export default function SignerDetailsModal({ signer, corporateId, profile, onSaved, onClose }) {
+// email / ownership %) AND identity verification (DOB / SSN / address / title /
+// phone) when the signer is primary OR colocated (`allowInlineKyc`). Remote
+// owners verify via their Verify & Sign email (/verify?intent=sign).
+export default function SignerDetailsModal({ signer, corporateId, profile, onSaved, onClose, allowInlineKyc = false }) {
   const isPrimary = signer.isPrimarySigner === true;
+  const showKyc = isPrimary || allowInlineKyc === true;
   const inheritedTitle = signer.titleType || profile?.titleType || '';
 
   const [form, setForm] = useState({
@@ -106,7 +104,7 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
 
   useEffect(() => {
     // Only worth looking up when identity data is still missing
-    if (!isPrimary || !signer.signerEmail || (signer.dobYear && signer.ssn)) return;
+    if (!showKyc || !signer.signerEmail || (signer.dobYear && signer.ssn)) return;
     (async () => {
       setLookingUp(true);
       try {
@@ -152,7 +150,7 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
     if (!form.ownershipPercentage || Number(form.ownershipPercentage) < 1) {
       setError('Ownership percentage is required.'); return;
     }
-    if (isPrimary) {
+    if (showKyc) {
       if (!form.dobMonth || !form.dobDay || !form.dobYear) { setError('Date of birth is required.'); return; }
       if (!form.ssn || rawSSN(form.ssn).length !== 9) { setError('A valid 9-digit SSN is required.'); return; }
       if (!form.homeStreet || !form.homeCity || !form.homeState || !form.homeZip) { setError('Home address is required.'); return; }
@@ -168,7 +166,7 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
         signerEmail: form.signerEmail.trim(),
         ownershipPercentage: Number(form.ownershipPercentage) || 0,
       };
-      if (isPrimary) {
+      if (showKyc) {
         Object.assign(signerData, {
           dobMonth: form.dobMonth,
           dobDay: form.dobDay,
@@ -222,12 +220,12 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
             <ShieldCheck className="w-4 h-4 text-cb-accent flex-shrink-0" />
             <div>
               <h3 className="font-display text-cb-title text-white">
-                {isPrimary ? 'Your Details & Identity Verification' : 'Edit Signer'}
+                {showKyc ? 'Your Details & Identity Verification' : 'Edit Signer'}
               </h3>
               <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-0.5">
-                {isPrimary
+                {showKyc
                   ? 'All data is encrypted and used only for underwriting'
-                  : 'Identity verification is completed by this signer via their email invite'}
+                  : 'For remote owners, identity + signing is completed via their Verify & Sign email'}
               </p>
             </div>
           </div>
@@ -284,8 +282,8 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
               onChange={e => set('ownershipPercentage', e.target.value)} placeholder="e.g. 25" />
           </div>
 
-          {/* Identity verification — primary signer only */}
-          {isPrimary && (
+          {/* Identity verification — primary or colocated (allowInlineKyc) */}
+          {showKyc && (
             <>
               <div className="border-t border-cb-border pt-4">
                 <p className="text-cb-caption uppercase text-gray-500">Identity Verification</p>
@@ -375,8 +373,8 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={handleSave} disabled={saving}
               className="flex-1 flex items-center justify-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 px-5 py-3 rounded-cb transition-all">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (isPrimary ? <ShieldCheck className="w-4 h-4" /> : <Save className="w-4 h-4" />)}
-              {saving ? 'Saving...' : (isPrimary ? 'Save & Verify' : 'Save')}
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (showKyc ? <ShieldCheck className="w-4 h-4" /> : <Save className="w-4 h-4" />)}
+              {saving ? 'Saving...' : (showKyc ? 'Save & Verify' : 'Save')}
             </button>
             <button type="button" onClick={onClose} className="px-4 py-3 text-cb-body font-medium text-gray-400 border border-cb-border hover:text-white hover:border-cb-border-strong rounded-cb transition-colors">
               Cancel

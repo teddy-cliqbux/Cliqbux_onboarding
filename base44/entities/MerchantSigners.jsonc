@@ -28,9 +28,11 @@
         "Pending Invitation",
         "Sent",
         "Verified",
+        "Signed",
         "Action Required"
       ],
-      "default": "Pending Invitation"
+      "default": "Pending Invitation",
+      "description": "Pending Invitation → Sent (remote invite) → Verified (KYC done) → Signed (BoldSign complete). Signed is written locally so admin dashboards never poll MSPWare per row."
     },
     "verifyToken": {
       "type": "string",
