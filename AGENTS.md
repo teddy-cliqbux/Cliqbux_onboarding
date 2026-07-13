@@ -915,6 +915,6 @@ A formal token layer now lives in `src/styles/tokens.css` (imported first in `in
 - Signature moment 1: bank-connected success in `OnboardingBanking.jsx` — spring check + "Bank connected" copy only on the just-saved transition (reloads stay quiet).
 - Signature moment 2: post-submit celebration on `PostSubmissionDashboard.jsx` — spring success mark + "You're all set" hero, one gold `canvas-confetti` burst per session (`sessionStorage` keyed by corporateId, respects `prefers-reduced-motion`). Nav/shipping panel tokenized; quote iframe card stays white (document readability).
 
-**Still optional / not blocking:** full `cb-*` restyle of remaining post-dashboard widgets (`InventoryUpload`, `LegacyPOSBridge`, `UnderwritingTracker`, `LocationStatusTable`, quote "Open in new tab" amber link). Entry/pricing screens (`PortalEntry`, `SelfServePricing`, `MobilePricing`) are outside this portal-step pass.
+**Still optional / not blocking:** ~~full `cb-*` restyle of remaining post-dashboard widgets~~ **DONE 2026-07-13 (Prompt 5/6):** `UnderwritingTracker`, `LocationStatusTable` (status → dot+caption), `InventoryUpload`, `LegacyPOSBridge`, `FormCard`, quote "Open in new tab" link; plus entry/pricing: `PortalEntry`, `SelfServePricing`, `MobilePricing`. Cash Discount remains the only self-serve card; pricing keys / createHubspotDeal payloads unchanged. Quote iframe card stays white for document readability.
 
-All four merchant-facing onboarding step pages + ProgressTracker are now on the token system.
+All merchant-facing onboarding surfaces (steps + ProgressTracker + post-submit dashboard chrome + entry/pricing) are now on the token system.

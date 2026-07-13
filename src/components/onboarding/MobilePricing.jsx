@@ -22,6 +22,9 @@ const PRICING_CARDS = [
   },
 ];
 
+const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-4 py-3.5 text-cb-body text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent hover:border-cb-border-strong transition-colors';
+const labelCls = 'text-cb-caption uppercase text-gray-500 mb-1.5 block';
+
 export default function MobilePricing({ onComplete }) {
   const [selectedTier, setSelectedTier] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -73,47 +76,51 @@ export default function MobilePricing({ onComplete }) {
   };
 
   return (
-    <div className="min-h-screen bg-[#111111] text-white px-4 pb-24">
+    <div className="min-h-screen portal-bg text-white px-4 pb-24">
       {/* Top bar */}
-      <div className="sticky top-0 z-50 bg-[#111111]/95 backdrop-blur border-b border-white/8 px-1 py-3 flex items-center gap-3">
-        <svg viewBox="0 0 28 32" className="w-6 h-7 flex-shrink-0" fill="none"><path d="M14 0L0 8v16l14 8 14-8V8L14 0z" fill="#F59E0B"/><path d="M14 5l-9 5v12l9 5 9-5V10l-9-5z" fill="#111"/><path d="M14 8l-6 3.5v7L14 22l6-3.5v-7L14 8z" fill="#F59E0B"/><path d="M10 13.5h8M14 13.5V18" stroke="#111" strokeWidth="1.5" strokeLinecap="round"/></svg>
+      <div className="sticky top-0 z-50 bg-cb-bg/95 backdrop-blur border-b border-cb-border px-1 py-3 flex items-center gap-3">
+        <svg viewBox="0 0 28 32" className="w-6 h-7 flex-shrink-0" fill="none"><path d="M14 0L0 8v16l14 8 14-8V8L14 0z" fill="var(--cb-accent)"/><path d="M14 5l-9 5v12l9 5 9-5V10l-9-5z" fill="var(--cb-bg)"/><path d="M14 8l-6 3.5v7L14 22l6-3.5v-7L14 8z" fill="var(--cb-accent)"/><path d="M10 13.5h8M14 13.5V18" stroke="var(--cb-bg)" strokeWidth="1.5" strokeLinecap="round"/></svg>
         <div className="flex-1">
-          <p className="text-xs font-bold text-white tracking-tight">cliqbux</p>
-          <p className="text-[10px] text-gray-100">Secure Merchant Onboarding</p>
+          <p className="text-cb-body font-semibold text-white tracking-tight">cliqbux</p>
+          <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Secure Merchant Onboarding</p>
         </div>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="bg-red-500/15 border border-red-500/30 rounded-xl px-4 py-3 text-red-300 text-xs mt-4">{error}</div>
+        <div className="bg-cb-bg border border-cb-border border-l-2 border-l-cb-danger rounded-cb px-4 py-3 text-cb-danger text-cb-body mt-4">{error}</div>
       )}
 
       <div className="mt-6 space-y-4">
-        <p className="text-[10px] text-gray-100 font-semibold uppercase tracking-widest mb-1 text-center">Choose Your Plan</p>
+        <p className="text-cb-caption uppercase text-gray-500 mb-1 text-center">Choose Your Plan</p>
 
         {PRICING_CARDS.map((card) => {
           const isSelected = selectedTier === card.key;
           return (
             <button key={card.key} onClick={() => handleSelectTier(card.key)}
-              className={`w-full text-left rounded-2xl border-2 p-5 transition-all duration-200 bg-white shadow-md ${
-                isSelected ? 'border-amber-500 shadow-amber-900/20 scale-[1.01]' : 'border-gray-200 hover:border-gray-300'
+              className={`w-full text-left rounded-cb border p-5 transition-colors duration-200 ${
+                isSelected ? 'bg-cb-surface-raised border-cb-accent' : 'bg-cb-surface border-cb-border'
               }`}>
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${isSelected ? 'bg-amber-100' : 'bg-gray-100'}`}>
-                    <Percent className={`w-5 h-5 ${isSelected ? 'text-amber-600' : 'text-gray-500'}`} />
+                  <div className={`w-10 h-10 rounded-cb flex items-center justify-center ${isSelected ? 'bg-cb-accent-muted' : 'bg-cb-bg'}`}>
+                    <Percent className={`w-5 h-5 ${isSelected ? 'text-cb-accent' : 'text-gray-500'}`} />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-gray-900">{card.label}</h3>
-                    <span className="text-[10px] text-gray-500">{card.badge}</span>
+                    <h3 className="text-cb-body font-semibold text-white">{card.label}</h3>
+                    <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">{card.badge}</span>
                   </div>
                 </div>
-                {isSelected && <Check className="w-5 h-5 text-amber-500 flex-shrink-0" />}
+                {isSelected && (
+                  <span className="flex items-center justify-center w-6 h-6 rounded-full bg-cb-accent flex-shrink-0">
+                    <Check className="w-3.5 h-3.5 text-cb-bg" strokeWidth={3} />
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-gray-500 mt-3 leading-relaxed">{card.description}</p>
-              <div className="border-t border-gray-100 mt-4 pt-4">
-                <p className="text-2xl font-black text-gray-900">{card.rate} <span className="text-sm font-medium text-gray-400">+ {card.fee}/txn</span></p>
-                <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider mt-1">{card.rateLabel}</p>
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-400 mt-3 leading-relaxed">{card.description}</p>
+              <div className="border-t border-cb-border mt-4 pt-4">
+                <p className="font-display text-cb-title text-white">{card.rate} <span className="text-cb-body font-normal text-gray-500">+ {card.fee}/txn</span></p>
+                <p className="text-cb-caption uppercase text-gray-500 mt-1">{card.rateLabel}</p>
               </div>
             </button>
           );
@@ -123,27 +130,27 @@ export default function MobilePricing({ onComplete }) {
         {selectedTier && (
           <form onSubmit={handleSubmit} className="space-y-4 mt-4">
             <div>
-              <label className="text-xs font-semibold text-gray-100 mb-1.5 block">Company Name <span className="text-red-400">*</span></label>
+              <label className={labelCls}>Company Name <span className="text-cb-danger">*</span></label>
               <input type="text" value={info.businessName} onChange={(e) => setInfo(p => ({ ...p, businessName: e.target.value }))} placeholder="e.g. Acme Retail LLC"
-                className="w-full bg-[#1A1D24] border border-white/25 rounded-xl px-4 py-3.5 text-sm text-white placeholder:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent" />
+                className={inputCls} />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-100 mb-1.5 block">Your Full Name <span className="text-red-400">*</span></label>
+              <label className={labelCls}>Your Full Name <span className="text-cb-danger">*</span></label>
               <input type="text" value={info.signerName} onChange={(e) => setInfo(p => ({ ...p, signerName: e.target.value }))} placeholder="e.g. Jane Smith"
-                className="w-full bg-[#1A1D24] border border-white/25 rounded-xl px-4 py-3.5 text-sm text-white placeholder:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent" />
+                className={inputCls} />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-100 mb-1.5 block">Business Email <span className="text-red-400">*</span></label>
+              <label className={labelCls}>Business Email <span className="text-cb-danger">*</span></label>
               <input type="email" value={info.signerEmail} onChange={(e) => setInfo(p => ({ ...p, signerEmail: e.target.value }))} placeholder="e.g. owner@yourbusiness.com"
-                className="w-full bg-[#1A1D24] border border-white/25 rounded-xl px-4 py-3.5 text-sm text-white placeholder:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent" />
+                className={inputCls} />
             </div>
             <div>
-              <label className="text-xs font-semibold text-gray-100 mb-1.5 block">Phone</label>
+              <label className={labelCls}>Phone</label>
               <input type="tel" value={info.phone} onChange={(e) => setInfo(p => ({ ...p, phone: e.target.value }))} placeholder="e.g. (865) 403-7301"
-                className="w-full bg-[#1A1D24] border border-white/25 rounded-xl px-4 py-3.5 text-sm text-white placeholder:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent" />
+                className={inputCls} />
             </div>
             <button type="submit" disabled={submitting}
-              className="w-full bg-amber-500 hover:bg-amber-400 disabled:bg-gray-600 disabled:text-gray-400 text-black font-bold py-4 rounded-xl text-sm transition-all mt-2">
+              className="w-full bg-cb-accent hover:opacity-90 disabled:bg-cb-bg disabled:text-gray-600 disabled:border disabled:border-cb-border text-cb-bg font-semibold py-4 rounded-cb text-cb-body transition-colors mt-2">
               {submitting ? <><Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Creating...</> : 'Create Account & Continue'}
             </button>
           </form>
@@ -151,8 +158,8 @@ export default function MobilePricing({ onComplete }) {
       </div>
 
       {/* Footer */}
-      <p className="text-gray-100 text-[10px] text-center mt-8">
-        Secured by <span className="text-amber-400 font-bold">Cliqbux</span> · onboarding.cliqbux.com · {new Date().getFullYear()}
+      <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600 text-center mt-8">
+        Secured by <span className="text-cb-accent font-medium">Cliqbux</span> · onboarding.cliqbux.com · {new Date().getFullYear()}
       </p>
     </div>
   );

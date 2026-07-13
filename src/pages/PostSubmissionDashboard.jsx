@@ -173,7 +173,7 @@ export default function PostSubmissionDashboard() {
                   <div className="flex items-center justify-between mb-1">
                     <h3 className="text-sm font-bold text-gray-900">Review &amp; Sign Your Equipment Quote</h3>
                     <a href={profile.hubspotQuoteUrl} target="_blank" rel="noopener noreferrer"
-                      className="text-xs font-semibold text-amber-600 hover:text-amber-700 underline">
+                      className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent hover:opacity-90 underline">
                       Open in new tab
                     </a>
                   </div>

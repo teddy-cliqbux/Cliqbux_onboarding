@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { CheckCircle2, AlertCircle, Clock, Store, CreditCard, ArrowRight, Loader2, CheckSquare, Square, Check, X, Copy, GripVertical, Building2, ChevronDown, ChevronRight } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Store, CreditCard, Loader2, CheckSquare, Square, Check, X, Copy, GripVertical, Building2, ChevronDown, ChevronRight } from 'lucide-react';
 import DragOrgMenu from './DragOrgMenu';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const STATUS_STYLES = {
-  'Active':            { icon: CheckCircle2, cls: 'text-green-600 bg-green-50 border-green-200', label: 'Active' },
-  'Active (Existing)': { icon: CheckCircle2, cls: 'text-green-600 bg-green-50 border-green-200', label: 'Active (Existing)' },
-  'Pending MID':       { icon: Clock, cls: 'text-amber-600 bg-amber-50 border-amber-200', label: 'Pending MID' },
-  'Ready to Submit':   { icon: ArrowRight, cls: 'text-blue-600 bg-blue-50 border-blue-200', label: 'Ready to Submit' },
-  'In Review':         { icon: Clock, cls: 'text-gray-500 bg-gray-50 border-gray-200', label: 'In Review' },
-  'Error':             { icon: AlertCircle, cls: 'text-red-600 bg-red-50 border-red-200', label: 'Error' },
+  'Active':            { dot: 'bg-cb-success', label: 'Active' },
+  'Active (Existing)': { dot: 'bg-cb-success', label: 'Active (Existing)' },
+  'Pending MID':       { dot: 'bg-cb-accent', label: 'Pending MID' },
+  'Ready to Submit':   { dot: 'bg-cb-accent', label: 'Ready to Submit' },
+  'In Review':         { dot: 'bg-gray-500', label: 'In Review' },
+  'Error':             { dot: 'bg-cb-danger', label: 'Error' },
 };
 
 const BATCH_STATUS_OPTIONS = ['In Review', 'Ready to Submit', 'Pending MID', 'Active', 'Error'];
@@ -18,6 +18,16 @@ const BATCH_STATUS_OPTIONS = ['In Review', 'Ready to Submit', 'Pending MID', 'Ac
 function formatCurrency(val) {
   if (!val && val !== 0) return '—';
   return '$' + Number(val).toLocaleString();
+}
+
+function StatusBadge({ status }) {
+  const statDef = STATUS_STYLES[status] || STATUS_STYLES['In Review'];
+  return (
+    <span className="inline-flex items-center gap-1.5 text-cb-caption normal-case tracking-normal font-medium text-gray-300">
+      <span className={`w-1.5 h-1.5 rounded-full ${statDef.dot}`} />
+      {statDef.label}
+    </span>
+  );
 }
 
 export default function LocationStatusTable({ locations = [], merchantIDs = [], loading, corporateId, onStatusChanged }) {
@@ -143,18 +153,18 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
 
   if (loading) {
     return (
-      <div className="bg-[#1c2128] rounded-xl border border-white/10 p-12 flex flex-col items-center justify-center gap-3">
+      <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-12 flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
-        <p className="text-sm text-gray-400">Loading location data...</p>
+        <p className="text-cb-body text-gray-400">Loading location data...</p>
       </div>
     );
   }
 
   if (!locations.length) {
     return (
-      <div className="bg-[#1c2128] rounded-xl border border-white/10 p-12 text-center">
+      <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-12 text-center">
         <Store className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-        <p className="text-sm text-gray-400">No business locations added yet.</p>
+        <p className="text-cb-body text-gray-400">No business locations added yet.</p>
       </div>
     );
   }
@@ -162,14 +172,12 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
   const renderRow = (loc, dragHandleProps, isDragging) => {
     const cs = merchantIDsByLoc[loc.id] || [];
     const status = getLocationStatus(loc);
-    const statDef = STATUS_STYLES[status] || STATUS_STYLES['In Review'];
-    const StatIcon = statDef.icon;
     const isSelected = selectedIds.includes(loc.id);
     const isMoving = movingLocId === loc.id;
 
     return (
       <tr
-        className={`transition-colors ${isDragging ? 'opacity-60 bg-amber-500/10' : 'hover:bg-white/[0.02]'} ${isSelected ? 'bg-amber-500/5 border-l-2 border-l-amber-400' : ''}`}
+        className={`transition-colors ${isDragging ? 'opacity-60 bg-cb-accent-muted' : 'hover:bg-white/[0.02]'} ${isSelected ? 'bg-cb-accent-muted border-l-2 border-l-cb-accent' : ''}`}
       >
         {/* Drag handle */}
         <td className="w-6 pl-2 py-4 text-center">
@@ -180,19 +188,19 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
         {/* Checkbox */}
         <td className="px-2 py-4 text-center">
           <button onClick={() => toggleSelect(loc.id)} className="hover:text-white transition-colors">
-            {isSelected ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4 text-gray-500" />}
+            {isSelected ? <CheckSquare className="w-4 h-4 text-cb-accent" /> : <Square className="w-4 h-4 text-gray-500" />}
           </button>
         </td>
         {/* Location */}
         <td className="px-2 py-4">
           <div className="flex items-center gap-2.5">
             {isMoving
-              ? <Loader2 className="w-4 h-4 text-amber-400 animate-spin flex-shrink-0" />
-              : <Store className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-amber-400' : 'text-amber-400/70'}`} />
+              ? <Loader2 className="w-4 h-4 text-cb-accent animate-spin flex-shrink-0" />
+              : <Store className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-cb-accent' : 'text-gray-500'}`} />
             }
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white truncate max-w-[180px]">{loc.dbaName}</p>
-              <p className="text-[11px] text-gray-400 truncate max-w-[180px]">{loc.businessAddress}</p>
+              <p className="text-cb-body font-semibold text-white truncate max-w-[180px]">{loc.dbaName}</p>
+              <p className="text-cb-caption normal-case tracking-normal text-gray-400 truncate max-w-[180px]">{loc.businessAddress}</p>
             </div>
           </div>
         </td>
@@ -202,13 +210,13 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
             <div className="flex flex-col gap-1">
               {cs.map(c => (
                 <div key={c.id} className="flex items-center gap-1.5">
-                  <CreditCard className="w-3 h-3 text-amber-400/70 flex-shrink-0" />
-                  <span className="text-xs text-gray-200 truncate max-w-[120px]">{c.merchantName || c.dbaName || 'Merchant ID'}</span>
-                  {c.elavonMID && <span className="text-[10px] font-mono text-green-500/70">MID</span>}
+                  <CreditCard className={`w-3 h-3 flex-shrink-0 ${isSelected ? 'text-cb-accent' : 'text-gray-500'}`} />
+                  <span className="text-cb-body text-gray-200 truncate max-w-[120px]">{c.merchantName || c.dbaName || 'Merchant ID'}</span>
+                  {c.elavonMID && <span className="text-cb-caption normal-case tracking-normal font-mono text-cb-success">MID</span>}
                 </div>
               ))}
             </div>
-          ) : <span className="text-xs text-gray-500">—</span>}
+          ) : <span className="text-cb-body text-gray-500">—</span>}
         </td>
         {/* MCC */}
         <td className="px-4 py-4">
@@ -216,42 +224,39 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
             <div className="flex flex-col gap-1">
               {cs.map(c => (
                 <div key={c.id} className="flex items-center gap-1.5">
-                  <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 rounded px-1.5 py-0.5">{c.mccCode || '—'}</span>
-                  {c.industryType && <span className="text-[10px] text-gray-400">{c.industryType}</span>}
+                  <span className="text-cb-caption font-mono text-cb-accent bg-cb-accent-muted rounded-cb px-1.5 py-0.5">{c.mccCode || '—'}</span>
+                  {c.industryType && <span className="text-cb-caption normal-case tracking-normal text-gray-400">{c.industryType}</span>}
                 </div>
               ))}
             </div>
-          ) : <span className="text-xs text-gray-500">—</span>}
+          ) : <span className="text-cb-body text-gray-500">—</span>}
         </td>
         {/* Volume */}
         <td className="px-4 py-4 text-right">
           {cs.length > 0 ? (
             <div className="flex flex-col gap-1 items-end">
-              {cs.map(c => <span key={c.id} className="text-xs font-semibold text-white">{formatCurrency(c.monthlyCardSales)}</span>)}
+              {cs.map(c => <span key={c.id} className="text-cb-body font-semibold text-white">{formatCurrency(c.monthlyCardSales)}</span>)}
             </div>
-          ) : <span className="text-xs text-gray-500">—</span>}
+          ) : <span className="text-cb-body text-gray-500">—</span>}
         </td>
         {/* Avg sale */}
         <td className="px-4 py-4 text-right">
           {cs.length > 0 ? (
             <div className="flex flex-col gap-1 items-end">
-              {cs.map(c => <span key={c.id} className="text-xs text-gray-200">{formatCurrency(c.avgSaleAmount)}</span>)}
+              {cs.map(c => <span key={c.id} className="text-cb-body text-gray-200">{formatCurrency(c.avgSaleAmount)}</span>)}
             </div>
-          ) : <span className="text-xs text-gray-500">—</span>}
+          ) : <span className="text-cb-body text-gray-500">—</span>}
         </td>
         {/* Status */}
         <td className="pr-4 py-4 text-center">
-          <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${statDef.cls}`}>
-            <StatIcon className="w-3 h-3" />
-            {statDef.label}
-          </span>
+          <StatusBadge status={status} />
         </td>
         {/* Duplicate */}
         <td className="pr-3 py-4 text-center">
           <button
             onClick={() => handleDuplicate(loc.id)}
             disabled={duplicatingIds.includes(loc.id)}
-            className="text-gray-500 hover:text-amber-400 disabled:text-gray-600 transition-colors p-1"
+            className="text-gray-500 hover:text-cb-accent disabled:text-gray-600 transition-colors p-1"
             title="Duplicate this location"
           >
             {duplicatingIds.includes(loc.id)
@@ -266,11 +271,11 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
 
   const tableHead = (
     <thead>
-      <tr className="border-b border-white/5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+      <tr className="border-b border-cb-border text-cb-caption uppercase text-gray-500">
         <th className="w-6 pl-2 py-3" />
         <th className="w-10 px-2 py-3 text-center">
           <button onClick={toggleSelectAll} className="hover:text-white transition-colors">
-            {allSelected ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4" />}
+            {allSelected ? <CheckSquare className="w-4 h-4 text-cb-accent" /> : <Square className="w-4 h-4" />}
           </button>
         </th>
         <th className="text-left px-2 py-3">Location</th>
@@ -285,45 +290,45 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
   );
 
   return (
-    <div className="bg-[#1c2128] rounded-xl border border-white/10 overflow-hidden">
+    <div className="bg-cb-surface-raised rounded-cb border border-cb-border overflow-hidden">
       {/* Summary bar */}
-      <div className="px-6 py-4 border-b border-white/10 flex flex-wrap items-center gap-x-8 gap-y-2">
+      <div className="px-6 py-4 border-b border-cb-border flex flex-wrap items-center gap-x-8 gap-y-2">
         <div>
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Locations</p>
+          <p className="text-cb-caption uppercase text-gray-500">Locations</p>
           <p className="text-lg font-bold text-white">{locations.length}</p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Merchant IDs</p>
+          <p className="text-cb-caption uppercase text-gray-500">Merchant IDs</p>
           <p className="text-lg font-bold text-white">{merchantIDs.length}</p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Combined Volume</p>
+          <p className="text-cb-caption uppercase text-gray-500">Combined Volume</p>
           <p className="text-lg font-bold text-white">
             {formatCurrency(merchantIDs.reduce((s, c) => s + (Number(c.monthlyCardSales) || 0), 0))}
           </p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Active / Complete</p>
-          <p className="text-lg font-bold text-green-400">
+          <p className="text-cb-caption uppercase text-gray-500">Active / Complete</p>
+          <p className="text-lg font-bold text-cb-success">
             {locations.filter(l => { const s = getLocationStatus(l); return s === 'Active' || s === 'Active (Existing)'; }).length} / {locations.length}
           </p>
         </div>
         {showGroups && (
-          <div className="ml-auto flex items-center gap-1.5 text-[10px] text-gray-400">
+          <div className="ml-auto flex items-center gap-1.5 text-cb-caption normal-case tracking-normal text-gray-400">
             <GripVertical className="w-3 h-3" />
             Drag rows between entities to reassign
           </div>
         )}
         {selectedIds.length > 0 && !showGroups && (
           <div className="ml-auto">
-            <span className="text-xs text-amber-400 font-semibold">{selectedIds.length} selected</span>
+            <span className="text-cb-body text-cb-accent font-semibold">{selectedIds.length} selected</span>
           </div>
         )}
       </div>
 
       {/* Drag error */}
       {dragError && (
-        <div className="px-6 py-2 bg-red-500/10 border-b border-red-500/20 text-xs text-red-400 flex items-center gap-2">
+        <div className="px-6 py-2 bg-cb-bg border-b border-cb-border border-l-2 border-l-cb-danger text-cb-body text-cb-danger flex items-center gap-2">
           <AlertCircle className="w-3.5 h-3.5" /> {dragError}
           <button onClick={() => setDragError('')} className="ml-auto"><X className="w-3.5 h-3.5" /></button>
         </div>
@@ -331,17 +336,17 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
 
       {/* Batch action bar */}
       {selectedIds.length > 0 && (
-        <div className="px-6 py-3 border-b border-amber-500/30 bg-amber-500/5 flex flex-wrap items-center gap-3">
-          <button onClick={clearSelection} className="text-xs text-gray-400 hover:text-white flex items-center gap-1">
+        <div className="px-6 py-3 border-b border-cb-border bg-cb-accent-muted flex flex-wrap items-center gap-3">
+          <button onClick={clearSelection} className="text-cb-body text-gray-400 hover:text-white flex items-center gap-1">
             <X className="w-3 h-3" /> Clear
           </button>
-          <span className="w-px h-5 bg-white/10" />
+          <span className="w-px h-5 bg-cb-border" />
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <span className="text-[10px] font-semibold text-gray-300 uppercase">Set Status:</span>
+            <span className="text-cb-caption uppercase text-gray-300">Set Status:</span>
             <select
               value={batchStatus}
               onChange={(e) => { setBatchStatus(e.target.value); setBatchError(''); setBatchDone(false); }}
-              className="bg-[#111318] border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
+              className="bg-cb-bg border border-cb-border rounded-cb px-2.5 py-1.5 text-cb-body text-white focus:outline-none focus:ring-1 focus:ring-cb-accent"
               style={{ colorScheme: 'dark' }}
             >
               <option value="">Choose...</option>
@@ -350,14 +355,14 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
             <button
               onClick={handleBatchStatus}
               disabled={batchBusy || !batchStatus}
-              className="text-xs font-semibold bg-amber-500 disabled:bg-gray-600 disabled:text-gray-400 text-black px-3 py-1.5 rounded-lg hover:bg-amber-400 transition-all flex items-center gap-1"
+              className="text-cb-body font-semibold bg-cb-accent disabled:bg-gray-600 disabled:text-gray-400 text-cb-bg px-3 py-1.5 rounded-cb hover:opacity-90 transition-opacity flex items-center gap-1"
             >
               {batchBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : batchDone ? <Check className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />}
               {batchBusy ? 'Applying...' : batchDone ? 'Done' : 'Apply'}
             </button>
-            {batchError && <span className="text-[10px] text-red-400">{batchError}</span>}
+            {batchError && <span className="text-cb-caption normal-case tracking-normal text-cb-danger">{batchError}</span>}
           </div>
-          <span className="w-px h-5 bg-white/10" />
+          <span className="w-px h-5 bg-cb-border" />
           {entities.length > 1 && (
             <div className="flex-shrink-0">
               <DragOrgMenu corporateId={corporateId} entities={entities} selectedIds={selectedIds} onActionDone={clearSelection} />
@@ -390,22 +395,22 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
                         {/* Entity group header — collapsible */}
                         <tbody>
                           <tr>
-                            <td colSpan={9} className={`transition-colors ${snapshot.isDraggingOver ? 'bg-amber-500/10' : 'bg-[#111318]'}`}>
+                            <td colSpan={9} className={`transition-colors ${snapshot.isDraggingOver ? 'bg-cb-accent-muted' : 'bg-cb-bg'}`}>
                               <button
                                 type="button"
                                 onClick={() => toggleGroup(group.entityId)}
                                 className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-white/[0.03] transition-colors text-left"
                               >
-                                <Building2 className="w-3.5 h-3.5 text-amber-400/70 flex-shrink-0" />
-                                <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider flex-1 truncate">{group.label}</span>
-                                {group.ein && <span className="text-[10px] text-gray-500 font-mono">{group.ein}</span>}
-                                <span className="text-[10px] text-gray-500">
+                                <Building2 className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                                <span className="text-cb-body font-semibold text-white flex-1 truncate">{group.label}</span>
+                                {group.ein && <span className="text-cb-caption normal-case tracking-normal text-gray-500 font-mono">{group.ein}</span>}
+                                <span className="text-cb-caption normal-case tracking-normal text-gray-500">
                                   {group.locations.length} loc{group.locations.length !== 1 ? 's' : ''}
                                   {groupVolume > 0 && <> · {formatCurrency(groupVolume)}/mo</>}
-                                  {activeCount > 0 && <span className="text-green-500 ml-1">· {activeCount} active</span>}
+                                  {activeCount > 0 && <span className="text-cb-success ml-1">· {activeCount} active</span>}
                                 </span>
                                 {snapshot.isDraggingOver
-                                  ? <span className="text-[10px] text-amber-400 font-semibold animate-pulse ml-1">Drop here →</span>
+                                  ? <span className="text-cb-caption normal-case tracking-normal text-cb-accent font-semibold ml-1">Drop here →</span>
                                   : isCollapsed
                                     ? <ChevronRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                                     : <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
@@ -415,14 +420,14 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
                           </tr>
                         </tbody>
                         {/* Droppable tbody — hidden when collapsed */}
-                        <tbody ref={provided.innerRef} {...provided.droppableProps} className={`divide-y divide-white/5 ${isCollapsed ? 'hidden' : ''}`}>
+                        <tbody ref={provided.innerRef} {...provided.droppableProps} className={`divide-y divide-cb-border ${isCollapsed ? 'hidden' : ''}`}>
                           {group.locations.map((loc, idx) => (
                             <Draggable draggableId={loc.id} index={idx} key={loc.id}>
                               {(dragProvided, dragSnapshot) => (
                                 <tr
                                   ref={dragProvided.innerRef}
                                   {...dragProvided.draggableProps}
-                                  className={`transition-colors ${dragSnapshot.isDragging ? 'opacity-70 bg-amber-500/10' : 'hover:bg-white/[0.02]'} ${selectedIds.includes(loc.id) ? 'bg-amber-500/5 border-l-2 border-l-amber-400' : ''}`}
+                                  className={`transition-colors ${dragSnapshot.isDragging ? 'opacity-70 bg-cb-accent-muted' : 'hover:bg-white/[0.02]'} ${selectedIds.includes(loc.id) ? 'bg-cb-accent-muted border-l-2 border-l-cb-accent' : ''}`}
                                 >
                                   <td className="w-6 pl-2 py-4 text-center">
                                     <span {...dragProvided.dragHandleProps} className="text-gray-600 hover:text-gray-300 cursor-grab active:cursor-grabbing block">
@@ -431,7 +436,7 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
                                   </td>
                                   <td className="px-2 py-4 text-center">
                                     <button onClick={() => toggleSelect(loc.id)} className="hover:text-white transition-colors">
-                                      {selectedIds.includes(loc.id) ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4 text-gray-500" />}
+                                      {selectedIds.includes(loc.id) ? <CheckSquare className="w-4 h-4 text-cb-accent" /> : <Square className="w-4 h-4 text-gray-500" />}
                                     </button>
                                   </td>
                                   {renderRowCells(loc, merchantIDsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds)}
@@ -442,7 +447,7 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
                           {provided.placeholder}
                           {group.locations.length === 0 && !snapshot.isDraggingOver && (
                             <tr>
-                              <td colSpan={9} className="px-6 py-4 text-center text-xs text-gray-600">
+                              <td colSpan={9} className="px-6 py-4 text-center text-cb-body text-gray-600">
                                 No locations assigned — drag one here
                               </td>
                             </tr>
@@ -458,18 +463,18 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
                 <>
                   <tbody>
                     <tr>
-                      <td colSpan={9} className="px-4 py-2 bg-white/[0.02]">
-                        <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Unassigned · {unassigned.length}</span>
+                      <td colSpan={9} className="px-4 py-2 bg-cb-bg">
+                        <span className="text-cb-caption uppercase text-gray-500">Unassigned · {unassigned.length}</span>
                       </td>
                     </tr>
                   </tbody>
-                  <tbody className="divide-y divide-white/5">
+                  <tbody className="divide-y divide-cb-border">
                     {unassigned.map((loc) => (
-                      <tr key={loc.id} className={`hover:bg-white/[0.02] transition-colors ${selectedIds.includes(loc.id) ? 'bg-amber-500/5 border-l-2 border-l-amber-400' : ''}`}>
+                      <tr key={loc.id} className={`hover:bg-white/[0.02] transition-colors ${selectedIds.includes(loc.id) ? 'bg-cb-accent-muted border-l-2 border-l-cb-accent' : ''}`}>
                         <td className="w-6 pl-2 py-4" />
                         <td className="px-2 py-4 text-center">
                           <button onClick={() => toggleSelect(loc.id)} className="hover:text-white transition-colors">
-                            {selectedIds.includes(loc.id) ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4 text-gray-500" />}
+                            {selectedIds.includes(loc.id) ? <CheckSquare className="w-4 h-4 text-cb-accent" /> : <Square className="w-4 h-4 text-gray-500" />}
                           </button>
                         </td>
                         {renderRowCells(loc, merchantIDsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds)}
@@ -484,13 +489,13 @@ export default function LocationStatusTable({ locations = [], merchantIDs = [], 
           // Single entity — simple flat table, no drag needed
           <table className="w-full text-sm">
             {tableHead}
-            <tbody className="divide-y divide-white/5">
+            <tbody className="divide-y divide-cb-border">
               {locations.map(loc => (
-                <tr key={loc.id} className={`hover:bg-white/[0.02] transition-colors ${selectedIds.includes(loc.id) ? 'bg-amber-500/5 border-l-2 border-l-amber-400' : ''}`}>
+                <tr key={loc.id} className={`hover:bg-white/[0.02] transition-colors ${selectedIds.includes(loc.id) ? 'bg-cb-accent-muted border-l-2 border-l-cb-accent' : ''}`}>
                   <td className="w-6 pl-2 py-4" />
                   <td className="px-2 py-4 text-center">
                     <button onClick={() => toggleSelect(loc.id)} className="hover:text-white transition-colors">
-                      {selectedIds.includes(loc.id) ? <CheckSquare className="w-4 h-4 text-amber-400" /> : <Square className="w-4 h-4 text-gray-500" />}
+                      {selectedIds.includes(loc.id) ? <CheckSquare className="w-4 h-4 text-cb-accent" /> : <Square className="w-4 h-4 text-gray-500" />}
                     </button>
                   </td>
                   {renderRowCells(loc, merchantIDsByLoc, movingLocId, duplicatingIds, handleDuplicate, selectedIds)}
@@ -515,8 +520,6 @@ function renderRowCells(loc, merchantIDsByLoc, movingLocId, duplicatingIds, hand
     }
     return loc.applicationStepStatus || 'In Review';
   })();
-  const statDef = STATUS_STYLES[status] || STATUS_STYLES['In Review'];
-  const StatIcon = statDef.icon;
   const isMoving = movingLocId === loc.id;
   const isSelected = selectedIds.includes(loc.id);
 
@@ -525,12 +528,12 @@ function renderRowCells(loc, merchantIDsByLoc, movingLocId, duplicatingIds, hand
       <td className="px-2 py-4">
         <div className="flex items-center gap-2.5">
           {isMoving
-            ? <Loader2 className="w-4 h-4 text-amber-400 animate-spin flex-shrink-0" />
-            : <Store className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-amber-400' : 'text-amber-400/70'}`} />
+            ? <Loader2 className="w-4 h-4 text-cb-accent animate-spin flex-shrink-0" />
+            : <Store className={`w-4 h-4 flex-shrink-0 ${isSelected ? 'text-cb-accent' : 'text-gray-500'}`} />
           }
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-white truncate max-w-[180px]">{loc.dbaName}</p>
-            <p className="text-[11px] text-gray-400 truncate max-w-[180px]">{loc.businessAddress}</p>
+            <p className="text-cb-body font-semibold text-white truncate max-w-[180px]">{loc.dbaName}</p>
+            <p className="text-cb-caption normal-case tracking-normal text-gray-400 truncate max-w-[180px]">{loc.businessAddress}</p>
           </div>
         </div>
       </td>
@@ -539,51 +542,48 @@ function renderRowCells(loc, merchantIDsByLoc, movingLocId, duplicatingIds, hand
           <div className="flex flex-col gap-1">
             {cs.map(c => (
               <div key={c.id} className="flex items-center gap-1.5">
-                <CreditCard className="w-3 h-3 text-amber-400/70 flex-shrink-0" />
-                <span className="text-xs text-gray-200 truncate max-w-[120px]">{c.merchantName || c.dbaName || 'Merchant ID'}</span>
-                {c.elavonMID && <span className="text-[10px] font-mono text-green-500/70">MID</span>}
+                <CreditCard className={`w-3 h-3 flex-shrink-0 ${isSelected ? 'text-cb-accent' : 'text-gray-500'}`} />
+                <span className="text-cb-body text-gray-200 truncate max-w-[120px]">{c.merchantName || c.dbaName || 'Merchant ID'}</span>
+                {c.elavonMID && <span className="text-cb-caption normal-case tracking-normal font-mono text-cb-success">MID</span>}
               </div>
             ))}
           </div>
-        ) : <span className="text-xs text-gray-500">—</span>}
+        ) : <span className="text-cb-body text-gray-500">—</span>}
       </td>
       <td className="px-4 py-4">
         {cs.length > 0 ? (
           <div className="flex flex-col gap-1">
             {cs.map(c => (
               <div key={c.id} className="flex items-center gap-1.5">
-                <span className="text-[10px] font-mono text-amber-400 bg-amber-500/10 rounded px-1.5 py-0.5">{c.mccCode || '—'}</span>
-                {c.industryType && <span className="text-[10px] text-gray-400">{c.industryType}</span>}
+                <span className="text-cb-caption font-mono text-cb-accent bg-cb-accent-muted rounded-cb px-1.5 py-0.5">{c.mccCode || '—'}</span>
+                {c.industryType && <span className="text-cb-caption normal-case tracking-normal text-gray-400">{c.industryType}</span>}
               </div>
             ))}
           </div>
-        ) : <span className="text-xs text-gray-500">—</span>}
+        ) : <span className="text-cb-body text-gray-500">—</span>}
       </td>
       <td className="px-4 py-4 text-right">
         {cs.length > 0 ? (
           <div className="flex flex-col gap-1 items-end">
-            {cs.map(c => <span key={c.id} className="text-xs font-semibold text-white">{formatCurrency(c.monthlyCardSales)}</span>)}
+            {cs.map(c => <span key={c.id} className="text-cb-body font-semibold text-white">{formatCurrency(c.monthlyCardSales)}</span>)}
           </div>
-        ) : <span className="text-xs text-gray-500">—</span>}
+        ) : <span className="text-cb-body text-gray-500">—</span>}
       </td>
       <td className="px-4 py-4 text-right">
         {cs.length > 0 ? (
           <div className="flex flex-col gap-1 items-end">
-            {cs.map(c => <span key={c.id} className="text-xs text-gray-200">{formatCurrency(c.avgSaleAmount)}</span>)}
+            {cs.map(c => <span key={c.id} className="text-cb-body text-gray-200">{formatCurrency(c.avgSaleAmount)}</span>)}
           </div>
-        ) : <span className="text-xs text-gray-500">—</span>}
+        ) : <span className="text-cb-body text-gray-500">—</span>}
       </td>
       <td className="pr-4 py-4 text-center">
-        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full border ${statDef.cls}`}>
-          <StatIcon className="w-3 h-3" />
-          {statDef.label}
-        </span>
+        <StatusBadge status={status} />
       </td>
       <td className="pr-3 py-4 text-center">
         <button
           onClick={() => handleDuplicate(loc.id)}
           disabled={duplicatingIds.includes(loc.id)}
-          className="text-gray-500 hover:text-amber-400 disabled:text-gray-600 transition-colors p-1"
+          className="text-gray-500 hover:text-cb-accent disabled:text-gray-600 transition-colors p-1"
           title="Duplicate this location"
         >
           {duplicatingIds.includes(loc.id)

@@ -1033,3 +1033,20 @@ Picked up the Stripe/Linear restraint redesign after Claude's mid-pass cut-off. 
 
 **→ Waiting on:** Teddy (review + push via GitHub Desktop), then Base44 (publish + quoted evidence)
 ---
+
+---
+**[CURSOR]** · 2026-07-13
+**Type:** Action Taken — Prompt 5/6 token migration (dashboard widgets + entry/pricing)
+
+Completed the remaining optional restyle pass Teddy approved:
+
+**Prompt 5 — post-dashboard:** `UnderwritingTracker`, `LocationStatusTable` (STATUS_STYLES → quiet dot+caption), `InventoryUpload`, `LegacyPOSBridge`, `FormCard`, PostSubmissionDashboard quote link. Quote iframe card stays white.
+
+**Prompt 6 — entry/pricing:** `PortalEntry`, `SelfServePricing`, `MobilePricing`. Cash Discount still the only self-serve card; `CASH_DISCOUNT` key + createHubspotDeal payload unchanged. Solid gold CTAs; no gradients/glow/scale-on-select.
+
+Visual-only. No field/key/validation/save/fetch/pricing-logic changes.
+
+**ACTION for Base44 after Teddy pushes:** publish frontend (covers prior UI work too).
+
+**→ Waiting on:** Teddy (push via GitHub Desktop), then Base44 (publish + quoted evidence)
+---

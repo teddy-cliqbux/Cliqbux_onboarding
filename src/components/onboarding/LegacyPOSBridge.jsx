@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link2, ChevronDown, ArrowRight } from 'lucide-react';
+import { Link2, ChevronDown, ArrowRight, Check } from 'lucide-react';
 
 const POS_OPTIONS = [
   { value: 'clover', label: 'Clover' },
@@ -22,12 +22,14 @@ export default function LegacyPOSBridge() {
 
   if (submitted) {
     return (
-      <div className="border border-green-200 bg-green-50 rounded-xl p-5">
+      <div className="bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-success rounded-cb p-5">
         <div className="flex items-center gap-3 mb-1">
-          <Link2 className="w-5 h-5 text-green-600" />
-          <h3 className="text-sm font-bold text-green-800">POS Authorization Submitted</h3>
+          <span className="flex items-center justify-center w-7 h-7 rounded-full bg-cb-success/15 flex-shrink-0">
+            <Check className="w-3.5 h-3.5 text-cb-success" strokeWidth={3} />
+          </span>
+          <h3 className="text-cb-body font-semibold text-white">POS Authorization Submitted</h3>
         </div>
-        <p className="text-xs text-gray-600">
+        <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1">
           Your {POS_OPTIONS.find((o) => o.value === provider)?.label || provider} integration request has been sent to your account manager.
         </p>
       </div>
@@ -35,12 +37,12 @@ export default function LegacyPOSBridge() {
   }
 
   return (
-    <div className="border border-gray-200 rounded-xl p-5">
-      <div className="flex items-center gap-3 mb-0.5">
-        <Link2 className="w-5 h-5 text-gray-900" />
-        <h3 className="text-sm font-bold text-gray-900">Connect Legacy POS Network</h3>
+    <div className="bg-cb-surface-raised border border-cb-border rounded-cb p-5">
+      <div className="flex items-center gap-2.5 mb-0.5">
+        <Link2 className="w-4 h-4 text-gray-400" />
+        <h3 className="text-cb-body font-semibold text-white">Connect Legacy POS Network</h3>
       </div>
-      <p className="text-xs text-gray-500 mb-4">
+      <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mb-4">
         Bridge your existing Point-of-Sale platform so Cliqbux can sync directly.
       </p>
 
@@ -49,18 +51,18 @@ export default function LegacyPOSBridge() {
         <div className="relative">
           <button
             onClick={() => setOpen(!open)}
-            className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-left"
+            className="w-full flex items-center justify-between bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5 text-cb-body text-left hover:border-cb-border-strong transition-colors"
           >
-            <span className={provider ? 'text-gray-900' : 'text-gray-400'}>{provider ? POS_OPTIONS.find((o) => o.value === provider)?.label : 'Select your POS provider...'}</span>
-            <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+            <span className={provider ? 'text-white' : 'text-gray-500'}>{provider ? POS_OPTIONS.find((o) => o.value === provider)?.label : 'Select your POS provider...'}</span>
+            <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
           </button>
           {open && (
-            <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20">
+            <div className="absolute left-0 right-0 top-full mt-1 bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay z-20 overflow-hidden">
               {POS_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}
                   onClick={() => { setProvider(opt.value); setOpen(false); }}
-                  className={`w-full text-left px-3 py-2.5 text-sm hover:bg-gray-100 ${provider === opt.value ? 'font-semibold text-gray-900' : 'text-gray-600'}`}
+                  className={`w-full text-left px-3 py-2.5 text-cb-body hover:bg-cb-bg transition-colors ${provider === opt.value ? 'font-medium text-white' : 'text-gray-400'}`}
                 >
                   {opt.label}
                 </button>
@@ -70,9 +72,9 @@ export default function LegacyPOSBridge() {
         </div>
 
         {/* Token / invite instructions */}
-        <div className="bg-blue-50 border border-blue-100 rounded-lg px-3 py-2.5">
-          <p className="text-[11px] font-semibold text-blue-800 mb-1">
-            {provider === 'other' ? 'Tell us which provider:' : 'Connect via API Token'}
+        <div className="bg-cb-bg border border-cb-border border-l-2 border-l-cb-accent rounded-cb px-3 py-2.5">
+          <p className="text-cb-caption uppercase text-gray-500 mb-1.5">
+            {provider === 'other' ? 'Tell us which provider' : 'Connect via API Token'}
           </p>
           <input
             type="text"
@@ -86,9 +88,9 @@ export default function LegacyPOSBridge() {
                 : 'Select a provider first...'
             }
             disabled={!provider}
-            className="w-full bg-white border border-blue-200 rounded-lg px-3 py-2 text-xs outline-none text-gray-900"
+            className="w-full bg-cb-surface border border-cb-border rounded-cb px-3 py-2 text-cb-body text-white placeholder:text-gray-500 outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent disabled:opacity-50"
           />
-          <p className="text-[10px] text-blue-600 mt-1">
+          <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1.5">
             {provider === 'clover'
               ? 'Go to Clover Dashboard → Apps → Create an API token with read access.'
               : provider === 'toast'
@@ -102,9 +104,9 @@ export default function LegacyPOSBridge() {
               : ''}
           </p>
           {provider && provider !== 'other' && (
-            <p className="text-[10px] text-gray-500 mt-2 border-t border-blue-100 pt-2">
+            <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-2 border-t border-cb-border pt-2">
               Alternatively, invite{' '}
-              <span className="font-bold text-blue-700">integrations@cliqbux.com</span> as an integration manager.
+              <span className="font-medium text-cb-accent">integrations@cliqbux.com</span> as an integration manager.
             </p>
           )}
         </div>
@@ -112,7 +114,7 @@ export default function LegacyPOSBridge() {
         <button
           onClick={handleSubmit}
           disabled={!provider || !token.trim()}
-          className="w-full flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-bold py-2.5 rounded-lg text-sm transition-colors"
+          className="w-full flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-cb-bg disabled:text-gray-600 disabled:border disabled:border-cb-border text-cb-bg font-semibold py-2.5 rounded-cb text-cb-body transition-colors"
         >
           Submit & Notify My Account Manager <ArrowRight className="w-4 h-4" />
         </button>
