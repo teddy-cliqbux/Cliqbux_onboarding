@@ -39,10 +39,18 @@ async function getHmacKey(usage: 'sign' | 'verify'): Promise<CryptoKey> {
   return crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, [usage]);
 }
 
-async function signMerchantToken(corporateId: string, email: string | undefined, expiresAt: string): Promise<string> {
+async function signMerchantToken(
+  corporateId: string,
+  email: string | undefined,
+  expiresAt: string,
+  opts?: { imp?: boolean }
+): Promise<string> {
   const header = { alg: 'HS256', typ: 'JWT' };
   const exp = Math.floor(new Date(expiresAt).getTime() / 1000);
-  const payload = { corporateId, email, exp };
+  // imp: true marks admin impersonation sessions — trackProgress uses this so
+  // agent portal opens/time aren't counted as merchant activity.
+  const payload: Record<string, unknown> = { corporateId, email, exp };
+  if (opts?.imp) payload.imp = true;
   const encodedHeader = base64UrlEncode(new TextEncoder().encode(JSON.stringify(header)));
   const encodedPayload = base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
   const signingInput = `${encodedHeader}.${encodedPayload}`;
@@ -51,7 +59,7 @@ async function signMerchantToken(corporateId: string, email: string | undefined,
   return `${signingInput}.${base64UrlEncode(new Uint8Array(signature))}`;
 }
 
-async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merchant' | 'admin'; corporateId?: string } | null> {
+async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merchant' | 'admin'; corporateId?: string; imp?: boolean } | null> {
   try {
     const m = (req.headers.get('Authorization') || '').match(/^Bearer\s+(.+)$/i);
     const parts = m ? m[1].split('.') : [];
@@ -62,7 +70,11 @@ async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merc
       if (ok) {
         const payload = JSON.parse(new TextDecoder().decode(__b64uDecode(parts[1])));
         if (payload.corporateId && typeof payload.exp === 'number' && Date.now() < payload.exp * 1000) {
-          return { actor: 'merchant', corporateId: String(payload.corporateId) };
+          return {
+            actor: 'merchant',
+            corporateId: String(payload.corporateId),
+            imp: payload.imp === true,
+          };
         }
       }
     }
@@ -255,10 +267,17 @@ Deno.serve(async (req) => {
       if (data?.applicationStatus != null) patch.applicationStatus = data.applicationStatus;
       if (data?.missingByStep != null) patch.missingByStep = data.missingByStep;
 
-      // Merchants may only log merchant-actor events (not spoof agent)
+      // Resolve activity actor from the AUTHENTICATED session — never trust a
+      // plain merchant JWT's self-reported actor (impersonation JWTs carry imp:true).
       let activityEvent = data?.activityEvent || null;
-      if (activityEvent && actor.actor === 'merchant') {
-        activityEvent = { ...activityEvent, actor: 'merchant' };
+      if (activityEvent) {
+        let resolved: 'merchant' | 'agent' = 'merchant';
+        if (actor.actor === 'admin') {
+          resolved = (activityEvent.actor === 'agent' || activityEvent.type === 'invite_sent') ? 'agent' : 'merchant';
+        } else if (actor.imp) {
+          resolved = 'agent';
+        }
+        activityEvent = { ...activityEvent, actor: resolved };
       }
 
       // Load prev for completedSteps deep-merge
@@ -296,7 +315,8 @@ Deno.serve(async (req) => {
       const merchantToken = await signMerchantToken(
         String(corporateId),
         profiles[0].signerEmail || undefined,
-        expiresAt
+        expiresAt,
+        { imp: true }
       );
       const portalUrl = `${publicUrl}/?corporateId=${encodeURIComponent(String(corporateId))}&impersonateToken=${encodeURIComponent(merchantToken)}`;
       return Response.json({ success: true, merchantToken, expiresAt, portalUrl });
