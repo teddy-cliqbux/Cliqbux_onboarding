@@ -1187,3 +1187,19 @@ Teddy confirmed nesting, unified remote email, dual completion signals, local `S
 
 **Waiting on:** Teddy (push via GitHub Desktop), Base44 (schema + 3 functions + frontend)
 ---
+
+---
+**[CURSOR]** — 2026-07-13
+**Type:** Action Taken — Applications admin panel token migration
+
+`ApplicationManager.jsx` (`/admin/applications`) visual-only pass to `cb-*` tokens, matching the merchant portal restraint rules:
+- Surfaces/borders/type/radius on tokens; no hardcoded hex backgrounds
+- Status = dot + caption (MID, identity, stuck, bottleneck, agent/merchant)
+- Blue/purple/amber/green pill chrome retired; solid gold CTAs; ghost secondary actions
+- Chart STAGE_COLORS: gray / `#FEAC27` / `#4ADE80`
+- No fetch/auth/field/validation changes
+
+**ACTION for Base44 after Teddy pushes:** publish frontend.
+
+**? Waiting on:** Teddy (push + visual check of /admin/applications)
+---

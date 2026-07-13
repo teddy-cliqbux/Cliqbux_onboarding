@@ -8,15 +8,10 @@ import {
   ChevronDown, ChevronRight, XCircle, RefreshCw
 } from 'lucide-react';
 
-const inputCls = 'w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent';
-const labelCls = 'block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1.5';
+const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
+const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 
-const STATUS_STYLES = {
-  draft: 'bg-gray-500/15 text-gray-400 border border-gray-500/30',
-  ready: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',
-  sent:  'bg-green-500/15 text-green-400 border border-green-500/30',
-};
-const STAGE_COLORS = { draft: '#6b7280', ready: '#3b82f6', sent: '#22c55e' };
+const STAGE_COLORS = { draft: '#6b7280', ready: '#FEAC27', sent: '#4ADE80' };
 const STAGE_LABELS = { draft: 'Draft', ready: 'Ready', sent: 'Sent' };
 
 // Align with live portal (2026-07-10): Locations → Banking → Signing → Submitted.
@@ -70,38 +65,35 @@ function PortalActivityPanel({ activity }) {
 
   return (
     <div>
-      <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Portal activity</p>
+      <p className="text-cb-caption uppercase text-gray-500 mb-2">Portal activity</p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
         {stats.map(st => (
-          <div key={st.label} className="rounded-xl border border-white/8 bg-white/[0.02] px-2.5 py-2">
-            <p className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">{st.label}</p>
-            <p className="text-sm font-bold text-white mt-0.5">{st.value}</p>
-            <p className="text-[9px] text-gray-600 mt-0.5 truncate">{st.sub}</p>
+          <div key={st.label} className="rounded-cb border border-cb-border bg-cb-surface-raised px-2.5 py-2">
+            <p className="text-cb-caption uppercase text-gray-500">{st.label}</p>
+            <p className="text-cb-body font-semibold text-white mt-0.5">{st.value}</p>
+            <p className="text-cb-caption text-gray-600 mt-0.5 truncate">{st.sub}</p>
           </div>
         ))}
       </div>
       {recent.length > 0 && (
-        <div className="rounded-xl border border-white/8 bg-[#111318]/50 divide-y divide-white/5 max-h-40 overflow-y-auto">
+        <div className="rounded-cb border border-cb-border bg-cb-bg/50 divide-y divide-cb-border max-h-40 overflow-y-auto">
           {recent.slice(0, 12).map((ev, i) => (
             <div key={`${ev.at}-${i}`} className="flex items-center gap-2 px-3 py-1.5">
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
-                ev.actor === 'agent'
-                  ? 'text-amber-400 border-amber-500/30 bg-amber-500/10'
-                  : 'text-blue-400 border-blue-500/30 bg-blue-500/10'
-              }`}>
+              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ev.actor === 'agent' ? 'bg-cb-accent' : 'bg-gray-500'}`} />
                 {ev.actor === 'agent' ? 'Agent' : 'Merchant'}
               </span>
-              <p className="text-[11px] text-gray-300 flex-1 truncate">
+              <p className="text-cb-caption text-gray-300 flex-1 truncate">
                 {ACTIVITY_EVENT_LABELS[ev.type] || ev.type}
                 {ev.detail ? ` · ${ev.detail}` : ''}
               </p>
-              <p className="text-[10px] text-gray-600 flex-shrink-0">{formatActivityAt(ev.at)}</p>
+              <p className="text-cb-caption text-gray-600 flex-shrink-0">{formatActivityAt(ev.at)}</p>
             </div>
           ))}
         </div>
       )}
       {!hasAny && (
-        <p className="text-[11px] text-gray-600">No portal activity recorded yet. Sends, opens, and time-in-app will appear here.</p>
+        <p className="text-cb-caption text-gray-600">No portal activity recorded yet. Sends, opens, and time-in-app will appear here.</p>
       )}
     </div>
   );
@@ -139,32 +131,33 @@ function signerMissingFields(s) {
 
 // ── Shared Badges ─────────────────────────────────────────────────────────────
 function MidStatusBadge({ status }) {
-  const map = {
-    'Active':            'bg-green-500/15 text-green-400 border-green-500/30',
-    'Active (Existing)': 'bg-green-500/15 text-green-400 border-green-500/30',
-    'Pending MID':       'bg-amber-500/15 text-amber-400 border-amber-500/30',
-    'Ready to Submit':   'bg-blue-500/15 text-blue-400 border-blue-500/30',
-    'In Review':         'bg-white/5 text-gray-400 border-white/10',
-    'Error':             'bg-red-500/15 text-red-400 border-red-500/30',
+  const dot = {
+    'Active':            'bg-cb-success',
+    'Active (Existing)': 'bg-cb-success',
+    'Pending MID':       'bg-cb-accent',
+    'Ready to Submit':   'bg-cb-accent',
+    'In Review':         'bg-gray-500',
+    'Error':             'bg-cb-danger',
   };
   return (
-    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${map[status] || map['In Review']}`}>
+    <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot[status] || dot['In Review']}`} />
       {status || 'In Review'}
     </span>
   );
 }
 
 function HealthBadge({ score }) {
-  if (score === 100) return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/15 text-green-400 border border-green-500/30">{score}%</span>;
-  if (score >= 80)  return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30">{score}%</span>;
-  if (score >= 50)  return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">{score}%</span>;
-  return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">{score ?? '?'}%</span>;
+  const color = score === 100 ? 'text-cb-success'
+    : score >= 50 ? 'text-cb-accent'
+    : 'text-cb-danger';
+  return <span className={`text-cb-caption font-medium ${color}`}>{score ?? '?'}%</span>;
 }
 
 function ProgressBar({ pct }) {
-  const barColor = pct === 100 ? 'bg-green-500' : pct >= 80 ? 'bg-blue-500' : pct >= 50 ? 'bg-amber-500' : 'bg-red-500';
+  const barColor = pct === 100 ? 'bg-cb-success' : 'bg-cb-accent';
   return (
-    <div className="w-full h-1 bg-white/8 rounded-full overflow-hidden">
+    <div className="w-full h-1 bg-cb-border rounded-full overflow-hidden">
       <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${Math.max(0, Math.min(100, pct || 0))}%` }} />
     </div>
   );
@@ -189,20 +182,20 @@ function StepTracker({ currentStep, completedSteps, missingByStep }) {
               title={`${STEP_LABELS_MAP[step]}${active ? ' · current' : ''}${miss ? ` · ${miss} missing` : ''}`}
             >
               <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold border transition-all ${
-                done   ? 'bg-green-500 border-green-500 text-white' :
-                active ? 'bg-amber-500 border-amber-400 text-black ring-2 ring-amber-400/50' :
+                done   ? 'bg-cb-accent border-cb-accent text-cb-bg' :
+                active ? 'bg-cb-accent-muted border-cb-accent text-cb-accent' :
                          'bg-transparent border-gray-700 text-gray-600'
               }`}>
                 {done ? '✓' : (miss > 0 ? miss : i + 1)}
               </div>
               <span className={`mt-0.5 text-[8px] font-semibold leading-none ${
-                active ? 'text-amber-400' : done ? 'text-green-500/80' : 'text-gray-600'
+                active ? 'text-cb-accent' : done ? 'text-gray-400' : 'text-gray-600'
               }`}>
                 {SHORT[step]}
               </span>
             </div>
             {i < STEP_ORDER.length - 1 && (
-              <div className={`w-3 h-0.5 mt-2.5 flex-shrink-0 ${done ? 'bg-green-500/40' : active ? 'bg-amber-500/60' : 'bg-gray-700'}`} />
+              <div className={`w-3 h-0.5 mt-2.5 flex-shrink-0 ${done ? 'bg-cb-accent/40' : active ? 'bg-cb-accent/60' : 'bg-gray-700'}`} />
             )}
           </div>
         );
@@ -279,34 +272,35 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
   const hasIssues = allErrors.length > 0 || (pct !== null && pct < 100 && !isDone);
 
   return (
-    <div className={`border rounded-xl overflow-hidden transition-all ${
-      isDone ? 'border-green-500/15 bg-green-500/5' :
-      hasIssues ? 'border-red-500/20 bg-red-500/5' :
-      'border-white/8 bg-white/[0.02]'
+    <div className={`border rounded-cb overflow-hidden transition-all ${
+      isDone ? 'border-cb-border bg-cb-surface-raised' :
+      hasIssues ? 'border-cb-danger/30 bg-cb-surface-raised' :
+      'border-cb-border bg-cb-surface-raised'
     }`}>
       <div className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer" onClick={() => setOpen(o => !o)}>
-        <CreditCard className={`w-3.5 h-3.5 flex-shrink-0 ${isDone ? 'text-green-400' : hasIssues ? 'text-red-400' : 'text-blue-400'}`} />
+        <CreditCard className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-xs font-semibold text-white truncate">{mid.dbaName || '—'}</p>
+            <p className="text-cb-body font-semibold text-white truncate">{mid.dbaName || '—'}</p>
             <MidStatusBadge status={mid.applicationStepStatus} />
           </div>
           {pct !== null && !isDone && (
             <div className="flex items-center gap-2 mt-1">
               <ProgressBar pct={pct} />
-              <span className="text-[10px] text-gray-500 flex-shrink-0 w-8">{pct}%</span>
+              <span className="text-cb-caption text-gray-500 flex-shrink-0 w-8">{pct}%</span>
             </div>
           )}
           {pct === null && !isDone && (
-            <p className="text-[10px] text-gray-600 mt-0.5">{mid.mccCode ? `MCC ${mid.mccCode}` : 'No MCC'}{mid.monthlyCardSales ? ` · $${Number(mid.monthlyCardSales).toLocaleString()}/mo` : ''}</p>
+            <p className="text-cb-caption text-gray-600 mt-0.5">{mid.mccCode ? `MCC ${mid.mccCode}` : 'No MCC'}{mid.monthlyCardSales ? ` · $${Number(mid.monthlyCardSales).toLocaleString()}/mo` : ''}</p>
           )}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {isLoadingMsp && <Loader2 className="w-3 h-3 text-gray-500 animate-spin" />}
           {!isLoadingMsp && pct !== null && !isDone && <HealthBadge score={pct} />}
-          {mid.elavonMID && <p className="text-[10px] font-mono text-green-400">{mid.elavonMID}</p>}
+          {mid.elavonMID && <p className="text-cb-caption font-mono text-cb-success">{mid.elavonMID}</p>}
           {allErrors.length > 0 && (
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+            <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-danger" />
               {allErrors.length} issue{allErrors.length !== 1 ? 's' : ''}
             </span>
           )}
@@ -319,28 +313,28 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
       </div>
 
       {open && (
-        <div className="border-t border-white/8 px-3 py-3 space-y-2 bg-[#111318]/40">
+        <div className="border-t border-cb-border px-3 py-3 space-y-2 bg-cb-bg/40">
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {mid.mspApplicationNo && (
-              <p className="text-[10px] text-gray-500">MSP App: <span className="font-mono text-gray-400">{mid.mspApplicationNo}</span></p>
+              <p className="text-cb-caption text-gray-500">MSP App: <span className="font-mono text-gray-400">{mid.mspApplicationNo}</span></p>
             )}
             {mid.elavonMID && (
-              <p className="text-[10px] text-gray-500">MID: <span className="font-mono text-green-400">{mid.elavonMID}</span></p>
+              <p className="text-cb-caption text-gray-500">MID: <span className="font-mono text-cb-success">{mid.elavonMID}</span></p>
             )}
           </div>
           {allErrors.length > 0 && (
             <div className="space-y-1">
-              <p className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Validation Issues</p>
+              <p className="text-cb-caption uppercase text-cb-danger">Validation Issues</p>
               {allErrors.map((err, i) => (
                 <div key={i} className="flex items-start gap-1.5">
-                  <XCircle className="w-3 h-3 text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-red-300">{err}</p>
+                  <XCircle className="w-3 h-3 text-cb-danger flex-shrink-0 mt-0.5" />
+                  <p className="text-cb-caption text-gray-300">{err}</p>
                 </div>
               ))}
             </div>
           )}
           {allErrors.length === 0 && pct === 100 && (
-            <div className="flex items-center gap-1.5 text-[11px] text-green-400">
+            <div className="flex items-center gap-1.5 text-cb-caption text-cb-success">
               <CheckCircle2 className="w-3 h-3" /> Form complete — ready to sign
             </div>
           )}
@@ -374,7 +368,7 @@ function PipelineOverview({ profiles, stages, loading, onRefresh, onQuickCreate 
   };
 
   return (
-    <div className="border-b border-white/8 bg-[#161b23] px-6 py-4 flex flex-wrap items-center gap-8">
+    <div className="border-b border-cb-border bg-cb-surface px-6 py-4 flex flex-wrap items-center gap-8">
       {/* Pie + stage counts */}
       <div className="flex items-center gap-4">
         {chartData.length > 0 ? (
@@ -384,40 +378,40 @@ function PipelineOverview({ profiles, stages, loading, onRefresh, onQuickCreate 
                 <Pie data={chartData} dataKey="value" cx="50%" cy="50%" innerRadius={18} outerRadius={30} strokeWidth={0}>
                   {chartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                 </Pie>
-                <Tooltip contentStyle={{ background: '#1c2128', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, fontSize: 11 }} itemStyle={{ color: '#e5e7eb' }} />
+                <Tooltip contentStyle={{ background: '#1A212C', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, fontSize: 11 }} itemStyle={{ color: '#e5e7eb' }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
         ) : (
-          <div className="w-9 h-9 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-            <BarChart2 className="w-4 h-4 text-amber-400" />
+          <div className="w-9 h-9 rounded-cb bg-cb-accent-muted flex items-center justify-center flex-shrink-0">
+            <BarChart2 className="w-4 h-4 text-cb-accent" />
           </div>
         )}
         <div>
-          <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Applications</p>
+          <p className="text-cb-caption uppercase text-gray-500 mb-1">Applications</p>
           <div className="flex items-center gap-3">
-            <span className="text-xl font-bold text-white">{profiles.length}</span>
+            <span className="text-cb-title font-display text-white">{profiles.length}</span>
             {loading && <Loader2 className="w-3 h-3 text-gray-600 animate-spin" />}
           </div>
           <div className="flex items-center gap-3 mt-1">
-            <span className="text-[11px] text-green-400">{submitted} submitted</span>
-            <span className="text-[11px] text-blue-400">{inProgress} in progress</span>
-            <span className="text-[11px] text-gray-500">{notStarted} not started</span>
+            <span className="text-cb-caption text-cb-success">{submitted} submitted</span>
+            <span className="text-cb-caption text-cb-accent">{inProgress} in progress</span>
+            <span className="text-cb-caption text-gray-500">{notStarted} not started</span>
           </div>
         </div>
       </div>
 
-      <div className="hidden sm:block w-px h-10 bg-white/8 flex-shrink-0" />
+      <div className="hidden sm:block w-px h-10 bg-cb-border flex-shrink-0" />
 
       {/* Quick create */}
       <div className="flex-shrink-0">
-        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Quick Stage — Corp ID</p>
+        <p className="text-cb-caption uppercase text-gray-500 mb-1.5">Quick Stage — Corp ID</p>
         <div className="flex gap-2 items-center">
           <input value={quickId} onChange={e => setQuickId(e.target.value)} placeholder="Enter Corporate ID…"
             onKeyDown={e => e.key === 'Enter' && handleQuickCreate()}
-            className="bg-[#111318] border border-white/20 rounded-xl px-3 py-2 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-amber-500 w-48" />
+            className="bg-cb-bg border border-cb-border rounded-cb px-3 py-2 text-cb-body text-white placeholder:text-gray-600 hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent w-48" />
           <button onClick={handleQuickCreate} disabled={!quickId.trim()}
-            className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold text-xs px-3 py-2 rounded-xl transition-all flex-shrink-0">
+            className="flex items-center gap-1.5 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-caption px-3 py-2 rounded-cb transition-opacity flex-shrink-0">
             <Zap className="w-3 h-3" /> Create
           </button>
         </div>
@@ -425,7 +419,7 @@ function PipelineOverview({ profiles, stages, loading, onRefresh, onQuickCreate 
 
       <div className="ml-auto flex-shrink-0">
         <button onClick={onRefresh} disabled={loading}
-          className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 hover:text-white border border-white/10 hover:border-white/20 px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-40">
+          className="flex items-center gap-1.5 text-cb-caption font-medium text-gray-400 hover:text-white border border-cb-border hover:border-cb-border-strong px-2.5 py-1.5 rounded-cb transition-all disabled:opacity-40">
           <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> Refresh
         </button>
       </div>
@@ -434,16 +428,11 @@ function PipelineOverview({ profiles, stages, loading, onRefresh, onQuickCreate 
 }
 
 // ── Checkbox Row ──────────────────────────────────────────────────────────────
-function CheckRow({ checked, onChange, color = 'amber', children }) {
-  const colors = {
-    amber:  { checked: 'bg-amber-500 border-amber-500',   ring: 'border-amber-500/40 bg-amber-500/5' },
-    blue:   { checked: 'bg-blue-500 border-blue-500',     ring: 'border-blue-500/40 bg-blue-500/5' },
-    purple: { checked: 'bg-purple-500 border-purple-500', ring: 'border-purple-500/40 bg-purple-500/5' },
-  }[color];
+function CheckRow({ checked, onChange, children }) {
   return (
-    <label className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all ${checked ? colors.ring : 'border-white/10 hover:border-white/20'}`}>
-      <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-all ${checked ? colors.checked : 'border-white/30'}`}>
-        {checked && <Check className="w-2.5 h-2.5 text-white" />}
+    <label className={`flex items-center gap-3 px-3 py-2.5 rounded-cb border cursor-pointer transition-all ${checked ? 'border-cb-accent/40 bg-cb-accent-muted' : 'border-cb-border hover:border-cb-border-strong'}`}>
+      <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-all ${checked ? 'bg-cb-accent border-cb-accent' : 'border-cb-border-strong'}`}>
+        {checked && <Check className="w-2.5 h-2.5 text-cb-bg" />}
       </div>
       <input type="checkbox" className="hidden" checked={checked} onChange={onChange} />
       {children}
@@ -606,20 +595,20 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-white/8">
-        <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-lg transition-colors" title="Close">
+      <div className="flex items-center gap-3 px-6 py-4 border-b border-cb-border">
+        <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-cb transition-colors" title="Close">
           <X className="w-4 h-4" />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-[10px] text-gray-500 uppercase tracking-wider">{merchantName}</p>
-          <p className="text-sm font-bold text-white">{stage?.id ? 'Edit Application' : 'Configure Application'}</p>
+          <p className="text-cb-caption uppercase text-gray-500">{merchantName}</p>
+          <p className="text-cb-body font-semibold text-white">{stage?.id ? 'Edit Application' : 'Configure Application'}</p>
         </div>
         <button onClick={handleHubspotSync} disabled={loading || saving} title="Pull the latest deal, contact, and company data from HubSpot"
-          className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-400 hover:text-white border border-white/10 hover:border-white/20 px-2.5 py-2 rounded-xl transition-all disabled:opacity-40">
+          className="flex items-center gap-1.5 text-cb-caption font-medium text-gray-400 hover:text-white border border-cb-border hover:border-cb-border-strong px-2.5 py-2 rounded-cb transition-all disabled:opacity-40">
           <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> HubSpot Sync
         </button>
         <button onClick={handleSave} disabled={saving}
-          className="flex items-center gap-2 bg-amber-500 hover:bg-amber-400 disabled:bg-gray-700 disabled:text-gray-500 text-black font-bold text-sm px-4 py-2 rounded-xl transition-all">
+          className="flex items-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-body px-4 py-2 rounded-cb transition-opacity">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
           {saving ? 'Saving…' : 'Save'}
         </button>
@@ -627,22 +616,22 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
 
       {loading ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3">
-          <Loader2 className="w-6 h-6 text-amber-400 animate-spin" />
-          {syncMsg && <p className="text-xs text-gray-400">{syncMsg}</p>}
+          <Loader2 className="w-6 h-6 text-cb-accent animate-spin" />
+          {syncMsg && <p className="text-cb-body text-gray-400">{syncMsg}</p>}
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
-          <div className="px-6 pt-5 pb-4 border-b border-white/5">
+          <div className="px-6 pt-5 pb-4 border-b border-cb-border">
             <label className={labelCls}>Internal label (optional)</label>
             <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Main application" className={inputCls} />
           </div>
-          <div className="flex border-b border-white/8 px-6 gap-1 pt-2">
+          <div className="flex border-b border-cb-border px-6 gap-1 pt-2">
             {tabs.map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key)}
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-t-lg border-b-2 transition-all -mb-px ${activeTab === t.key ? 'border-amber-500 text-amber-400' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
+                className={`flex items-center gap-1.5 px-3 py-2 text-cb-body font-medium rounded-t-lg border-b-2 transition-all -mb-px ${activeTab === t.key ? 'border-cb-accent text-cb-accent' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
                 <t.icon className="w-3.5 h-3.5" />
                 {t.label}
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${activeTab === t.key ? 'bg-amber-500/20 text-amber-400' : 'bg-white/8 text-gray-500'}`}>
+                <span className={`text-cb-caption ${activeTab === t.key ? 'text-cb-accent' : 'text-gray-500'}`}>
                   {t.count}{t.total !== undefined ? `/${t.total}` : ''}
                 </span>
               </button>
@@ -651,30 +640,30 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
           <div className="px-6 py-5 space-y-3">
             {activeTab === 'locations' && (
               <>
-                <p className="text-[11px] text-gray-500">Only selected locations will appear in the merchant's portal.</p>
+                <p className="text-cb-caption text-gray-500">Only selected locations will appear in the merchant's portal.</p>
                 {locations.length === 0
-                  ? <p className="text-xs text-gray-600 italic py-4 text-center">No locations found.</p>
+                  ? <p className="text-cb-body text-gray-600 italic py-4 text-center">No locations found.</p>
                   : locations.map(loc => {
                     const id = loc.id || loc.locationId;
                     const locMids = mids.filter(c => c.locationId === id);
                     return (
                       <div key={id}>
-                        <CheckRow checked={selLocs.has(id)} onChange={() => toggle(id, setSelLocs)} color="amber">
-                          <Store className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                        <CheckRow checked={selLocs.has(id)} onChange={() => toggle(id, setSelLocs)}>
+                          <Store className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-white truncate">{loc.dbaName}</p>
-                            <p className="text-[10px] text-gray-500 truncate">{loc.businessAddress}</p>
+                            <p className="text-cb-body font-semibold text-white truncate">{loc.dbaName}</p>
+                            <p className="text-cb-caption text-gray-500 truncate">{loc.businessAddress}</p>
                           </div>
-                          <span className="text-[9px] text-gray-600 flex-shrink-0">{locMids.length} MID{locMids.length !== 1 ? 's' : ''}</span>
+                          <span className="text-cb-caption text-gray-600 flex-shrink-0">{locMids.length} MID{locMids.length !== 1 ? 's' : ''}</span>
                         </CheckRow>
                         {selLocs.has(id) && locMids.length > 0 && (
                           <div className="ml-6 mt-1.5 space-y-1.5">
                             {locMids.map(mid => (
-                              <CheckRow key={mid.id} checked={selMids.has(mid.id)} onChange={() => toggle(mid.id, setSelMids)} color="blue">
-                                <CreditCard className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                              <CheckRow key={mid.id} checked={selMids.has(mid.id)} onChange={() => toggle(mid.id, setSelMids)}>
+                                <CreditCard className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-semibold text-white truncate">{mid.dbaName || mid.merchantName}</p>
-                                  <p className="text-[10px] text-gray-500">{mid.mccCode ? `MCC ${mid.mccCode}` : 'No MCC'} · {mid.applicationStepStatus || 'In Review'}</p>
+                                  <p className="text-cb-body font-semibold text-white truncate">{mid.dbaName || mid.merchantName}</p>
+                                  <p className="text-cb-caption text-gray-500">{mid.mccCode ? `MCC ${mid.mccCode}` : 'No MCC'} · {mid.applicationStepStatus || 'In Review'}</p>
                                 </div>
                               </CheckRow>
                             ))}
@@ -687,17 +676,18 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
             )}
             {activeTab === 'signers' && (
               <>
-                <p className="text-[11px] text-gray-500">Selected signers are included in this application's invite scope.</p>
+                <p className="text-cb-caption text-gray-500">Selected signers are included in this application's invite scope.</p>
                 {signers.length === 0
-                  ? <p className="text-xs text-gray-600 italic py-4 text-center">No signers found.</p>
+                  ? <p className="text-cb-body text-gray-600 italic py-4 text-center">No signers found.</p>
                   : signers.map(s => (
-                    <CheckRow key={s.id} checked={selSigners.has(s.id)} onChange={() => toggle(s.id, setSelSigners)} color="purple">
-                      <Users className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                    <CheckRow key={s.id} checked={selSigners.has(s.id)} onChange={() => toggle(s.id, setSelSigners)}>
+                      <Users className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-white truncate">{s.firstName} {s.lastName}</p>
-                        <p className="text-[10px] text-gray-500 truncate">{s.signerEmail}</p>
+                        <p className="text-cb-body font-semibold text-white truncate">{s.firstName} {s.lastName}</p>
+                        <p className="text-cb-caption text-gray-500 truncate">{s.signerEmail}</p>
                       </div>
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${(s.identityStatus === 'Verified' || s.identityStatus === 'Signed') ? 'text-green-400 border-green-500/30' : 'text-gray-500 border-gray-500/20'}`}>
+                      <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${(s.identityStatus === 'Verified' || s.identityStatus === 'Signed') ? 'bg-cb-success' : 'bg-gray-500'}`} />
                         {s.identityStatus || 'Pending'}
                       </span>
                     </CheckRow>
@@ -708,24 +698,24 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
             {activeTab === 'quotes' && (
               <>
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-[11px] text-gray-500">
+                  <p className="text-cb-caption text-gray-500">
                     Pick which HubSpot quote appears in the merchant portal for equipment signing.
                   </p>
                   <button
                     onClick={fetchQuotes}
                     disabled={loadingQuotes || selectingQuote}
-                    className="flex items-center gap-1 text-[10px] font-semibold text-gray-400 hover:text-white border border-white/10 px-2 py-1 rounded-lg disabled:opacity-40"
+                    className="flex items-center gap-1 text-cb-caption font-medium text-gray-400 hover:text-white border border-cb-border hover:border-cb-border-strong px-2 py-1 rounded-cb disabled:opacity-40"
                   >
                     <RefreshCw className={`w-3 h-3 ${loadingQuotes ? 'animate-spin' : ''}`} /> Refresh
                   </button>
                 </div>
                 {loadingQuotes ? (
                   <div className="flex items-center justify-center py-8 gap-2">
-                    <Loader2 className="w-4 h-4 text-amber-400 animate-spin" />
-                    <span className="text-xs text-gray-500">Loading quotes…</span>
+                    <Loader2 className="w-4 h-4 text-cb-accent animate-spin" />
+                    <span className="text-cb-body text-gray-500">Loading quotes…</span>
                   </div>
                 ) : quotes.length === 0 ? (
-                  <p className="text-xs text-gray-600 italic py-4 text-center">
+                  <p className="text-cb-body text-gray-600 italic py-4 text-center">
                     No quotes associated with this HubSpot deal yet. Create/publish a quote in HubSpot, then Refresh.
                   </p>
                 ) : (
@@ -738,28 +728,29 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                           type="button"
                           disabled={selectingQuote}
                           onClick={() => handleSelectQuote(q.id)}
-                          className={`w-full text-left rounded-xl border px-3 py-3 transition-all ${
+                          className={`w-full text-left rounded-cb border px-3 py-3 transition-all ${
                             selected
-                              ? 'border-amber-500/40 bg-amber-500/10'
-                              : 'border-white/10 hover:border-white/20 bg-white/[0.02]'
+                              ? 'border-cb-accent/40 bg-cb-accent-muted'
+                              : 'border-cb-border hover:border-cb-border-strong bg-cb-surface-raised'
                           } disabled:opacity-50`}
                         >
                           <div className="flex items-start gap-2.5">
                             <div className={`mt-0.5 w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0 ${
-                              selected ? 'border-amber-400 bg-amber-500' : 'border-white/30'
+                              selected ? 'border-cb-accent bg-cb-accent' : 'border-cb-border-strong'
                             }`}>
-                              {selected && <Check className="w-2.5 h-2.5 text-black" />}
+                              {selected && <Check className="w-2.5 h-2.5 text-cb-bg" />}
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-sm font-semibold text-white truncate">{q.title}</p>
+                                <p className="text-cb-body font-semibold text-white truncate">{q.title}</p>
                                 {selected && (
-                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                  <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-accent whitespace-nowrap">
+                                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
                                     Selected
                                   </span>
                                 )}
                               </div>
-                              <p className="text-[10px] text-gray-500 mt-0.5">
+                              <p className="text-cb-caption text-gray-500 mt-0.5">
                                 {formatMoney(q.amount)}
                                 {q.esignStatus ? ` · ${q.esignStatus}` : ''}
                                 {q.paymentStatus ? ` · Pay ${q.paymentStatus}` : ''}
@@ -771,12 +762,12 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                                   target="_blank"
                                   rel="noreferrer"
                                   onClick={e => e.stopPropagation()}
-                                  className="inline-flex items-center gap-1 text-[10px] text-blue-400 hover:text-blue-300 mt-1"
+                                  className="inline-flex items-center gap-1 text-cb-caption text-cb-accent hover:opacity-80 mt-1"
                                 >
                                   Open quote <ExternalLink className="w-3 h-3" />
                                 </a>
                               ) : (
-                                <p className="text-[10px] text-amber-500/80 mt-1">No public signing link yet</p>
+                                <p className="text-cb-caption text-gray-500 mt-1">No public signing link yet</p>
                               )}
                             </div>
                           </div>
@@ -789,8 +780,8 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
             )}
           </div>
           {error && (
-            <div className="mx-6 mb-4 bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" /> {error}
+            <div className="mx-6 mb-4 bg-cb-surface-raised border border-cb-danger/30 border-l-2 border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-gray-300 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-cb-danger" /> {error}
             </div>
           )}
         </div>
@@ -838,34 +829,34 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-4" onClick={onClose}>
-      <div className="bg-[#1c2128] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+      <div className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-green-500/15 flex items-center justify-center"><Send className="w-4 h-4 text-green-400" /></div>
+            <div className="w-9 h-9 rounded-cb bg-cb-accent-muted flex items-center justify-center"><Send className="w-4 h-4 text-cb-accent" /></div>
             <div>
-              <h3 className="font-bold text-white text-sm">Send to Merchant</h3>
-              <p className="text-[10px] text-gray-500 truncate max-w-[200px]">{stage?.label || 'Direct link'}</p>
+              <h3 className="font-semibold text-white text-cb-body">Send to Merchant</h3>
+              <p className="text-cb-caption text-gray-500 truncate max-w-[200px]">{stage?.label || 'Direct link'}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-lg"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-cb"><X className="w-4 h-4" /></button>
         </div>
         {sent ? (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3">
-              <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
-              <p className="text-sm text-green-300 font-semibold">Sent to {email}</p>
+            <div className="flex items-center gap-2 bg-cb-surface border border-cb-border border-l-2 border-l-cb-success rounded-cb px-4 py-3">
+              <CheckCircle2 className="w-4 h-4 text-cb-success flex-shrink-0" />
+              <p className="text-cb-body text-white font-semibold">Sent to {email}</p>
             </div>
             <div>
               <label className={labelCls}>Magic Link</label>
-              <div className="flex items-center gap-2 bg-[#111318] border border-white/15 rounded-xl px-3.5 py-2.5">
-                <p className="text-xs text-gray-400 flex-1 truncate font-mono">{link}</p>
-                <button onClick={copyLink} className="flex-shrink-0 text-amber-400 hover:text-amber-300">
-                  {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <div className="flex items-center gap-2 bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5">
+                <p className="text-cb-caption text-gray-400 flex-1 truncate font-mono">{link}</p>
+                <button onClick={copyLink} className="flex-shrink-0 text-cb-accent hover:opacity-80">
+                  {copied ? <Check className="w-3.5 h-3.5 text-cb-success" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
                 <a href={link} target="_blank" rel="noreferrer" className="flex-shrink-0 text-gray-500 hover:text-white"><ExternalLink className="w-3.5 h-3.5" /></a>
               </div>
             </div>
-            <button onClick={onClose} className="w-full border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white">Done</button>
+            <button onClick={onClose} className="w-full border border-cb-border text-gray-400 font-medium text-cb-body py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong">Done</button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -874,14 +865,14 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
               <input value={email} onChange={e => setEmail(e.target.value)} placeholder="merchant@example.com"
                 className={inputCls} autoFocus onKeyDown={e => e.key === 'Enter' && handleSend()} />
             </div>
-            {error && <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-300">{error}</div>}
+            {error && <div className="bg-cb-surface border border-cb-danger/30 border-l-2 border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-gray-300">{error}</div>}
             <div className="flex gap-3">
               <button onClick={handleSend} disabled={sending}
-                className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold text-sm py-2.5 rounded-xl transition-all">
+                className="flex-1 flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-body py-2.5 rounded-cb transition-opacity">
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 {sending ? 'Sending…' : 'Send Link'}
               </button>
-              <button onClick={onClose} className="px-4 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white">Cancel</button>
+              <button onClick={onClose} className="px-4 border border-cb-border text-gray-400 font-medium text-cb-body py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong">Cancel</button>
             </div>
           </div>
         )}
@@ -1007,33 +998,39 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     }
   };
 
-  const borderColor = isSubmitted ? 'border-green-500/25' : totalErrors > 0 ? 'border-red-500/30' : isStuck ? 'border-amber-500/25' : 'border-white/10';
+  const borderColor = isSubmitted ? 'border-cb-success/25' : totalErrors > 0 ? 'border-cb-danger/30' : isStuck ? 'border-cb-accent/25' : 'border-cb-border';
 
   return (
-    <div className={`bg-[#1c2128] border ${borderColor} rounded-2xl overflow-hidden hover:border-white/20 transition-all`}>
+    <div className={`bg-cb-surface border ${borderColor} rounded-cb overflow-hidden hover:border-cb-border-strong transition-all`}>
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={handleExpand}>
         <button className="text-gray-500 flex-shrink-0">
           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
-        <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isSubmitted ? 'bg-green-500/15' : totalErrors > 0 ? 'bg-red-500/15' : 'bg-amber-500/10'}`}>
-          <Building2 className={`w-3.5 h-3.5 ${isSubmitted ? 'text-green-400' : totalErrors > 0 ? 'text-red-400' : 'text-amber-400'}`} />
+        <div className={`w-7 h-7 rounded-cb flex items-center justify-center flex-shrink-0 ${isSubmitted ? 'bg-cb-success/15' : totalErrors > 0 ? 'bg-cb-danger/15' : 'bg-cb-accent-muted'}`}>
+          <Building2 className={`w-3.5 h-3.5 ${isSubmitted ? 'text-cb-success' : totalErrors > 0 ? 'text-cb-danger' : 'text-cb-accent'}`} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-bold text-white truncate">{merchantName || corporateId}</p>
-            <span className="text-[10px] font-mono text-gray-600">{corporateId}</span>
-            {isStuck && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30">Stuck</span>}
+            <p className="text-cb-body font-semibold text-white truncate">{merchantName || corporateId}</p>
+            <span className="text-cb-caption font-mono text-gray-600">{corporateId}</span>
+            {isStuck && (
+              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
+                Stuck
+              </span>
+            )}
             {!isSubmitted && currentStep === 'banking' && (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">
+              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
                 Bottleneck: Banking
               </span>
             )}
           </div>
           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-            {(p.signerEmail || profile?.signerEmail) && <p className="text-[10px] text-gray-500 truncate">{p.signerEmail || profile?.signerEmail}</p>}
-            {(p.pricingTier || profile?.pricingTier) && <span className="text-[10px] text-gray-600">{p.pricingTier || profile?.pricingTier}</span>}
-            {lastSeen && <p className="hidden sm:flex items-center gap-1 text-[10px] text-gray-600"><Clock className="w-2.5 h-2.5" /> {lastSeen}</p>}
+            {(p.signerEmail || profile?.signerEmail) && <p className="text-cb-caption text-gray-500 truncate">{p.signerEmail || profile?.signerEmail}</p>}
+            {(p.pricingTier || profile?.pricingTier) && <span className="text-cb-caption text-gray-600">{p.pricingTier || profile?.pricingTier}</span>}
+            {lastSeen && <p className="hidden sm:flex items-center gap-1 text-cb-caption text-gray-600"><Clock className="w-2.5 h-2.5" /> {lastSeen}</p>}
           </div>
         </div>
 
@@ -1045,34 +1042,35 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
         {/* Health + actions */}
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
           {totalErrors > 0 && (
-            <div className="flex items-center gap-1 text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">
-              <XCircle className="w-3 h-3" /> {totalErrors}
-            </div>
+            <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-danger" />
+              {totalErrors}
+            </span>
           )}
           {avgMspPct !== null && <HealthBadge score={avgMspPct} />}
-          {isSubmitted && <CheckCircle2 className="w-4 h-4 text-green-400" />}
+          {isSubmitted && <CheckCircle2 className="w-4 h-4 text-cb-success" />}
           <button onClick={openMerchantView} disabled={impersonating} title="Open merchant portal (30-min session)"
-            className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all bg-amber-500/10 text-amber-300 border-amber-500/25 hover:bg-amber-500/20 disabled:opacity-40">
+            className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40">
             {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
             View
           </button>
           <button onClick={(e) => copyInviteLink(e, linkStage)} title="Copy invite link"
-            className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all ${copied === (linkStage?.id || 'link') ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20'}`}>
+            className={`flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all ${copied === (linkStage?.id || 'link') ? 'border-cb-success/30 text-cb-success' : 'border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong'}`}>
             {copied === (linkStage?.id || 'link') ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
             {copied === (linkStage?.id || 'link') ? 'Copied!' : 'Copy'}
           </button>
           <button onClick={() => onSend(linkStage, corporateId, p.signerEmail || profile?.signerEmail || '')}
-            className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all bg-white/5 text-gray-400 border-white/10 hover:bg-green-500/10 hover:text-green-400 hover:border-green-500/20">
+            className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong">
             <Send className="w-3 h-3" /> Send
           </button>
           <button onClick={() => onEdit(corporateId, merchantName, linkStage)}
             title="Edit locations, signers & prefill"
-            className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-all bg-white/5 text-gray-300 border-white/10 hover:bg-amber-500/10 hover:text-amber-300 hover:border-amber-500/25">
+            className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong">
             <Pencil className="w-3 h-3" />
             Edit
           </button>
           <button onClick={() => onDeleteMerchant({ corporateId, merchantName })} title="Delete merchant permanently (all data)"
-            className="p-1.5 text-gray-700 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors">
+            className="p-1.5 text-gray-600 hover:text-cb-danger rounded-cb transition-colors">
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -1080,11 +1078,11 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
 
       {/* Expanded detail */}
       {expanded && (
-        <div className="border-t border-white/5 bg-[#111318]/60">
+        <div className="border-t border-cb-border bg-cb-bg/60">
           {loadingDetail ? (
             <div className="flex items-center justify-center py-6 gap-2">
               <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
-              <span className="text-xs text-gray-500">Loading…</span>
+              <span className="text-cb-body text-gray-500">Loading…</span>
             </div>
           ) : (
             <div className="p-4 space-y-4">
@@ -1094,12 +1092,12 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               {mids.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                    <p className="text-cb-caption uppercase text-gray-500">
                       MIDs ({mids.length}) {loadingMsp && <Loader2 className="inline w-3 h-3 animate-spin ml-1" />}
                     </p>
                     {avgMspPct !== null && (
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-500">Avg form:</span>
+                        <span className="text-cb-caption text-gray-500">Avg form:</span>
                         <HealthBadge score={avgMspPct} />
                       </div>
                     )}
@@ -1120,31 +1118,38 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               {/* Signers */}
               {signers.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-2">Signers</p>
+                  <p className="text-cb-caption uppercase text-gray-500 mb-2">Signers</p>
                   <div className="space-y-1.5">
                     {signers.map(s => {
                       const miss = signerMissingFields(s);
                       const verified = s.identityStatus === 'Verified' || s.identityStatus === 'Signed';
                       const hasIssues = !verified && miss.length > 0;
                       return (
-                        <div key={s.id} className={`px-3 py-2 rounded-xl border ${
-                          verified ? 'border-green-500/20 bg-green-500/5' :
-                          hasIssues ? 'border-red-500/20 bg-red-500/5' :
-                          'border-white/8 bg-white/[0.02]'
+                        <div key={s.id} className={`px-3 py-2 rounded-cb border ${
+                          verified ? 'border-cb-border bg-cb-surface-raised' :
+                          hasIssues ? 'border-cb-danger/30 bg-cb-surface-raised' :
+                          'border-cb-border bg-cb-surface-raised'
                         }`}>
                           <div className="flex items-center gap-2.5">
-                            <Users className={`w-3.5 h-3.5 flex-shrink-0 ${verified ? 'text-green-400' : hasIssues ? 'text-red-400' : 'text-gray-500'}`} />
+                            <Users className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-white">{s.firstName} {s.lastName}</p>
-                              <p className="text-[10px] text-gray-500">{s.signerEmail}</p>
+                              <p className="text-cb-body font-semibold text-white">{s.firstName} {s.lastName}</p>
+                              <p className="text-cb-caption text-gray-500">{s.signerEmail}</p>
                             </div>
                             <div className="flex items-center gap-1.5 flex-shrink-0">
-                              {s.isPrimarySigner && <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-full">Primary</span>}
-                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${verified ? 'text-green-400 border-green-500/30 bg-green-500/10' : 'text-gray-500 border-gray-500/20 bg-gray-500/10'}`}>
+                              {s.isPrimarySigner && (
+                                <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+                                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
+                                  Primary
+                                </span>
+                              )}
+                              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${verified ? 'bg-cb-success' : 'bg-gray-500'}`} />
                                 {s.identityStatus || 'Pending'}
                               </span>
                               {hasIssues && (
-                                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/30">
+                                <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
+                                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-danger" />
                                   {miss.length} missing
                                 </span>
                               )}
@@ -1154,8 +1159,8 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                             <div className="mt-2 ml-6 space-y-1">
                               {miss.map(m => (
                                 <div key={m} className="flex items-start gap-1.5">
-                                  <XCircle className="w-3 h-3 text-red-400 flex-shrink-0 mt-0.5" />
-                                  <p className="text-[11px] text-red-300">Missing {m}</p>
+                                  <XCircle className="w-3 h-3 text-cb-danger flex-shrink-0 mt-0.5" />
+                                  <p className="text-cb-caption text-gray-300">Missing {m}</p>
                                 </div>
                               ))}
                             </div>
@@ -1168,7 +1173,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               )}
 
               {mids.length === 0 && signers.length === 0 && (
-                <p className="text-xs text-gray-600 text-center py-4">No MIDs or signers found for this merchant.</p>
+                <p className="text-cb-body text-gray-600 text-center py-4">No MIDs or signers found for this merchant.</p>
               )}
             </div>
           )}
@@ -1304,31 +1309,31 @@ export default function ApplicationManager() {
   const showEditor = editing !== null;
 
   return (
-    <div className="min-h-screen bg-[#111318] flex flex-col">
+    <div className="min-h-screen bg-cb-bg flex flex-col">
       <PipelineOverview profiles={profiles} stages={allStages} loading={loading} onRefresh={load} onQuickCreate={handleQuickCreate} />
 
       <div className="flex flex-1 min-h-0">
         {/* Full-width list — editor is an overlay so it never crushes this column */}
-        <div className="flex flex-col flex-1 min-w-0 border-r border-white/8">
-          <div className="px-6 py-4 border-b border-white/8 flex-shrink-0">
-            <p className="text-[10px] font-mono text-amber-500 uppercase tracking-widest mb-1">Admin Tool</p>
-            <h1 className="text-xl font-bold text-white">Applications</h1>
+        <div className="flex flex-col flex-1 min-w-0 border-r border-cb-border">
+          <div className="px-6 py-4 border-b border-cb-border flex-shrink-0">
+            <p className="text-cb-caption uppercase text-cb-accent mb-1">Admin Tool</p>
+            <h1 className="font-display text-cb-display text-white">Applications</h1>
           </div>
 
           {/* Toolbar */}
-          <div className="px-4 py-3 border-b border-white/5 flex-shrink-0 flex gap-2">
+          <div className="px-4 py-3 border-b border-cb-border flex-shrink-0 flex gap-2">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
               <input value={searchText} onChange={e => setSearchText(e.target.value)}
                 placeholder="Search by name or Corp ID…"
-                className={`${inputCls} pl-9 text-xs py-2`} />
+                className={`${inputCls} pl-9 py-2`} />
             </div>
             <input value={jumpId} onChange={e => setJumpId(e.target.value)}
               placeholder="Corp ID…"
-              className="bg-[#111318] border border-white/20 rounded-xl px-2.5 py-1.5 text-[11px] text-white placeholder:text-gray-600 focus:outline-none focus:ring-1 focus:ring-amber-500 w-28"
+              className="bg-cb-bg border border-cb-border rounded-cb px-2.5 py-1.5 text-cb-caption text-white placeholder:text-gray-600 hover:border-cb-border-strong focus:outline-none focus:ring-1 focus:ring-cb-accent w-28"
               onKeyDown={e => e.key === 'Enter' && handleJump()} />
             <button onClick={handleJump} disabled={searching || !jumpId.trim()}
-              className="flex items-center gap-1 bg-amber-500/20 border border-amber-500/30 text-amber-300 hover:bg-amber-500/30 disabled:opacity-40 font-bold text-[11px] px-2.5 py-1.5 rounded-xl transition-all flex-shrink-0">
+              className="flex items-center gap-1 bg-cb-accent hover:opacity-90 disabled:opacity-40 text-cb-bg font-semibold text-cb-caption px-2.5 py-1.5 rounded-cb transition-opacity flex-shrink-0">
               {searching ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Go'}
             </button>
           </div>
@@ -1342,7 +1347,7 @@ export default function ApplicationManager() {
             ) : sorted.length === 0 ? (
               <div className="text-center py-16 px-8">
                 <FileText className="w-7 h-7 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-500 text-sm">{profiles.length === 0 ? 'No applications yet.' : 'No results match your search.'}</p>
+                <p className="text-gray-500 text-cb-body">{profiles.length === 0 ? 'No applications yet.' : 'No results match your search.'}</p>
               </div>
             ) : (
               <div className="px-4 py-4 space-y-2">
@@ -1370,7 +1375,7 @@ export default function ApplicationManager() {
       {showEditor && (
         <div className="fixed inset-0 z-[9000] flex justify-end bg-black/60 backdrop-blur-sm" onClick={() => setEditing(null)}>
           <div
-            className="w-full max-w-xl h-full bg-[#161b23] border-l border-white/10 shadow-2xl flex flex-col"
+            className="w-full max-w-xl h-full bg-cb-surface border-l border-cb-border shadow-cb-overlay flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <StageEditor
@@ -1403,38 +1408,38 @@ export default function ApplicationManager() {
       {deleteMerchantConfirm && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4"
           onClick={() => { if (!deletingMerchant) { setDeleteMerchantConfirm(null); setDeleteMerchantTyped(''); } }}>
-          <div className="bg-[#1c2128] border border-red-500/30 rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="font-bold text-white mb-2">Permanently delete this merchant?</h3>
-            <p className="text-sm text-gray-400 mb-1">
+          <div className="bg-cb-surface-raised border border-cb-danger/30 rounded-cb shadow-cb-overlay w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-white mb-2">Permanently delete this merchant?</h3>
+            <p className="text-cb-body text-gray-400 mb-1">
               <span className="text-white font-semibold">{deleteMerchantConfirm.merchantName}</span> ({deleteMerchantConfirm.corporateId})
             </p>
-            <p className="text-xs text-gray-500 mb-4">
+            <p className="text-cb-caption text-gray-500 mb-4">
               This permanently deletes the corporate profile, all locations, all MIDs, and all signers from our database.
               This does not touch any application already drafted in MSPWare. This cannot be undone.
             </p>
-            <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5">
+            <label className={labelCls}>
               Type DELETE to confirm
             </label>
             <input
               value={deleteMerchantTyped}
               onChange={e => setDeleteMerchantTyped(e.target.value)}
               placeholder="DELETE"
-              className="w-full bg-[#111318] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder:text-gray-600 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4"
+              className={`${inputCls} focus:ring-cb-danger mb-4`}
             />
             {deleteMerchantError && (
-              <p className="text-xs text-red-400 mb-3">{deleteMerchantError}</p>
+              <p className="text-cb-caption text-cb-danger mb-3">{deleteMerchantError}</p>
             )}
             <div className="flex gap-3">
               <button
                 onClick={handleDeleteMerchant}
                 disabled={deleteMerchantTyped !== 'DELETE' || deletingMerchant}
-                className="flex-1 flex items-center justify-center gap-2 bg-red-500 hover:bg-red-400 disabled:bg-gray-700 disabled:text-gray-500 text-white font-bold text-sm py-2.5 rounded-xl transition-all">
+                className="flex-1 flex items-center justify-center gap-2 bg-cb-danger hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold text-cb-body py-2.5 rounded-cb transition-opacity">
                 {deletingMerchant ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete Permanently'}
               </button>
               <button
                 onClick={() => { setDeleteMerchantConfirm(null); setDeleteMerchantTyped(''); }}
                 disabled={deletingMerchant}
-                className="flex-1 border border-white/15 text-gray-300 font-semibold text-sm py-2.5 rounded-xl hover:text-white disabled:opacity-40">
+                className="flex-1 border border-cb-border text-gray-400 font-medium text-cb-body py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong disabled:opacity-40">
                 Cancel
               </button>
             </div>

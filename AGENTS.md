@@ -946,5 +946,7 @@ A formal token layer now lives in `src/styles/tokens.css` (imported first in `in
 
 All merchant-facing onboarding surfaces (steps + ProgressTracker + post-submit dashboard chrome + entry/pricing) are now on the token system.
 
+**ApplicationManager.jsx (`/admin/applications`) migrated to `cb-*` tokens (2026-07-13, same restraint pass):** quiet surfaces, dot+caption status (MID/identity/stuck/bottleneck/agent-vs-merchant), solid gold CTAs, ghost secondary actions, blue/purple/amber pill chrome retired. Chart stage colors use token hexes (gray / `#FEAC27` / `#4ADE80`). No fetch/auth/field/validation changes.
+
 ### Post-signing Equipment Order (2026-07-13)
 `EquipmentOrderPanel` on `PostSubmissionDashboard`: native invoice from `getHubspotQuote` (TanStack `staleTime` 10 min) + HubSpot custom-domain iframe for sign/pay. HubSpot Payments only — no Stripe checkout in this flow.
