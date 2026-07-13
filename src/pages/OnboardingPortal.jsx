@@ -576,6 +576,15 @@ export default function OnboardingPortal() {
       const m3Done = applicationStatus === 'Submitted';
       const m2Unlocked = hasLocations;
       const m3Unlocked = m1Done && m2Done;
+      // Agents may open the post-signing dashboard before the merchant signs.
+      // Prefer live signals over React state alone (View sessions sometimes
+      // re-enter with portal_impersonating / imp JWT already set).
+      const agentSession = !!(
+        isImpersonating
+        || merchantTokenHasImp()
+        || (profile?.corporateId && sessionStorage.getItem('portal_impersonating') === String(profile.corporateId))
+      );
+      const m4Unlocked = m3Done || agentSession;
 
       return (
         <div className="px-6 sm:px-8 py-10 flex flex-col gap-8">
@@ -624,10 +633,12 @@ export default function OnboardingPortal() {
             <MilestoneCard
               index={4}
               title="Review & Sign Equipment Quote"
-              description="Your equipment and services order — signed on your dashboard after the merchant application is submitted."
+              description={agentSession && !m3Done
+                ? 'Agent preview — open the post-signing dashboard before the merchant finishes signing.'
+                : 'Your equipment and services order — signed on your dashboard after the merchant application is submitted.'}
               done={quoteSigned}
-              unlocked={m3Done || isImpersonating}
-              ctaLabel={m3Done ? 'Open Dashboard' : 'Preview Dashboard'}
+              unlocked={m4Unlocked}
+              ctaLabel={m3Done ? 'Open Dashboard' : (agentSession ? 'Preview Dashboard' : 'Open Dashboard')}
               onCta={() => navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`)}
             />
           </div>
@@ -701,8 +712,17 @@ export default function OnboardingPortal() {
 
       <div className="pt-16 min-h-screen flex flex-col items-center justify-start px-4 py-10">
         {isImpersonating && (
-          <div className="w-full max-w-4xl mb-4 bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-accent text-gray-300 text-cb-body px-4 py-2.5 rounded-cb">
-            Impersonating merchant · Corp {profile.corporateId} · Saves write to the live record · session ~30 min
+          <div className="w-full max-w-4xl mb-4 bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-accent text-gray-300 text-cb-body px-4 py-2.5 rounded-cb flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <span>
+              Impersonating merchant · Corp {profile.corporateId} · Saves write to the live record · session ~30 min
+            </span>
+            <button
+              type="button"
+              onClick={() => navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`)}
+              className="text-cb-caption font-semibold px-3 py-1.5 rounded-cb bg-cb-accent text-cb-bg hover:opacity-90 whitespace-nowrap self-start sm:self-auto"
+            >
+              Post-signing dashboard
+            </button>
           </div>
         )}
         {/* Merchant greeting */}
