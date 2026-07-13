@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { setMerchantToken, getMerchantToken, clearMerchantToken, invokePortalFunction } from '@/lib/merchantAuthFetch';
+import { setMerchantToken, getMerchantToken, clearMerchantToken, invokePortalFunction, merchantTokenHasImp } from '@/lib/merchantAuthFetch';
 import TopNav from '@/components/onboarding/TopNav';
 import ErrorScreen from '@/components/onboarding/ErrorScreen';
 import LoadingScreen from '@/components/onboarding/LoadingScreen';
@@ -171,9 +171,13 @@ export default function OnboardingPortal() {
 
     // Admin impersonation: short-lived merchant JWT minted by manageStagedApplication
     // action "impersonate". Store it, strip from the address bar, open the live portal.
+    // Agent open is counted server-side on the impersonate call — mark it so we don't
+    // also emit a merchant portal_open from this tab.
     if (impersonateToken && id) {
       setMerchantToken(impersonateToken);
       sessionStorage.setItem('portal_impersonating', String(id));
+      sessionStorage.setItem(`portal_agent_open_server_${id}`, '1');
+      sessionStorage.setItem(`portal_open_logged_agent_${id}`, '1');
       setIsImpersonating(true);
       setMode('sales');
       setDealId(id);
@@ -367,23 +371,36 @@ export default function OnboardingPortal() {
       setProfile(mergedProfile);
       setLocations(filteredLocations);
       setReadiness(data.readiness || null);
-      // Heartbeat metadata + portal_open activity (once per browser tab session).
-      // Do NOT send currentStep here — that was rewinding the admin funnel bar.
+      // Heartbeat metadata + portal_open (once per tab). Agent View opens are
+      // counted by manageStagedApplication impersonate — never log those as merchant.
       if (mergedProfile?.corporateId && mergedProfile?.applicationStatus !== 'Submitted') {
         const corp = String(mergedProfile.corporateId);
-        const actor = isImpersonating || sessionStorage.getItem('portal_impersonating') === corp
-          ? 'agent'
-          : 'merchant';
-        const openKey = `portal_open_logged_${actor}_${corp}`;
-        const already = sessionStorage.getItem(openKey);
-        trackProgress(mergedProfile.corporateId, {
+        const isAgentSession = !!(
+          isImpersonating
+          || sessionStorage.getItem('portal_impersonating') === corp
+          || merchantTokenHasImp()
+        );
+        const patch = {
           merchantName: mergedProfile.legalName,
           signerEmail: mergedProfile.signerEmail,
           pricingTier: mergedProfile.pricingTier,
           applicationStatus: mergedProfile.applicationStatus,
-          ...(already ? {} : { activityEvent: { type: 'portal_open', actor } }),
-        });
-        if (!already) sessionStorage.setItem(openKey, '1');
+        };
+        if (isAgentSession) {
+          const openKey = `portal_open_logged_agent_${corp}`;
+          const serverCounted = sessionStorage.getItem(`portal_agent_open_server_${corp}`);
+          if (!serverCounted && !sessionStorage.getItem(openKey)) {
+            patch.activityEvent = { type: 'portal_open', actor: 'agent' };
+            sessionStorage.setItem(openKey, '1');
+          }
+        } else {
+          const openKey = `portal_open_logged_merchant_${corp}`;
+          if (!sessionStorage.getItem(openKey)) {
+            patch.activityEvent = { type: 'portal_open', actor: 'merchant' };
+            sessionStorage.setItem(openKey, '1');
+          }
+        }
+        trackProgress(mergedProfile.corporateId, patch);
       }
       if (data.profile?.applicationStatus === 'Submitted') {
         setRedirected(true);
@@ -426,9 +443,11 @@ export default function OnboardingPortal() {
     const TICK_SECS = 60;
     const tick = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
-      const actor = isImpersonating || sessionStorage.getItem('portal_impersonating') === String(dealId)
-        ? 'agent'
-        : 'merchant';
+      const actor = (
+        isImpersonating
+        || sessionStorage.getItem('portal_impersonating') === String(dealId)
+        || merchantTokenHasImp()
+      ) ? 'agent' : 'merchant';
       trackProgress(dealId, {
         activityEvent: { type: 'session_tick', actor, seconds: TICK_SECS },
       });

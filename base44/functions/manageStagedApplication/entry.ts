@@ -319,6 +319,9 @@ Deno.serve(async (req) => {
         { imp: true }
       );
       const portalUrl = `${publicUrl}/?corporateId=${encodeURIComponent(String(corporateId))}&impersonateToken=${encodeURIComponent(merchantToken)}`;
+      // Count the agent open here (View click) — more reliable than the portal
+      // inferring actor from a merchant-shaped JWT after load.
+      await upsertAutoTrack(base44, String(corporateId), {}, { type: 'portal_open', actor: 'agent' }).catch(() => null);
       return Response.json({ success: true, merchantToken, expiresAt, portalUrl });
     }
 

@@ -162,11 +162,15 @@ async function listDealQuotes(corporateId: string, headers: Record<string, strin
     `/crm/v3/objects/deals/${corporateId}?properties=dealname&associations=quotes`,
     headers
   );
+  // HubSpot often returns the SAME quote id multiple times (one row per
+  // association type/label). Deduplicate before fetching or the admin UI
+  // shows 2–3 identical "Selected" cards for one real quote.
   const quoteAssocs = deal.associations?.quotes?.results || [];
+  const uniqueIds = [...new Set(quoteAssocs.map((qa: any) => String(qa.id)).filter(Boolean))];
   const quotes: any[] = [];
-  for (const qa of quoteAssocs) {
+  for (const id of uniqueIds) {
     try {
-      const q = await hsGet(`/crm/v3/objects/quotes/${qa.id}?properties=${QUOTE_PROPS}`, headers);
+      const q = await hsGet(`/crm/v3/objects/quotes/${id}?properties=${QUOTE_PROPS}`, headers);
       const qp = q.properties || {};
       quotes.push({
         id: String(q.id),
@@ -181,7 +185,7 @@ async function listDealQuotes(corporateId: string, headers: Record<string, strin
         createdAt: qp.hs_createdate || '',
       });
     } catch (e: any) {
-      console.warn(`[getHubspotQuote] list quote ${qa.id} failed: ${e.message}`);
+      console.warn(`[getHubspotQuote] list quote ${id} failed: ${e.message}`);
     }
   }
   quotes.sort((a, b) => {

@@ -16,6 +16,23 @@ export function clearMerchantToken() {
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
+/** True when the cached JWT was minted by admin impersonate (payload.imp === true). */
+export function merchantTokenHasImp() {
+  const token = getMerchantToken();
+  if (!token) return false;
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    let b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const pad = (4 - (b64.length % 4)) % 4;
+    b64 += '='.repeat(pad);
+    const payload = JSON.parse(atob(b64));
+    return payload.imp === true;
+  } catch {
+    return false;
+  }
+}
+
 // Invokes a Base44 backend function directly via fetch, attaching the
 // merchant-portal JWT as a Bearer token.
 //

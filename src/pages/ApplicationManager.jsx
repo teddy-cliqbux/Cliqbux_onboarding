@@ -492,7 +492,17 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
     try {
       const res = await base44.functions.invoke('getHubspotQuote', { action: 'list', corporateId });
       if (res.data?.error) throw new Error(res.data.error);
-      setQuotes(res.data?.quotes || []);
+      // Safety: unique by id in case HubSpot associations still duplicate
+      const raw = res.data?.quotes || [];
+      const seen = new Set();
+      const unique = [];
+      for (const q of raw) {
+        const id = String(q.id);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        unique.push(q);
+      }
+      setQuotes(unique);
       setSelectedQuoteId(res.data?.selectedQuoteId || null);
     } catch (err) {
       setError(err.message || 'Failed to load HubSpot quotes');
