@@ -8,10 +8,72 @@ import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
+const SPRING = { type: 'spring', stiffness: 150, damping: 20 };
 
 function formatEIN(raw) {
   const d = (raw || '').replace(/\D/g, '');
   return d.length >= 9 ? `${d.slice(0, 2)}-${d.slice(2, 9)}` : raw || '';
+}
+
+/** One animation: the check path draws in, then rests. */
+function DrawnCheck({ animate }) {
+  return (
+    <span className="flex items-center justify-center w-11 h-11 rounded-full bg-cb-success/15 flex-shrink-0">
+      <svg viewBox="0 0 24 24" className="w-5 h-5 text-cb-success" fill="none" aria-hidden>
+        <motion.path
+          d="M5 13l4 4L19 7"
+          stroke="currentColor"
+          strokeWidth={2.75}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          initial={animate ? { pathLength: 0, opacity: 0 } : false}
+          animate={{ pathLength: 1, opacity: 1 }}
+          transition={SPRING}
+        />
+      </svg>
+    </span>
+  );
+}
+
+function BankConfirmationCard({ details, justSaved, onChange }) {
+  const masked = details?.accountNumberMasked || '••••';
+  const typeLabel = details?.accountType
+    ? details.accountType.charAt(0).toUpperCase() + details.accountType.slice(1)
+    : null;
+  const institution =
+    details?.institutionName
+    || details?.accountName
+    || (details?.authMethod === 'Plaid' ? 'Linked via Plaid' : 'Manual bank entry');
+  const subtitle = [institution, typeLabel].filter(Boolean).join(' · ');
+
+  return (
+    <motion.div
+      layout
+      initial={justSaved ? { opacity: 0, y: 6 } : false}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={SPRING}
+      className="rounded-cb border border-cb-border bg-cb-bg px-5 py-5"
+    >
+      <div className="flex items-start gap-4">
+        <DrawnCheck animate={!!justSaved} />
+        <div className="flex-1 min-w-0 pt-0.5">
+          <p className="text-cb-caption uppercase text-cb-success mb-1">
+            {justSaved ? 'Connected' : 'Bank on file'}
+          </p>
+          <p className="text-cb-body font-semibold text-white truncate">{subtitle}</p>
+          <p className="text-cb-body font-mono text-gray-400 mt-1 tracking-wide">{masked}</p>
+        </div>
+        <button
+          type="button"
+          onClick={onChange}
+          className="text-cb-caption normal-case tracking-normal text-gray-400 hover:text-white border border-cb-border hover:border-cb-border-strong rounded-cb px-2.5 py-1.5 transition-colors flex-shrink-0"
+        >
+          Change
+        </button>
+      </div>
+    </motion.div>
+  );
 }
 
 // ─── Banking Panel ────────────────────────────────────────────────────────────
@@ -31,6 +93,9 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(!!(bankDetails?.routingNumber));
   const [justSaved, setJustSaved] = useState(false);
+  // Snapshot shown on the confirmation card (avoids stale props on the frame after save)
+  const [confirmed, setConfirmed] = useState(() => (bankDetails?.routingNumber ? bankDetails : null));
+  const [institutionHint, setInstitutionHint] = useState(bankDetails?.institutionName || null);
   const [connecting, setConnecting] = useState(false);
   const [plaidError, setPlaidError] = useState('');
 
@@ -38,10 +103,20 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
     if (entityAccounts.length > 0 && mode === 'connect') setMode('plaid');
   }, [entityAccounts.length]);
 
+  // Keep confirmation in sync when parent refreshes bankDetails (e.g. background getMerchantData)
+  useEffect(() => {
+    if (bankDetails?.routingNumber && !justSaved) {
+      setConfirmed(bankDetails);
+      setSaved(true);
+      if (bankDetails.institutionName) setInstitutionHint(bankDetails.institutionName);
+    }
+  }, [bankDetails, justSaved]);
+
   const saveBank = async (details) => {
     setSaving(true);
     try {
       await invokePortalFunction('saveLocationBankDetails', { locations: [{ id: location.id, bankDetails: details }] });
+      setConfirmed(details);
       setJustSaved(true);
       setSaved(true);
       onBankSaved(location.id, details, entityId);
@@ -62,13 +137,23 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
         token: linkToken,
         onSuccess: async (publicToken, metadata) => {
           try {
+            const institutionName = metadata?.institution?.name || null;
+            if (institutionName) setInstitutionHint(institutionName);
             const res = await invokePortalFunction('exchangePlaidToken', { publicToken, accountId: metadata.account_id });
             const accounts = res.data?.accounts || [];
             onAccountsConnected(entityId, accounts);
             if (accounts[0]) {
               setSelectedId(accounts[0].accountId);
               setMode('plaid');
-              await saveBank({ routingNumber: accounts[0].routingNumber, accountNumber: accounts[0].accountNumber, authMethod: 'Plaid', accountNumberMasked: `••••${accounts[0].mask || ''}`, accountType: accounts[0].subtype || null });
+              await saveBank({
+                routingNumber: accounts[0].routingNumber,
+                accountNumber: accounts[0].accountNumber,
+                authMethod: 'Plaid',
+                accountNumberMasked: `••••${accounts[0].mask || ''}`,
+                accountType: accounts[0].subtype || null,
+                institutionName,
+                accountName: accounts[0].name || accounts[0].officialName || null,
+              });
             }
           } catch (err) {
             // Never log bank field values — message only
@@ -91,127 +176,136 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
     setSelectedId(accountId);
     const acct = entityAccounts.find(a => a.accountId === accountId);
     if (!acct) return;
-    await saveBank({ routingNumber: acct.routingNumber, accountNumber: acct.accountNumber, authMethod: 'Plaid', accountNumberMasked: `••••${acct.mask || ''}`, accountType: acct.subtype || null });
+    await saveBank({
+      routingNumber: acct.routingNumber,
+      accountNumber: acct.accountNumber,
+      authMethod: 'Plaid',
+      accountNumberMasked: `••••${acct.mask || ''}`,
+      accountType: acct.subtype || null,
+      institutionName: institutionHint || null,
+      accountName: acct.name || acct.officialName || null,
+    });
   };
 
-  // Saved state — quiet summary row; spring check only when the merchant just linked
-  if (saved) {
-    const displayAccount = bankDetails?.accountNumberMasked || '••••';
-    return (
-      <motion.div
-        className="flex items-center justify-between rounded-cb border border-cb-border bg-cb-bg px-4 py-3.5"
-        initial={justSaved ? { opacity: 0.6, scale: 0.98 } : false}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: 'spring', stiffness: 150, damping: 20 }}
-      >
-        <div className="flex items-center gap-3">
-          <motion.span
-            className="flex items-center justify-center w-7 h-7 rounded-full bg-cb-success/15 flex-shrink-0"
-            initial={justSaved ? { scale: 0 } : false}
-            animate={{ scale: 1 }}
-            transition={{ type: 'spring', stiffness: 150, damping: 20 }}
-          >
-            <Check className="w-3.5 h-3.5 text-cb-success" strokeWidth={3} />
-          </motion.span>
-          <div>
-            <p className="text-cb-body font-medium text-white">
-              {justSaved
-                ? 'Bank connected'
-                : (bankDetails?.authMethod === 'Plaid' ? 'Bank Linked via Plaid' : 'Manual Bank Entry')}
-            </p>
-            <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 font-mono mt-0.5">{displayAccount} · Routing ••••{bankDetails?.routingNumber?.slice(-4)}</p>
-          </div>
-        </div>
-        <button onClick={() => { setSaved(false); setJustSaved(false); setMode('connect'); }} className="text-cb-caption normal-case tracking-normal text-gray-400 hover:text-white border border-cb-border hover:border-cb-border-strong rounded-cb px-2.5 py-1.5 transition-colors">Change</button>
-      </motion.div>
-    );
-  }
-
-  const canReuse = reuseDetails?.routingNumber && !bankDetails?.routingNumber;
+  const handleChange = () => {
+    setSaved(false);
+    setJustSaved(false);
+    setConfirmed(null);
+    setMode('connect');
+  };
 
   return (
-    <div className="space-y-3">
-      {/* Reuse banner */}
-      {canReuse && (
-        <div className="flex items-center justify-between bg-cb-bg border border-cb-border rounded-cb px-4 py-2.5">
-          <div className="flex items-center gap-2.5">
-            <Banknote className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-            <div>
-              <p className="text-cb-body font-medium text-white">Another location in this entity uses this account</p>
-              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 font-mono">{reuseDetails.accountNumberMasked} · Routing ••••{reuseDetails.routingNumber?.slice(-4)}</p>
+    <AnimatePresence mode="wait" initial={false}>
+      {saved ? (
+        <BankConfirmationCard
+          key="confirm"
+          details={confirmed || bankDetails}
+          justSaved={justSaved}
+          onChange={handleChange}
+        />
+      ) : (
+        <motion.div
+          key="form"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          className="space-y-3"
+        >
+          {/* Reuse banner */}
+          {reuseDetails?.routingNumber && !bankDetails?.routingNumber && (
+            <div className="flex items-center justify-between bg-cb-bg border border-cb-border rounded-cb px-4 py-2.5">
+              <div className="flex items-center gap-2.5">
+                <Banknote className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                <div>
+                  <p className="text-cb-body font-medium text-white">Another location in this entity uses this account</p>
+                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 font-mono">
+                    {reuseDetails.institutionName ? `${reuseDetails.institutionName} · ` : ''}
+                    {reuseDetails.accountNumberMasked} · Routing ••••{reuseDetails.routingNumber?.slice(-4)}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => saveBank(reuseDetails)} disabled={saving}
+                className="text-cb-body font-medium text-gray-200 border border-cb-border-strong rounded-cb px-3 py-1.5 hover:text-white transition-colors disabled:opacity-50">
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Use Same'}
+              </button>
             </div>
-          </div>
-          <button onClick={() => saveBank(reuseDetails)} disabled={saving}
-            className="text-cb-body font-medium text-gray-200 border border-cb-border-strong rounded-cb px-3 py-1.5 hover:text-white transition-colors disabled:opacity-50">
-            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Use Same'}
-          </button>
-        </div>
-      )}
-
-      {/* Mode toggle — segmented control */}
-      <div className="flex gap-1 bg-cb-bg border border-cb-border rounded-cb p-1">
-        <button onClick={() => setMode('connect')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-cb text-cb-body font-medium transition-colors ${mode === 'connect' || mode === 'plaid' ? 'bg-cb-accent-muted text-cb-accent' : 'text-gray-400 hover:text-white'}`}>
-          <Landmark className="w-3.5 h-3.5" /> Plaid (Instant)
-        </button>
-        <button onClick={() => setMode('manual')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-cb text-cb-body font-medium transition-colors ${mode === 'manual' ? 'bg-cb-surface text-white' : 'text-gray-400 hover:text-white'}`}>
-          <Banknote className="w-3.5 h-3.5" /> Manual Entry
-        </button>
-      </div>
-
-      {(mode === 'connect' || mode === 'plaid') && (
-        <div className="space-y-2">
-          {entityAccounts.length > 0 ? (
-            <select value={selectedId} onChange={e => handlePlaidSelect(e.target.value)} className={inputCls} style={{ colorScheme: 'dark' }}>
-              <option value="">Select account…</option>
-              {entityAccounts.map(a => <option key={a.accountId} value={a.accountId}>{a.name} — ••••{a.mask || (a.accountNumber || '').slice(-4)}</option>)}
-            </select>
-          ) : (
-            <button onClick={handlePlaidConnect} disabled={connecting}
-              className="w-full flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 rounded-cb py-3 text-cb-body font-semibold text-cb-bg transition-all disabled:opacity-50">
-              {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Landmark className="w-4 h-4" />}
-              {connecting ? 'Connecting…' : 'Link Bank Account via Plaid'}
-            </button>
           )}
-          {plaidError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">{plaidError}</p>}
-        </div>
-      )}
 
-      {mode === 'manual' && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Routing # (9 digits)</label>
-              <input type="text" value={routing} maxLength={9}
-                onChange={e => setRouting(e.target.value.replace(/\D/g, '').slice(0, 9))}
-                placeholder="021000021" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Account #</label>
-              <input type="text" value={account} maxLength={17}
-                onChange={e => setAccount(e.target.value.replace(/\D/g, '').slice(0, 17))}
-                placeholder="000123456789" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Account Type</label>
-              <select value={accountType} onChange={e => setAccountType(e.target.value)}
-                className={inputCls} style={{ colorScheme: 'dark' }}>
-                <option value="">Select…</option>
-                <option value="checking">Checking</option>
-                <option value="savings">Savings</option>
-              </select>
-            </div>
+          {/* Mode toggle — segmented control */}
+          <div className="flex gap-1 bg-cb-bg border border-cb-border rounded-cb p-1">
+            <button onClick={() => setMode('connect')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-cb text-cb-body font-medium transition-colors ${mode === 'connect' || mode === 'plaid' ? 'bg-cb-accent-muted text-cb-accent' : 'text-gray-400 hover:text-white'}`}>
+              <Landmark className="w-3.5 h-3.5" /> Plaid (Instant)
+            </button>
+            <button onClick={() => setMode('manual')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-cb text-cb-body font-medium transition-colors ${mode === 'manual' ? 'bg-cb-surface text-white' : 'text-gray-400 hover:text-white'}`}>
+              <Banknote className="w-3.5 h-3.5" /> Manual Entry
+            </button>
           </div>
-          <button onClick={() => saveBank({ routingNumber: routing, accountNumber: account, authMethod: 'Manual', accountNumberMasked: `••••${account.slice(-4)}`, accountType })}
-            disabled={saving || routing.length !== 9 || account.length < 4 || !accountType}
-            className="w-full flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 text-cb-bg font-semibold text-cb-body py-2.5 rounded-cb transition-all">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-            {saving ? 'Saving…' : 'Save Bank Details'}
-          </button>
-        </div>
+
+          {(mode === 'connect' || mode === 'plaid') && (
+            <div className="space-y-2">
+              {entityAccounts.length > 0 ? (
+                <select value={selectedId} onChange={e => handlePlaidSelect(e.target.value)} className={inputCls} style={{ colorScheme: 'dark' }}>
+                  <option value="">Select account…</option>
+                  {entityAccounts.map(a => <option key={a.accountId} value={a.accountId}>{a.name} — ••••{a.mask || (a.accountNumber || '').slice(-4)}</option>)}
+                </select>
+              ) : (
+                <button onClick={handlePlaidConnect} disabled={connecting}
+                  className="w-full flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 rounded-cb py-3 text-cb-body font-semibold text-cb-bg transition-all disabled:opacity-50">
+                  {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Landmark className="w-4 h-4" />}
+                  {connecting ? 'Connecting…' : 'Link Bank Account via Plaid'}
+                </button>
+              )}
+              {plaidError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">{plaidError}</p>}
+            </div>
+          )}
+
+          {mode === 'manual' && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Routing # (9 digits)</label>
+                  <input type="text" value={routing} maxLength={9}
+                    onChange={e => setRouting(e.target.value.replace(/\D/g, '').slice(0, 9))}
+                    placeholder="021000021" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Account #</label>
+                  <input type="text" value={account} maxLength={17}
+                    onChange={e => setAccount(e.target.value.replace(/\D/g, '').slice(0, 17))}
+                    placeholder="000123456789" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Account Type</label>
+                  <select value={accountType} onChange={e => setAccountType(e.target.value)}
+                    className={inputCls} style={{ colorScheme: 'dark' }}>
+                    <option value="">Select…</option>
+                    <option value="checking">Checking</option>
+                    <option value="savings">Savings</option>
+                  </select>
+                </div>
+              </div>
+              <button onClick={() => saveBank({
+                routingNumber: routing,
+                accountNumber: account,
+                authMethod: 'Manual',
+                accountNumberMasked: `••••${account.slice(-4)}`,
+                accountType,
+                institutionName: null,
+                accountName: null,
+              })}
+                disabled={saving || routing.length !== 9 || account.length < 4 || !accountType}
+                className="w-full flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 text-cb-bg font-semibold text-cb-body py-2.5 rounded-cb transition-all">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {saving ? 'Saving…' : 'Save Bank Details'}
+              </button>
+            </div>
+          )}
+        </motion.div>
       )}
-    </div>
+    </AnimatePresence>
   );
 }
 
@@ -224,7 +318,7 @@ function LocationBankingRow({ location, corporateId, merchantIDs, bankDetails, r
   return (
     <motion.div
       layout
-      transition={{ type: 'spring', stiffness: 150, damping: 20 }}
+      transition={SPRING}
       className={`rounded-cb border transition-colors ${isExpanded ? 'border-cb-border-strong bg-cb-surface-raised' : 'border-cb-border bg-cb-surface-raised hover:border-cb-border-strong'}`}
     >
       {/* Header */}
@@ -262,7 +356,7 @@ function LocationBankingRow({ location, corporateId, merchantIDs, bankDetails, r
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ type: 'spring', stiffness: 150, damping: 20 }}
+            transition={SPRING}
             className="overflow-hidden"
           >
             <div className="border-t border-cb-border px-5 py-5">

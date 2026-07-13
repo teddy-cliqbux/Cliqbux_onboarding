@@ -63,6 +63,14 @@
             "Plaid",
             "Manual"
           ]
+        },
+        "institutionName": {
+          "type": "string",
+          "description": "Bank institution name from Plaid metadata (e.g. Chase). Optional; blank for manual entry."
+        },
+        "accountName": {
+          "type": "string",
+          "description": "Plaid account nickname (e.g. Plaid Checking). Optional."
         }
       }
     },

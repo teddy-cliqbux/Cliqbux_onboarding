@@ -67,6 +67,9 @@ Deno.serve(async (req) => {
           accountNumberMasked: bankDetails.accountNumberMasked || null,
           accountType: bankDetails.accountType || null,
           authMethod: bankDetails.authMethod || null,
+          // Optional display fields for the portal confirmation card (Plaid institution / account nickname)
+          institutionName: bankDetails.institutionName || null,
+          accountName: bankDetails.accountName || null,
         }
       };
       // Preserve entityId on the location record (maps to a LegalEntity)

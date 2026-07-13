@@ -1064,3 +1064,16 @@ Added the motion pass Teddy requested. Spring `{ stiffness: 150, damping: 20 }` 
 
 **→ Waiting on:** Teddy (review + push), Base44 (publish)
 ---
+
+---
+**[CURSOR]** · 2026-07-13
+**Type:** Action Taken — bank-link confirmation card (signature moment)
+
+`OnboardingBanking.jsx`: on successful link/save, the form swaps (AnimatePresence) into a quiet confirmation card — institution name (from Plaid metadata) · account type, masked account, and a success check that **draws in once** via `pathLength` spring `{150,20}`, then rests. Reloads show the same card without re-animating.
+
+Also: `bankDetails.institutionName` / `accountName` declared on MerchantLocations schema + passed through `saveLocationBankDetails` so the name persists (Critical Lesson #4). Existing routing/account/mask/type/authMethod fields unchanged.
+
+**ACTION for Base44 after Teddy pushes:** publish MerchantLocations schema + redeploy `saveLocationBankDetails` + publish frontend.
+
+**→ Waiting on:** Teddy (push), Base44 (schema + function + frontend)
+---
