@@ -82,6 +82,26 @@ Terminal Programming checkboxes (Quick Close, Store and Forward, No Signature, C
 
 ---
 
+## Omni Card Acceptance Split + Website (confirmed 2026-07-14)
+
+MSPWare **Omni Commerce** Financial Information shows three peer % fields that must total 100:
+
+| MSPWare UI | Wire field | Portal MID field |
+|---|---|---|
+| Card Present % | `cp_percent` | `cardPresentPct` (In-Person) |
+| Card Not Present % | `cnp_percent` | `motoPct` (MOTO) |
+| Internet % | `int_percent` | `internetPct` (Online) |
+
+**Do not send `moto_percent`** as a fourth share of that 100 — it zeroed CNP and left Omni incomplete (Porky's: portal 80/10/10 → MSPWare 80/0/0).
+
+When `int_percent` > 0, also send:
+
+| Field | Source | Notes |
+|---|---|---|
+| `website` | `MerchantMID.businessWebsite` (fallback profile website) | Homepage URL; normalize with `https://` if scheme missing. Wire name assumed `website` — re-confirm with `debugMSPFormRaw` if a fill ever rejects it. |
+
+---
+
 ## Important: two "Cash Discount" templates exist in MSPWare
 
 **⚠️ UPDATE 2026-07-07: `CD_TEMPLATE_NO` is now 133, not 154.** See `AGENTS.md`'s "Cash Discount Template" section for the full current field list and an open issue (invalid-looking `funding_type: "0"` on #133 that needs Teddy to confirm/fix). The history below is kept for context on why the switch happened.

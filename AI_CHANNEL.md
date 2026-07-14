@@ -1628,3 +1628,27 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 
 **ACTION:** Redeploy both ? Retry Signing. If bank/DOB/SSN still flagged after clean refill, fix in Identity / Banking.
 ---
+
+---
+**[CURSOR]** · 2026-07-14
+**Type:** Bugfix · Omni card split not flowing + homepage URL for Online volume
+
+**Problem:** Portal Card Split 80/10/10 (In-Person/Online/MOTO) landed in MSPWare as CP 80 / CNP 0 / Internet 0 ? Omni must total 100%. Also need business homepage URL when Online > 0.
+
+**Cause:** Omni is three peer buckets (CP / CNP / Internet), not four. Old residual + `moto_percent` mapping left Internet/CNP at 0.
+
+**Shipped:**
+- `mapPortalCardSplit`: In-Person?`cp_percent`, Online?`int_percent`, MOTO?`cnp_percent`; omit `moto_percent`
+- MID field `businessWebsite` (schema + manageMerchantID + MidCard UI when Online > 0)
+- Send `website` on PUT when Internet % > 0; clear errors if missing
+- Docs: AGENTS Critical Lesson #18, `docs/mspware-field-reference.md`
+
+**Teddy action:**
+1. Push via GitHub Desktop
+2. Publish MerchantMID entity schema (`businessWebsite`)
+3. Force-redeploy `signApplication`, `submitToMSP`, `manageMerchantID`, `refillMSPForms` + frontend
+4. Porky's: edit MID ? confirm 80/10/10 ? enter homepage URL ? Save ? Retry Signing
+5. In MSPWare verify CP 80 / CNP 10 / Internet 10 (+ website if shown)
+
+**? Waiting on:** Teddy (push / redeploy / retest)
+---

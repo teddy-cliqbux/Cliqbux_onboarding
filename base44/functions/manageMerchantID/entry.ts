@@ -126,6 +126,7 @@ Deno.serve(async (req) => {
         cardPresentPct: data?.cardPresentPct != null ? Number(data.cardPresentPct) : 100,
         internetPct: data?.internetPct != null ? Number(data.internetPct) : 0,
         motoPct: data?.motoPct != null ? Number(data.motoPct) : 0,
+        ...(data?.businessWebsite ? { businessWebsite: String(data.businessWebsite).trim() } : {}),
         applicationStepStatus: 'In Review',
       };
       const merchantMID = await base44.asServiceRole.entities.MerchantMID.create(merchantMIDData);
@@ -168,6 +169,24 @@ Deno.serve(async (req) => {
       if (d.cardPresentPct !== undefined) updateFields.cardPresentPct = Number(d.cardPresentPct);
       if (d.internetPct !== undefined) updateFields.internetPct = Number(d.internetPct);
       if (d.motoPct !== undefined) updateFields.motoPct = Number(d.motoPct);
+      if (d.businessWebsite !== undefined) {
+        const site = String(d.businessWebsite || '').trim();
+        updateFields.businessWebsite = site || null;
+      }
+      // Require homepage URL when Online (internet) volume > 0
+      {
+        const nextInt = d.internetPct !== undefined
+          ? Number(d.internetPct)
+          : Number(existing?.internetPct ?? 0);
+        const nextSite = d.businessWebsite !== undefined
+          ? String(d.businessWebsite || '').trim()
+          : String(existing?.businessWebsite || '').trim();
+        if (Number.isFinite(nextInt) && nextInt > 0 && !nextSite) {
+          return Response.json({
+            error: 'Business homepage URL is required when Online volume is greater than 0%.',
+          }, { status: 422 });
+        }
+      }
       if (d.locationId !== undefined) updateFields.locationId = d.locationId;
       if (d.applicationStepStatus !== undefined) updateFields.applicationStepStatus = d.applicationStepStatus;
       if (d.alcoholSalesPercentage !== undefined) {
@@ -216,7 +235,7 @@ Deno.serve(async (req) => {
       // Critical for: first MCC save after add (draft deferred), and MCC/volume
       // corrections after a draft already exists with stale/wrong values.
       const boardingKeys = ['mccCode', 'industryType', 'monthlyCardSales', 'avgSaleAmount',
-        'highestTicketAmount', 'cardPresentPct', 'internetPct', 'motoPct', 'merchantName', 'dbaName'];
+        'highestTicketAmount', 'cardPresentPct', 'internetPct', 'motoPct', 'businessWebsite', 'merchantName', 'dbaName'];
       const touchedBoarding = boardingKeys.some((k) => d[k] !== undefined);
       const effectiveMcc = String(updated?.mccCode || existing?.mccCode || '').trim();
       const corpId = String(existing?.corporateId || corporateId || '');

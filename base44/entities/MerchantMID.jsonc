@@ -59,8 +59,12 @@
     },
     "motoPct": {
       "type": "number",
-      "description": "Percentage of transactions that are mail/telephone order (MOTO). 0-100. Added 2026-07-10 \u2014 same stripped-field bug as internetPct.",
+      "description": "Percentage of transactions that are mail/telephone order (MOTO). 0-100. Maps to MSPWare cnp_percent (Card Not Present) under Omni. Added 2026-07-10.",
       "default": 0
+    },
+    "businessWebsite": {
+      "type": "string",
+      "description": "Business homepage URL. Required when internetPct > 0. Sent to MSPWare as website on PUT /form (2026-07-14)."
     },
     "alcoholSalesPercentage": {
       "type": "number",

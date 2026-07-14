@@ -114,35 +114,34 @@ function sanitizeLegalDbaName(name: string): string {
     .trim();
 }
 
-/** Four MSPWare acceptance buckets must sum to exactly 100 for OMNI. */
-function normalizeAcceptanceSplit(cpIn: number, intIn: number, motoIn: number) {
+/** Portal card split (In-Person / Online / MOTO) → MSPWare Omni (CP / CNP / Internet).
+ *  MSPWare Omni UI has THREE peer buckets that must sum to 100 — not four.
+ *  Map: In-Person→cp, Online→int (Internet %), MOTO→cnp (Card Not Present %).
+ *  Do NOT also send moto_percent as a share of the 100 (that zeroed CNP and left Omni at 80%).
+ */
+function mapPortalCardSplit(cpIn: number, onlineIn: number, motoIn: number) {
   let cp = Math.max(0, Math.min(100, Math.round(cpIn)));
-  let intPct = Math.max(0, Math.min(100, Math.round(intIn)));
-  let motoPct = Math.max(0, Math.min(100, Math.round(motoIn)));
-  const sum3 = cp + intPct + motoPct;
-  if (sum3 > 100) {
-    const room = Math.max(0, 100 - cp);
-    const rest = intPct + motoPct;
-    if (rest > 0) {
-      intPct = Math.floor((intPct * room) / rest);
-      motoPct = Math.max(0, room - intPct);
-    } else {
-      cp = 100;
-    }
+  let online = Math.max(0, Math.min(100, Math.round(onlineIn)));
+  let moto = Math.max(0, Math.min(100, Math.round(motoIn)));
+  const sum = cp + online + moto;
+  if (sum <= 0) {
+    return { cp: 100, cnp: 0, intPct: 0 };
   }
-  let cnp = Math.max(0, 100 - cp - intPct - motoPct);
-  const total = cp + cnp + intPct + motoPct;
-  if (total < 100) cnp += 100 - total;
-  else if (total > 100) {
-    const over = total - 100;
-    if (cnp >= over) cnp -= over;
-    else {
-      const left = over - cnp;
-      cnp = 0;
-      cp = Math.max(0, cp - left);
-    }
+  if (sum !== 100) {
+    // Scale to 100, keep integers; put rounding remainder on CP
+    cp = Math.round((cp * 100) / sum);
+    online = Math.round((online * 100) / sum);
+    moto = Math.max(0, 100 - cp - online);
   }
-  return { cp, cnp: Math.max(0, cnp), intPct, motoPct };
+  return { cp, cnp: moto, intPct: online };
+}
+
+/** Normalize URL for MSPWare website field. */
+function normalizeWebsiteUrl(raw: string): string {
+  const s = String(raw || '').trim();
+  if (!s) return '';
+  if (/^https?:\/\//i.test(s)) return s;
+  return `https://${s}`;
 }
 
 async function diagnoseMspTemplate(
@@ -482,20 +481,24 @@ function buildFormPayload(
   // (0 is falsy) — only default when the value is genuinely absent/NaN.
   const parsedCpPct = parseInt(String(rawCpPct), 10);
   const cardPresentPct = Math.max(0, Math.min(100, Number.isFinite(parsedCpPct) ? parsedCpPct : 100));
-  // MSPWare has FOUR acceptance buckets (cp / cnp-keyed / internet / moto) that
-  // must sum to 100, and rejects cnp_percent >= 100. The portal collects three
-  // (in-person / online / moto), so cnp is the RESIDUAL keyed portion — with a
-  // 100-total portal split it is always 0. The old formula (100 - cp) double-
-  // counted internet/moto and produced cnp_percent: 100 for online merchants,
-  // which the processor rejected (observed live 2026-07-10, app #210).
+  // Portal In-Person / Online / MOTO → MSPWare Omni CP / Internet / CNP (three
+  // peer buckets that must sum to 100). MOTO maps to cnp_percent; do NOT also
+  // send moto_percent. Old residual math (cnp = 100−cp) zeroed Internet/MOTO
+  // on the wire (Porky's 2026-07-14: portal 80/10/10 → MSPWare 80/0/0).
   const midIntPct  = Math.max(0, Math.min(100, parseInt(String(merchantMID.internetPct ?? profile.internetPct ?? 0), 10) || 0));
   const midMotoPct = Math.max(0, Math.min(100, parseInt(String(merchantMID.motoPct ?? profile.motoPct ?? 0), 10) || 0));
-  // Normalize so cp+cnp+int+moto === 100 (Omni-Commerce rejects other totals — Porky's 2026-07-14).
-  const split = normalizeAcceptanceSplit(cardPresentPct, midIntPct, midMotoPct);
+  const split = mapPortalCardSplit(cardPresentPct, midIntPct, midMotoPct);
   const cardPresentPctNorm = split.cp;
   const cnpPct = split.cnp;
   const intPct  = String(split.intPct);
-  const motoPct = String(split.motoPct);
+  const websiteUrl = normalizeWebsiteUrl(
+    merchantMID.businessWebsite || profile.businessWebsite || profile.website || ''
+  );
+  if (split.intPct > 0 && !websiteUrl) {
+    throw new Error(
+      `Business homepage URL is required when Online volume is greater than 0% (MID "${merchantMID.dbaName || merchantMID.merchantName || merchantMID.id}"). Edit the MID in Locations and add the website, then retry.`
+    );
+  }
   const ownershipRaw = profile.ownershipType || matchedEntity?.ownershipType || profile.taxClassType || '';
   const ownershipType = mapOwnershipType(ownershipRaw);
   const isLLC = ownershipType === 'LL';
@@ -615,8 +618,12 @@ function buildFormPayload(
     cp_percent: String(cardPresentPctNorm),
     cnp_percent: String(cnpPct),
     int_percent: intPct,
-    moto_percent: motoPct,
+    // moto_percent intentionally omitted — MSPWare Omni totals CP+CNP+Internet only.
+    // Portal MOTO maps to cnp_percent (Card Not Present). Sending a 4th share zeroed CNP (Porky's 2026-07-14).
     delayed_delivery: deliveryDelayDays,
+    // Website required by underwriting when Internet % > 0. Wire name `website` —
+    // confirm via debugMSPFormRaw if a fill ever rejects it.
+    ...(split.intPct > 0 && websiteUrl ? { website: websiteUrl } : {}),
     // cards_accepted / all_cards intentionally OMITTED as of 2026-07-08 — template #133
     // has all_cards: true (accept every card type, including UnionPay). Sending an
     // explicit cards_accepted list here overwrote that with a fixed 6-card list and

@@ -264,9 +264,30 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 **Template 133 follow-up (same day):** MSPWare returned `An error has occurred` when cloning template **133** for Porky's Cash Discount. Likely a broken/un-cloneable template or DBA special chars. Code now sanitizes DBA on create, diagnoses template via GET on failure, and supports `MSP_CD_TEMPLATE_NO` env override without code change.
 
-**Form fill follow-up (same day):** After draft existed, fill failed validation: `full_dba_name` / `legal_dba_name` reject apostrophe (and `&` on full DBA); Omni split must total 100%. Fixed via `sanitizeFullDbaName` / `sanitizeLegalDbaName` / `normalizeAcceptanceSplit` in buildFormPayload. DOB/SSN/bank "missing" often cascade from a rejected PUT — recheck after a clean refill.
+**Form fill follow-up (same day):** After draft existed, fill failed validation: `full_dba_name` / `legal_dba_name` reject apostrophe (and `&` on full DBA); Omni split must total 100%. Fixed via `sanitizeFullDbaName` / `sanitizeLegalDbaName`. Card-split Omni mapping was still wrong — see Critical Lesson #18. DOB/SSN/bank "missing" often cascade from a rejected PUT — recheck after a clean refill.
 
 **Rule:** Blank HubSpot `processing_pricing_tier` must not write `STANDARD`. Pricing tab complete = canonical CD **or** custom with all three fees — never markup-only. Applications list pricing label must come from the profile (not stale track prefill). Never return a generic MSP draft failure without the underlying create/location/MCC error text. If MSPWare refuses `templatemerchantapplicationno: 133`, verify the Cash Discount record is still a **Template** (not a Draft) and update `MSP_CD_TEMPLATE_NO` to the working number. Never send raw merchant DBA/legal names with apostrophes to MSPWare PUT /form.
+
+---
+
+### 18. Omni card split — portal Online/MOTO never reached MSPWare (Porky's 2026-07-14)
+
+**Live evidence:** Portal MID Card Split In-Person **80** / Online **10** / MOTO **10**. MSPWare Financial Information Omni showed Card Present **80** / Card Not Present **0** / Internet **0** → "Omni-Commerce acceptance split must total to 100%".
+
+**Root cause:** MSPWare Omni has **three peer buckets** that must sum to 100: `cp_percent` (Card Present), `cnp_percent` (Card Not Present), `int_percent` (Internet). The portal labels them In-Person / Online / MOTO. Old code treated MOTO as a fourth `moto_percent` share and used residual math that left CNP/Internet at 0 when CP was set — so 80/10/10 became 80/0/0 on the wire.
+
+**Correct mapping (`mapPortalCardSplit`):**
+| Portal | MSPWare field |
+|---|---|
+| In-Person (`cardPresentPct`) | `cp_percent` |
+| Online (`internetPct`) | `int_percent` |
+| MOTO (`motoPct`) | `cnp_percent` |
+
+**Do not** send `moto_percent` as part of the Omni 100% total.
+
+**Also shipped:** when Online / `internetPct` > 0, require `businessWebsite` on the MID (UI + `manageMerchantID` 422 + boarding throw), send MSPWare `website` (normalized with `https://` if missing). Schema field `MerchantMID.businessWebsite` must be declared or Base44 strips it (Lesson #4).
+
+**Rule:** Omni = three peer percents totaling 100. Portal Online → Internet %, portal MOTO → Card Not Present %. Collect homepage URL whenever Internet % > 0.
 
 ---
 

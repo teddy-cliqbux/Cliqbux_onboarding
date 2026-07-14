@@ -95,9 +95,27 @@ function buildFormPayload(profile: any, location: any, merchantMID: any, signer:
   const deliveryDelayDays = String(Math.max(parseInt(String(merchantMID.deliveryDelayDays ?? '0'), 10), 1));
   const rawCpPct = merchantMID.cardPresentPct != null ? merchantMID.cardPresentPct : 100;
   const cardPresentPct = Math.max(0, Math.min(100, parseInt(String(rawCpPct), 10) || 100));
-  const cnpPct = 100 - cardPresentPct;
-  const intPct = cnpPct > 0 ? String(profile.internetPct ?? 0) : '0';
-  const motoPct = cnpPct > 0 ? String(profile.motoPct ?? Math.max(0, cnpPct - parseInt(intPct, 10))) : '0';
+  // Same Omni mapping as signApplication/submitToMSP (2026-07-14): In-Person→cp,
+  // Online→int, MOTO→cnp. Do not use residual (100−cp) or send moto_percent.
+  const midIntPct = Math.max(0, Math.min(100, parseInt(String(merchantMID.internetPct ?? 0), 10) || 0));
+  const midMotoPct = Math.max(0, Math.min(100, parseInt(String(merchantMID.motoPct ?? 0), 10) || 0));
+  let cp = cardPresentPct;
+  let online = midIntPct;
+  let moto = midMotoPct;
+  const splitSum = cp + online + moto;
+  if (splitSum <= 0) { cp = 100; online = 0; moto = 0; }
+  else if (splitSum !== 100) {
+    cp = Math.round((cp * 100) / splitSum);
+    online = Math.round((online * 100) / splitSum);
+    moto = Math.max(0, 100 - cp - online);
+  }
+  const cnpPct = moto;
+  const intPct = String(online);
+  let websiteUrl = String(merchantMID.businessWebsite || profile.businessWebsite || profile.website || '').trim();
+  if (websiteUrl && !/^https?:\/\//i.test(websiteUrl)) websiteUrl = `https://${websiteUrl}`;
+  if (online > 0 && !websiteUrl) {
+    throw new Error(`Business homepage URL is required when Online volume > 0% (MID "${merchantMID.dbaName || merchantMID.merchantName || merchantMID.id}").`);
+  }
   const ownershipRaw = profile.ownershipType || profile.taxClassType || '';
   const ownershipType = mapOwnershipType(ownershipRaw);
   const isLLC = ownershipType === 'LL';
@@ -189,10 +207,11 @@ function buildFormPayload(profile: any, location: any, merchantMID: any, signer:
     average_sales: avgSaleAmount,
     highest_ticket: highestTicketAmount,
     freq_highest_average_ticket: String(profile.highestTicketFrequency || '24'),
-    cp_percent: String(cardPresentPct),
+    cp_percent: String(cp),
     cnp_percent: String(cnpPct),
     int_percent: intPct,
-    moto_percent: motoPct,
+    // moto_percent omitted — Omni totals CP+CNP+Internet only (portal MOTO → cnp)
+    ...(online > 0 && websiteUrl ? { website: websiteUrl } : {}),
     delayed_delivery: deliveryDelayDays,
     cards_accepted: ['VISA', 'VISA_DEBIT', 'MASTERCARD', 'MASTERCARD_DEBIT', 'DISCOVER', 'AMEX'],
     card_acceptance_split: cardPresentPct >= 100 ? 'CP' : 'OMNI',

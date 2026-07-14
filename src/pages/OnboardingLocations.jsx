@@ -139,6 +139,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
     cardPresentPct: mid.cardPresentPct != null ? String(mid.cardPresentPct) : '100',
     internetPct: mid.internetPct != null ? String(mid.internetPct) : '0',
     motoPct: mid.motoPct != null ? String(mid.motoPct) : '0',
+    businessWebsite: mid.businessWebsite || '',
     alcoholSalesPercentage: mid.alcoholSalesPercentage != null && mid.alcoholSalesPercentage !== ''
       ? String(mid.alcoholSalesPercentage)
       : '',
@@ -147,9 +148,11 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
   const [savedAt, setSavedAt] = useState(null);
 
   const pctSum = (parseInt(form.cardPresentPct) || 0) + (parseInt(form.internetPct) || 0) + (parseInt(form.motoPct) || 0);
+  const onlinePct = parseInt(form.internetPct) || 0;
+  const websiteOk = onlinePct <= 0 || String(form.businessWebsite || '').trim().length > 0;
   const needsLiquorCompliance = requiresLiquorCompliance(businessState, form.mccCode);
   const alcoholOk = !needsLiquorCompliance || isAlcoholSalesPercentageSet(form.alcoholSalesPercentage);
-  const canSave = form.mccCode && pctSum === 100 && alcoholOk;
+  const canSave = form.mccCode && pctSum === 100 && alcoholOk && websiteOk;
   // isComplete reads from form state (not stale mid prop) so the header updates immediately after save
   const isComplete = !!(form.mccCode && form.monthlyCardSales && alcoholOk);
 
@@ -291,6 +294,27 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                 </div>
                 {pctSum !== 100 && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">Total: {pctSum}% (must be 100%)</p>}
               </div>
+
+              {onlinePct > 0 && (
+                <div>
+                  <label className={labelCls}>Business homepage URL *</label>
+                  <input
+                    type="url"
+                    value={form.businessWebsite}
+                    onChange={e => setField('businessWebsite', e.target.value)}
+                    placeholder="https://www.example.com"
+                    className={inputCls}
+                  />
+                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1.5">
+                    Required when Online volume is greater than 0% — sent to MSPWare for underwriting.
+                  </p>
+                  {!websiteOk && (
+                    <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1">
+                      Enter the business website URL to continue.
+                    </p>
+                  )}
+                </div>
+              )}
 
               {needsLiquorCompliance && (
                 <div className="space-y-3 rounded-cb border border-cb-border bg-cb-bg py-3 pr-3 pl-3 relative overflow-hidden">
