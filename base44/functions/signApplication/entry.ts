@@ -94,6 +94,57 @@ function sanitizeDbaForMspCreate(dba: string): string {
   return cleaned || 'Merchant';
 }
 
+/** full_dba_name: no special chars (apostrophe/& rejected live 2026-07-14). */
+function sanitizeFullDbaName(name: string): string {
+  return String(name || '')
+    .replace(/['"`´]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-zA-Z0-9\s.\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** legal_dba_name: letters, spaces, & and - only. */
+function sanitizeLegalDbaName(name: string): string {
+  return String(name || '')
+    .replace(/['"`]/g, '')
+    .replace(/\u2018|\u2019|\u00B4/g, '')
+    .replace(/[^a-zA-Z\s&\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Four MSPWare acceptance buckets must sum to exactly 100 for OMNI. */
+function normalizeAcceptanceSplit(cpIn: number, intIn: number, motoIn: number) {
+  let cp = Math.max(0, Math.min(100, Math.round(cpIn)));
+  let intPct = Math.max(0, Math.min(100, Math.round(intIn)));
+  let motoPct = Math.max(0, Math.min(100, Math.round(motoIn)));
+  const sum3 = cp + intPct + motoPct;
+  if (sum3 > 100) {
+    const room = Math.max(0, 100 - cp);
+    const rest = intPct + motoPct;
+    if (rest > 0) {
+      intPct = Math.floor((intPct * room) / rest);
+      motoPct = Math.max(0, room - intPct);
+    } else {
+      cp = 100;
+    }
+  }
+  let cnp = Math.max(0, 100 - cp - intPct - motoPct);
+  const total = cp + cnp + intPct + motoPct;
+  if (total < 100) cnp += 100 - total;
+  else if (total > 100) {
+    const over = total - 100;
+    if (cnp >= over) cnp -= over;
+    else {
+      const left = over - cnp;
+      cnp = 0;
+      cp = Math.max(0, cp - left);
+    }
+  }
+  return { cp, cnp: Math.max(0, cnp), intPct, motoPct };
+}
+
 async function diagnoseMspTemplate(
   mspBase: string,
   headers: Record<string, string>,
@@ -439,12 +490,12 @@ function buildFormPayload(
   // which the processor rejected (observed live 2026-07-10, app #210).
   const midIntPct  = Math.max(0, Math.min(100, parseInt(String(merchantMID.internetPct ?? profile.internetPct ?? 0), 10) || 0));
   const midMotoPct = Math.max(0, Math.min(100, parseInt(String(merchantMID.motoPct ?? profile.motoPct ?? 0), 10) || 0));
-  const cnpPct = Math.max(0, 100 - cardPresentPct - midIntPct - midMotoPct);
-  // The card split is entered PER-MID in the portal (merchantMID.internetPct/motoPct);
-  // the profile-level fields were a dead fallback that never existed, which
-  // misclassified online merchants as 100% MOTO (2026-07-10).
-  const intPct  = String(midIntPct);
-  const motoPct = String(midMotoPct);
+  // Normalize so cp+cnp+int+moto === 100 (Omni-Commerce rejects other totals — Porky's 2026-07-14).
+  const split = normalizeAcceptanceSplit(cardPresentPct, midIntPct, midMotoPct);
+  const cardPresentPctNorm = split.cp;
+  const cnpPct = split.cnp;
+  const intPct  = String(split.intPct);
+  const motoPct = String(split.motoPct);
   const ownershipRaw = profile.ownershipType || matchedEntity?.ownershipType || profile.taxClassType || '';
   const ownershipType = mapOwnershipType(ownershipRaw);
   const isLLC = ownershipType === 'LL';
@@ -483,8 +534,8 @@ function buildFormPayload(
   }));
 
   return {
-    full_dba_name: dbaName,
-    legal_dba_name: profile.legalName || '',
+    full_dba_name: sanitizeFullDbaName(dbaName),
+    legal_dba_name: sanitizeLegalDbaName(profile.legalName || dbaName || ''),
     products_or_services: profile.productDescription || 'Retail goods and services',
     year_business_established: String(profile.establishmentYear || new Date().getFullYear() - 3),
     ownership_years: String(profile.currentOwnershipYears || '1'),
@@ -561,7 +612,7 @@ function buildFormPayload(
     average_sales: avgSaleAmount,
     highest_ticket: highestTicketAmount,
     freq_highest_average_ticket: String(profile.highestTicketFrequency || '24'),
-    cp_percent: String(cardPresentPct),
+    cp_percent: String(cardPresentPctNorm),
     cnp_percent: String(cnpPct),
     int_percent: intPct,
     moto_percent: motoPct,
@@ -572,7 +623,7 @@ function buildFormPayload(
     // silently dropped UnionPay + the "All Cards" toggle on every application. Let
     // the template's own value pass through untouched, same as other template-owned
     // fields. See AGENTS.md.
-    card_acceptance_split: cardPresentPct >= 100 ? 'CP' : 'OMNI',
+    card_acceptance_split: cardPresentPctNorm >= 100 ? 'CP' : 'OMNI',
     mcc,
     // ── Pricing (merchant-specific only — template owns fee schedule, debit rates, etc.) ──
     pricing_method: pricingMethod,

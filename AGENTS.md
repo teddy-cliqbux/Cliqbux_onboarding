@@ -264,7 +264,9 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 **Template 133 follow-up (same day):** MSPWare returned `An error has occurred` when cloning template **133** for Porky's Cash Discount. Likely a broken/un-cloneable template or DBA special chars. Code now sanitizes DBA on create, diagnoses template via GET on failure, and supports `MSP_CD_TEMPLATE_NO` env override without code change.
 
-**Rule:** Blank HubSpot `processing_pricing_tier` must not write `STANDARD`. Pricing tab complete = canonical CD **or** custom with all three fees — never markup-only. Applications list pricing label must come from the profile (not stale track prefill). Never return a generic MSP draft failure without the underlying create/location/MCC error text. If MSPWare refuses `templatemerchantapplicationno: 133`, verify the Cash Discount record is still a **Template** (not a Draft) and update `MSP_CD_TEMPLATE_NO` to the working number.
+**Form fill follow-up (same day):** After draft existed, fill failed validation: `full_dba_name` / `legal_dba_name` reject apostrophe (and `&` on full DBA); Omni split must total 100%. Fixed via `sanitizeFullDbaName` / `sanitizeLegalDbaName` / `normalizeAcceptanceSplit` in buildFormPayload. DOB/SSN/bank "missing" often cascade from a rejected PUT — recheck after a clean refill.
+
+**Rule:** Blank HubSpot `processing_pricing_tier` must not write `STANDARD`. Pricing tab complete = canonical CD **or** custom with all three fees — never markup-only. Applications list pricing label must come from the profile (not stale track prefill). Never return a generic MSP draft failure without the underlying create/location/MCC error text. If MSPWare refuses `templatemerchantapplicationno: 133`, verify the Cash Discount record is still a **Template** (not a Draft) and update `MSP_CD_TEMPLATE_NO` to the working number. Never send raw merchant DBA/legal names with apostrophes to MSPWare PUT /form.
 
 ---
 
