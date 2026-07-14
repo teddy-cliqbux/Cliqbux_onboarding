@@ -91,6 +91,12 @@ Deno.serve(async (req) => {
       const profile = profiles?.[0];
       const pricingMethod = data?.pricingMethod || TIER_TO_METHOD[(profile?.pricingTier || '').toUpperCase()] || 'ICPLS';
 
+      if (String(data?.mccCode || '').trim() === '5999') {
+        return Response.json({
+          error: 'MCC 5999 is not allowed (restricted merchant category — rejected in CA/CO/NY). Choose a specific retail MCC.',
+        }, { status: 422 });
+      }
+
       const merchantMIDData = {
         locationId,
         corporateId,
@@ -109,11 +115,19 @@ Deno.serve(async (req) => {
       };
       const merchantMID = await base44.asServiceRole.entities.MerchantMID.create(merchantMIDData);
 
-      // Auto-create MSPWare draft immediately so signApplication doesn't have to do it lazily
-      try {
-        await base44.functions.invoke('submitToMSP', { corporateId, midIds: [merchantMID.id] });
-      } catch (e) {
-        console.warn('[manageMerchantID] submitToMSP draft creation failed (non-fatal):', e.message);
+      // Only auto-create the MSPWare draft once an MCC is present. Creating a
+      // draft with an empty MCC used to silently fall back to 5999 (restricted /
+      // rejected in CA/CO/NY) and poison the form. Draft is created on the first
+      // MID update that includes a real MCC (see action === 'update' below).
+      const hasMcc = Boolean(String(merchantMIDData.mccCode || '').trim()) && merchantMIDData.mccCode !== '5999';
+      if (hasMcc) {
+        try {
+          await base44.functions.invoke('submitToMSP', { corporateId, midIds: [merchantMID.id] });
+        } catch (e) {
+          console.warn('[manageMerchantID] submitToMSP draft creation failed (non-fatal):', e.message);
+        }
+      } else {
+        console.log('[manageMerchantID] Skipping submitToMSP on add — MCC not set yet (will create draft on MCC save)');
       }
 
       return Response.json({ merchantID: merchantMID });
@@ -141,7 +155,33 @@ Deno.serve(async (req) => {
       if (d.motoPct !== undefined) updateFields.motoPct = Number(d.motoPct);
       if (d.locationId !== undefined) updateFields.locationId = d.locationId;
       if (d.applicationStepStatus !== undefined) updateFields.applicationStepStatus = d.applicationStepStatus;
+
+      // Reject restricted MCC at the write boundary so it never reaches MSPWare.
+      if (updateFields.mccCode !== undefined && String(updateFields.mccCode).trim() === '5999') {
+        return Response.json({
+          error: 'MCC 5999 is not allowed (restricted merchant category — rejected in CA/CO/NY). Choose a specific retail MCC.',
+        }, { status: 422 });
+      }
+
       const updated = await base44.asServiceRole.entities.MerchantMID.update(merchantIDId, updateFields);
+
+      // Create or re-fill the MSPWare draft when boarding-relevant fields change.
+      // Critical for: first MCC save after add (draft deferred), and MCC/volume
+      // corrections after a draft already exists with stale/wrong values.
+      const boardingKeys = ['mccCode', 'industryType', 'monthlyCardSales', 'avgSaleAmount',
+        'highestTicketAmount', 'cardPresentPct', 'internetPct', 'motoPct', 'merchantName', 'dbaName'];
+      const touchedBoarding = boardingKeys.some((k) => d[k] !== undefined);
+      const effectiveMcc = String(updated?.mccCode || existing?.mccCode || '').trim();
+      const corpId = String(existing?.corporateId || corporateId || '');
+      if (touchedBoarding && effectiveMcc && effectiveMcc !== '5999' && corpId
+          && !LOCKED.includes(updated?.applicationStepStatus || existing?.applicationStepStatus || '')) {
+        try {
+          await base44.functions.invoke('submitToMSP', { corporateId: corpId, midIds: [merchantIDId] });
+        } catch (e) {
+          console.warn('[manageMerchantID] submitToMSP after update failed (non-fatal):', e.message);
+        }
+      }
+
       return Response.json({ updatedMerchantID: updated, merchantID: updated });
     }
 

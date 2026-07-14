@@ -328,7 +328,20 @@ function buildFormPayload(
   }
 
   const industryType = merchantMID.industryType || mapIndustryType(pricingCategory);
-  const mcc = merchantMID.mccCode || profile.mccCode || '5999';
+  // 2026-07-13: NEVER default to 5999 (restricted category; rejected in CA/CO/NY).
+  const mcc = String(merchantMID.mccCode || profile.mccCode || '').trim();
+  if (!mcc) {
+    throw new Error(
+      `MCC code is required before signing for "${merchantMID.dbaName || merchantMID.merchantName || 'this MID'}". ` +
+      `Set the MCC on the MID in Locations & MIDs, then try again.`
+    );
+  }
+  if (mcc === '5999') {
+    throw new Error(
+      `MCC 5999 is not allowed (restricted merchant category — rejected in CA/CO/NY). ` +
+      `Choose a specific retail MCC on the MID in Locations & MIDs.`
+    );
+  }
   const dbaName = merchantMID.dbaName || location.dbaName || profile.legalName || '';
   const monthlyCardSales = Math.max(1, parseFloat(String(merchantMID.monthlyCardSales || profile.monthlyCardSales || '6000')) || 6000);
   const rawAvg = parseFloat(String(merchantMID.avgSaleAmount || profile.avgSaleAmount || '100')) || 100;
@@ -906,9 +919,21 @@ Deno.serve(async (req) => {
             ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
         console.log(`[signApplication] GET form status for ${mspApplicationNo}: ${refillPercentComplete ?? '?'}% complete, ${getErrors.length} errors`);
 
-        // Re-fill when not at 100%, OR when co-owners were added after the last package
-        // (forceOwnerRefill) so MSPWare's owners[] includes every required signer email.
-        if (refillPercentComplete !== 100 || forceOwnerRefill) {
+        // Re-fill when not at 100%, when co-owners were added after the last
+        // package (forceOwnerRefill), OR when the form still has a stale/wrong
+        // MCC vs the portal MID (e.g. draft was created with the old 5999
+        // fallback before the merchant saved a real MCC).
+        const formMcc = String(
+          getData?.form?.mcc ?? getData?.mcc ?? getData?.validation?.form?.mcc ?? ''
+        ).trim();
+        const expectedMcc = String(merchantMID.mccCode || profile.mccCode || '').trim();
+        const mccMismatch = Boolean(expectedMcc && formMcc && formMcc !== expectedMcc);
+        if (mccMismatch) {
+          console.log(
+            `[signApplication] MCC mismatch for ${mspApplicationNo}: form=${formMcc} portal=${expectedMcc} — forcing re-fill`
+          );
+        }
+        if (refillPercentComplete !== 100 || forceOwnerRefill || mccMismatch) {
           const location = locationMap[merchantMID.locationId];
           if (location) {
             const refillEntityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;

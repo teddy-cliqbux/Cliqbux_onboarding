@@ -128,7 +128,7 @@ Deno.serve(async (req) => {
       }
 
       // ── Pull real MCC / industry data from MSPWare ─────────────────────────
-      let mccCode         = '5999';   // misc retail fallback
+      let mccCode         = '';   // never invent 5999 — leave blank if unknown
       let industryType    = 'RE';     // Retail fallback
       let pricingCategory = '1';
       let pricingMethod   = 'ICPLS';

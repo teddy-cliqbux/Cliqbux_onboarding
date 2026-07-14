@@ -22,12 +22,14 @@ const accordionProps = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+// 5999 intentionally omitted (2026-07-13): Elavon/MSPWare treats it as a
+// restricted category (e.g. ammunition) and rejects it for CA/CO/NY. Never
+// offer it in the portal — merchants must pick a specific retail MCC instead.
 const MCC_OPTIONS = [
   { value: '5812', label: '5812 — Restaurant / Eating Place' },
   { value: '5814', label: '5814 — Fast Food' },
   { value: '5813', label: '5813 — Bar / Drinking Place' },
   { value: '5411', label: '5411 — Grocery / Supermarket' },
-  { value: '5999', label: '5999 — Specialty Retail' },
   { value: '7230', label: '7230 — Beauty / Barber Shop' },
   { value: '5651', label: '5651 — Clothing Store' },
   { value: '5734', label: '5734 — Computer / Software' },

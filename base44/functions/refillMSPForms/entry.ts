@@ -79,7 +79,14 @@ function buildFormPayload(profile: any, location: any, merchantMID: any, signer:
   const rawPricingMethod = merchantMID.pricingMethod || profile.pricingMethod || TIER_TO_METHOD[(profile.pricingTier||'').toUpperCase()] || 'ICPLS';
   const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'TIERD' : rawPricingMethod;
   const industryType = (merchantMID.pricingCategory && merchantMID.industryType) ? merchantMID.industryType : mapIndustryType(pricingCategory);
-  const mcc = merchantMID.mccCode || profile.mccCode || '5999';
+  // 2026-07-13: NEVER default to 5999 (restricted; rejected in CA/CO/NY).
+  const mcc = String(merchantMID.mccCode || profile.mccCode || '').trim();
+  if (!mcc) {
+    throw new Error(`MCC code is required before refill for "${merchantMID.dbaName || merchantMID.merchantName || 'this MID'}".`);
+  }
+  if (mcc === '5999') {
+    throw new Error('MCC 5999 is not allowed (restricted merchant category — rejected in CA/CO/NY).');
+  }
   const dbaName = merchantMID.dbaName || location.dbaName || profile.legalName || '';
   const monthlyCardSales = Math.max(1, parseFloat(String(merchantMID.monthlyCardSales || profile.monthlyCardSales || '6000')) || 6000);
   const cap = Math.max(monthlyCardSales - 1, 1);

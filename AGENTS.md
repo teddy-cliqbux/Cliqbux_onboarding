@@ -194,6 +194,27 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 ---
 
+### 15. Silent MCC fallback to `5999` poisoned MSPWare drafts (Quick Stage / CA)
+
+**Found 2026-07-13** during a no-HubSpot Quick Stage end-to-end test (Imperial Beach, CA). Portal MID correctly showed `5813` (Bar). MSPWare form showed `5999` (Ammunition Stores) with: *"This MCC is invalid for businesses in California, Colorado, or New York."* Form stuck ~79%; other sections looked incomplete because MSPWare rolls back / stalls on validation failure.
+
+**Root cause:**
+1. `manageMerchantID` action=`add` created the MID with empty `mccCode`, then immediately called `submitToMSP`.
+2. `buildFormPayload` (submitToMSP / signApplication / refillMSPForms) used `merchantMID.mccCode || profile.mccCode || '5999'`.
+3. Empty MCC → silent `5999`. Portal later saved `5813`, but MID **update** did not re-push to MSPWare. Signing could still leave a poisoned draft if the initial PUT failed or fields didn't stick.
+4. Portal dropdown labeled `5999` as "Specialty Retail" — misleading vs Elavon's restricted category.
+
+**Fixes (2026-07-13):**
+- Removed `5999` from portal `MCC_OPTIONS`.
+- Require real MCC in `buildFormPayload`; reject `5999` with a clear error.
+- `manageMerchantID`: defer `submitToMSP` on add until MCC is set; re-invoke on boarding-field update; 422 if `5999` is written.
+- `signApplication`: force re-fill when form MCC ≠ portal MID MCC (even at 100%).
+- `syncFromHubspot` `industryToMcc`: generic RETAIL/ECOMMERCE no longer map to `5999` (blank → merchant picks).
+
+**Rule:** Never invent an MCC. Never use `5999` as a default. Never create/fill an MSPWare draft until the MID has a real MCC. Do not re-add `5999` to the portal dropdown.
+
+---
+
 ## What This App Does
 
 Merchant onboarding portal for Cliqbux, an ISO/ISV that boards merchants to Elavon via **MSPWare/PulsePoint** (NOT Elavon's direct eBanking API). Merchants complete an online application, connect their bank account via Plaid, and their processing application is submitted to Elavon through MSPWare.
@@ -238,7 +259,7 @@ Published function base URL: `https://cliqbux-onboard-prime.base44.app/functions
 | `business_address_type` | BSA |
 | `owner_address_type` | PRA |
 | `beneficial_ownership_exemption` | NON |
-| `mcc` | Elavon MCC codes e.g. `5812`, `5411A`, `5999` |
+| `mcc` | Elavon MCC codes e.g. `5812`, `5411A`. **Never default to / send `5999`** — restricted category rejected in CA/CO/NY (see Critical Lesson #15). |
 | `pricing_category` | 1=Retail, 2=Lodging, 4=Supermarket, 5=ARU, 6=MOTO, 7=Restaurant, 13=Omni |
 | `auth_pricing_program` | `49999` (Cliqbux account constant) |
 | `is_firearm_verified` | **OMIT from PUT /form payload entirely.** MSPWare template #6 and #154 already have this field set to the correct internal value. Sending ANY value in the PUT (including `"yes"`, `"no"`, `false`, `"N"`, `"YES"`, `true`) overrides the template's value with something invalid, causing the form to DROP below 100% completion and blocking signing. The correct flow: `signApplication` GETs the form first — when the template default is in place the form is at 100%, the PUT is skipped entirely, and signing URLs are generated normally via the API with no manual MSP dashboard action required. The `"yes"` captured from the MSPWare network (2026-06-29) came from their internal `TestData.cfc` UI endpoint, which has different validation than the API's PUT /applications/{no}/form. `"no"` was tried on 2026-06-30 and also drops completion. There is no valid string — omit the field entirely. `debugMSPFormRaw` previously had `"yes"` hardcoded — removed 2026-06-30. |
@@ -321,7 +342,7 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 
 
 ### MID creation → auto MSPWare draft
-When a new `MerchantMID` is created via `manageMerchantID` (action="add"), the function immediately calls `submitToMSP` with `{ corporateId, midIds: [merchantMID.id] }` in the background. This ensures the MSPWare draft exists before the merchant reaches the signing page. Non-fatal — failure is logged but the MID record is still returned.
+When a new `MerchantMID` is created via `manageMerchantID` (action="add") **and an MCC is already present**, the function calls `submitToMSP` with `{ corporateId, midIds: [merchantMID.id] }` in the background. If MCC is empty at add time (normal portal flow), draft creation is **deferred** until the first MID update that includes a real MCC — then `submitToMSP` runs. Non-fatal — failure is logged but the MID record is still returned. Never invent MCC `5999`.
 
 ### Deleted / do not recreate
 - ~~`submitToElavon`~~ — replaced by `submitToMSP`
@@ -508,6 +529,7 @@ MSPWare rolls back the entire form and returns `percent_complete: -1` when **any
 
 ## What NOT to Do
 
+- Do not invent or default MCC to `5999` in any boarding path — restricted category; rejected in CA/CO/NY. Fail loudly if MCC is missing. See Critical Lesson #15.
 - Do not call Elavon eBanking API directly (no `uat-buynow-na.elavon.net`, no `PAPI_USA_CLIQBUX1`, no AWB-based polling)
 - Do not use `submitToElavon` — it is deleted
 - Do not set `MSP_SUBMIT_ENABLED=true` in any automated test or dry-run context
@@ -968,3 +990,13 @@ Replaces `LegacyPOSBridge`. `ConnectLegacyPOS` on post-submit dashboard with thr
 - C Credential vault — RSA-OAEP client encrypt (`VITE_POS_VAULT_PUBLIC_KEY`), legal waiver, `MerchantPOSConnection` audit trail
 Never accept plaintext `password` in the API (400). `ipAddress` / `authorizedUserEmail` derived server-side only.
 **Entity must be published in Base44** or creates return 503 `ENTITY_SCHEMA_MISSING`. Provider migration field maps: `docs/legacy-pos-schemas.md`.
+
+---
+
+## Stress / integration tests (2026-07-14)
+
+Playwright suite at `tests/onboardingStress.spec.ts` (run: `npm run test:stress`). Safe by default — in-memory simulation of production MCC/draft/HubSpot-bypass gates; does **not** call live MSPWare or HubSpot. Report: `stress-test-report.md`.
+
+Covers: empty-MCC draft deferral, CA/CO/NY×MCC matrix, live MCC swap refill, TX→CA restricted MCC, alphanumeric HubSpot bypass, empty MID refusal, multi-MID split MCC, signApplication partial-fill / MCC-mismatch recovery.
+
+**Latest result:** 6 PASS / 2 WARN. Remaining product gap: no portal inline warning for CA/NY + MCC 5813 (liquor) underwriting. 5999 silent-default bug is fixed in production code (see Critical Lessons / AI_CHANNEL 2026-07-13).

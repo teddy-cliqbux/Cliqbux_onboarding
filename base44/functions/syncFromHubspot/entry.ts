@@ -135,14 +135,17 @@ function mapHubspotIndustry(industry: string): string {
 }
 
 function industryToMcc(industryClass: string): string {
+  // 2026-07-13: Do NOT map generic retail/ecommerce to 5999 — that MCC is a
+  // restricted category (rejected in CA/CO/NY). Prefer blank so the merchant
+  // (or sales) picks a specific MCC in the portal rather than inventing one.
   const map: Record<string, string> = {
     'RESTAURANT': '5812', 'GROCERY': '5411', 'HOTEL': '7011',
     'SALON': '7230', 'GYM': '7941', 'HEALTH': '8099',
     'AUTO': '5511', 'CLOTHING': '5691', 'ELECTRONICS': '5732',
-    'FURNITURE': '5712', 'ECOMMERCE': '5999', 'RETAIL': '5999',
+    'FURNITURE': '5712', 'ECOMMERCE': '', 'RETAIL': '',
     'BAR': '5813', 'SERVICES': '7299',
   };
-  return map[industryClass] || '5999';
+  return map[industryClass] || '';
 }
 
 function mapJobTitle(title: string): string {

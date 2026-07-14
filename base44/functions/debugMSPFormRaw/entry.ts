@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
         delayed_delivery: '1',
         cards_accepted: ['VISA', 'VISA_DEBIT', 'MASTERCARD', 'MASTERCARD_DEBIT', 'DISCOVER', 'AMEX'],
         card_acceptance_split: 'CP',
-        mcc: profile?.mccCode || '5999',
+        mcc: profile?.mccCode || '',
         pricing_method: 'ICPLS',
         pricing_category: '1',
         billing_method: 'N',

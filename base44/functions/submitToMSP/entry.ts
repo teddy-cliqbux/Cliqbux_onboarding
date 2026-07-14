@@ -412,7 +412,22 @@ function buildFormPayload(
   }
 
   const industryType = merchantMID.industryType || mapIndustryType(pricingCategory);
-  const mcc = merchantMID.mccCode || profile.mccCode || '5999';
+  // 2026-07-13: NEVER default to 5999. That code is a restricted category
+  // (MSPWare/Elavon reject it for CA/CO/NY) and was silently poisoning drafts
+  // created before the merchant picked a real MCC. Fail loudly instead.
+  const mcc = String(merchantMID.mccCode || profile.mccCode || '').trim();
+  if (!mcc) {
+    throw new Error(
+      `MCC code is required before creating or filling an MSPWare application for "${merchantMID.dbaName || merchantMID.merchantName || 'this MID'}". ` +
+      `Set the MCC on the MID in Locations & MIDs, then try again.`
+    );
+  }
+  if (mcc === '5999') {
+    throw new Error(
+      `MCC 5999 is not allowed (restricted merchant category — rejected in CA/CO/NY). ` +
+      `Choose a specific retail MCC on the MID in Locations & MIDs.`
+    );
+  }
   const dbaName = merchantMID.dbaName || location.dbaName || profile.legalName || '';
   const monthlyCardSales = Math.max(1, parseFloat(String(merchantMID.monthlyCardSales || profile.monthlyCardSales || '6000')) || 6000);
   const rawAvg = parseFloat(String(merchantMID.avgSaleAmount || profile.avgSaleAmount || '100')) || 100;
@@ -815,7 +830,9 @@ Deno.serve(async (req) => {
             corporateId,
             merchantName:     loc.dbaName || profile.legalName,
             dbaName:         loc.dbaName || profile.legalName,
-            mccCode:         profile.mccCode || profile.mcc || '5999',
+            // Do not invent an MCC — blank until the merchant picks one in the portal.
+            // buildFormPayload will refuse to fill MSPWare until mccCode is set.
+            mccCode:         profile.mccCode || profile.mcc || '',
             industryType:    profile.industryClass ? industryClassToMSP(profile.industryClass) : 'RE',
             pricingCategory: '1',
             // Derived from profile.pricingTier — was previously hardcoded 'ICPLS'
@@ -878,6 +895,23 @@ Deno.serve(async (req) => {
           dbaName: merchantMID.dbaName,
           status: 'skipped',
           reason: `Already ${merchantMID.applicationStepStatus}`,
+        });
+        continue;
+      }
+
+      // ── Require a real MCC before any MSPWare draft / form PUT ──────────────
+      // Creating a draft with a placeholder MCC (formerly 5999) poisons the form
+      // and can roll back other fields on state-restricted validation failures.
+      const midMcc = String(merchantMID.mccCode || profile.mccCode || '').trim();
+      if (!midMcc || midMcc === '5999') {
+        results.push({
+          midId: merchantMID.id,
+          locationId: merchantMID.locationId,
+          dbaName: merchantMID.dbaName,
+          status: 'skipped',
+          reason: !midMcc
+            ? 'MCC code not set yet — draft deferred until Locations & MIDs is saved with an MCC'
+            : 'MCC 5999 is not allowed (restricted category) — choose a specific retail MCC',
         });
         continue;
       }

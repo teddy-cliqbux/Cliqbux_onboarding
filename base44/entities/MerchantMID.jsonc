@@ -20,7 +20,7 @@
     },
     "mccCode": {
       "type": "string",
-      "description": "Elavon MCC code e.g. 5812, 5411A, 5999. Determines interchange rates and industry rules."
+      "description": "Elavon MCC code e.g. 5812, 5411A. Do not use 5999 (restricted category rejected in CA/CO/NY)."
     },
     "industryType": {
       "type": "string",

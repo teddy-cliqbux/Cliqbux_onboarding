@@ -9,7 +9,9 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:stress": "playwright test --config=playwright.config.ts",
+    "test:stress:report": "playwright test --config=playwright.config.ts && echo Report: stress-test-report.md"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.38",
@@ -80,6 +82,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
+    "@playwright/test": "^1.61.1",
     "@types/node": "^22.13.5",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
