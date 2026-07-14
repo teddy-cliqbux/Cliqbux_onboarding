@@ -468,6 +468,8 @@ function buildFormPayload(
   const tierKey = (merchantMID.pricingTier || profile.pricingTier || '').toUpperCase();
   const pricingBlock = pricingNotReadyMessage(profile, tierKey);
   if (pricingBlock) throw new Error(pricingBlock);
+  // Used below to attach negotiated markup fields — CD / TIERD never send these.
+  const isCustomPricingTier = CUSTOM_PRICING_TIERS.includes(tierKey);
 
   const industryType = merchantMID.industryType || mapIndustryType(pricingCategory);
   // 2026-07-13: NEVER default to 5999. That code is a restricted category

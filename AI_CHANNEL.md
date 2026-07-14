@@ -1604,3 +1604,16 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 
 **? Waiting on:** Teddy (confirm CD template number in MSPWare)
 ---
+
+---
+**[CURSOR]** · 2026-07-14
+**Type:** Bugfix · `isCustomPricingTier is not defined` after draft create (Porky's)
+
+**Problem:** Draft was created in MSPWare but form fill crashed: `isCustomPricingTier is not defined`. Signing showed that ReferenceError.
+
+**Cause:** Pricing-guard refactor removed the `const isCustomPricingTier = ?` binding but left the spread that sends custom markup fields in `buildFormPayload` (signApplication + submitToMSP).
+
+**Shipped:** Restored `isCustomPricingTier = CUSTOM_PRICING_TIERS.includes(tierKey)` after the guard in both functions. Cash Discount correctly stays false (no custom markup fields sent).
+
+**ACTION:** Force-redeploy `signApplication` + `submitToMSP` ? Try again on Porky's (draft already exists ? will refill).
+---
