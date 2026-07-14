@@ -734,13 +734,20 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No signer email found on profile or signers' }, { status: 400 });
     }
 
-    // Build a locationId → location map
+    // Build a locationId → location map (normalize to string — Base44 ids can mismatch on type)
     const locationMap: Record<string, any> = {};
-    for (const loc of (allLocs || [])) locationMap[loc.id] = loc;
+    for (const loc of (allLocs || [])) {
+      if (loc?.id != null) locationMap[String(loc.id)] = loc;
+      if (loc?.locationId != null) locationMap[String(loc.locationId)] = loc;
+    }
 
     // Build entityId → mailing address lookup from profile's legalEntities
     const entityMailingMap: Record<string, any> = {};
-    for (const ent of (profile.legalEntities || [])) {
+    let legalEntitiesRaw = profile.legalEntities ?? [];
+    if (typeof legalEntitiesRaw === 'string') {
+      try { legalEntitiesRaw = JSON.parse(legalEntitiesRaw); } catch { legalEntitiesRaw = []; }
+    }
+    for (const ent of (Array.isArray(legalEntitiesRaw) ? legalEntitiesRaw : [])) {
       if (ent.entityId && ent.mailingStreet && ent.mailingCity && ent.mailingState) {
         entityMailingMap[ent.entityId] = { street: ent.mailingStreet, city: ent.mailingCity, state: ent.mailingState, zip: ent.mailingZip || '' };
       }
@@ -780,15 +787,42 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (candidateMerchantMIDs.length === 0) {
+      return Response.json({
+        success: false,
+        error: 'No signable merchantMIDs.',
+        hint: 'All MIDs are already Pending MID / Active. Nothing left to sign.',
+      });
+    }
+
+    const draftErrors: string[] = [];
     const needsDraft = candidateMerchantMIDs.filter((c: any) => !c.mspApplicationNo);
     if (needsDraft.length > 0) {
       console.log(`[signApplication] Auto-creating drafts for ${needsDraft.length} merchantMID(s) missing mspApplicationNo`);
       for (const merchantMID of needsDraft) {
-        const location = locationMap[merchantMID.locationId];
+        let location = locationMap[String(merchantMID.locationId || '')];
+        if (!location && merchantMID.locationId) {
+          location = await base44.asServiceRole.entities.MerchantLocations.get(merchantMID.locationId).catch(() => null);
+          if (location?.id != null) locationMap[String(location.id)] = location;
+        }
         if (!location) {
-          console.warn(`[signApplication] MerchantMID "${merchantMID.dbaName}" has no matching location (locationId=${merchantMID.locationId}) — skipping`);
+          const msg = `MID "${merchantMID.dbaName || merchantMID.id}" has no matching location (locationId=${merchantMID.locationId || 'missing'}). Re-open Locations & MIDs and re-save the MID.`;
+          console.warn(`[signApplication] ${msg}`);
+          draftErrors.push(msg);
           continue;
         }
+
+        // Fail fast on MCC before creating a stranded MSPWare draft
+        const mccPrecheck = String(merchantMID.mccCode || profile.mccCode || '').trim();
+        if (!mccPrecheck) {
+          draftErrors.push(`MCC is required on MID "${merchantMID.dbaName || merchantMID.id}" before an MSPWare draft can be created.`);
+          continue;
+        }
+        if (mccPrecheck === '5999') {
+          draftErrors.push(`MCC 5999 is not allowed on MID "${merchantMID.dbaName || merchantMID.id}". Choose a specific retail MCC.`);
+          continue;
+        }
+
         try {
           // Pick the template via pricingTier first (canonical); fall back to the
           // old pricingMethod-based cash-discount detection for any record that
@@ -807,25 +841,46 @@ Deno.serve(async (req) => {
           const createRes = await fetch(`${mspBase}/applications`, {
             method: 'POST', headers: mspHeaders, body: JSON.stringify(createBody),
           });
-          const createData = await createRes.json();
+          let createData: any = {};
+          try {
+            createData = await createRes.json();
+          } catch {
+            createData = { error: `MSPWare returned non-JSON (HTTP ${createRes.status})` };
+          }
           console.log(`[signApplication] POST /applications response ${createRes.status} for "${merchantMID.dbaName}":`, JSON.stringify(createData));
-          if (!createRes.ok || !createData.success) {
-            console.error(`[signApplication] Failed to create draft for "${merchantMID.dbaName}":`, createData?.error || createData?.message);
+
+          const appNo = createData.merchantapplicationno ?? createData.MerchantApplicationNo;
+          // Accept app number even when MSP omits success:true (observed variance).
+          const createOk = createRes.ok && appNo != null && appNo !== '' && createData.success !== false;
+          if (!createOk) {
+            const mspErr = createData.error || createData.message || createData.Message
+              || (Array.isArray(createData.errors) ? createData.errors.join('; ') : null)
+              || `HTTP ${createRes.status}`;
+            const msg = `MSPWare refused draft for "${merchantMID.dbaName || merchantMID.id}" (template ${templateNo}): ${mspErr}`;
+            console.error(`[signApplication] ${msg}`, createData);
+            draftErrors.push(msg);
             continue;
           }
-          const mspApplicationNo = String(createData.merchantapplicationno);
+          const mspApplicationNo = String(appNo);
           await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, { mspApplicationNo, applicationStepStatus: 'In Review' });
           merchantMID.mspApplicationNo = mspApplicationNo;
-          // Fill form
-          const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
-          const formPayload = buildFormPayload(profile, resolveLocationAddress(location), merchantMID, primarySigner, additionalSigners, entityMailing);
-          const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
-            method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
-          });
-          const formData = await formRes.json();
-          console.log(`[signApplication] Form fill ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(formData)));
+          // Fill form — non-fatal if this throws; draft number is already saved
+          try {
+            const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
+            const formPayload = buildFormPayload(profile, resolveLocationAddress(location), merchantMID, primarySigner, additionalSigners, entityMailing);
+            const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
+              method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
+            });
+            const formData = await formRes.json();
+            console.log(`[signApplication] Form fill ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(formData)));
+          } catch (fillErr: any) {
+            console.error(`[signApplication] Form fill failed for ${mspApplicationNo} (draft kept):`, fillErr.message);
+            draftErrors.push(`Draft ${mspApplicationNo} created but form fill failed: ${fillErr.message}`);
+          }
         } catch (err: any) {
-          console.error(`[signApplication] Exception creating draft for "${merchantMID.dbaName}":`, err.message);
+          const msg = `Exception creating draft for "${merchantMID.dbaName || merchantMID.id}": ${err.message}`;
+          console.error(`[signApplication] ${msg}`);
+          draftErrors.push(msg);
         }
       }
     }
@@ -833,10 +888,17 @@ Deno.serve(async (req) => {
     let signable = candidateMerchantMIDs.filter((c: any) => c.mspApplicationNo);
 
     if (signable.length === 0) {
+      const detail = draftErrors.length
+        ? draftErrors.join(' | ')
+        : 'No MSPWare application number on any MID and draft creation did not run.';
       return Response.json({
         success: false,
         error: 'Unable to prepare signing documents.',
-        hint: 'Could not create MSPWare draft applications. Check MSPWare API status and try again.',
+        hint: detail,
+        draftErrors,
+        midCount: (allMerchantMIDs || []).length,
+        candidateCount: candidateMerchantMIDs.length,
+        needsDraftCount: needsDraft.length,
       });
     }
 

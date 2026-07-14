@@ -248,7 +248,9 @@ export default function OnboardingVerification({ profile, locations, initialSign
       const data = res.data;
 
       if (!data?.success) {
-        setSigningError(data?.hint || data?.error || 'Unable to prepare signing documents.');
+        const parts = [data?.hint, data?.error].filter(Boolean);
+        // Prefer hint (detailed draft failure) over generic error
+        setSigningError(parts[0] || 'Unable to prepare signing documents.');
         return;
       }
 

@@ -860,12 +860,17 @@ Deno.serve(async (req) => {
     // Build a locationId → location lookup for fast joins
     const locationMap: Record<string, any> = {};
     for (const loc of (allLocs || [])) {
-      locationMap[loc.id] = loc;
+      if (loc?.id != null) locationMap[String(loc.id)] = loc;
+      if (loc?.locationId != null) locationMap[String(loc.locationId)] = loc;
     }
 
     // Build a entityId → mailing address lookup from profile's legalEntities
     const entityMailingMap: Record<string, any> = {};
-    for (const ent of (profile.legalEntities || [])) {
+    let legalEntitiesRaw = profile.legalEntities ?? [];
+    if (typeof legalEntitiesRaw === 'string') {
+      try { legalEntitiesRaw = JSON.parse(legalEntitiesRaw); } catch { legalEntitiesRaw = []; }
+    }
+    for (const ent of (Array.isArray(legalEntitiesRaw) ? legalEntitiesRaw : [])) {
       if (ent.entityId && ent.mailingStreet && ent.mailingCity && ent.mailingState) {
         entityMailingMap[ent.entityId] = { street: ent.mailingStreet, city: ent.mailingCity, state: ent.mailingState, zip: ent.mailingZip || '' };
       }
@@ -917,7 +922,9 @@ Deno.serve(async (req) => {
       }
 
       // ── Join to location for address + fallback bank ──────────────────────
-      const location = resolveLocationAddress(locationMap[merchantMID.locationId]);
+      const location = resolveLocationAddress(
+        locationMap[merchantMID.locationId] || locationMap[String(merchantMID.locationId || '')]
+      );
       if (!location) {
         results.push({
           midId: merchantMID.id,
@@ -969,7 +976,7 @@ Deno.serve(async (req) => {
           });
           const createData = await createRes.json();
 
-          if (!createRes.ok || !createData.success) {
+          if (!createRes.ok || createData.success === false || !(createData.merchantapplicationno ?? createData.MerchantApplicationNo)) {
             console.error(`[submitToMSP] Failed to create application for "${merchantMID.dbaName}":`, JSON.stringify(createData));
             await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, { applicationStepStatus: 'Error' });
             results.push({
@@ -983,7 +990,7 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          mspApplicationNo = createData.merchantapplicationno;
+          mspApplicationNo = createData.merchantapplicationno ?? createData.MerchantApplicationNo;
           console.log(`[submitToMSP] Created application ${mspApplicationNo} for "${merchantMID.dbaName}"`);
 
           // Persist application number immediately so it's trackable even if form fill fails

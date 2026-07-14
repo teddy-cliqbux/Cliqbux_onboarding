@@ -1573,3 +1573,16 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 
 **ACTION:** Same push/redeploy as prior entry (`updatePricing` + frontend). Re-save Cash Discount on Porky's after deploy ? list should show **Cash Discount**.
 ---
+
+---
+**[CURSOR]** · 2026-07-14
+**Type:** Bugfix · MSPWare draft create failed silently (Porky's signing)
+
+**Problem:** Portal showed Cash Discount Plan but signing failed with generic "Could not create MSPWare draft applications. Check MSPWare API status." Porky's not in MSPWare Drafts. Console noise (HubSpot I18n/Twilio) is unrelated.
+
+**Cause:** `signApplication` swallowed MSPWare POST / location / MCC failures (`continue` with no return detail). Also required `createData.success` strictly ? responses that return `merchantapplicationno` without `success:true` were treated as failures.
+
+**Shipped:** Collect `draftErrors` and return them as `hint`; normalize locationId lookup + Locations.get fallback; MCC precheck before create; accept create when app number present unless `success===false`; same create tolerance in `submitToMSP`.
+
+**ACTION:** Force-redeploy `signApplication` + `submitToMSP` ? Try again on Porky's signing. If it still fails, the red box will now show the **real** MSPWare/location reason ? send that text.
+---

@@ -260,7 +260,9 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 **List badge follow-up (same day):** Applications row showed STANDARD after a successful CD save because it preferred `__auto_track__.prefilledData.pricingTier` over the live profile. Prefer profile; patch track on save; verify persist after `MerchantCorporateProfile.update`.
 
-**Rule:** Blank HubSpot `processing_pricing_tier` must not write `STANDARD`. Pricing tab complete = canonical CD **or** custom with all three fees — never markup-only. Applications list pricing label must come from the profile (not stale track prefill).
+**Draft create follow-up (same day):** Signing then failed with a generic "Could not create MSPWare draft" while Porky's never appeared in MSPWare Drafts. `signApplication` was swallowing POST/location failures. Now returns `draftErrors` in `hint`; locationId string-normalized; create accepts `merchantapplicationno` even if `success` is omitted.
+
+**Rule:** Blank HubSpot `processing_pricing_tier` must not write `STANDARD`. Pricing tab complete = canonical CD **or** custom with all three fees — never markup-only. Applications list pricing label must come from the profile (not stale track prefill). Never return a generic MSP draft failure without the underlying create/location/MCC error text.
 
 ---
 
