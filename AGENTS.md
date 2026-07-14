@@ -311,10 +311,10 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 | `manageMSPTemplate` | Reads/fills MSPWare templates. Actions: `read`, `fill_icpls`, `fill_cd`, `create_cd`. Template #6 = ICPLS, Template #154 = Cash Discount (pricing_method: `"CLEAR"`). |
 | `uploadSignerIDsToMSP` | Uploads signer ID document files to all pending MSPWare applications for a corporateId. Call after signers upload their IDs via the portal. |
 | `getMSPFormStatus` | Merchant-facing form status check (no admin required). Returns completion %, errors, and raw form fields for a given `mspApplicationNo`. |
-| `getHubspotQuote` | Portal-auth'd HubSpot quote + line items for EquipmentOrderPanel. Read-only; payment stays on HubSpot Payments (quote URL CTA). |
+| `getHubspotQuote` | Portal-auth'd HubSpot quote + line items. Returns `isSigned` / `isPaid` / `quoteLifecycle` / `invoiceUrl` for EquipmentOrderPanel + SetupGate. Read-only; payment via HubSpot Payments. |
 
 ### Other active functions
-`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `handleHubspotWebhook`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `submitLegacyPOSConnection`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`
+`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `submitLegacyPOSConnection`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`
 
 ### Debug/admin-only functions (do not call from merchant portal)
 `checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`, `cleanupTestHubspot`
@@ -327,6 +327,7 @@ When a new `MerchantMID` is created via `manageMerchantID` (action="add"), the f
 - ~~`submitToElavon`~~ — replaced by `submitToMSP`
 - ~~`pollBoardingStatus`~~ — replaced by `pollMSPStatus`
 - ~~`elavonWebhook`~~ — MSPWare uses polling, no webhooks
+- ~~`handleHubspotWebhook`~~ — deleted 2026-07-13; HubSpot tier has no workflow webhooks. Quote lifecycle is pull-only (`syncFromHubspot` on dashboard mount + 10s `getHubspotQuote` while QuoteSignModal open). Do not recreate.
 - ~~`mspGetSchema`~~ — debug artifact, wrong base URL and auth headers
 - ~~`manageConcept`~~ — unused duplicate of `manageMerchantID` with raw `concept`/`conceptId` naming, deleted 2026-07-01
 - ~~`AddConceptModal.jsx`~~ — unused frontend component, not imported anywhere, deleted 2026-07-01
@@ -344,7 +345,7 @@ When a new `MerchantMID` is created via `manageMerchantID` (action="add"), the f
 | `MSP_SALESPERSON_ID` | `76764` |
 | `MSP_SUBMIT_ENABLED` | `true` to actually submit to Elavon; omit for safe draft-only mode |
 | `ELAVON_USERNAME` / `ELAVON_PASSWORD` | Only used by `getDocuments`/`listDocuments` (direct Elavon doc API) |
-| `HUBSPOT_API_KEY` | HubSpot Private App token — used by `createHubspotDeal`, `pushStatusToHubspot`, `handleHubspotWebhook`, `syncFromHubspot`, `getHubspotQuote`, `cleanupTestHubspot` |
+| `HUBSPOT_API_KEY` | HubSpot Private App token — used by `createHubspotDeal`, `pushStatusToHubspot`, `syncFromHubspot`, `getHubspotQuote`, `cleanupTestHubspot` |
 
 **Production credentials live in Base44 env vars only — never in code or committed files.**
 
@@ -393,15 +394,20 @@ Quote-level: `hs_quote_link`, `hs_quote_esign_status`, `hs_esign_num_signers_com
 
 **To pull line items:** `GET /crm/v3/objects/quotes/{quoteId}?associations=line_items` then `POST /crm/v3/objects/line_items/batch/read`
 
-### Post-signing dashboard (native quote invoice — shipped 2026-07-13)
-After application submit, `PostSubmissionDashboard` shows underwriting + `EquipmentOrderPanel`:
-1. **Native invoice** via `getHubspotQuote` (portal-auth'd) — hardware (SKU) vs recurring SaaS vs one-time services; TanStack `staleTime` 10 min
-2. **HubSpot Payments** via primary CTA **Review, sign & pay** → opens `hs_quote_link` in a new tab (no Stripe; no quote iframe in this panel)
-3. On `hs_payment_status === PAID`: show “Paid — provisioning”, stamp `equipmentPaidAt`, fire `pushStatusToHubspot` milestone `closed_won` (also `handleHubspotWebhook` event `quote_paid`)
+### Post-signing dashboard (native quote invoice — shipped 2026-07-13, Signed≠Paid 2026-07-13)
+After application submit, `PostSubmissionDashboard` shows underwriting + setup checklist:
+1. **Native invoice** via `getHubspotQuote` — returns `isSigned`, `isPaid`, `quoteLifecycle` (`awaiting_signature` | `awaiting_payment` | `paid`), `invoiceUrl`
+2. **Quote card stages:** Review & Sign → View Invoice / Pay → Paid (badges gold / amber / green). `QuoteSignModal` modes: `sign` | `pay`
+3. **SetupGate:** Menu (`InventoryUpload`) + Legacy POS unlock on **Signed**; Shipping holds until **Paid** (“Shipping Hold — Terminals will ship once invoice payment is fully cleared.” → “Ready to Ship”)
+4. On **PAID only:** stamp `equipmentPaidAt` + `equipmentShippingStatus=ready_to_ship`; panel fires `pushStatusToHubspot` `closed_won`
+5. On **SIGNED:** stamp `quoteSignedAt` + `equipmentShippingStatus=hold` (Menu/POS unlock; shipping stays held)
 
-**Do not** set `MerchantMID.applicationStepStatus` to Active on quote payment — that means Elavon MID received. Payment ≠ processor go-live.
+**HubSpot quote sync = pull only (2026-07-13).** Our HubSpot tier does **not** support workflow webhooks — `handleHubspotWebhook` was deleted. Architecture:
+1. **On dashboard mount:** silent `syncFromHubspot({ dealId })` then refresh profile + invalidate `hubspotQuote` (catches email-link sign/pay while away)
+2. **While QuoteSignModal open:** `PostSubmissionDashboard` `setInterval` every **10s** → `getHubspotQuote`; on lifecycle advance (`awaiting_signature`→`awaiting_payment`|`paid`, or `awaiting_payment`→`paid`) refresh SetupGates; panel closes modal + celebrates
+3. Interval cleared on modal close / unmount
 
-**Do not** build Stripe Elements for equipment checkout — Cliqbux uses HubSpot Payments on the quote. `@stripe/*` client libs remain unused for this flow.
+**Do not** treat SIGNED as paid. **Do not** set `MerchantMID` Active on quote payment. **Do not** build Stripe for equipment — HubSpot Payments only. **Do not** recreate `handleHubspotWebhook` for this flow.
 
 ---
 
@@ -588,7 +594,7 @@ The `legalEntities` array items now include `ownershipType`, `taxClassType`, `es
 4. Functions keyed on something other than corporateId resolve ownership first: `removeSelfServeLocation` and `saveLocationBankDetails` load the location record and compare its corporateId to the token's; `getMSPFormStatus` checks the applicationNo belongs to one of the token's MIDs.
 5. Admin-only functions (`deleteMerchant`, `debugEnv`, `debugMSPForm`, `debugMSPFormRaw`, `debugMSPSignatures`, `refillMSPForms`, `importExistingMIDs`, `readMSPTemplate`) require a workspace session and deliberately reject merchant tokens. Note: curl-testing these against the published URL now requires a workspace session.
 6. `manageStagedApplication` never leaks `accessToken` to list/get/create/update responses (`sanitizeStage`). Public `validate` compares the token server-side and returns a sanitized stage + merchant JWT. Admin invite URLs come from `getInviteLink` or `send` only. Admin portal **View** uses `impersonate` with `destination: 'portal'` (30-min JWT via `?corporateId=&impersonateToken=`). **Dashboard** uses `destination: 'dashboard'` → `/onboarding/dashboard?dealId=&impersonateToken=`. Agents/admins may preview the post-signing dashboard before `applicationStatus === 'Submitted'`; plain merchants are redirected back to the application portal until they finish signing. `OnboardingPortal` / `PostSubmissionDashboard` strip `impersonateToken` from the URL after storing it and set `portal_impersonating` + the gold banner ("Saves write to the live record").
-7. Still deliberately public: `validateResumeToken`, `verifySignerToken` (its own signer token), `sendResumeLink` (email-keyed, no data returned), `createHubspotDeal` (signup), `handleHubspotWebhook` (HubSpot webhook — TODO: verify HubSpot signatures).
+7. Still deliberately public: `validateResumeToken`, `verifySignerToken` (its own signer token), `sendResumeLink` (email-keyed, no data returned), `createHubspotDeal` (signup).
 
 **Rules:**
 - Requires `MERCHANT_JWT_SECRET` env var in Base44 (already used by `validateResumeToken`). If it's unset, all merchant tokens fail verification and merchants get 401s.
@@ -869,24 +875,24 @@ GET /crm/v3/objects/quotes/{quoteId}?associations=line_items
 POST /crm/v3/objects/line_items/batch/read  (batch-fetch the line item details)
 ```
 
-### Post-signing dashboard — architecture (shipped 2026-07-13)
+### Post-signing dashboard — architecture (shipped 2026-07-13; Signed≠Paid 2026-07-13)
 After the merchant completes portal signing, `PostSubmissionDashboard` shows:
-1. MID/underwriting status (existing)
-2. `EquipmentOrderPanel` — native HubSpot line items via `getHubspotQuote`; sign/pay via HubSpot quote URL CTA (HubSpot Payments)
+1. MID/underwriting status
+2. `EquipmentOrderPanel` — three quote stages (sign → pay → paid)
+3. `SetupGate` — Menu + Legacy POS on **Signed**; Shipping on **Paid**
 
 **Implemented:**
-- `hubspotQuoteId` on `MerchantLocations` (synced from deal→quote associations)
-- `equipmentPaidAt` on `MerchantCorporateProfile` (set when `hs_payment_status` is PAID)
-- `getHubspotQuote` — portal `getPortalActor` gate; GET quote + batch/read line items
-- **HubSpot scope required for line items:** `crm.objects.line_items.read` on the private app. Without it, quote metadata + pay CTA still work; line items return empty with `lineItemsScopeHint` (soft-fail, not a hard 500).
-- Payment rail = **HubSpot Payments** on the quote page — not Stripe Elements; panel does not embed the quote iframe
-- `handleHubspotWebhook` event `quote_paid` → stamps `equipmentPaidAt` + dealstage `closedwon`
-- Do **not** mark MerchantMID Active on quote payment
+- `hubspotQuoteId` on `MerchantLocations`; `equipmentPaidAt` / `quoteSignedAt` / `equipmentShippingStatus` (`hold` | `ready_to_ship`) on `MerchantCorporateProfile`
+- `getHubspotQuote` — `isSigned` / `isPaid` / `quoteLifecycle` / `invoiceUrl`; soft-fail line-item 403; stamps `quoteSignedAt`/`equipmentPaidAt` on pull
+- `syncFromHubspot` — on-load gateway for the same stamps (email-link offline path)
+- `QuoteSignModal` modes `sign` | `pay`; HubSpot Payments on quote URL
+- **No inbound HubSpot webhooks** — `handleHubspotWebhook` deleted 2026-07-13 (tier limitation)
+- Do **not** mark MerchantMID Active on quote payment; do **not** unlock shipping on SIGNED alone
 
 ### Environment variables (HubSpot)
 | Var | Purpose |
 |---|---|
-| `HUBSPOT_API_KEY` | HubSpot Private App token — already set. Used by `createHubspotDeal`, `pushStatusToHubspot`, `handleHubspotWebhook`, `syncFromHubspot`, `getHubspotQuote`. |
+| `HUBSPOT_API_KEY` | HubSpot Private App token — already set. Used by `createHubspotDeal`, `pushStatusToHubspot`, `syncFromHubspot`, `getHubspotQuote`. |
 
 ---
 
@@ -949,8 +955,8 @@ All merchant-facing onboarding surfaces (steps + ProgressTracker + post-submit d
 
 **ApplicationManager.jsx (`/admin/applications`) migrated to `cb-*` tokens (2026-07-13, same restraint pass):** quiet surfaces, dot+caption status (MID/identity/stuck/bottleneck/agent-vs-merchant), solid gold CTAs, ghost secondary actions, blue/purple/amber pill chrome retired. Chart stage colors use token hexes (gray / `#FEAC27` / `#4ADE80`). No fetch/auth/field/validation changes.
 
-### Post-signing Equipment Order (2026-07-13)
-`EquipmentOrderPanel` on `PostSubmissionDashboard`: native invoice from `getHubspotQuote` (TanStack `staleTime` 10 min) + **Review, sign & pay** opens HubSpot quote URL (HubSpot Payments). No Stripe; no quote iframe in the panel.
+### Post-signing Equipment Order (2026-07-13; Signed≠Paid same day)
+`EquipmentOrderPanel` + `SetupGate` on `PostSubmissionDashboard`. `getHubspotQuote` exposes `quoteLifecycle`. CTAs: **Review & Sign Quote** → **View Invoice / Pay** → Paid. Menu/POS unlock on Signed; Shipping hold until Paid. Poll 5s while modal open. No Stripe.
 
 ### Connect Legacy POS (2026-07-13)
 Replaces `LegacyPOSBridge`. `ConnectLegacyPOS` on post-submit dashboard with three accordion options:

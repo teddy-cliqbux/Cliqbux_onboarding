@@ -76,6 +76,9 @@ Deno.serve(async (req) => {
       hubspotQuoteUrl: profile.hubspotQuoteUrl,
       pricingTier: profile.pricingTier,
       applicationStatus: profile.applicationStatus,
+      quoteSignedAt: profile.quoteSignedAt || null,
+      equipmentPaidAt: profile.equipmentPaidAt || null,
+      equipmentShippingStatus: profile.equipmentShippingStatus || null,
       // Inherited EIN from Step 1 (self-serve) — used for first-location defaults
       taxId: profile.taxId || '',
       legalEntities: (profile.legalEntities || []).map(e => ({

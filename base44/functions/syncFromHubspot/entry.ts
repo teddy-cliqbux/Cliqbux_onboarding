@@ -404,16 +404,26 @@ Deno.serve(async (req) => {
         legalName,
         hubspotQuoteUrl: profileData.hubspotQuoteUrl || existing.hubspotQuoteUrl,
         pricingTier:     pricingTier || existing.pricingTier,
-        // Signature detection — only ever upgrades Incomplete, never regresses a
-        // later status (Quote Signed / Submitted / Pending MID / Active)
-        ...(quoteEsignStatus === 'SIGNED' && (!existing.applicationStatus || existing.applicationStatus === 'Incomplete')
+        // Signature detection — only ever upgrades Incomplete/Pricing Selected, never regresses
+        ...(quoteEsignStatus === 'SIGNED' &&
+          (!existing.applicationStatus ||
+            existing.applicationStatus === 'Incomplete' ||
+            existing.applicationStatus === 'Pricing Selected')
           ? { applicationStatus: 'Quote Signed' } : {}),
         industryClass:   industryClass || existing.industryClass,
         mccCode:         mccCode || existing.mccCode,
       };
+      // Pull architecture (no HubSpot workflow webhooks): stamp quote lifecycle from live quote props
+      if (quoteEsignStatus === 'SIGNED' && !existing.quoteSignedAt) {
+        safeUpdate.quoteSignedAt = new Date().toISOString();
+        if (!existing.equipmentPaidAt) safeUpdate.equipmentShippingStatus = 'hold';
+      }
       // HubSpot Payments: stamp equipmentPaidAt once when quote is PAID (never clears)
       if (quotePaymentStatus === 'PAID' && !existing.equipmentPaidAt) {
-        safeUpdate.equipmentPaidAt = new Date().toISOString();
+        const paidAt = new Date().toISOString();
+        safeUpdate.equipmentPaidAt = paidAt;
+        safeUpdate.equipmentShippingStatus = 'ready_to_ship';
+        if (!existing.quoteSignedAt) safeUpdate.quoteSignedAt = paidAt;
       }
       if (force || !existing.taxId)            safeUpdate.taxId            = profileData.taxId;
       if (force || !existing.ownershipType)    safeUpdate.ownershipType    = profileData.ownershipType;
@@ -434,7 +444,13 @@ Deno.serve(async (req) => {
       result.profileAction = 'updated';
     } else {
       if (quotePaymentStatus === 'PAID') {
-        profileData.equipmentPaidAt = new Date().toISOString();
+        const paidAt = new Date().toISOString();
+        profileData.equipmentPaidAt = paidAt;
+        profileData.equipmentShippingStatus = 'ready_to_ship';
+        profileData.quoteSignedAt = paidAt;
+      } else if (quoteEsignStatus === 'SIGNED') {
+        profileData.quoteSignedAt = new Date().toISOString();
+        profileData.equipmentShippingStatus = 'hold';
       }
       const created = await base44.asServiceRole.entities.MerchantCorporateProfile.create(profileData);
       profileId = created.id;

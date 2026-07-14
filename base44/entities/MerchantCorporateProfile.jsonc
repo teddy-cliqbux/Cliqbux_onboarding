@@ -45,9 +45,21 @@
     "hubspotQuoteUrl": {
       "type": "string"
     },
+    "quoteSignedAt": {
+      "type": "string",
+      "description": "ISO timestamp when the HubSpot quote was accepted/signed (detected via syncFromHubspot / getHubspotQuote pull). Unlocks Menu + Legacy POS; shipping stays on hold until equipmentPaidAt."
+    },
     "equipmentPaidAt": {
       "type": "string",
       "description": "ISO timestamp when HubSpot quote hs_payment_status first became PAID. Commerce fulfillment only \u2014 does NOT mean Elavon MID is Active."
+    },
+    "equipmentShippingStatus": {
+      "type": "string",
+      "description": "Terminal shipping gate driven by quote payment. hold = signed but unpaid; ready_to_ship = invoice cleared. Not MerchantMID underwriting status.",
+      "enum": [
+        "hold",
+        "ready_to_ship"
+      ]
     },
     "taxId": {
       "type": "string"

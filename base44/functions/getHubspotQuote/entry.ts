@@ -302,10 +302,17 @@ Deno.serve(async (req) => {
         success: true,
         quoteId: null,
         quoteUrl: null,
+        invoiceUrl: null,
         esignStatus: null,
         paymentStatus: null,
         paymentEnabled: false,
         amount: null,
+        isSigned: false,
+        isPaid: false,
+        quoteLifecycle: 'awaiting_signature',
+        quoteSignedAt: null,
+        equipmentPaidAt: null,
+        equipmentShippingStatus: null,
         lineItems: [],
         hardware: [],
         recurring: [],
@@ -360,30 +367,73 @@ Deno.serve(async (req) => {
     const oneTimeServices = lineItems.filter((i) => i.kind === 'service');
 
     // Stamp equipmentPaidAt once when we observe PAID (commerce only — not MID Active)
-    if (String(qp.hs_payment_status || '').toUpperCase() === 'PAID') {
-      try {
-        const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId }) || [];
-        if (profiles[0] && !profiles[0].equipmentPaidAt) {
-          await base44.asServiceRole.entities.MerchantCorporateProfile.update(profiles[0].id, {
-            equipmentPaidAt: qp.hs_payment_date || new Date().toISOString(),
-          });
-        }
-      } catch (e: any) {
-        console.warn(`[getHubspotQuote] equipmentPaidAt stamp failed: ${e.message}`);
+    let equipmentPaidAt: string | null = null;
+    let quoteSignedAt: string | null = null;
+    let equipmentShippingStatus: string | null = null;
+    try {
+      const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId }) || [];
+      equipmentPaidAt = profiles[0]?.equipmentPaidAt || null;
+      quoteSignedAt = profiles[0]?.quoteSignedAt || null;
+      equipmentShippingStatus = profiles[0]?.equipmentShippingStatus || null;
+      if (String(qp.hs_payment_status || '').toUpperCase() === 'PAID' && profiles[0] && !profiles[0].equipmentPaidAt) {
+        equipmentPaidAt = qp.hs_payment_date || new Date().toISOString();
+        equipmentShippingStatus = 'ready_to_ship';
+        await base44.asServiceRole.entities.MerchantCorporateProfile.update(profiles[0].id, {
+          equipmentPaidAt,
+          equipmentShippingStatus: 'ready_to_ship',
+          ...(!profiles[0].quoteSignedAt ? { quoteSignedAt: equipmentPaidAt } : {}),
+        });
+        quoteSignedAt = quoteSignedAt || equipmentPaidAt;
+      } else if (
+        String(qp.hs_quote_esign_status || '').toUpperCase() === 'SIGNED' &&
+        profiles[0] &&
+        !profiles[0].quoteSignedAt
+      ) {
+        quoteSignedAt = new Date().toISOString();
+        await base44.asServiceRole.entities.MerchantCorporateProfile.update(profiles[0].id, {
+          quoteSignedAt,
+          equipmentShippingStatus: profiles[0].equipmentPaidAt ? 'ready_to_ship' : 'hold',
+        });
+        equipmentShippingStatus = profiles[0].equipmentPaidAt ? 'ready_to_ship' : 'hold';
       }
+    } catch (e: any) {
+      console.warn(`[getHubspotQuote] equipmentPaidAt/quoteSignedAt stamp failed: ${e.message}`);
     }
+
+    const esignStatus = qp.hs_quote_esign_status || null;
+    const paymentStatus = qp.hs_payment_status || null;
+    const isSigned =
+      String(esignStatus || '').toUpperCase() === 'SIGNED' ||
+      !!quoteSignedAt ||
+      String(paymentStatus || '').toUpperCase() === 'PAID' ||
+      !!equipmentPaidAt;
+    const isPaid =
+      String(paymentStatus || '').toUpperCase() === 'PAID' || !!equipmentPaidAt;
+    const quoteLifecycle = !isSigned
+      ? 'awaiting_signature'
+      : !isPaid
+        ? 'awaiting_payment'
+        : 'paid';
+    const quoteUrl = qp.hs_quote_link || null;
 
     return Response.json({
       success: true,
       quoteId: String(quoteId),
-      quoteUrl: qp.hs_quote_link || null,
-      esignStatus: qp.hs_quote_esign_status || null,
-      paymentStatus: qp.hs_payment_status || null,
+      quoteUrl,
+      invoiceUrl: quoteUrl, // HubSpot Payments lives on the quote link until a dedicated invoice URL exists
+      esignStatus,
+      paymentStatus,
       paymentDate: qp.hs_payment_date || null,
       paymentEnabled: qp.hs_payment_enabled === 'true' || qp.hs_payment_enabled === true,
       amount: qp.hs_quote_amount != null ? Number(qp.hs_quote_amount) : null,
       expirationDate: qp.hs_expiration_date || null,
       title: qp.hs_title || null,
+      isSigned,
+      isPaid,
+      quoteLifecycle,
+      quoteSignedAt,
+      equipmentPaidAt,
+      equipmentShippingStatus: equipmentShippingStatus || (isPaid ? 'ready_to_ship' : isSigned ? 'hold' : null),
       lineItems,
       hardware,
       recurring,

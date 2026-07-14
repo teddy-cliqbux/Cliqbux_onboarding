@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Package, RefreshCw, Wrench, ExternalLink, Check } from 'lucide-react';
+import { Package, RefreshCw, Wrench, Check } from 'lucide-react';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+import QuoteSignModal from '@/components/onboarding/QuoteSignModal';
 
-const STALE_MS = 10 * 60 * 1000; // 10 minutes — do not re-hit HubSpot on every re-render
+const STALE_MS = 10 * 60 * 1000; // 10 minutes when modal closed — parent polls at 10s while open
 
 function formatMoney(n) {
   if (n == null || Number.isNaN(Number(n))) return '—';
@@ -14,6 +15,7 @@ function StatusCaption({ label, tone = 'neutral' }) {
   const dot =
     tone === 'success' ? 'bg-cb-success' :
     tone === 'accent' ? 'bg-cb-accent' :
+    tone === 'amber' ? 'bg-amber-400' :
     tone === 'danger' ? 'bg-cb-danger' :
     'bg-gray-500';
   return (
@@ -56,11 +58,21 @@ function LineSection({ title, icon: Icon, items }) {
 }
 
 /**
- * Native Equipment & Services invoice from getHubspotQuote (TanStack 10-min cache).
- * Sign & pay happen on HubSpot Payments via the quote URL (new tab) — not Stripe, not iframe.
+ * Equipment & Services invoice from getHubspotQuote.
+ * Lifecycle: awaiting_signature → awaiting_payment → paid (Signed ≠ Paid).
+ * Polling is owned by PostSubmissionDashboard (10s setInterval while modal open).
  */
-export default function EquipmentOrderPanel({ corporateId }) {
+export default function EquipmentOrderPanel({ corporateId, onModalOpenChange }) {
   const closedWonFired = useRef(false);
+  const celebrateHandled = useRef(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState('sign'); // 'sign' | 'pay'
+  const [celebrating, setCelebrating] = useState(false);
+
+  const setModal = (open) => {
+    setModalOpen(open);
+    onModalOpenChange?.(open);
+  };
 
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ['hubspotQuote', corporateId],
@@ -71,16 +83,26 @@ export default function EquipmentOrderPanel({ corporateId }) {
     },
     enabled: !!corporateId,
     staleTime: STALE_MS,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
+    // Dashboard owns the 10s setInterval while modal is open
+    refetchInterval: false,
   });
 
   const paymentStatus = String(data?.paymentStatus || '').toUpperCase();
   const esignStatus = String(data?.esignStatus || '').toUpperCase();
-  const isPaid = paymentStatus === 'PAID';
+  const isPaid = data?.isPaid === true || paymentStatus === 'PAID' || !!data?.equipmentPaidAt;
+  const isSigned =
+    data?.isSigned === true ||
+    esignStatus === 'SIGNED' ||
+    !!data?.quoteSignedAt ||
+    isPaid;
+  const lifecycle =
+    data?.quoteLifecycle ||
+    (!isSigned ? 'awaiting_signature' : !isPaid ? 'awaiting_payment' : 'paid');
   const quoteUrl = data?.quoteUrl || '';
+  const invoiceUrl = data?.invoiceUrl || quoteUrl;
 
-  // Fire-and-forget closed_won once when HubSpot Payments reports PAID.
-  // Does NOT set MerchantMID to Active — payment ≠ Elavon go-live.
+  // Fire-and-forget closed_won once when HubSpot Payments reports PAID (replaces webhook).
   useEffect(() => {
     if (!corporateId || !isPaid || closedWonFired.current) return;
     const key = `cb_closed_won_${corporateId}`;
@@ -95,23 +117,36 @@ export default function EquipmentOrderPanel({ corporateId }) {
     invokePortalFunction('pushStatusToHubspot', { corporateId, milestone: 'closed_won' }).catch(() => {});
   }, [corporateId, isPaid]);
 
-  // After returning from HubSpot sign/pay tab, refresh once (cooldown avoids API spam)
+  // Celebrate when the open modal's milestone is hit (data refreshed by parent poll)
   useEffect(() => {
-    let lastFocusFetch = 0;
-    const onVisibility = () => {
-      if (document.visibilityState !== 'visible' || isPaid) return;
-      const now = Date.now();
-      if (now - lastFocusFetch < 60_000) return;
-      lastFocusFetch = now;
-      refetch();
-    };
-    document.addEventListener('visibilitychange', onVisibility);
-    return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [isPaid, refetch]);
+    if (!modalOpen || celebrateHandled.current) return;
+    const done =
+      (modalMode === 'sign' && isSigned) ||
+      (modalMode === 'pay' && isPaid);
+    if (!done) return;
+    celebrateHandled.current = true;
+    setCelebrating(true);
+    const t = setTimeout(() => {
+      setModal(false);
+      setCelebrating(false);
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [modalOpen, modalMode, isSigned, isPaid]);
 
-  const openQuote = () => {
-    if (!quoteUrl) return;
-    window.open(quoteUrl, '_blank', 'noopener,noreferrer');
+  useEffect(() => {
+    if (!modalOpen) {
+      celebrateHandled.current = false;
+      setCelebrating(false);
+    }
+  }, [modalOpen]);
+
+  const openSign = () => {
+    setModalMode('sign');
+    setModal(true);
+  };
+  const openPay = () => {
+    setModalMode('pay');
+    setModal(true);
   };
 
   if (isLoading) {
@@ -147,7 +182,7 @@ export default function EquipmentOrderPanel({ corporateId }) {
       <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-5">
         <h3 className="text-cb-body font-semibold text-white mb-1">Equipment &amp; Services</h3>
         <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
-          Your rep is finalizing your quote. It will appear here when ready to review, sign, and pay.
+          Your rep is finalizing your quote. It will appear here when ready to review and sign.
         </p>
       </div>
     );
@@ -156,6 +191,25 @@ export default function EquipmentOrderPanel({ corporateId }) {
   const hardware = data.hardware || [];
   const recurring = data.recurring || [];
   const services = data.oneTimeServices || [];
+
+  let badge = null;
+  if (lifecycle === 'paid') {
+    badge = <StatusCaption label="Paid — provisioning" tone="success" />;
+  } else if (lifecycle === 'awaiting_payment') {
+    badge = (
+      <StatusCaption
+        label={paymentStatus === 'PROCESSING' ? 'Payment processing' : 'Awaiting payment'}
+        tone="amber"
+      />
+    );
+  } else {
+    badge = (
+      <StatusCaption
+        label={esignStatus === 'PENDING_SIGNATURE' ? 'Awaiting signature' : (esignStatus || 'Quote ready')}
+        tone="accent"
+      />
+    );
+  }
 
   return (
     <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-5 space-y-5">
@@ -168,24 +222,9 @@ export default function EquipmentOrderPanel({ corporateId }) {
           )}
         </div>
         <div className="flex flex-col items-end gap-1.5">
-          {isPaid ? (
-            <StatusCaption label="Paid — provisioning" tone="success" />
-          ) : (
-            <>
-              <StatusCaption
-                label={esignStatus === 'SIGNED' ? 'Signed' : esignStatus === 'PENDING_SIGNATURE' ? 'Awaiting signature' : (esignStatus || 'Quote ready')}
-                tone={esignStatus === 'SIGNED' ? 'success' : 'accent'}
-              />
-              {data.paymentEnabled && (
-                <StatusCaption
-                  label={paymentStatus === 'PENDING' ? 'Payment pending' : paymentStatus === 'PROCESSING' ? 'Payment processing' : 'Pay on quote'}
-                  tone="accent"
-                />
-              )}
-            </>
-          )}
-          {isFetching && (
-            <span className="text-cb-caption normal-case tracking-normal text-gray-600">Refreshing…</span>
+          {badge}
+          {isFetching && modalOpen && (
+            <span className="text-cb-caption normal-case tracking-normal text-gray-600">Checking status…</span>
           )}
         </div>
       </div>
@@ -203,7 +242,7 @@ export default function EquipmentOrderPanel({ corporateId }) {
                   'Your HubSpot private app can read the quote, but not its line items yet.'}
               </p>
               <p className="text-cb-caption normal-case tracking-normal text-gray-500">
-                You can still review, sign, and pay on the quote below. After the scope is added, hit Retry.
+                You can still review and sign below. After the scope is added, hit Retry.
               </p>
               <button
                 type="button"
@@ -226,7 +265,7 @@ export default function EquipmentOrderPanel({ corporateId }) {
         <span className="font-display text-cb-title text-white tabular-nums">{formatMoney(data.amount)}</span>
       </div>
 
-      {isPaid ? (
+      {lifecycle === 'paid' ? (
         <div className="flex items-center gap-2 rounded-cb border border-cb-border bg-cb-bg px-3 py-3">
           <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-cb-success/15">
             <Check className="w-4 h-4 text-cb-success" strokeWidth={2.5} />
@@ -238,30 +277,61 @@ export default function EquipmentOrderPanel({ corporateId }) {
             </p>
           </div>
         </div>
+      ) : lifecycle === 'awaiting_payment' ? (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 rounded-cb border border-cb-border bg-cb-bg px-3 py-3">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-cb-success/15">
+              <Check className="w-4 h-4 text-cb-success" strokeWidth={2.5} />
+            </span>
+            <div>
+              <p className="text-cb-body text-white font-medium">Quote signed</p>
+              <p className="text-cb-caption normal-case tracking-normal text-gray-500">
+                Menu &amp; POS setup are unlocked. Complete payment to release terminal shipping.
+              </p>
+            </div>
+          </div>
+          {(invoiceUrl || quoteUrl) && (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={openPay}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-cb bg-cb-accent text-cb-bg font-semibold text-cb-body py-3 hover:opacity-95 transition-opacity"
+              >
+                View Invoice / Pay
+              </button>
+              <p className="text-center text-cb-caption normal-case tracking-normal text-gray-500">
+                HubSpot Payments — secure portal window.
+              </p>
+            </div>
+          )}
+        </div>
       ) : quoteUrl ? (
         <div className="space-y-2">
           <button
             type="button"
-            onClick={openQuote}
+            onClick={openSign}
             className="w-full inline-flex items-center justify-center gap-2 rounded-cb bg-cb-accent text-cb-bg font-semibold text-cb-body py-3 hover:opacity-95 transition-opacity"
           >
-            Review, sign &amp; pay
-            <ExternalLink className="w-4 h-4" />
+            Review &amp; Sign Quote
           </button>
           <p className="text-center text-cb-caption normal-case tracking-normal text-gray-500">
-            Opens your HubSpot quote{data.paymentEnabled ? ' (HubSpot Payments)' : ''} in a new tab.
-            {' '}
-            <a
-              href={quoteUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-cb-accent hover:opacity-90 underline font-medium"
-            >
-              Open in new tab
-            </a>
+            Opens in a secure portal window. Payment comes after signing.
           </p>
         </div>
       ) : null}
+
+      <QuoteSignModal
+        open={modalOpen}
+        onOpenChange={setModal}
+        quoteUrl={quoteUrl}
+        invoiceUrl={invoiceUrl}
+        mode={modalMode}
+        amount={data.amount}
+        title={data.title}
+        paymentStatus={data.paymentStatus}
+        celebrating={celebrating}
+        celebrateLabel={modalMode === 'pay' ? 'Payment received' : 'Quote signed'}
+      />
     </div>
   );
 }

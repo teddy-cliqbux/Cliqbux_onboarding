@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
@@ -9,12 +10,15 @@ import EquipmentShippingModal from '@/components/onboarding/EquipmentShippingMod
 import EquipmentOrderPanel from '@/components/onboarding/EquipmentOrderPanel';
 import InventoryUpload from '@/components/onboarding/InventoryUpload';
 import ConnectLegacyPOS from '@/components/onboarding/ConnectLegacyPOS';
+import SetupGate from '@/components/onboarding/SetupGate';
 import { base44 } from '@/api/base44Client';
 import {
   invokePortalFunction,
   setMerchantToken,
   merchantTokenHasImp,
 } from '@/lib/merchantAuthFetch';
+
+const QUOTE_POLL_MS = 10_000;
 
 /** One tasteful gold burst — signature moment for application submitted. */
 function fireSubmissionCelebration(corporateId) {
@@ -49,14 +53,40 @@ async function resolveAgentAccess(corporateId) {
   }
 }
 
+function deriveQuoteFlags(quoteData, profile) {
+  const quotePaid =
+    quoteData?.isPaid === true ||
+    String(quoteData?.paymentStatus || '').toUpperCase() === 'PAID' ||
+    !!quoteData?.equipmentPaidAt ||
+    !!profile?.equipmentPaidAt ||
+    quoteData?.equipmentShippingStatus === 'ready_to_ship' ||
+    profile?.equipmentShippingStatus === 'ready_to_ship';
+  const quoteSigned =
+    quoteData?.isSigned === true ||
+    String(quoteData?.esignStatus || '').toUpperCase() === 'SIGNED' ||
+    !!quoteData?.quoteSignedAt ||
+    !!profile?.quoteSignedAt ||
+    quotePaid;
+  const lifecycle =
+    quoteData?.quoteLifecycle ||
+    (!quoteSigned ? 'awaiting_signature' : !quotePaid ? 'awaiting_payment' : 'paid');
+  return { quotePaid, quoteSigned, lifecycle };
+}
+
 export default function PostSubmissionDashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
   const [merchantIDs, setMerchantIDs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showShipping, setShowShipping] = useState(false);
   const [agentPreview, setAgentPreview] = useState(false);
+  /** QuoteSignModal open — drives 10s pull poll (HubSpot tier has no workflow webhooks). */
+  const [quoteModalOpen, setQuoteModalOpen] = useState(false);
+  const lifecycleAtModalOpen = useRef(null);
+  const profileRef = useRef(profile);
+  profileRef.current = profile;
 
   useEffect(() => {
     const load = async () => {
@@ -110,6 +140,101 @@ export default function PostSubmissionDashboard() {
     load();
   }, []);
 
+  const corporateId = profile?.corporateId;
+
+  // ── On-load sync gateway ────────────────────────────────────────────────────
+  // Silent HubSpot pull so email-link sign/pay is reflected when the merchant returns.
+  useEffect(() => {
+    if (!corporateId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await invokePortalFunction('syncFromHubspot', { dealId: corporateId });
+        if (cancelled) return;
+        const res = await invokePortalFunction('getMerchantData', { corporateId });
+        if (cancelled || res.data?.error) return;
+        const p = res.data?.profile;
+        if (p) {
+          setProfile((prev) => (prev ? {
+            ...prev,
+            applicationStatus: p.applicationStatus ?? prev.applicationStatus,
+            quoteSignedAt: p.quoteSignedAt ?? prev.quoteSignedAt,
+            equipmentPaidAt: p.equipmentPaidAt ?? prev.equipmentPaidAt,
+            equipmentShippingStatus: p.equipmentShippingStatus ?? prev.equipmentShippingStatus,
+            hubspotQuoteUrl: p.hubspotQuoteUrl ?? prev.hubspotQuoteUrl,
+          } : prev));
+        }
+        await queryClient.invalidateQueries({ queryKey: ['hubspotQuote', corporateId] });
+      } catch {
+        // Non-blocking — getHubspotQuote still loads live HubSpot state
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [corporateId, queryClient]);
+
+  // Shared TanStack cache with EquipmentOrderPanel
+  const { data: quoteData, refetch: refetchQuote } = useQuery({
+    queryKey: ['hubspotQuote', corporateId],
+    queryFn: async () => {
+      const res = await invokePortalFunction('getHubspotQuote', { corporateId });
+      if (res.data?.error) throw new Error(res.data.error);
+      return res.data;
+    },
+    enabled: !!corporateId,
+    staleTime: quoteModalOpen ? 0 : 10 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
+
+  const { quotePaid, quoteSigned, lifecycle } = deriveQuoteFlags(quoteData, profile);
+
+  // Snapshot lifecycle when modal opens so we can detect transitions
+  useEffect(() => {
+    if (quoteModalOpen) {
+      lifecycleAtModalOpen.current = lifecycle;
+    } else {
+      lifecycleAtModalOpen.current = null;
+    }
+    // Capture open-time lifecycle only — do not re-run when lifecycle changes mid-poll
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteModalOpen]);
+
+  // ── Active poll while QuoteSignModal is open (10s) ──────────────────────────
+  // HubSpot workflow webhooks are unavailable on our tier — pull instead.
+  useEffect(() => {
+    if (!corporateId || !quoteModalOpen) return undefined;
+
+    const tick = async () => {
+      try {
+        const result = await refetchQuote();
+        const next = deriveQuoteFlags(result.data, profileRef.current);
+        const started = lifecycleAtModalOpen.current;
+        const advanced =
+          (started === 'awaiting_signature' &&
+            (next.lifecycle === 'awaiting_payment' || next.lifecycle === 'paid')) ||
+          (started === 'awaiting_payment' && next.lifecycle === 'paid');
+        if (advanced) {
+          // Panel closes modal + celebrates via shared query data; refresh SetupGate stamps
+          const res = await invokePortalFunction('getMerchantData', { corporateId });
+          const p = res.data?.profile;
+          if (p) {
+            setProfile((prev) => (prev ? {
+              ...prev,
+              quoteSignedAt: p.quoteSignedAt ?? prev.quoteSignedAt,
+              equipmentPaidAt: p.equipmentPaidAt ?? prev.equipmentPaidAt,
+              equipmentShippingStatus: p.equipmentShippingStatus ?? prev.equipmentShippingStatus,
+            } : prev));
+          }
+        }
+      } catch {
+        /* next tick retries */
+      }
+    };
+
+    tick();
+    const id = setInterval(tick, QUOTE_POLL_MS);
+    return () => clearInterval(id);
+  }, [corporateId, quoteModalOpen, refetchQuote]);
+
   if (loading) {
     return (
       <div className="portal-bg min-h-screen px-4 py-16" aria-busy="true" aria-label="Loading dashboard">
@@ -142,50 +267,26 @@ export default function PostSubmissionDashboard() {
 
   return (
     <div className="portal-bg" style={{ fontFamily: 'Inter, sans-serif' }}>
-      {/* Nav */}
       <div className="fixed top-0 left-0 right-0 bg-cb-surface/95 backdrop-blur border-b border-cb-border z-40 px-6 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <CliqbuxLogo />
-          <div className="flex items-center gap-3">
-            <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-400">{profile.legalName}</span>
-            {agentPreview ? (
-              <span className="inline-flex items-center gap-1.5 text-cb-caption normal-case tracking-normal font-medium text-cb-accent border border-cb-border px-2.5 py-1 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-cb-accent" />
-                Agent preview
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-cb-caption normal-case tracking-normal font-medium text-cb-success border border-cb-border px-2.5 py-1 rounded-full">
-                <span className="w-1.5 h-1.5 rounded-full bg-cb-success" />
-                Submitted
-              </span>
-            )}
-          </div>
+          <span className="text-cb-caption normal-case tracking-normal text-gray-500 truncate max-w-[50%]">
+            {profile.legalName || 'Merchant'}
+          </span>
         </div>
       </div>
 
-      <div className="pt-16 min-h-screen px-4 py-8">
-        <div className="max-w-3xl mx-auto flex flex-col gap-8">
-          {agentPreview && (
-            <div className="bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-accent text-gray-300 text-cb-body px-4 py-2.5 rounded-cb">
-              Agent preview · merchant has not finished signing yet · Saves write to the live record · session ~30 min
-            </div>
-          )}
-
-          {/* Welcome — signature calm celebration */}
+      <div className="max-w-3xl mx-auto px-4 pt-24 pb-12">
+        <div className="space-y-8">
           <motion.div
-            className="text-center mb-2"
-            initial={{ opacity: 0, y: 12 }}
+            className="text-center"
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: 'spring', stiffness: 150, damping: 20 }}
           >
-            <motion.span
-              className={`inline-flex items-center justify-center w-12 h-12 rounded-full mb-4 ${agentPreview ? 'bg-cb-accent-muted' : 'bg-cb-success/15'}`}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', stiffness: 150, damping: 20, delay: 0.05 }}
-            >
-              <Check className={`w-6 h-6 ${agentPreview ? 'text-cb-accent' : 'text-cb-success'}`} strokeWidth={2.5} />
-            </motion.span>
+            <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-cb-success/15 mb-4">
+              <Check className="w-6 h-6 text-cb-success" strokeWidth={2.5} />
+            </span>
             <p className="text-cb-caption uppercase text-gray-500 mb-2">
               {agentPreview ? 'Post-signing dashboard' : 'Application submitted'}
             </p>
@@ -199,43 +300,63 @@ export default function PostSubmissionDashboard() {
             </p>
           </motion.div>
 
-          {/* Tracker */}
           {merchantIDs.length > 0 && <UnderwritingTracker locations={locations} merchantIDs={merchantIDs} />}
 
-          {/* Checklist */}
           <div>
             <h2 className="text-cb-caption uppercase text-gray-400 mb-4">Complete Your Setup</h2>
             <div className="flex flex-col gap-4">
-              {/* Equipment & Services — native invoice via getHubspotQuote;
-                  sign/pay on HubSpot Payments (quote URL, new tab). */}
-              <EquipmentOrderPanel corporateId={profile.corporateId} />
+              <EquipmentOrderPanel
+                corporateId={profile.corporateId}
+                onModalOpenChange={setQuoteModalOpen}
+              />
 
-              {/* A: Equipment Shipping */}
-              <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-5">
-                <div className="flex items-center justify-between mb-1">
-                  <h3 className="text-cb-body font-semibold text-white">Equipment Shipping Router</h3>
-                  <button
-                    type="button"
-                    onClick={() => setShowShipping(true)}
-                    className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent hover:opacity-90 underline"
-                  >
-                    Route
-                  </button>
+              <SetupGate
+                state={quotePaid ? 'unlocked' : quoteSigned ? 'hold' : 'locked'}
+                title={quotePaid ? null : quoteSigned ? 'Shipping Hold' : 'Shipping locked'}
+                holdMessage="Shipping Hold — Terminals will ship once invoice payment is fully cleared."
+                lockedMessage="Available after your quote is signed and paid."
+              >
+                <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="text-cb-body font-semibold text-white">
+                      {quotePaid ? 'Ready to Ship' : 'Equipment Shipping Router'}
+                    </h3>
+                    {quotePaid && (
+                      <button
+                        type="button"
+                        onClick={() => setShowShipping(true)}
+                        className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent hover:opacity-90 underline"
+                      >
+                        Route
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
+                    {quotePaid
+                      ? 'Tell us where to ship your payment terminals — storefront, corporate mailing, or a staging warehouse.'
+                      : 'Terminal shipping unlocks after your invoice is paid in full.'}
+                  </p>
                 </div>
-                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
-                  Tell us where to ship your payment terminals — storefront, corporate mailing, or a staging warehouse.
-                </p>
-              </div>
+              </SetupGate>
 
-              {/* B: Inventory & Menu */}
-              <InventoryUpload corporateId={profile.corporateId} />
+              <SetupGate
+                state={quoteSigned ? 'unlocked' : 'locked'}
+                title="Menu & inventory locked"
+                lockedMessage="Available after your quote is signed."
+              >
+                <InventoryUpload corporateId={profile.corporateId} />
+              </SetupGate>
 
-              {/* C: Legacy POS — three-tier secure connect */}
-              <ConnectLegacyPOS corporateId={profile.corporateId} />
+              <SetupGate
+                state={quoteSigned ? 'unlocked' : 'locked'}
+                title="Legacy POS locked"
+                lockedMessage="Available after your quote is signed."
+              >
+                <ConnectLegacyPOS corporateId={profile.corporateId} />
+              </SetupGate>
             </div>
           </div>
 
-          {/* Footer */}
           <div className="text-center pt-4 pb-6">
             <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">
               Secured by <span className="text-cb-accent font-medium">Cliqbux</span> &nbsp;·&nbsp; onboarding.cliqbux.com &nbsp;·&nbsp; {new Date().getFullYear()}
