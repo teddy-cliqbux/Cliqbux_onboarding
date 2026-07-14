@@ -17,6 +17,26 @@ import {
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 
+/** Pure digits = HubSpot deal id. Anything else = local Quick Stage. */
+function isHubSpotDealId(id) {
+  return /^\d+$/.test(String(id || '').trim());
+}
+
+/** Mirror of manageStagedApplication.slugifyCorporateId — preview only; server is authoritative. */
+function slugifyCorporateId(raw) {
+  const slug = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[''`´]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+  return slug || 'merchant';
+}
 const STAGE_COLORS = { draft: '#6b7280', ready: '#FEAC27', sent: '#4ADE80' };
 const STAGE_LABELS = { draft: 'Draft', ready: 'Ready', sent: 'Sent' };
 
@@ -368,6 +388,108 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
   );
 }
 
+// ── Quick Local Stage Modal (alphanumeric / no-HubSpot corp IDs) ───────────────
+function QuickLocalStageModal({ initialName, onCreated, onClose }) {
+  const [businessName, setBusinessName] = useState(initialName || '');
+  const [signerName, setSignerName] = useState('');
+  const [signerEmail, setSignerEmail] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const slug = slugifyCorporateId(businessName);
+  const canSave = businessName.trim() && signerName.trim() && signerEmail.includes('@') && !saving;
+
+  const handleCreate = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    setError('');
+    try {
+      const res = await base44.functions.invoke('manageStagedApplication', {
+        action: 'createLocalStage',
+        data: {
+          businessName: businessName.trim(),
+          signerName: signerName.trim(),
+          signerEmail: signerEmail.trim(),
+        },
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      onCreated?.(res.data);
+    } catch (err) {
+      setError(err?.response?.data?.error || err.message || 'Failed to create local stage');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9100] flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
+      <div
+        className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-md p-6"
+        onClick={e => e.stopPropagation()}
+      >
+        <h3 className="font-display text-cb-title text-white mb-1">Quick Stage — No HubSpot</h3>
+        <p className="text-cb-caption text-gray-500 mb-4">
+          Creates a local merchant (slug corporate ID). HubSpot sync and quotes are skipped.
+        </p>
+
+        <label className={labelCls}>Business name</label>
+        <input
+          value={businessName}
+          onChange={e => setBusinessName(e.target.value)}
+          className={`${inputCls} mb-3`}
+          placeholder="Danono's Donuts"
+          autoFocus
+        />
+
+        <label className={labelCls}>Corporate ID slug</label>
+        <input
+          value={slug}
+          readOnly
+          className={`${inputCls} mb-3 opacity-80 font-mono text-cb-caption`}
+        />
+
+        <label className={labelCls}>Primary signer name</label>
+        <input
+          value={signerName}
+          onChange={e => setSignerName(e.target.value)}
+          className={`${inputCls} mb-3`}
+          placeholder="Jane Owner"
+        />
+
+        <label className={labelCls}>Primary signer email</label>
+        <input
+          type="email"
+          value={signerEmail}
+          onChange={e => setSignerEmail(e.target.value)}
+          className={`${inputCls} mb-4`}
+          placeholder="jane@example.com"
+          onKeyDown={e => e.key === 'Enter' && canSave && handleCreate()}
+        />
+
+        {error && <p className="text-cb-caption text-cb-danger mb-3">{error}</p>}
+
+        <div className="flex gap-3">
+          <button
+            onClick={handleCreate}
+            disabled={!canSave}
+            className="flex-1 flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-body py-2.5 rounded-cb transition-opacity"
+          >
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            Create local stage
+          </button>
+          <button
+            onClick={onClose}
+            disabled={saving}
+            className="flex-1 border border-cb-border text-gray-400 font-medium text-cb-body py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong disabled:opacity-40"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Pipeline Overview Bar ─────────────────────────────────────────────────────
 function PipelineOverview({ profiles, stages, loading, onRefresh, onQuickCreate }) {
   const [quickId, setQuickId] = useState('');
@@ -431,9 +553,9 @@ function PipelineOverview({ profiles, stages, loading, onRefresh, onQuickCreate 
       <div className="flex-shrink-0">
         <p className="text-cb-caption uppercase text-gray-500 mb-1.5">Quick Stage — Corp ID</p>
         <div className="flex gap-2 items-center">
-          <input value={quickId} onChange={e => setQuickId(e.target.value)} placeholder="Enter Corporate ID…"
+          <input value={quickId} onChange={e => setQuickId(e.target.value)} placeholder="Deal ID or business name…"
             onKeyDown={e => e.key === 'Enter' && handleQuickCreate()}
-            className="bg-cb-bg border border-cb-border rounded-cb px-3 py-2 text-cb-body text-white placeholder:text-gray-600 hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent w-48" />
+            className="bg-cb-bg border border-cb-border rounded-cb px-3 py-2 text-cb-body text-white placeholder:text-gray-600 hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent w-56" />
           <button onClick={handleQuickCreate} disabled={!quickId.trim()}
             className="flex items-center gap-1.5 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-caption px-3 py-2 rounded-cb transition-opacity flex-shrink-0">
             <Zap className="w-3 h-3" /> Create
@@ -466,6 +588,7 @@ function CheckRow({ checked, onChange, children }) {
 
 // ── Stage Editor ──────────────────────────────────────────────────────────────
 function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
+  const hubspotDeal = isHubSpotDealId(corporateId);
   const [label, setLabel]             = useState(stage?.label || '');
   const [locations, setLocations]     = useState([]);
   const [mids, setMids]               = useState([]);
@@ -501,6 +624,11 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
   };
 
   const fetchQuotes = async () => {
+    if (!hubspotDeal) {
+      setQuotes([]);
+      setSelectedQuoteId(null);
+      return;
+    }
     setLoadingQuotes(true);
     try {
       const res = await base44.functions.invoke('getHubspotQuote', { action: 'list', corporateId });
@@ -534,7 +662,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
     setLoading(true); setError('');
     try {
       let lists = await fetchLists();
-      if (!lists.locs.length && !lists.sigs.length) {
+      if (!lists.locs.length && !lists.sigs.length && hubspotDeal) {
         setSyncMsg('Nothing in Base44 yet — pulling this deal from HubSpot…');
         const syncRes = await base44.functions.invoke('syncFromHubspot', { dealId: corporateId });
         if (syncRes.data?.error) throw new Error(syncRes.data.error);
@@ -551,6 +679,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
   };
 
   const handleHubspotSync = async () => {
+    if (!hubspotDeal) return;
     setLoading(true); setError('');
     setSyncMsg('Syncing from HubSpot…');
     try {
@@ -627,9 +756,9 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
           <p className="text-cb-caption uppercase text-gray-500">{merchantName}</p>
           <p className="text-cb-body font-semibold text-white">{stage?.id ? 'Edit Application' : 'Configure Application'}</p>
         </div>
-        <button onClick={handleHubspotSync} disabled={loading || saving} title="Pull the latest deal, contact, and company data from HubSpot"
-          className="flex items-center gap-1.5 text-cb-caption font-medium text-gray-400 hover:text-white border border-cb-border hover:border-cb-border-strong px-2.5 py-2 rounded-cb transition-all disabled:opacity-40">
-          <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> HubSpot Sync
+        <button onClick={handleHubspotSync} disabled={loading || saving || !hubspotDeal} title={hubspotDeal ? 'Pull the latest deal, contact, and company data from HubSpot' : 'Local merchant — no HubSpot deal'}
+          className={`flex items-center gap-1.5 text-cb-caption font-medium border px-2.5 py-2 rounded-cb transition-all disabled:opacity-40 ${hubspotDeal ? 'text-gray-400 hover:text-white border-cb-border hover:border-cb-border-strong' : 'text-gray-600 border-cb-border cursor-not-allowed'}`}>
+          <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> {hubspotDeal ? 'HubSpot Sync' : 'Local only'}
         </button>
         <button onClick={handleSave} disabled={saving}
           className="flex items-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-body px-4 py-2 rounded-cb transition-opacity">
@@ -741,7 +870,9 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                   </div>
                 ) : quotes.length === 0 ? (
                   <p className="text-cb-body text-gray-600 italic py-4 text-center">
-                    No quotes associated with this HubSpot deal yet. Create/publish a quote in HubSpot, then Refresh.
+                    {hubspotDeal
+                      ? 'No quotes associated with this HubSpot deal yet. Create/publish a quote in HubSpot, then Refresh.'
+                      : 'Local Quick Stage merchant — HubSpot quotes are not available. Equipment quote can be added later if a deal is linked.'}
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -1377,6 +1508,7 @@ export default function ApplicationManager() {
   const [deleteMerchantError, setDeleteMerchantError]     = useState('');
   const [searchText, setSearchText]       = useState('');
   const [jumpId, setJumpId]               = useState('');
+  const [localStageDraft, setLocalStageDraft] = useState(null); // { businessName } | null
 
   const publicUrl = (import.meta.env.VITE_PUBLIC_URL || window.location.origin).replace(/\/$/, '');
 
@@ -1400,13 +1532,42 @@ export default function ApplicationManager() {
 
   useEffect(() => { load(); }, [load]);
 
-  const handleQuickCreate = (id) => {
-    const adminForCorp = allStages.filter(s => s.corporateId === id && s.label !== '__auto_track__');
+  const handleQuickCreate = (raw) => {
+    const id = String(raw || '').trim();
+    if (!id) return;
+
+    // Alphanumeric / business name → local Quick Stage modal (no HubSpot)
+    if (!isHubSpotDealId(id)) {
+      setLocalStageDraft({ businessName: id });
+      return;
+    }
+
+    const adminForCorp = allStages.filter(s => String(s.corporateId) === id && s.label !== '__auto_track__');
     const existing = adminForCorp.find(s => s.status === 'sent')
       || adminForCorp.find(s => s.status === 'ready')
       || adminForCorp[0]
       || null;
     setEditing({ corporateId: id, merchantName: merchantNames[id] || id, stage: existing });
+  };
+
+  const handleLocalStageCreated = (data) => {
+    const cid = String(data.corporateId);
+    const name = data.businessName || cid;
+    setLocalStageDraft(null);
+    setMerchantNames(prev => ({ ...prev, [cid]: name }));
+    if (data.profile) {
+      setProfiles(prev => {
+        if (prev.find(p => String(p.corporateId) === cid)) return prev;
+        return [data.profile, ...prev];
+      });
+    }
+    if (data.stage) {
+      setAllStages(prev => {
+        if (prev.find(s => s.id === data.stage.id)) return prev;
+        return [data.stage, ...prev];
+      });
+    }
+    setEditing({ corporateId: cid, merchantName: name, stage: data.stage || null });
   };
 
   const handleStageSaved = (stage) => {
@@ -1550,6 +1711,14 @@ export default function ApplicationManager() {
           </div>
         </div>
       </div>
+
+      {localStageDraft && (
+        <QuickLocalStageModal
+          initialName={localStageDraft.businessName}
+          onCreated={handleLocalStageCreated}
+          onClose={() => setLocalStageDraft(null)}
+        />
+      )}
 
       {/* Edit overlay — does not shrink the applications list */}
       {showEditor && (

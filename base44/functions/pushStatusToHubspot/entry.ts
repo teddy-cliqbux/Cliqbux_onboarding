@@ -104,6 +104,17 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Local Quick Stage (slug corporateId) — nothing to push to HubSpot.
+    if (!/^\d+$/.test(String(corporateId).trim())) {
+      return Response.json({
+        success: true,
+        synced: false,
+        hubspotBypass: true,
+        reason: 'Local merchant (no HubSpot deal) — status push skipped',
+        corporateId,
+        milestone,
+      });
+    }
 
     const hsKey = Deno.env.get('HUBSPOT_API_KEY');
     if (!hsKey) return Response.json({ error: 'HUBSPOT_API_KEY not set' }, { status: 500 });

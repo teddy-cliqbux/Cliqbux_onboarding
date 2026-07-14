@@ -216,6 +216,35 @@ Deno.serve(async (req) => {
     const corporateId = actor.actor === 'merchant' ? String(actor.corporateId) : bodyCorporateId;
     if (!corporateId) return Response.json({ error: 'corporateId required' }, { status: 400 });
 
+    // Local Quick Stage (slug corporateId) — no HubSpot deal/quotes.
+    if (!/^\d+$/.test(corporateId.trim())) {
+      if (action === 'list') {
+        return Response.json({
+          success: true,
+          hubspotBypass: true,
+          quotes: [],
+          selectedQuoteId: null,
+          hubspotQuoteUrl: null,
+        });
+      }
+      if (action === 'select') {
+        return Response.json({
+          success: false,
+          hubspotBypass: true,
+          error: 'This merchant has no HubSpot deal — quotes cannot be selected.',
+        }, { status: 400 });
+      }
+      return Response.json({
+        success: true,
+        hubspotBypass: true,
+        quote: null,
+        lineItems: [],
+        quoteLifecycle: 'awaiting_signature',
+        isSigned: false,
+        isPaid: false,
+      });
+    }
+
     const hsKey = Deno.env.get('HUBSPOT_API_KEY');
     if (!hsKey) return Response.json({ error: 'HUBSPOT_API_KEY not set' }, { status: 500 });
 

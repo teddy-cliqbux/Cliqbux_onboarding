@@ -578,6 +578,7 @@ Admin-created or auto-tracked application staging records. Supports:
 - Auto-tracking: `trackProgress` action upserts a record when merchant opens the portal
 - Admin dashboard at `/admin/applications` (`ApplicationManager.jsx`). Tracks `__auto_track__` progress (currentStep / lastSeenAt), MSP form errors via `getMSPFormStatus`, and admin impersonation via `manageStagedApplication` action `impersonate`.
 - Labels: `__auto_track__` for auto-created tracking records; custom label for admin-created stages
+- **Quick Stage — local / no HubSpot (2026-07-13):** Numeric input = HubSpot deal ID (existing sync). Alphanumeric (e.g. `Danono's Donuts`) opens a modal → `manageStagedApplication` action `createLocalStage`. Backend `slugifyCorporateId` → `danonos-donuts` as `corporateId`; raw name → profile `legalName` + location `dbaName`; creates primary signer + draft stage. If `corporateId` is **not** `/^\d+$/`, `syncFromHubspot` / `getHubspotQuote` / `pushStatusToHubspot` return `hubspotBypass: true` with **no** HubSpot API calls. Portal links use the slug as `corporateId` (encodeURIComponent).
 
 ### MerchantCorporateProfile.legalEntities schema (updated)
 The `legalEntities` array items now include `ownershipType`, `taxClassType`, `establishmentYear` as schema fields. Without these in the schema, Base44 strips them on every save. The entity JSON file must declare them.

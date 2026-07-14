@@ -208,6 +208,28 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const corporateId = String(dealId);
+
+    // Local Quick Stage merchants use slug corporateIds (e.g. danonos-donuts) —
+    // there is no HubSpot deal. Bypass all HubSpot API calls.
+    if (!/^\d+$/.test(corporateId.trim())) {
+      const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter(
+        { corporateId }, '-created_date', 1
+      );
+      return Response.json({
+        success: true,
+        synced: false,
+        hubspotBypass: true,
+        corporateId,
+        locations: [],
+        signers: [],
+        summary: profiles?.length
+          ? 'Local merchant (no HubSpot deal) — sync skipped'
+          : 'Local corporateId has no HubSpot deal and no Base44 profile yet',
+        profile: profiles?.[0] || null,
+      });
+    }
+
     const hsKey = Deno.env.get('HUBSPOT_API_KEY');
     if (!hsKey) return Response.json({ error: 'HUBSPOT_API_KEY not set' }, { status: 500 });
 
@@ -216,7 +238,6 @@ Deno.serve(async (req) => {
       'Content-Type': 'application/json',
     };
 
-    const corporateId = String(dealId);
     const result: Record<string, any> = { corporateId, locations: [], signers: [] };
 
     // ── 1. Fetch deal ─────────────────────────────────────────────────────────

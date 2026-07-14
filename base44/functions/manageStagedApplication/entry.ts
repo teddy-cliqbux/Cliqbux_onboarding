@@ -6,6 +6,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //                                             staged-link token; returns a signed merchant
 //                                             JWT + a sanitized stage record
 //   trackProgress                           — merchant token (matching corporateId) or admin
+//   createLocalStage                        — ADMIN ONLY: Quick Stage for no-HubSpot merchants
+//                                             (slugified alphanumeric corporateId)
 //   impersonate                             — ADMIN ONLY: mint a 30-min merchant JWT so sales
 //                                             can open the live portal and Save on behalf of
 //                                             the merchant. Never returns stage accessToken.
@@ -90,6 +92,30 @@ function generateToken(): string {
   const arr = new Uint8Array(24);
   crypto.getRandomValues(arr);
   return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Pure digits = HubSpot deal id. Anything else = local / no-HubSpot corporateId. */
+function isHubSpotDealId(corporateId: string | number | null | undefined): boolean {
+  return /^\d+$/.test(String(corporateId ?? '').trim());
+}
+
+/**
+ * Slugify a custom business name into a URL-safe corporateId.
+ * "Danono's Donuts" → "danonos-donuts"
+ */
+function slugifyCorporateId(raw: string): string {
+  const slug = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[''`´]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 64);
+  return slug || 'merchant';
 }
 
 // Strip the fields a merchant must never see (accessToken most of all —
@@ -336,6 +362,111 @@ Deno.serve(async (req) => {
     // ── Everything below is ADMIN ONLY ───────────────────────────────────────
     if (actor.actor !== 'admin') {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // ── createLocalStage — Quick Stage for merchants with no HubSpot deal ─────
+    // Body: { businessName, signerName, signerEmail } (optional corporateIdOverride)
+    // Slugifies businessName → corporateId, creates Profile + Location + Signer + Stage.
+    if (action === 'createLocalStage') {
+      const businessName = String(data?.businessName || body.businessName || '').trim();
+      const signerName = String(data?.signerName || body.signerName || '').trim();
+      const signerEmail = String(data?.signerEmail || body.signerEmail || '').trim().toLowerCase();
+      if (!businessName) return Response.json({ error: 'businessName required' }, { status: 400 });
+      if (!signerName) return Response.json({ error: 'signerName (primary signer) required' }, { status: 400 });
+      if (!signerEmail || !signerEmail.includes('@')) {
+        return Response.json({ error: 'Valid primary signer email required' }, { status: 400 });
+      }
+
+      const corporateId = data?.corporateIdOverride
+        ? slugifyCorporateId(String(data.corporateIdOverride))
+        : slugifyCorporateId(businessName);
+
+      if (isHubSpotDealId(corporateId)) {
+        return Response.json({
+          error: 'Slug resolved to digits only — use Quick Stage with a HubSpot deal ID, or pick a name with letters.',
+        }, { status: 400 });
+      }
+
+      const existingProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter(
+        { corporateId }, '-created_date', 1
+      );
+      if (existingProfiles?.length) {
+        return Response.json({
+          error: `A merchant with corporateId "${corporateId}" already exists. Open that application or choose a different name.`,
+          corporateId,
+          exists: true,
+        }, { status: 409 });
+      }
+
+      const nameParts = signerName.split(/\s+/).filter(Boolean);
+      const firstName = nameParts[0] || signerName;
+      const lastName = nameParts.slice(1).join(' ') || '';
+
+      const profile = await base44.asServiceRole.entities.MerchantCorporateProfile.create({
+        corporateId,
+        legalName: businessName,
+        signerEmail,
+        firstName,
+        lastName,
+        applicationStatus: 'Incomplete',
+      });
+
+      const location = await base44.asServiceRole.entities.MerchantLocations.create({
+        corporateId,
+        dbaName: businessName,
+        businessAddress: '',
+        applicationStepStatus: 'In Review',
+      });
+
+      const verifyToken = generateToken();
+      const signer = await base44.asServiceRole.entities.MerchantSigners.create({
+        corporateId,
+        firstName,
+        lastName,
+        signerEmail,
+        ownershipPercentage: 100,
+        isPrimarySigner: true,
+        identityStatus: 'Pending Invitation',
+        verifyToken,
+      });
+
+      const accessToken = generateToken();
+      const stage = await base44.asServiceRole.entities.StagedApplication.create({
+        corporateId,
+        status: 'draft',
+        label: businessName,
+        includedLocationIds: [location.id],
+        includedMidIds: [],
+        includedSignerIds: [signer.id],
+        prefilledData: {
+          merchantName: businessName,
+          signerEmail,
+          source: 'local_quick_stage',
+          hubspotBypass: true,
+        },
+        accessToken,
+        sentToEmail: signerEmail,
+      });
+
+      await upsertAutoTrack(base44, corporateId, {
+        merchantName: businessName,
+        signerEmail,
+        applicationStatus: 'Incomplete',
+        currentStep: 'locations',
+        source: 'local_quick_stage',
+        hubspotBypass: true,
+      }).catch(() => null);
+
+      return Response.json({
+        success: true,
+        hubspotBypass: true,
+        corporateId,
+        businessName,
+        profile,
+        location,
+        signer,
+        stage: sanitizeStage(stage),
+      });
     }
 
     // ── impersonate — mint a short-lived merchant JWT for live sales guidance ─
