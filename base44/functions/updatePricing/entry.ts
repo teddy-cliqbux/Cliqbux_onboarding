@@ -162,21 +162,39 @@ Deno.serve(async (req) => {
 
     const updated = await base44.asServiceRole.entities.MerchantCorporateProfile.update(profile.id, patch);
 
-    // Mirror onto latest admin staged app (not __auto_track__) for drawer reopen.
+    // Confirm the enum actually stuck — Base44 can strip undeclared enum values silently
+    // (or leave the old value), which made Cash Discount look "saved" in the UI while the
+    // profile stayed STANDARD (Porky's 2026-07-14).
+    const verified = await base44.asServiceRole.entities.MerchantCorporateProfile.get(profile.id);
+    const persistedTier = String(verified?.pricingTier || '').toUpperCase();
+    if (persistedTier !== pricingTier) {
+      return Response.json({
+        error:
+          `Pricing tier did not persist (wanted ${pricingTier}, got ${verified?.pricingTier || 'null'}). ` +
+          `Republish the MerchantCorporateProfile entity schema so pricingTier includes SELF_SERVE_CASH_DISCOUNT.`,
+        wanted: pricingTier,
+        got: verified?.pricingTier || null,
+      }, { status: 500 });
+    }
+
+    const snap = pricingSnapshot(verified);
+
+    // Mirror onto admin stage + auto-track so Applications list badge stays in sync.
+    // Track prefilledData.pricingTier is a stale copy — must update or the list keeps
+    // showing STANDARD after a successful profile save.
     try {
       const stages = await base44.asServiceRole.entities.StagedApplication.filter(
-        { corporateId }, '-updated_date', 20
+        { corporateId }, '-updated_date', 40
       );
-      const adminStage = (stages || []).find((s: any) => s.label !== '__auto_track__');
-      if (adminStage?.id) {
-        const prev = (adminStage.prefilledData && typeof adminStage.prefilledData === 'object')
-          ? adminStage.prefilledData
-          : {};
-        await base44.asServiceRole.entities.StagedApplication.update(adminStage.id, {
-          prefilledData: {
-            ...prev,
-            pricing: pricingSnapshot(updated),
-          },
+      for (const st of (stages || [])) {
+        const prev = (st.prefilledData && typeof st.prefilledData === 'object') ? st.prefilledData : {};
+        const nextPrefill: Record<string, any> = {
+          ...prev,
+          pricingTier,
+          pricing: snap,
+        };
+        await base44.asServiceRole.entities.StagedApplication.update(st.id, {
+          prefilledData: nextPrefill,
         });
       }
     } catch (e: any) {
@@ -205,8 +223,8 @@ Deno.serve(async (req) => {
     return Response.json({
       success: true,
       corporateId,
-      pricing: pricingSnapshot(updated),
-      profile: updated,
+      pricing: snap,
+      profile: verified,
       refill,
     });
   } catch (error: any) {

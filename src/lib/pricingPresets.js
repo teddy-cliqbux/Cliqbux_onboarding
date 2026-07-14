@@ -32,6 +32,9 @@ export const TIER_LABELS = {
   CUSTOM_INTERCHANGE_PLUS: 'Custom Interchange Plus',
   CUSTOM_FLAT_RATE: 'Custom Flat Rate',
   SELF_SERVE_CASH_DISCOUNT: 'Cash Discount',
+  STANDARD: 'Standard (unset)',
+  TRADITIONAL: 'Traditional (unset)',
+  PREMIUM: 'Premium (unset)',
 };
 
 /** Parse a numeric input; returns null for blank/invalid (never NaN). */
