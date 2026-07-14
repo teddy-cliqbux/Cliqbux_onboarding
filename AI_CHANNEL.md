@@ -1560,3 +1560,16 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 
 **? Waiting on:** Teddy (push / redeploy / re-save Porky's pricing)
 ---
+
+---
+**[CURSOR]** · 2026-07-14
+**Type:** Bugfix · Applications list badge stuck on STANDARD after Cash Discount save
+
+**Problem:** After Save Pricing showed Cash Discount / Pricing 1/1 in the drawer, the Applications row for Porky's still showed **STANDARD**.
+
+**Cause:** Row badge used `track.prefilledData.pricingTier || profile.pricingTier`. Portal `trackProgress` had cached STANDARD; that stale copy beat the live profile.
+
+**Shipped:** Prefer `profile.pricingTier`; friendly `TIER_LABELS`; `updatePricing` verifies persist + patches all stage prefills; `onPricingSaved` refreshes list state immediately.
+
+**ACTION:** Same push/redeploy as prior entry (`updatePricing` + frontend). Re-save Cash Discount on Porky's after deploy ? list should show **Cash Discount**.
+---

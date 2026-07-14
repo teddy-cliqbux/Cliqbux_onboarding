@@ -258,7 +258,9 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 **Ops unblock for a stuck merchant:** Applications → Pricing → Cash Discount → **Save Pricing** → confirm tab shows **Pricing 1/1** → **do not** HubSpot Sync unless the deal has `processing_pricing_tier` set → retry signing. Push + redeploy `syncFromHubspot`, `updatePricing`, `signApplication`, `submitToMSP` + frontend.
 
-**Rule:** Blank HubSpot `processing_pricing_tier` must not write `STANDARD`. Pricing tab complete = canonical CD **or** custom with all three fees — never markup-only.
+**List badge follow-up (same day):** Applications row showed STANDARD after a successful CD save because it preferred `__auto_track__.prefilledData.pricingTier` over the live profile. Prefer profile; patch track on save; verify persist after `MerchantCorporateProfile.update`.
+
+**Rule:** Blank HubSpot `processing_pricing_tier` must not write `STANDARD`. Pricing tab complete = canonical CD **or** custom with all three fees — never markup-only. Applications list pricing label must come from the profile (not stale track prefill).
 
 ---
 
