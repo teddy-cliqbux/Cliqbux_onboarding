@@ -105,7 +105,29 @@ const TIER_TO_TEMPLATE: Record<string, number> = {
 // off-the-shelf template exists. buildFormPayload must source markup values from
 // the merchant's own customMarkupPercentage/customPerTxFee, never a static constant,
 // and must refuse to proceed if either is missing. See Critical Lesson #12.
-const CUSTOM_PRICING_TIERS = ['CUSTOM_FLAT_RATE', 'CUSTOM_INTERCHANGE_PLUS', 'TRADITIONAL', 'STANDARD', 'PREMIUM'];
+const CUSTOM_PRICING_TIERS = ['CUSTOM_FLAT_RATE', 'CUSTOM_INTERCHANGE_PLUS'];
+const LEGACY_UNCONFIGURED_TIERS = ['STANDARD', 'TRADITIONAL', 'PREMIUM', 'CUSTOM'];
+
+function pricingNotReadyMessage(profile: any, tierKey: string): string | null {
+  const name = profile?.legalName || 'this merchant';
+  if (!tierKey || LEGACY_UNCONFIGURED_TIERS.includes(tierKey)) {
+    return (
+      `Pricing is not configured for "${name}" (pricingTier=${tierKey || 'unset'}). ` +
+      `Open Admin → Applications → Pricing, choose Cash Discount or Custom fees, and click Save Pricing. ` +
+      `Do not click HubSpot Sync afterward unless the HubSpot deal has processing_pricing_tier set — ` +
+      `blank HubSpot tiers previously reset merchants to STANDARD.`
+    );
+  }
+  if (CUSTOM_PRICING_TIERS.includes(tierKey) &&
+      (profile.customMarkupPercentage == null || profile.customPerTxFee == null || profile.customAuthPerCard == null)) {
+    return (
+      `Custom pricing not yet set for "${name}" (pricingTier=${tierKey}). ` +
+      `Your Cliqbux representative needs to set the negotiated markup, per-transaction fee, and per-auth fee ` +
+      `on the deal before your application can be prepared. No application was created.`
+    );
+  }
+  return null;
+}
 
 // ─── Value Mappings ───────────────────────────────────────────────────────────
 
@@ -392,24 +414,10 @@ function buildFormPayload(
     || 'ICPLS';
   const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'TIERD' : rawPricingMethod;
 
-  // GUARD (2026-07-06): Custom Flat Rate / Custom Interchange Plus are always
-  // individually-negotiated deals — there is no off-the-shelf default rate, and no
-  // template to inherit one from. Refuse to build a payload (and therefore create or
-  // fill an MSPWare application) until the merchant's real negotiated numbers are
-  // captured. This is the fix for the "blank required pricing fields" issue Teddy
-  // flagged 2026-07-06 — see AGENTS.md Critical Lesson #12.
+  // GUARD (2026-07-06 / 2026-07-14): Custom tiers need fees; legacy STANDARD = not configured.
   const tierKey = (merchantMID.pricingTier || profile.pricingTier || '').toUpperCase();
-  const isCustomPricingTier = CUSTOM_PRICING_TIERS.includes(tierKey);
-  if (isCustomPricingTier && (profile.customMarkupPercentage == null || profile.customPerTxFee == null || profile.customAuthPerCard == null)) {
-    throw new Error(
-      `Custom pricing not yet set for "${profile.legalName || 'this merchant'}" (pricingTier=${tierKey}). ` +
-      `customMarkupPercentage, customPerTxFee, and customAuthPerCard must ALL be set on the corporate ` +
-      `profile before an MSPWare application can be created or filled for a custom-pricing tier — ` +
-      `pricing must never be left blank for someone to fill in manually inside MSPWare. ` +
-      `(These come from the HubSpot deal: processing_pricing_tier + custom_markup_percentage + ` +
-      `custom_per_tx_fee + custom_auth_per_card.)`
-    );
-  }
+  const pricingBlock = pricingNotReadyMessage(profile, tierKey);
+  if (pricingBlock) throw new Error(pricingBlock);
 
   const industryType = merchantMID.industryType || mapIndustryType(pricingCategory);
   // 2026-07-13: NEVER default to 5999. That code is a restricted category
@@ -800,20 +808,12 @@ Deno.serve(async (req) => {
     const profile = profiles?.[0];
     if (!profile) return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
 
-    // ── Early custom-pricing guard (2026-07-10) ───────────────────────────────
-    // buildFormPayload has the same check, but it runs AFTER the MSPWare draft is
-    // created — failing there strands an empty draft application in MSPWare
-    // (observed on the first live ICPLS test). Fail fast here, before anything
-    // is created in MSPWare.
+    // ── Early custom-pricing guard (2026-07-10 / 2026-07-14) ──────────────────
     {
       const tierKeyEarly = (profile.pricingTier || '').toUpperCase();
-      if (CUSTOM_PRICING_TIERS.includes(tierKeyEarly) &&
-          (profile.customMarkupPercentage == null || profile.customPerTxFee == null || profile.customAuthPerCard == null)) {
-        return Response.json({
-          error: `Custom pricing not yet set for "${profile.legalName || 'this merchant'}" (pricingTier=${tierKeyEarly}). ` +
-            `Your Cliqbux representative needs to set the negotiated markup, per-transaction fee, and per-auth fee ` +
-            `on the deal before your application can be prepared. No application was created.`,
-        }, { status: 422 });
+      const earlyBlock = pricingNotReadyMessage(profile, tierKeyEarly);
+      if (earlyBlock) {
+        return Response.json({ error: earlyBlock }, { status: 422 });
       }
     }
 

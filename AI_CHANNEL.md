@@ -1536,3 +1536,27 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 
 **? Waiting on:** Teddy (push), Base44 (schema + redeploy)
 ---
+
+---
+**[CURSOR]** · 2026-07-14
+**Type:** Bugfix · Pricing preset / Cash Discount + HubSpot Sync overwrite (Porky's)
+
+**Problem:** Live applicant Porky's (`334067326709`) could not sign. Portal showed `pricingTier=STANDARD` and demanded custom fees. Admin Applications ? Pricing ? Cash Discount looked broken (tab stayed **0/1**); HubSpot Sync after save could wipe CD.
+
+**Root causes:**
+1. `syncFromHubspot` defaulted empty deal `processing_pricing_tier` to `STANDARD`, overwriting agent-saved `SELF_SERVE_CASH_DISCOUNT`
+2. Pricing tab counted complete only when `customMarkupPercentage != null` ? CD never sets markup ? false **0/1**
+3. `signApplication`/`submitToMSP` treated `STANDARD` as custom-fee tier (wrong error copy)
+
+**Shipped:**
+1. `syncFromHubspot` ? no STANDARD invent; preserve canonical agent tiers
+2. `isPricingComplete` + ApplicationManager Pricing tab + clearer Save Pricing errors
+3. Legacy STANDARD ? "set Pricing in Applications" errors in `signApplication` / `submitToMSP`
+4. Entity enum keeps legacy tier values for safe updates; PricingEditorPanel warns on STANDARD
+
+**Ops (Porky's now):** Save Cash Discount ? confirm **Pricing 1/1** ? skip HubSpot Sync ? retry signing. Full fix needs push + redeploy listed functions + frontend (+ republish profile schema if enum change not live).
+
+**ACTION:** Push ? redeploy `syncFromHubspot`, `updatePricing`, `signApplication`, `submitToMSP` ? publish frontend + MerchantCorporateProfile schema.
+
+**? Waiting on:** Teddy (push / redeploy / re-save Porky's pricing)
+---

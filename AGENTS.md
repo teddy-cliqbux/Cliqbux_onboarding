@@ -241,6 +241,25 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 **Rule:** Never bypass `getPortalActor` on demote. Never clear `mspApplicationNo` except intentional void / explicit 404. Do not invent a separate BoldSign API path.
 
+### 17. Cash Discount / Pricing tab "save failed" — HubSpot Sync + false incomplete (Porky's 2026-07-14)
+
+**Live incident:** Porky's Lechon & BBQ (`corporateId` 334067326709). Admin chose Cash Discount on Applications → Pricing; tab stayed **Pricing 0/1**; portal signing failed with `pricingTier=STANDARD` and a message about missing custom markup fees.
+
+**Root causes:**
+1. **`syncFromHubspot` defaulted blank HubSpot deal tiers to `STANDARD`.** Agent-saved `SELF_SERVE_CASH_DISCOUNT` was overwritten on HubSpot Sync (or any sync that ran after Save Pricing) when `processing_pricing_tier` was empty on the deal.
+2. **Pricing tab completeness used `customMarkupPercentage != null`.** Cash Discount correctly does not set markup → tab stayed **0/1 even after a successful CD save**, looking like a failed save.
+3. **Legacy `STANDARD` was treated as a custom-fee tier** in `signApplication` / `submitToMSP`, so the error asked for markup/per-tx/auth instead of "set Pricing in Applications."
+
+**Fixes (2026-07-14):**
+- `syncFromHubspot`: never invent `STANDARD`; never clobber agent-set canonical tiers (`CUSTOM_*` / `SELF_SERVE_CASH_DISCOUNT`) with blank/legacy HubSpot values
+- `isPricingComplete()` — CD counts as complete; custom needs all 3 fees
+- Clearer signing errors for legacy STANDARD; entity enum re-allows legacy values so existing profiles can be updated
+- Save Pricing surfaces API errors into the StageEditor banner
+
+**Ops unblock for a stuck merchant:** Applications → Pricing → Cash Discount → **Save Pricing** → confirm tab shows **Pricing 1/1** → **do not** HubSpot Sync unless the deal has `processing_pricing_tier` set → retry signing. Push + redeploy `syncFromHubspot`, `updatePricing`, `signApplication`, `submitToMSP` + frontend.
+
+**Rule:** Blank HubSpot `processing_pricing_tier` must not write `STANDARD`. Pricing tab complete = canonical CD **or** custom with all three fees — never markup-only.
+
 ---
 
 ## What This App Does

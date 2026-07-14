@@ -14,6 +14,7 @@ import {
   isApplicationSigned,
 } from '@/lib/signerLifecycle';
 import PricingEditorPanel from '@/components/pricing/PricingEditorPanel';
+import { isPricingComplete } from '@/lib/pricingPresets';
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 
@@ -745,7 +746,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
     { key: 'locations', label: 'Locations', count: selLocs.size, total: locations.length, icon: Store },
     { key: 'signers',   label: 'Signers',   count: selSigners.size, total: signers.length, icon: Users },
     { key: 'quotes',    label: 'Quotes',    count: selectedQuoteId ? 1 : 0, total: quotes.length, icon: FileText },
-    { key: 'pricing',   label: 'Pricing',   count: pricing?.customMarkupPercentage != null ? 1 : 0, total: 1, icon: Percent },
+    { key: 'pricing',   label: 'Pricing',   count: isPricingComplete(pricing) ? 1 : 0, total: 1, icon: Percent },
   ];
 
   const formatMoney = (n) => (n == null || Number.isNaN(n) ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`);
@@ -947,9 +948,23 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                   initialPricing={pricing}
                   saveLabel="Save Pricing"
                   onSave={async (payload) => {
-                    const res = await base44.functions.invoke('updatePricing', { corporateId, ...payload });
-                    if (res.data?.error) throw new Error(res.data.error);
-                    setPricing(res.data?.pricing || null);
+                    try {
+                      const res = await base44.functions.invoke('updatePricing', { corporateId, ...payload });
+                      const data = res?.data;
+                      if (data?.error) throw new Error(data.error);
+                      if (!data?.success) {
+                        throw new Error(data?.error || 'Pricing save did not succeed — is updatePricing published?');
+                      }
+                      setPricing(data.pricing || null);
+                      setError('');
+                    } catch (err) {
+                      const msg =
+                        err?.response?.data?.error
+                        || err?.message
+                        || 'Pricing save failed';
+                      setError(msg);
+                      throw new Error(msg);
+                    }
                   }}
                 />
               </div>

@@ -49,7 +49,9 @@ export default function PricingEditorPanel({
       setTemplateId(tier === 'CUSTOM_FLAT_RATE' ? 'FLAT_RATE_2_5' : 'CUSTOM_INTERCHANGE_PLUS');
     } else {
       setMode('template');
-      setTemplateId(matched?.id || 'CUSTOM_INTERCHANGE_PLUS');
+      // Legacy STANDARD / unset: default the dropdown to Cash Discount so agents
+      // don't accidentally "save" Interchange Plus without fees (2026-07-14).
+      setTemplateId(matched?.id || 'SELF_SERVE_CASH_DISCOUNT');
     }
     setMarkup(
       initialPricing.customMarkupPercentage != null && Number.isFinite(Number(initialPricing.customMarkupPercentage))
@@ -245,6 +247,14 @@ export default function PricingEditorPanel({
       {selected.pricingTier === 'SELF_SERVE_CASH_DISCOUNT' && mode === 'template' && (
         <p className="text-cb-caption text-gray-500">
           Cash Discount uses Cliqbux&apos;s fixed fee schedule — monthly/service fees stay on the MSPWare template.
+        </p>
+      )}
+
+      {initialPricing?.pricingTier
+        && ['STANDARD', 'TRADITIONAL', 'PREMIUM'].includes(String(initialPricing.pricingTier).toUpperCase())
+        && (
+        <p className="text-cb-caption text-cb-accent">
+          This merchant still has legacy pricing &quot;{initialPricing.pricingTier}&quot;. Choose a template (or custom fees) and Save before signing will work.
         </p>
       )}
 

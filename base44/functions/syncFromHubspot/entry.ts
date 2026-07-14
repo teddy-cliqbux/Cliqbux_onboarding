@@ -253,8 +253,8 @@ Deno.serve(async (req) => {
 
     const dealProps = deal.properties || {};
     // Tier precedence: processing_pricing_tier (the real deal property, 2026-07-09)
-    // → legacy names → STANDARD. Normalize legacy/lowercase option values to the
-    // canonical enum so TIER_TO_METHOD and the custom-pricing guard match.
+    // → legacy names. NEVER default blank HubSpot tiers to STANDARD — that clobbered
+    // agent-saved Cash Discount / custom tiers (Porky's live incident 2026-07-14).
     const TIER_ALIASES: Record<string, string> = {
       'CUSTOM': 'CUSTOM_INTERCHANGE_PLUS',              // pre-cleanup processing_pricing_tier option
       'ZERO_CASH_DISCOUNT': 'SELF_SERVE_CASH_DISCOUNT', // pre-cleanup processing_pricing_tier option
@@ -264,8 +264,15 @@ Deno.serve(async (req) => {
       // on-hold self-serve flat rate (Elavon unsupported); leaving it unmapped makes
       // downstream fall back to safe defaults instead of boarding an unsupported plan.
     };
-    const rawTier = String(dealProps.processing_pricing_tier || dealProps.pricing_tier__ || dealProps.pricing_tier || 'STANDARD').toUpperCase();
-    const pricingTier = TIER_ALIASES[rawTier] || rawTier;
+    const CANONICAL_TIERS = new Set([
+      'CUSTOM_FLAT_RATE', 'CUSTOM_INTERCHANGE_PLUS', 'SELF_SERVE_CASH_DISCOUNT',
+    ]);
+    const rawFromDeal = String(
+      dealProps.processing_pricing_tier || dealProps.pricing_tier__ || dealProps.pricing_tier || ''
+    ).trim().toUpperCase();
+    const dealPricingTier = rawFromDeal
+      ? (TIER_ALIASES[rawFromDeal] || rawFromDeal)
+      : '';
 
     // ── 2. Find the associated parent company ─────────────────────────────────
     const companyAssocs = deal.associations?.companies?.results || [];
@@ -361,6 +368,30 @@ Deno.serve(async (req) => {
     const legalName = pc.name || dealProps.dealname || 'New Merchant';
     const signerEmail = primaryContact.email || '';
 
+    // Resolve tier: never invent STANDARD when HubSpot is blank; never clobber an
+    // agent-saved canonical tier (Cash Discount / custom) with HubSpot legacy/blank.
+    const resolvePricingTier = (existingTier: string | undefined | null): string | undefined => {
+      const existing = existingTier != null && existingTier !== '' ? String(existingTier) : undefined;
+      const existingUpper = String(existing || '').toUpperCase();
+      // force=true only wins when HubSpot has a *canonical* tier — never force-write
+      // legacy STANDARD over an agent-saved Cash Discount / custom tier.
+      if (force && dealPricingTier && CANONICAL_TIERS.has(dealPricingTier)) {
+        return dealPricingTier;
+      }
+      if (CANONICAL_TIERS.has(existingUpper)) {
+        if (dealPricingTier && CANONICAL_TIERS.has(dealPricingTier)) return dealPricingTier;
+        return existing;
+      }
+      if (dealPricingTier && CANONICAL_TIERS.has(dealPricingTier)) return dealPricingTier;
+      if (existing) return existing;
+      // Blank HubSpot + no existing → leave unset (agent sets via Applications → Pricing)
+      // Do not invent STANDARD. Non-canonical deal values (STANDARD etc.) only apply
+      // when there is no existing tier yet (create path).
+      return (dealPricingTier && !['STANDARD', 'TRADITIONAL', 'PREMIUM', 'CUSTOM'].includes(dealPricingTier))
+        ? dealPricingTier
+        : undefined;
+    };
+
     const profileData: Record<string, any> = {
       corporateId,
       legalName,
@@ -371,10 +402,11 @@ Deno.serve(async (req) => {
       titleType:         mapJobTitle(primaryContact.jobtitle || ''),
       industryClass,
       mccCode,
-      pricingTier,
       hubspotQuoteUrl:   quoteUrl,
       applicationStatus: quoteEsignStatus === 'SIGNED' ? 'Quote Signed' : 'Incomplete',
     };
+    const createTier = resolvePricingTier(null);
+    if (createTier) profileData.pricingTier = createTier;
 
     // Only set fields that come from HubSpot custom properties if present
     if (pc.ein)                 profileData.taxId             = pc.ein.replace(/\D/g, '');
@@ -420,14 +452,16 @@ Deno.serve(async (req) => {
 
     const existingProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
     let profileId: string;
+    let effectivePricingTier: string | undefined = createTier || dealPricingTier || undefined;
 
     if (existingProfiles?.length) {
       const existing = existingProfiles[0];
       // Don't overwrite sensitive/progress fields unless force=true
+      const resolvedTier = resolvePricingTier(existing.pricingTier);
+      effectivePricingTier = resolvedTier || existing.pricingTier || undefined;
       const safeUpdate: Record<string, any> = {
         legalName,
         hubspotQuoteUrl: profileData.hubspotQuoteUrl || existing.hubspotQuoteUrl,
-        pricingTier:     pricingTier || existing.pricingTier,
         // Signature detection — only ever upgrades Incomplete/Pricing Selected, never regresses
         ...(quoteEsignStatus === 'SIGNED' &&
           (!existing.applicationStatus ||
@@ -437,6 +471,7 @@ Deno.serve(async (req) => {
         industryClass:   industryClass || existing.industryClass,
         mccCode:         mccCode || existing.mccCode,
       };
+      if (resolvedTier) safeUpdate.pricingTier = resolvedTier;
       // Pull architecture (no HubSpot workflow webhooks): stamp quote lifecycle from live quote props
       if (quoteEsignStatus === 'SIGNED' && !existing.quoteSignedAt) {
         safeUpdate.quoteSignedAt = new Date().toISOString();
@@ -481,7 +516,14 @@ Deno.serve(async (req) => {
       result.profileAction = 'created';
     }
 
-    result.profile = { legalName, industryClass, mccCode, pricingTier, taxId: profileData.taxId || null, hubspotQuoteUrl: profileData.hubspotQuoteUrl || '' };
+    result.profile = {
+      legalName,
+      industryClass,
+      mccCode,
+      pricingTier: effectivePricingTier || null,
+      taxId: profileData.taxId || null,
+      hubspotQuoteUrl: profileData.hubspotQuoteUrl || '',
+    };
     // ── 4b. Seed the first legal entity from HubSpot company data ─────────────
     // The sync previously left legalEntities[] empty, so the merchant entity
     // panel showed blank fields even when HubSpot already knew the EIN and
@@ -566,7 +608,7 @@ Deno.serve(async (req) => {
         const state      = lc.state   || '';
         const zip        = lc.zip     || '';
         const locMcc     = lc.mcc_code || mccCode;
-        const locPricing = lc.pricing_tier || pricingTier;
+        const locPricing = lc.pricing_tier || effectivePricingTier;
         const monthlyVol = lc.monthly_card_sales || profileData.monthlyCardSales || '5000';
         const avgTicket  = lc.avg_ticket          || profileData.avgSaleAmount    || '100';
         const cpPct      = parseInt(lc.card_present_pct || '100', 10);

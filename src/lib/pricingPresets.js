@@ -53,6 +53,21 @@ export function formatDollarDisplay(n) {
   return `$${v.toFixed(2)}`;
 }
 
+/** True when agent has saved a boarding-ready tier (CD or custom with all 3 fees). */
+export function isPricingComplete(pricing) {
+  if (!pricing) return false;
+  const tier = String(pricing.pricingTier || '').toUpperCase();
+  if (tier === 'SELF_SERVE_CASH_DISCOUNT') return true;
+  if (tier === 'CUSTOM_FLAT_RATE' || tier === 'CUSTOM_INTERCHANGE_PLUS') {
+    return (
+      pricing.customMarkupPercentage != null
+      && pricing.customPerTxFee != null
+      && pricing.customAuthPerCard != null
+    );
+  }
+  return false;
+}
+
 export function findTemplateByTier(pricingTier, fees = {}) {
   const tier = String(pricingTier || '').toUpperCase();
   if (tier === 'SELF_SERVE_CASH_DISCOUNT') {
@@ -67,5 +82,6 @@ export function findTemplateByTier(pricingTier, fees = {}) {
   if (tier === 'CUSTOM_INTERCHANGE_PLUS') {
     return PRICING_TEMPLATES.find(t => t.id === 'CUSTOM_INTERCHANGE_PLUS');
   }
-  return PRICING_TEMPLATES[0];
+  // Legacy STANDARD / unset — do NOT default to Interchange Plus (misleading UI).
+  return null;
 }
