@@ -171,12 +171,33 @@ function applyActivityEvent(prevActivity: any, event: any) {
 
 /** Upsert __auto_track__ for a corporateId, merging prefill patch + optional activityEvent. */
 async function upsertAutoTrack(base44: any, corporateId: string, prefillPatch: Record<string, any> = {}, activityEvent?: any) {
-  const existing = await base44.asServiceRole.entities.StagedApplication.filter(
-    { corporateId, label: '__auto_track__' }, '-created_date', 1
-  );
-  const prev = (existing[0]?.prefilledData && typeof existing[0].prefilledData === 'object')
-    ? existing[0].prefilledData
-    : {};
+  const cid = String(corporateId ?? '').trim();
+  const tryFilter = async (corp: string | number) => {
+    const rows = await base44.asServiceRole.entities.StagedApplication.filter(
+      { corporateId: corp, label: '__auto_track__' }, '-created_date', 5
+    );
+    return Array.isArray(rows) ? rows : [];
+  };
+  let rows = await tryFilter(cid);
+  if (rows.length === 0 && /^\d+$/.test(cid)) rows = await tryFilter(Number(cid));
+  let existingRow = rows[0] || null;
+  if (!existingRow) {
+    try {
+      const scan = await base44.asServiceRole.entities.StagedApplication.filter(
+        { label: '__auto_track__' }, '-created_date', 100
+      );
+      existingRow = (scan || []).find((s: any) => String(s.corporateId) === cid) || null;
+    } catch { /* non-fatal */ }
+  }
+
+  let prev: Record<string, any> = {};
+  const raw = existingRow?.prefilledData;
+  if (typeof raw === 'string') {
+    try { prev = JSON.parse(raw) || {}; } catch { prev = {}; }
+  } else if (raw && typeof raw === 'object') {
+    prev = raw;
+  }
+
   const activity = activityEvent
     ? applyActivityEvent(prev.activity, activityEvent)
     : (prev.activity || emptyActivity());
@@ -190,13 +211,13 @@ async function upsertAutoTrack(base44: any, corporateId: string, prefillPatch: R
     lastSeenAt: prefillPatch.lastSeenAt || prev.lastSeenAt || new Date().toISOString(),
   };
   const trackData: any = {
-    corporateId,
+    corporateId: cid,
     label: '__auto_track__',
     status: 'draft',
     prefilledData: mergedPrefill,
   };
-  if (existing.length > 0) {
-    return base44.asServiceRole.entities.StagedApplication.update(existing[0].id, trackData);
+  if (existingRow?.id) {
+    return base44.asServiceRole.entities.StagedApplication.update(existingRow.id, trackData);
   }
   const token = generateToken();
   return base44.asServiceRole.entities.StagedApplication.create({ ...trackData, accessToken: token });

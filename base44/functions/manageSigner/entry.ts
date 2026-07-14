@@ -158,12 +158,32 @@ function buildSigningInviteUrl(token: string): string {
 /** Log signer invite/open onto __auto_track__.prefilledData.activity (Applications panel). */
 async function logSignerActivity(base44: any, corporateId: string, event: any) {
   try {
-    const existing = await base44.asServiceRole.entities.StagedApplication.filter(
-      { corporateId, label: '__auto_track__' }, '-created_date', 1
-    );
-    const prev = (existing[0]?.prefilledData && typeof existing[0].prefilledData === 'object')
-      ? existing[0].prefilledData
-      : {};
+    const cid = String(corporateId ?? '').trim();
+    const tryFilter = async (corp: string | number) => {
+      const rows = await base44.asServiceRole.entities.StagedApplication.filter(
+        { corporateId: corp, label: '__auto_track__' }, '-created_date', 5
+      );
+      return Array.isArray(rows) ? rows : [];
+    };
+    let rows = await tryFilter(cid);
+    if (rows.length === 0 && /^\d+$/.test(cid)) rows = await tryFilter(Number(cid));
+    let existing = rows[0] || null;
+    if (!existing) {
+      try {
+        const scan = await base44.asServiceRole.entities.StagedApplication.filter(
+          { label: '__auto_track__' }, '-created_date', 100
+        );
+        existing = (scan || []).find((s: any) => String(s.corporateId) === cid) || null;
+      } catch { /* non-fatal */ }
+    }
+
+    let prev: Record<string, any> = {};
+    const raw = existing?.prefilledData;
+    if (typeof raw === 'string') {
+      try { prev = JSON.parse(raw) || {}; } catch { prev = {}; }
+    } else if (raw && typeof raw === 'object') {
+      prev = raw;
+    }
     const prevAct = (prev.activity && typeof prev.activity === 'object') ? prev.activity : {};
     const at = new Date().toISOString();
     const type = String(event?.type || '');
@@ -182,16 +202,17 @@ async function logSignerActivity(base44: any, corporateId: string, event: any) {
       activity.signerLastOpenAt = at;
     }
     const prefilledData = { ...prev, activity, lastSeenAt: at };
-    if (existing.length > 0) {
-      await base44.asServiceRole.entities.StagedApplication.update(existing[0].id, {
+    if (existing?.id) {
+      await base44.asServiceRole.entities.StagedApplication.update(existing.id, {
         prefilledData,
+        corporateId: cid,
       });
     } else {
       const bytes = new Uint8Array(24);
       crypto.getRandomValues(bytes);
       const accessToken = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
       await base44.asServiceRole.entities.StagedApplication.create({
-        corporateId,
+        corporateId: cid,
         label: '__auto_track__',
         status: 'draft',
         accessToken,

@@ -80,17 +80,60 @@ function isPackageSignedStatus(status: string): boolean {
   return ['signed', 'complete', 'completed'].includes((status || '').toLowerCase());
 }
 
+/** Base44 sometimes returns nested JSON fields as strings — never wipe activity on that. */
+function parsePrefill(raw: any): Record<string, any> {
+  if (!raw) return {};
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof raw === 'object' ? raw : {};
+}
+
+/**
+ * Find __auto_track__ for a deal. corporateId may be stored as string OR number —
+ * a typed filter miss creates a duplicate track the Applications UI never shows
+ * (invites land on one record, opens on another).
+ */
+async function findAutoTrack(base44: any, corporateId: string | number) {
+  const cid = String(corporateId ?? '').trim();
+  if (!cid || cid === 'undefined' || cid === 'null') return null;
+
+  const tryFilter = async (corp: string | number) => {
+    const rows = await base44.asServiceRole.entities.StagedApplication.filter(
+      { corporateId: corp, label: '__auto_track__' }, '-created_date', 5
+    );
+    return Array.isArray(rows) ? rows : [];
+  };
+
+  let rows = await tryFilter(cid);
+  if (rows.length === 0 && /^\d+$/.test(cid)) {
+    rows = await tryFilter(Number(cid));
+  }
+  if (rows.length > 0) return rows[0];
+
+  // Last resort: scan recent auto-tracks and match loosely (small portfolios).
+  try {
+    const scan = await base44.asServiceRole.entities.StagedApplication.filter(
+      { label: '__auto_track__' }, '-created_date', 100
+    );
+    return (scan || []).find((s: any) => String(s.corporateId) === cid) || null;
+  } catch {
+    return null;
+  }
+}
+
 /** Log signer link opens onto Applications portal activity (__auto_track__).
  *  signer_link_opened is idempotent per email for 5 minutes (refresh spam guard).
  */
 async function logSignerActivity(base44: any, corporateId: string, event: any) {
   try {
-    const existing = await base44.asServiceRole.entities.StagedApplication.filter(
-      { corporateId, label: '__auto_track__' }, '-created_date', 1
-    );
-    const prev = (existing[0]?.prefilledData && typeof existing[0].prefilledData === 'object')
-      ? existing[0].prefilledData
-      : {};
+    const existing = await findAutoTrack(base44, corporateId);
+    const prev = parsePrefill(existing?.prefilledData);
     const prevAct = (prev.activity && typeof prev.activity === 'object') ? prev.activity : {};
     const at = new Date().toISOString();
     const type = String(event?.type || '');
@@ -98,7 +141,7 @@ async function logSignerActivity(base44: any, corporateId: string, event: any) {
     const actor = event?.actor === 'agent' ? 'agent' : 'merchant';
     const detail = event?.email
       ? String(event.email).trim().toLowerCase()
-      : (event?.detail ? String(event.detail) : undefined);
+      : (event?.detail ? String(event.detail).trim().toLowerCase() : undefined);
 
     if (type === 'signer_link_opened' && detail) {
       const windowMs = 5 * 60 * 1000;
@@ -127,14 +170,19 @@ async function logSignerActivity(base44: any, corporateId: string, event: any) {
       activity.signerLastOpenAt = at;
     }
     const prefilledData = { ...prev, activity, lastSeenAt: at };
-    if (existing.length > 0) {
-      await base44.asServiceRole.entities.StagedApplication.update(existing[0].id, { prefilledData });
+    const cid = String(corporateId ?? '').trim();
+    if (existing?.id) {
+      await base44.asServiceRole.entities.StagedApplication.update(existing.id, {
+        prefilledData,
+        // Normalize stored key so future typed filters hit this row
+        corporateId: cid,
+      });
     } else {
       const bytes = new Uint8Array(24);
       crypto.getRandomValues(bytes);
       const accessToken = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
       await base44.asServiceRole.entities.StagedApplication.create({
-        corporateId,
+        corporateId: cid,
         label: '__auto_track__',
         status: 'draft',
         accessToken,
@@ -232,13 +280,13 @@ Deno.serve(async (req) => {
       }
 
       // Activity feed: "Merchant  Signer link opened · email" (5-min debounce per email)
-      if (signer.signerEmail) {
-        await logSignerActivity(base44, String(signer.corporateId), {
-          type: 'signer_link_opened',
-          actor: 'merchant',
-          email: signer.signerEmail,
-        });
-      }
+      // Always attempt — even if email is blank (detail falls back so the row still appears).
+      await logSignerActivity(base44, String(signer.corporateId), {
+        type: 'signer_link_opened',
+        actor: 'merchant',
+        email: signer.signerEmail || undefined,
+        detail: signer.signerEmail || signer.id || 'signer',
+      });
 
       return Response.json({ success: true, signer: toSafeSigner(current), legalName });
     }
@@ -311,6 +359,13 @@ Deno.serve(async (req) => {
           signer: toSafeSigner(signer),
         });
       }
+
+      // Backup open log for verified→signing path (same 5-min debounce as `get`)
+      await logSignerActivity(base44, String(signer.corporateId), {
+        type: 'signer_link_opened',
+        actor: 'merchant',
+        email: email,
+      });
 
       const mspKey = Deno.env.get('MSP_APP_KEY');
       const mspAppId = Deno.env.get('MSP_APP_ID') || 'cliqbux';

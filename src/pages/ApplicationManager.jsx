@@ -1457,10 +1457,11 @@ export default function ApplicationManager() {
   };
 
   // Build grouped map: corporateId → { profile, track, admin[] }
+  // Always key by String(corporateId) — HubSpot deal ids may arrive as number or string.
   const trackMap = {};
   const adminMap = {};
   for (const s of allStages) {
-    const key = s.corporateId;
+    const key = s.corporateId != null ? String(s.corporateId) : '';
     if (!key) continue;
     if (s.label === '__auto_track__') trackMap[key] = s;
     else { if (!adminMap[key]) adminMap[key] = []; adminMap[key].push(s); }
@@ -1474,8 +1475,8 @@ export default function ApplicationManager() {
 
   // Sort: submitted last, stuck + active first, then by updated
   const sorted = [...filtered].sort((a, b) => {
-    const aTrack = trackMap[a.corporateId];
-    const bTrack = trackMap[b.corporateId];
+    const aTrack = trackMap[String(a.corporateId)];
+    const bTrack = trackMap[String(b.corporateId)];
     const aStuck = aTrack?.prefilledData?.lastSeenAt && (Date.now() - new Date(aTrack.prefilledData.lastSeenAt).getTime()) > 3 * 24 * 60 * 60 * 1000 && a.applicationStatus !== 'Submitted';
     const bStuck = bTrack?.prefilledData?.lastSeenAt && (Date.now() - new Date(bTrack.prefilledData.lastSeenAt).getTime()) > 3 * 24 * 60 * 60 * 1000 && b.applicationStatus !== 'Submitted';
     if (aStuck && !bStuck) return -1;
@@ -1536,8 +1537,8 @@ export default function ApplicationManager() {
                     corporateId={profile.corporateId}
                     merchantName={merchantNames[profile.corporateId] || profile.legalName || profile.corporateId}
                     profile={profile}
-                    trackStage={trackMap[profile.corporateId] || null}
-                    adminStages={adminMap[profile.corporateId] || []}
+                    trackStage={trackMap[String(profile.corporateId)] || null}
+                    adminStages={adminMap[String(profile.corporateId)] || []}
                     publicUrl={publicUrl}
                     onEdit={(corpId, name, stage) => setEditing({ corporateId: corpId, merchantName: name, stage: stage || null })}
                     onSend={(stage, corpId, email) => setSending({ stage, corporateId: corpId, prefillEmail: email })}
