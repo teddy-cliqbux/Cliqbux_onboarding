@@ -41,6 +41,571 @@ async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merc
   return null;
 }
 
+// --- BEGIN pricingMapper (sync with helpers/pricingMapper.ts + src/utils/pricingMapper.ts) ---
+/**
+ * Canonical Deno copy — Base44 boarding functions INLINE this (cannot import helpers). Keep in sync with src/utils/pricingMapper.ts
+ *
+ * Pure, testable module that compiles MSPWare pricing PUT fields from a
+ * merchant pricing source (MerchantCorporateProfile — NOT StagedApplication
+ * tracking metadata).
+ *
+ * Canonical models (switch must handle all four):
+ *   Presets:  FLAT_RATE, CASH_DISCOUNT
+ *   Customs:  CUSTOM_INTERCHANGE_PLUS, CUSTOM_FLAT_RATE
+ *
+ * Production field names (do not invent):
+ *   customMarkupPercentage — percent number (0.15 = 0.15%), NOT basis points
+ *   customPerTxFee, customAuthPerCard — dollars
+ * Optional aliases: basisPoints (/100 → percent), perTransactionFee → customPerTxFee
+ *
+ * Self-serve Flat Rate remains ON HOLD (Elavon) — FLAT_RATE here is the agent
+ * preset 2.5%+$0.10+$0.10 auth, stored as CUSTOM_FLAT_RATE on the profile.
+ */
+
+// ─── Canonical models ─────────────────────────────────────────────────────────
+
+const CANONICAL_PRICING_MODELS = [
+  'FLAT_RATE',
+  'CASH_DISCOUNT',
+  'CUSTOM_INTERCHANGE_PLUS',
+  'CUSTOM_FLAT_RATE',
+] as const;
+
+type CanonicalPricingModel = (typeof CANONICAL_PRICING_MODELS)[number];
+
+const WHITELISTED_PRICING_METHODS = ['FLAT', 'ICPLS', 'TIERD'] as const;
+type WhitelistedPricingMethod = (typeof WHITELISTED_PRICING_METHODS)[number];
+
+/** MSPWare monetary / auth program contract strings (Cash Discount schedule only). */
+const WHITELISTED_MONETARY_PROGRAMS = ['09828'] as const;
+const WHITELISTED_AUTH_PROGRAMS = ['49999'] as const;
+
+/** Hard ceiling: 500 bps = 5.00% markup / flat rate. */
+const MAX_MARKUP_BPS = 500;
+const MAX_MARKUP_PERCENT = MAX_MARKUP_BPS / 100; // 5
+const MAX_DOLLAR_FEE = 100;
+
+const PRICING_LOCK_STATUSES = ['signing', 'pending_signature', 'all_signed'] as const;
+
+// ─── Hardcoded preset constants (never read from mutable objects) ─────────────
+
+/** Agent Flat Rate preset (2.5% + $0.10 + $0.10 auth). Template UUID/IDs unchanged. */
+const FLAT_RATE_PRESET = Object.freeze({
+  markupPercent: 2.5,
+  perTxFee: 0.1,
+  authPerCard: 0.1,
+  pricing_method: 'FLAT' as const,
+});
+
+/**
+ * Cash Discount Tiered fee schedule — confirmed live 2026-07-03.
+ * Absolute constants only; do not look these up from profile/env.
+ */
+const CASH_DISCOUNT_MSP_FIELDS = Object.freeze({
+  billing_method: 'N',
+  monetary_pricing_program: '09828',
+  auth_pricing_program: '49999',
+  all_qualified_discount: '3.3816',
+  all_qualified_per_item: '0.000',
+  all_mid_qualified_discount: '3.3816',
+  all_mid_qualified_per_item: '0.000',
+  all_non_qualified_discount: '3.3816',
+  all_non_qualified_per_item: '0.000',
+  all_standard_discount: '3.3816',
+  all_standard_per_item: '0.000',
+  all_rewards_discount: '3.3816',
+  all_rewards_per_item: '0.000',
+  has_pin_debit: true,
+  debit_auth_method: 'FIXED',
+  debit_pricing_method: 'SURCH',
+  apply_all_pin_debit: true,
+  all_networks_percent_fee: '3.3816',
+  all_networks_per_auth: '0',
+  all_networks_transaction_fee: '0',
+  pin_debit_monthly_fee: '0',
+  intl_card_handling_fee: '0',
+  all_card_auth_per_item: '0',
+  touch_tone_auth: '0',
+  avs_service_auth: '0',
+  bank_referral_auth: '0',
+  op_assisted_auth: '0',
+});
+
+// ─── Source types ─────────────────────────────────────────────────────────────
+
+/**
+ * Pricing source for compile. Prefer MerchantCorporateProfile fields.
+ * StagedApplication.prefilledData.pricing may be passed through the same shape
+ * but is never the authority for boarding (profile wins at call sites).
+ */
+type PricingSource = {
+  pricingTier?: string | null;
+  customMarkupPercentage?: number | string | null;
+  customPerTxFee?: number | string | null;
+  customAuthPerCard?: number | string | null;
+  /** Alias: bps → percent via /100 (e.g. 15 bps → 0.15%). Prefer customMarkupPercentage. */
+  basisPoints?: number | string | null;
+  /** Alias for customPerTxFee */
+  perTransactionFee?: number | string | null;
+  /** Accepted for integrity checks only — NOT sent on MSP PUT (no boarding wire field). */
+  monthlyServiceFee?: number | string | null;
+  portalLockStatus?: string | null;
+  applicationStatus?: string | null;
+  pricingContractSnapshot?: string | null;
+  legalName?: string | null;
+};
+
+type CompiledMspPricing = {
+  model: CanonicalPricingModel;
+  pricing_method: WhitelistedPricingMethod;
+  /** Fields to spread into MSPWare PUT /form (pricing section only). */
+  mspFields: Readonly<Record<string, string | boolean>>;
+  /** Frozen JSON snapshot after pre-flight passes. */
+  snapshot: string;
+  meta: Readonly<{
+    sourceTier: string;
+    usedPreset: boolean;
+    markupPercent: number | null;
+    perTxFee: number | null;
+    authPerCard: number | null;
+    monthlyServiceFee: number | null;
+  }>;
+};
+
+class PricingIntegrityError extends Error {
+  readonly code = 'CRITICAL_DATA_MISMATCH';
+  readonly payloadSnapshot: string;
+  constructor(message: string, payloadSnapshot: string) {
+    super(`CRITICAL_DATA_MISMATCH: ${message}`);
+    this.name = 'PricingIntegrityError';
+    this.payloadSnapshot = payloadSnapshot;
+  }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function isPricingMutationLocked(
+  portalLockStatus?: string | null,
+  applicationStatus?: string | null,
+): boolean {
+  const lock = String(portalLockStatus || '').toLowerCase();
+  if ((PRICING_LOCK_STATUSES as readonly string[]).includes(lock)) return true;
+  if (String(applicationStatus || '') === 'Submitted') return true;
+  return false;
+}
+
+function normalizeCanonicalModel(tierRaw: string | null | undefined): CanonicalPricingModel | null {
+  const t = String(tierRaw || '').trim().toUpperCase();
+  switch (t) {
+    case 'FLAT_RATE':
+    case 'FLAT_RATE_2_5':
+      return 'FLAT_RATE';
+    case 'CASH_DISCOUNT':
+    case 'SELF_SERVE_CASH_DISCOUNT':
+    case 'SELF_CASH_DISCOUNT':
+      return 'CASH_DISCOUNT';
+    case 'CUSTOM_INTERCHANGE_PLUS':
+      return 'CUSTOM_INTERCHANGE_PLUS';
+    case 'CUSTOM_FLAT_RATE':
+      return 'CUSTOM_FLAT_RATE';
+    default:
+      return null;
+  }
+}
+
+function finiteNumber(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(String(v).replace(/[$,%\s]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Defensive percent for MSP all_markup_discount (4 decimal places). */
+function formatMarkupPercent(n: number): string {
+  return Number(n.toFixed(4)).toString();
+}
+
+function formatDollarFee(n: number): string {
+  return Number(n.toFixed(4)).toString();
+}
+
+function resolveMarkupPercent(source: PricingSource): number | null {
+  const fromPct = finiteNumber(source.customMarkupPercentage);
+  if (fromPct != null) return fromPct;
+  const bps = finiteNumber(source.basisPoints);
+  if (bps != null) return Number((bps / 100).toFixed(4));
+  return null;
+}
+
+function resolvePerTx(source: PricingSource): number | null {
+  return finiteNumber(source.customPerTxFee) ?? finiteNumber(source.perTransactionFee);
+}
+
+function resolveAuth(source: PricingSource): number | null {
+  return finiteNumber(source.customAuthPerCard);
+}
+
+function freezeCompiled(
+  partial: Omit<CompiledMspPricing, 'snapshot'>,
+): CompiledMspPricing {
+  const snapshot = JSON.stringify({
+    model: partial.model,
+    pricing_method: partial.pricing_method,
+    mspFields: partial.mspFields,
+    meta: partial.meta,
+  });
+  return Object.freeze({
+    ...partial,
+    mspFields: Object.freeze({ ...partial.mspFields }),
+    meta: Object.freeze({ ...partial.meta }),
+    snapshot,
+  });
+}
+
+function assertCustomFees(
+  model: CanonicalPricingModel,
+  markup: number | null,
+  perTx: number | null,
+  auth: number | null,
+  name: string,
+): asserts markup is number {
+  if (markup == null || perTx == null || auth == null) {
+    throw new PricingIntegrityError(
+      `Custom pricing not yet set for "${name}" (${model}). ` +
+        `customMarkupPercentage, customPerTxFee, and customAuthPerCard must ALL be set.`,
+      JSON.stringify({ model, markup, perTx, auth }),
+    );
+  }
+  if ([markup, perTx, auth].some((n) => Number.isNaN(n))) {
+    throw new PricingIntegrityError(
+      `NaN financial value for "${name}" (${model}).`,
+      JSON.stringify({ model, markup, perTx, auth }),
+    );
+  }
+  if (markup < 0 || perTx < 0 || auth < 0) {
+    throw new PricingIntegrityError(
+      `Negative fee rejected for "${name}" (${model}).`,
+      JSON.stringify({ model, markup, perTx, auth }),
+    );
+  }
+  const markupBps = Math.round(markup * 100);
+  if (markupBps > MAX_MARKUP_BPS) {
+    throw new PricingIntegrityError(
+      `Markup ${markup}% (${markupBps} bps) exceeds hard ceiling of ${MAX_MARKUP_BPS} bps for "${name}".`,
+      JSON.stringify({ model, markup, markupBps }),
+    );
+  }
+  if (perTx > MAX_DOLLAR_FEE || auth > MAX_DOLLAR_FEE) {
+    throw new PricingIntegrityError(
+      `Dollar fee exceeds safety ceiling ($${MAX_DOLLAR_FEE}) for "${name}".`,
+      JSON.stringify({ model, perTx, auth }),
+    );
+  }
+}
+
+function customMarkupFields(markup: number, perTx: number, auth: number): Record<string, string> {
+  return {
+    all_markup_discount: formatMarkupPercent(markup),
+    all_markup_per_item: formatDollarFee(perTx),
+    all_card_auth_per_item: formatDollarFee(auth),
+  };
+}
+
+// ─── Compile ──────────────────────────────────────────────────────────────────
+
+/**
+ * Compile MSPWare pricing fields for a merchant pricing source.
+ * Switch covers all four canonical models exhaustively.
+ */
+function compileMspPricingPayload(appState: PricingSource): CompiledMspPricing {
+  const name = appState.legalName || 'this merchant';
+  const sourceTier = String(appState.pricingTier || '').trim().toUpperCase();
+
+  // Idempotent target lock: when signing/locked and a validated snapshot exists,
+  // never recalculate from mutable fee columns — return the frozen contract.
+  if (
+    isPricingMutationLocked(appState.portalLockStatus, appState.applicationStatus)
+    && appState.pricingContractSnapshot
+  ) {
+    try {
+      const parsed = JSON.parse(appState.pricingContractSnapshot) as CompiledMspPricing;
+      return assertMspPricingPayload({
+        ...parsed,
+        snapshot: appState.pricingContractSnapshot,
+      });
+    } catch (e: any) {
+      throw new PricingIntegrityError(
+        `Locked pricingContractSnapshot failed re-validation for "${name}": ${e?.message || e}`,
+        String(appState.pricingContractSnapshot),
+      );
+    }
+  }
+
+  const model = normalizeCanonicalModel(sourceTier);
+  if (!model) {
+    throw new PricingIntegrityError(
+      `Pricing is not configured for "${name}" (pricingTier=${sourceTier || 'unset'}). ` +
+        `Open Admin → Applications → Pricing and Save Pricing (Cash Discount or Custom).`,
+      JSON.stringify({ pricingTier: sourceTier }),
+    );
+  }
+
+  const monthlyServiceFee = finiteNumber(appState.monthlyServiceFee);
+
+  switch (model) {
+    case 'CASH_DISCOUNT': {
+      return freezeCompiled({
+        model,
+        pricing_method: 'TIERD',
+        mspFields: { ...CASH_DISCOUNT_MSP_FIELDS },
+        meta: {
+          sourceTier,
+          usedPreset: true,
+          markupPercent: null,
+          perTxFee: null,
+          authPerCard: null,
+          monthlyServiceFee,
+        },
+      });
+    }
+
+    case 'FLAT_RATE': {
+      // Hardcoded preset — do not read mutable profile fee columns.
+      const { markupPercent, perTxFee, authPerCard, pricing_method } = FLAT_RATE_PRESET;
+      return freezeCompiled({
+        model,
+        pricing_method,
+        mspFields: customMarkupFields(markupPercent, perTxFee, authPerCard),
+        meta: {
+          sourceTier,
+          usedPreset: true,
+          markupPercent,
+          perTxFee,
+          authPerCard,
+          monthlyServiceFee,
+        },
+      });
+    }
+
+    case 'CUSTOM_FLAT_RATE': {
+      const markup = resolveMarkupPercent(appState);
+      const perTx = resolvePerTx(appState);
+      const auth = resolveAuth(appState);
+      assertCustomFees(model, markup, perTx, auth, name);
+      return freezeCompiled({
+        model,
+        pricing_method: 'FLAT',
+        mspFields: customMarkupFields(markup, perTx!, auth!),
+        meta: {
+          sourceTier,
+          usedPreset: false,
+          markupPercent: markup,
+          perTxFee: perTx,
+          authPerCard: auth,
+          monthlyServiceFee,
+        },
+      });
+    }
+
+    case 'CUSTOM_INTERCHANGE_PLUS': {
+      const markup = resolveMarkupPercent(appState);
+      const perTx = resolvePerTx(appState);
+      const auth = resolveAuth(appState);
+      assertCustomFees(model, markup, perTx, auth, name);
+      return freezeCompiled({
+        model,
+        pricing_method: 'ICPLS',
+        mspFields: customMarkupFields(markup, perTx!, auth!),
+        meta: {
+          sourceTier,
+          usedPreset: false,
+          markupPercent: markup,
+          perTxFee: perTx,
+          authPerCard: auth,
+          monthlyServiceFee,
+        },
+      });
+    }
+
+    default: {
+      const _exhaustive: never = model;
+      throw new PricingIntegrityError(
+        `Unhandled pricing model: ${String(_exhaustive)}`,
+        JSON.stringify({ sourceTier }),
+      );
+    }
+  }
+}
+
+// ─── Pre-flight runtime checks (no zod — Deno / Base44 inline copy) ───────────
+
+function isFiniteOrNull(v: unknown): v is number | null {
+  if (v === null) return true;
+  return typeof v === 'number' && Number.isFinite(v);
+}
+
+/**
+ * Equivalent of the zod compiledSchema.safeParse — plain TypeScript runtime checks.
+ * Returns an array of issue messages (empty = valid).
+ */
+function validateCompiledShape(
+  compiled: unknown,
+): string[] {
+  const issues: string[] = [];
+  if (compiled == null || typeof compiled !== 'object') {
+    issues.push('Expected object');
+    return issues;
+  }
+  const c = compiled as Record<string, unknown>;
+
+  if (!(CANONICAL_PRICING_MODELS as readonly string[]).includes(c.model as string)) {
+    issues.push(`Invalid enum value. Expected ${CANONICAL_PRICING_MODELS.join(' | ')}, received '${String(c.model)}'`);
+  }
+  if (!(WHITELISTED_PRICING_METHODS as readonly string[]).includes(c.pricing_method as string)) {
+    issues.push(`Invalid enum value. Expected ${WHITELISTED_PRICING_METHODS.join(' | ')}, received '${String(c.pricing_method)}'`);
+  }
+
+  if (c.mspFields == null || typeof c.mspFields !== 'object' || Array.isArray(c.mspFields)) {
+    issues.push('mspFields: Expected record');
+  } else {
+    for (const [key, val] of Object.entries(c.mspFields as Record<string, unknown>)) {
+      if (typeof val === 'boolean') continue;
+      if (typeof val === 'string' && val.length >= 1) continue;
+      issues.push(`mspFields.${key}: Expected non-empty string or boolean`);
+    }
+  }
+
+  if (c.snapshot !== undefined && typeof c.snapshot !== 'string') {
+    issues.push('snapshot: Expected string');
+  }
+
+  if (c.meta == null || typeof c.meta !== 'object' || Array.isArray(c.meta)) {
+    issues.push('meta: Expected object');
+  } else {
+    const m = c.meta as Record<string, unknown>;
+    if (typeof m.sourceTier !== 'string') issues.push('meta.sourceTier: Expected string');
+    if (typeof m.usedPreset !== 'boolean') issues.push('meta.usedPreset: Expected boolean');
+    if (!isFiniteOrNull(m.markupPercent)) issues.push('meta.markupPercent: Expected finite number or null');
+    if (!isFiniteOrNull(m.perTxFee)) issues.push('meta.perTxFee: Expected finite number or null');
+    if (!isFiniteOrNull(m.authPerCard)) issues.push('meta.authPerCard: Expected finite number or null');
+    if (!isFiniteOrNull(m.monthlyServiceFee)) issues.push('meta.monthlyServiceFee: Expected finite number or null');
+  }
+
+  return issues;
+}
+
+/**
+ * Strict pre-flight: throws PricingIntegrityError (CRITICAL_DATA_MISMATCH) and
+ * must halt the outbound MSPWare / BoldSign network call.
+ */
+function assertMspPricingPayload(
+  compiled: CompiledMspPricing | (Omit<CompiledMspPricing, 'snapshot'> & { snapshot?: string }),
+): CompiledMspPricing {
+  const snap = compiled.snapshot || JSON.stringify(compiled);
+
+  const shapeIssues = validateCompiledShape(compiled);
+  if (shapeIssues.length > 0) {
+    throw new PricingIntegrityError(
+      `Schema validation failed: ${shapeIssues.join('; ')}`,
+      snap,
+    );
+  }
+
+  if (!(WHITELISTED_PRICING_METHODS as readonly string[]).includes(compiled.pricing_method)) {
+    throw new PricingIntegrityError(
+      `pricing_method "${compiled.pricing_method}" is not on the contract whitelist.`,
+      snap,
+    );
+  }
+
+  for (const [key, val] of Object.entries(compiled.mspFields)) {
+    if (val === null || val === undefined) {
+      throw new PricingIntegrityError(`mspFields.${key} is null/undefined.`, snap);
+    }
+    if (typeof val === 'number' && Number.isNaN(val)) {
+      throw new PricingIntegrityError(`mspFields.${key} is NaN.`, snap);
+    }
+    if (typeof val === 'string') {
+      const asNum = Number(val);
+      if (val !== '' && !Number.isNaN(asNum) && !Number.isFinite(asNum)) {
+        throw new PricingIntegrityError(`mspFields.${key} is non-finite.`, snap);
+      }
+    }
+  }
+
+  if (compiled.model === 'CASH_DISCOUNT') {
+    const mon = String(compiled.mspFields.monetary_pricing_program || '');
+    const auth = String(compiled.mspFields.auth_pricing_program || '');
+    if (!(WHITELISTED_MONETARY_PROGRAMS as readonly string[]).includes(mon)) {
+      throw new PricingIntegrityError(
+        `monetary_pricing_program "${mon}" not whitelisted.`,
+        snap,
+      );
+    }
+    if (!(WHITELISTED_AUTH_PROGRAMS as readonly string[]).includes(auth)) {
+      throw new PricingIntegrityError(
+        `auth_pricing_program "${auth}" not whitelisted.`,
+        snap,
+      );
+    }
+  }
+
+  if (
+    compiled.model === 'CUSTOM_INTERCHANGE_PLUS'
+    || compiled.model === 'CUSTOM_FLAT_RATE'
+    || compiled.model === 'FLAT_RATE'
+  ) {
+    for (const k of ['all_markup_discount', 'all_markup_per_item', 'all_card_auth_per_item']) {
+      if (compiled.mspFields[k] == null || compiled.mspFields[k] === '') {
+        throw new PricingIntegrityError(`Missing required custom field ${k}.`, snap);
+      }
+    }
+  }
+
+  return freezeCompiled({
+    model: compiled.model,
+    pricing_method: compiled.pricing_method,
+    mspFields: compiled.mspFields,
+    meta: compiled.meta,
+  });
+}
+
+/**
+ * Compile + assert. Logs CRITICAL_DATA_MISMATCH with full snapshot on failure.
+ * Call immediately before MSPWare PUT /form or BoldSign package creation.
+ */
+function compileAndAssertMspPricing(appState: PricingSource): CompiledMspPricing {
+  try {
+    const compiled = compileMspPricingPayload(appState);
+    return assertMspPricingPayload(compiled);
+  } catch (err: any) {
+    const snapshot =
+      err instanceof PricingIntegrityError
+        ? err.payloadSnapshot
+        : JSON.stringify({ appState, error: String(err?.message || err) });
+    console.error('CRITICAL_DATA_MISMATCH', snapshot);
+    if (err instanceof PricingIntegrityError) throw err;
+    throw new PricingIntegrityError(String(err?.message || err), snapshot);
+  }
+}
+
+/** Map profile.pricingTier for MSP method derivation (legacy aliases included). */
+function tierToPricingMethod(tierRaw: string | null | undefined): WhitelistedPricingMethod | null {
+  const model = normalizeCanonicalModel(tierRaw);
+  if (!model) return null;
+  switch (model) {
+    case 'CASH_DISCOUNT':
+      return 'TIERD';
+    case 'FLAT_RATE':
+    case 'CUSTOM_FLAT_RATE':
+      return 'FLAT';
+    case 'CUSTOM_INTERCHANGE_PLUS':
+      return 'ICPLS';
+    default:
+      return null;
+  }
+}
+// --- END pricingMapper ---
+
 
 // ─── MSPWare / PulsePoint Constants ───────────────────────────────────────────
 // Application type 24 = "Elavon US Application" in this account
@@ -198,34 +763,6 @@ const TIER_TO_METHOD: Record<string, string> = {
   // merchants through them until Elavon adds support. See Critical Lesson #12.
   'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
 };
-
-// Pricing tiers that are ALWAYS a custom, individually-negotiated deal — no
-// off-the-shelf template exists. buildFormPayload must source markup values from
-// the merchant's own customMarkupPercentage/customPerTxFee, never a static constant,
-// and must refuse to proceed if either is missing. See Critical Lesson #12.
-const CUSTOM_PRICING_TIERS = ['CUSTOM_FLAT_RATE', 'CUSTOM_INTERCHANGE_PLUS'];
-const LEGACY_UNCONFIGURED_TIERS = ['STANDARD', 'TRADITIONAL', 'PREMIUM', 'CUSTOM'];
-
-function pricingNotReadyMessage(profile: any, tierKey: string): string | null {
-  const name = profile?.legalName || 'this merchant';
-  if (!tierKey || LEGACY_UNCONFIGURED_TIERS.includes(tierKey)) {
-    return (
-      `Pricing is not configured for "${name}" (pricingTier=${tierKey || 'unset'}). ` +
-      `Open Admin → Applications → Pricing, choose Cash Discount or Custom fees, and click Save Pricing. ` +
-      `Do not click HubSpot Sync afterward unless the HubSpot deal has processing_pricing_tier set — ` +
-      `blank HubSpot tiers previously reset merchants to STANDARD.`
-    );
-  }
-  if (CUSTOM_PRICING_TIERS.includes(tierKey) &&
-      (profile.customMarkupPercentage == null || profile.customPerTxFee == null || profile.customAuthPerCard == null)) {
-    return (
-      `Custom pricing not yet set for "${name}" (pricingTier=${tierKey}). ` +
-      `Your Cliqbux representative needs to set the negotiated markup, per-transaction fee, and per-auth fee ` +
-      `on the deal before your application can be prepared. No application was created.`
-    );
-  }
-  return null;
-}
 
 // ─── Value Mappings ───────────────────────────────────────────────────────────
 
@@ -474,7 +1011,7 @@ function buildFormPayload(
   primarySigner: Record<string, any>,
   additionalSigners: Record<string, any>[],
   entityMailing?: { street: string; city: string; state: string; zip: string } | null
-): Record<string, unknown> {
+): { payload: Record<string, unknown>; pricingSnapshot: string } {
 
   const signer = primarySigner || {};
 
@@ -512,12 +1049,18 @@ function buildFormPayload(
     || 'ICPLS';
   const pricingMethod = rawPricingMethod.toUpperCase() === 'CASH_DISCOUNT' ? 'TIERD' : rawPricingMethod;
 
-  // GUARD (2026-07-06 / 2026-07-14): Custom tiers need fees; legacy STANDARD = not configured.
   const tierKey = (merchantMID.pricingTier || profile.pricingTier || '').toUpperCase();
-  const pricingBlock = pricingNotReadyMessage(profile, tierKey);
-  if (pricingBlock) throw new Error(pricingBlock);
-  // Used below to attach negotiated markup fields — CD / TIERD never send these.
-  const isCustomPricingTier = CUSTOM_PRICING_TIERS.includes(tierKey);
+  const compiledPricing = compileAndAssertMspPricing({
+    pricingTier: tierKey,
+    customMarkupPercentage: profile.customMarkupPercentage,
+    customPerTxFee: profile.customPerTxFee,
+    customAuthPerCard: profile.customAuthPerCard,
+    portalLockStatus: profile.portalLockStatus,
+    applicationStatus: profile.applicationStatus,
+    pricingContractSnapshot: profile.pricingContractSnapshot,
+    legalName: profile.legalName || merchantMID.dbaName,
+  });
+  // Prefer compiled method for the PUT
 
   const industryType = merchantMID.industryType || mapIndustryType(pricingCategory);
   // 2026-07-13: NEVER default to 5999. That code is a restricted category
@@ -615,7 +1158,7 @@ function buildFormPayload(
     owner_id_number: cleanDigits(s.ssn || ''),
   }));
 
-  return {
+  const payload = {
     // ── Merchant Information ──────────────────────────────────────────────────
     full_dba_name: sanitizeFullDbaName(dbaName),
     legal_dba_name: sanitizeLegalDbaName(profile.legalName || dbaName || ''),
@@ -721,8 +1264,8 @@ function buildFormPayload(
     // ── Industry / MCC ────────────────────────────────────────────────────────
     mcc,
 
-    // ── Pricing (merchant-specific only — all fee/rate/config fields omitted; template owns them) ──
-    pricing_method: pricingMethod,
+    // ── Pricing (compiled via compileAndAssertMspPricing) ──
+    pricing_method: compiledPricing.pricing_method,
     pricing_category: pricingCategory,
     // NOTE: billing_method, annual_fee_start_date, auth_pricing_program, all_markup_*,
     // intl_card_handling_fee, tokenization_*, has_pin_debit, debit_*, all ACCL_*/AFFN_*/etc
@@ -759,53 +1302,9 @@ function buildFormPayload(
     safet_fee: '0',
     tokenization: 'none',
 
-    // ── Cliqbux Cash Discount Fee Schedule (Tiered pricing only) ───────────────
-    // Cliqbux never uses MSPWare's "Clear and Simple" pricing method — confirmed
-    // by Teddy 2026-07-03. Cash Discount merchants use pricing_method: 'TIERD'
-    // ("Tiered") instead, which requires its own explicit fee schedule (template
-    // #154 was built around Clear and Simple, so its Tiered fields aren't
-    // reliable). These values were confirmed live by Teddy on 2026-07-03. ICPLS
-    // merchants are unaffected — this block only applies when pricingMethod is
-    // Cash Discount's wire value. See docs/mspware-field-reference.md.
-    ...(pricingMethod === 'TIERD' ? {
-      billing_method: 'N',
-      monetary_pricing_program: '09828',
-      auth_pricing_program: '49999',
-      all_qualified_discount: '3.3816',     all_qualified_per_item: '0.000',
-      all_mid_qualified_discount: '3.3816', all_mid_qualified_per_item: '0.000',
-      all_non_qualified_discount: '3.3816', all_non_qualified_per_item: '0.000',
-      all_standard_discount: '3.3816',      all_standard_per_item: '0.000',
-      all_rewards_discount: '3.3816',       all_rewards_per_item: '0.000',
-      has_pin_debit: true,
-      debit_auth_method: 'FIXED',
-      debit_pricing_method: 'SURCH',
-      apply_all_pin_debit: true,
-      all_networks_percent_fee: '3.3816',
-      all_networks_per_auth: '0',
-      all_networks_transaction_fee: '0',
-      pin_debit_monthly_fee: '0',
-      intl_card_handling_fee: '0',
-      all_card_auth_per_item: '0',
-      touch_tone_auth: '0',
-      avs_service_auth: '0',
-      bank_referral_auth: '0',
-      op_assisted_auth: '0',
-    } : {}),
-
-    // ── Custom Flat Rate / Custom Interchange Plus markup (individually negotiated) ──
-    // These 2 tiers are ALWAYS a custom, per-merchant negotiated deal — never a
-    // static Cliqbux-wide rate. The guard above already refused to reach this point
-    // if either value were missing, so it's safe to send them here. auth-per-card
-    // stays a fixed template-level value (all_card_auth_per_item) per Teddy
-    // 2026-07-06 — no separate custom field needed for it. See Critical Lesson #12.
-    ...(isCustomPricingTier ? {
-      all_markup_discount: String(profile.customMarkupPercentage),
-      all_markup_per_item: String(profile.customPerTxFee),
-      // 2026-07-09: auth-per-card is now ALSO per-deal for custom tiers (Teddy —
-      // supersedes the 2026-07-06 "template-level only, no custom field" decision).
-      // HubSpot prompts all three values on custom-tier deals.
-      all_card_auth_per_item: String(profile.customAuthPerCard),
-    } : {}),
+    // ── Compiled MSP pricing fields (Cash Discount TIERD schedule OR custom markup) ──
+    // Source: compileAndAssertMspPricing (inlined from helpers/pricingMapper.ts).
+    ...compiledPricing.mspFields,
 
     // ── Cliqbux Standard Equipment Configuration ───────────────────────────────
     // Cliqbux ships and manages equipment deployment separately from the MSPWare
@@ -869,6 +1368,7 @@ function buildFormPayload(
     seasonal_business: profile.isSeasonal ? 'Y' : 'N',
     refund_policy: profile.refundPolicy || 'R',
   };
+  return { payload, pricingSnapshot: compiledPricing.snapshot };
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
@@ -911,13 +1411,24 @@ Deno.serve(async (req) => {
     const profile = profiles?.[0];
     if (!profile) return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
 
-    // ── Early custom-pricing guard (2026-07-10 / 2026-07-14) ──────────────────
-    {
-      const tierKeyEarly = (profile.pricingTier || '').toUpperCase();
-      const earlyBlock = pricingNotReadyMessage(profile, tierKeyEarly);
-      if (earlyBlock) {
-        return Response.json({ error: earlyBlock }, { status: 422 });
-      }
+    // ── Early pricing compile guard (canonical mapper) ─────────────────────────
+    try {
+      compileAndAssertMspPricing({
+        pricingTier: (profile.pricingTier || '').toUpperCase(),
+        customMarkupPercentage: profile.customMarkupPercentage,
+        customPerTxFee: profile.customPerTxFee,
+        customAuthPerCard: profile.customAuthPerCard,
+        portalLockStatus: profile.portalLockStatus,
+        applicationStatus: profile.applicationStatus,
+        pricingContractSnapshot: profile.pricingContractSnapshot,
+        legalName: profile.legalName,
+      });
+    } catch (earlyPricingErr: any) {
+      const msg = earlyPricingErr?.message || String(earlyPricingErr);
+      return Response.json({
+        error: msg,
+        code: earlyPricingErr instanceof PricingIntegrityError ? earlyPricingErr.code : 'PRICING_NOT_READY',
+      }, { status: 422 });
     }
 
     // ── Auto-create merchantMIDs for new merchants who have locations but no merchantMIDs yet ──
@@ -1108,7 +1619,7 @@ Deno.serve(async (req) => {
 
         // ── Step 2: Fill form ─────────────────────────────────────────────────
         const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
-        const formPayload = buildFormPayload(profile, location, merchantMID, primarySigner, additionalSigners, entityMailing);
+        const { payload: formPayload, pricingSnapshot } = buildFormPayload(profile, location, merchantMID, primarySigner, additionalSigners, entityMailing);
         console.log(`[submitToMSP] Filling form for application ${mspApplicationNo}:`, JSON.stringify(redactSensitive(formPayload), null, 2));
 
         const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
@@ -1118,6 +1629,18 @@ Deno.serve(async (req) => {
         });
         const formData = await formRes.json();
         console.log(`[submitToMSP] Form fill response ${formRes.status}:`, JSON.stringify(redactSensitive(formData), null, 2));
+
+        // Best-effort freeze pricing contract after a successful PUT (skip if already locked)
+        if (formRes.ok && pricingSnapshot && !isPricingMutationLocked(profile.portalLockStatus, profile.applicationStatus)) {
+          try {
+            await base44.asServiceRole.entities.MerchantCorporateProfile.update(profile.id, {
+              pricingContractSnapshot: pricingSnapshot,
+            });
+            profile.pricingContractSnapshot = pricingSnapshot;
+          } catch (snapErr: any) {
+            console.warn('[submitToMSP] pricingContractSnapshot persist failed (non-fatal):', snapErr?.message);
+          }
+        }
 
         // Per the actual MSPWare API spec (mspware-swagger.json), the PUT /form
         // response nests everything under `validation` — { validation: { errors:

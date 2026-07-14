@@ -107,6 +107,10 @@
       "type": "number",
       "description": "Per-auth card fee for custom pricing tiers (CUSTOM_FLAT_RATE, CUSTOM_INTERCHANGE_PLUS). Feeds MSPWare all_card_auth_per_item. Set per-deal in HubSpot."
     },
+    "pricingContractSnapshot": {
+      "type": "string",
+      "description": "Frozen JSON from compileAndAssertMspPricing after pre-flight; used when portalLockStatus is signing to prevent recalculation."
+    },
     "applicationStatus": {
       "type": "string",
       "enum": [

@@ -1089,3 +1089,23 @@ Covers: empty-MCC draft deferral, CA/CO/NY×MCC matrix, live MCC swap refill, TX
 | `liquorLicenseDocUrl` (+ fileName / uploadedAt) | `MerchantLocations` | **Post-signing only** via `InventoryUpload` + `updateLocationDetails`. Soft prompt on Locations MID UI — does **not** block Continue, signing, or Ready-to-Submit. Ops attach to MSPWare after. |
 
 **Do not** send alcohol % or license URL in MSPWare `PUT /form` (template preservation). Republish `MerchantMID` + `MerchantLocations` schemas in Base44 after push or fields will strip.
+
+---
+
+### 19. Canonical pricing mapper wired into MSP boarding (2026-07-14)
+
+**Source of truth:** `base44/functions/helpers/pricingMapper.ts` (+ mirror `src/utils/pricingMapper.ts`). Base44 cannot import helpers — the full file is **inlined** (no `export`) into `submitToMSP` and `signApplication` between sync markers:
+`// --- BEGIN pricingMapper (sync with helpers/pricingMapper.ts + src/utils/pricingMapper.ts) ---`
+
+**What changed:**
+- `buildFormPayload` calls `compileAndAssertMspPricing` → PUT uses `compiledPricing.pricing_method` + `...compiledPricing.mspFields`; returns `{ payload, pricingSnapshot }`.
+- Old `pricingNotReadyMessage` / `CUSTOM_PRICING_TIERS` / hardcoded TIERD+custom spreads removed from those two boarding entries.
+- After successful form PUT (`submitToMSP`), best-effort persist `pricingContractSnapshot` when not pricing-locked.
+- `signApplication` persists snapshot with `portalLockStatus` → signing / all_signed.
+- `syncFromHubspot`: when `portalLockStatus` ∈ signing|pending_signature|all_signed, skip writes to `pricingTier` / custom fee fields (quote stamps still update).
+- `updatePricing`: HTTP 423 `PRICING_LOCKED` when locked or `applicationStatus === Submitted`.
+- `demoteApplication`: clears `pricingContractSnapshot` on unlock.
+- Entity field `MerchantCorporateProfile.pricingContractSnapshot` (string) — **republish schema in Base44** or the snapshot strips.
+
+**Rules:** Cash Discount fees stay hardcoded in the mapper (`CASH_DISCOUNT_MSP_FIELDS`); custom fees use percent `customMarkupPercentage` (not bps DB column); locked profiles re-use frozen snapshot (no recalculation). Keep the three copies of pricingMapper in sync when editing.
+

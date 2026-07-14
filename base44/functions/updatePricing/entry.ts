@@ -102,6 +102,19 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, corporateId, pricing: pricingSnapshot(profile) });
     }
 
+    const lockStatus = String(profile.portalLockStatus || '').toLowerCase();
+    const pricingLocked =
+      ['signing', 'pending_signature', 'all_signed'].includes(lockStatus) ||
+      String(profile.applicationStatus || '') === 'Submitted';
+    if (pricingLocked) {
+      return Response.json({
+        error: 'Pricing is locked while the merchant agreement is in signing or submitted. Unlock via demoteApplication first.',
+        code: 'PRICING_LOCKED',
+        portalLockStatus: profile.portalLockStatus || 'unlocked',
+        applicationStatus: profile.applicationStatus || null,
+      }, { status: 423 });
+    }
+
     const pricingType = body.pricingType === 'custom' ? 'custom' : 'template';
     let pricingTier = body.pricingTier != null
       ? String(body.pricingTier).trim().toUpperCase()

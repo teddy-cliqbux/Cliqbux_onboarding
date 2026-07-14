@@ -456,8 +456,16 @@ Deno.serve(async (req) => {
 
     if (existingProfiles?.length) {
       const existing = existingProfiles[0];
+      const lockStatus = String(existing.portalLockStatus || '').toLowerCase();
+      const pricingLocked = ['signing', 'pending_signature', 'all_signed'].includes(lockStatus);
+      if (pricingLocked) {
+        console.log(
+          `[syncFromHubspot] Pricing mutation skipped — portalLockStatus=${lockStatus} ` +
+          `(will not write pricingTier / customMarkupPercentage / customPerTxFee / customAuthPerCard)`
+        );
+      }
       // Don't overwrite sensitive/progress fields unless force=true
-      const resolvedTier = resolvePricingTier(existing.pricingTier);
+      const resolvedTier = pricingLocked ? null : resolvePricingTier(existing.pricingTier);
       effectivePricingTier = resolvedTier || existing.pricingTier || undefined;
       const safeUpdate: Record<string, any> = {
         legalName,
@@ -471,7 +479,7 @@ Deno.serve(async (req) => {
         industryClass:   industryClass || existing.industryClass,
         mccCode:         mccCode || existing.mccCode,
       };
-      if (resolvedTier) safeUpdate.pricingTier = resolvedTier;
+      if (!pricingLocked && resolvedTier) safeUpdate.pricingTier = resolvedTier;
       // Pull architecture (no HubSpot workflow webhooks): stamp quote lifecycle from live quote props
       if (quoteEsignStatus === 'SIGNED' && !existing.quoteSignedAt) {
         safeUpdate.quoteSignedAt = new Date().toISOString();
@@ -494,9 +502,11 @@ Deno.serve(async (req) => {
       // by the merchant — so always mirror non-null deal values. The old
       // fill-blanks-only rule meant a rep correcting a rate in HubSpot never
       // propagated to the profile. Never nulls an existing value.
-      if (profileData.customMarkupPercentage != null) safeUpdate.customMarkupPercentage = profileData.customMarkupPercentage;
-      if (profileData.customPerTxFee         != null) safeUpdate.customPerTxFee         = profileData.customPerTxFee;
-      if (profileData.customAuthPerCard      != null) safeUpdate.customAuthPerCard      = profileData.customAuthPerCard;
+      if (!pricingLocked) {
+        if (profileData.customMarkupPercentage != null) safeUpdate.customMarkupPercentage = profileData.customMarkupPercentage;
+        if (profileData.customPerTxFee         != null) safeUpdate.customPerTxFee         = profileData.customPerTxFee;
+        if (profileData.customAuthPerCard      != null) safeUpdate.customAuthPerCard      = profileData.customAuthPerCard;
+      }
 
       await base44.asServiceRole.entities.MerchantCorporateProfile.update(existing.id, safeUpdate);
       profileId = existing.id;

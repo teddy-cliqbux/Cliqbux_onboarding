@@ -240,6 +240,8 @@ Deno.serve(async (req) => {
     const prevLock = profile.portalLockStatus || 'unlocked';
     const profilePatch: Record<string, any> = {
       portalLockStatus: 'unlocked',
+      // Clear frozen pricing so the next signing cycle re-compiles from live fees
+      pricingContractSnapshot: null,
     };
     if (prevStatus === 'Submitted') {
       profilePatch.applicationStatus = 'Incomplete';
