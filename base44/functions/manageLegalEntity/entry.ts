@@ -62,12 +62,24 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-
     const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
     if (!profiles || profiles.length === 0) {
       return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
     }
     const profile = profiles[0];
+
+    // Portal form lock (signing phase) — list stays allowed; mutations blocked
+    if (action !== 'list') {
+      const lock = String(profile.portalLockStatus || 'unlocked').toLowerCase();
+      const locked = profile.applicationStatus === 'Submitted'
+        || lock === 'signing' || lock === 'pending_signature' || lock === 'all_signed';
+      if (locked) {
+        return Response.json({
+          error: 'Forms are locked while the merchant agreement is in signing. Use Unlock & Modify Details first.',
+          code: 'FORMS_LOCKED',
+        }, { status: 423 });
+      }
+    }
 
     // Defensive: Base44 sometimes returns JSON fields as strings — parse if needed
     let rawEntities = profile.legalEntities ?? [];

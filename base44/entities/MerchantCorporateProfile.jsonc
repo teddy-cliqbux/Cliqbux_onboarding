@@ -111,6 +111,17 @@
       ],
       "default": "Incomplete"
     },
+    "portalLockStatus": {
+      "type": "string",
+      "description": "Portal data-entry lock while merchant agreement signing is in flight (2026-07-14). unlocked = editable; signing / pending_signature / all_signed = forms frozen until demoteApplication. Submitted applicationStatus also locks forms.",
+      "enum": [
+        "unlocked",
+        "signing",
+        "pending_signature",
+        "all_signed"
+      ],
+      "default": "unlocked"
+    },
     "isManualMode": {
       "type": "boolean",
       "default": false

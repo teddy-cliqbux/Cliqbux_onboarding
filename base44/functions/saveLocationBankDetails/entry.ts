@@ -54,6 +54,25 @@ Deno.serve(async (req) => {
     const actor = await getPortalActor(req, base44);
     if (!actor) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
+    // Resolve corporateId from first location for form-lock check
+    const firstId = locations.find((l: any) => l?.id)?.id;
+    if (firstId) {
+      const firstLoc = await base44.asServiceRole.entities.MerchantLocations.get(firstId).catch(() => null);
+      if (firstLoc?.corporateId) {
+        const lockProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId: firstLoc.corporateId });
+        const lockProfile = lockProfiles?.[0];
+        const lock = String(lockProfile?.portalLockStatus || 'unlocked').toLowerCase();
+        const formsLocked = lockProfile?.applicationStatus === 'Submitted'
+          || lock === 'signing' || lock === 'pending_signature' || lock === 'all_signed';
+        if (formsLocked) {
+          return Response.json({
+            error: 'Forms are locked while the merchant agreement is in signing. Use Unlock & Modify Details first.',
+            code: 'FORMS_LOCKED',
+          }, { status: 423 });
+        }
+      }
+    }
+
     const results = [];
     for (const loc of locations) {
       const { id, entityId } = loc;

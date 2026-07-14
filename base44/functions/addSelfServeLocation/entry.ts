@@ -82,10 +82,22 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-
     const profile = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
     if (!profile || profile.length === 0) {
       return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
+    }
+
+    {
+      const lockProfile = profile[0];
+      const lock = String(lockProfile?.portalLockStatus || 'unlocked').toLowerCase();
+      const formsLocked = lockProfile?.applicationStatus === 'Submitted'
+        || lock === 'signing' || lock === 'pending_signature' || lock === 'all_signed';
+      if (formsLocked) {
+        return Response.json({
+          error: 'Forms are locked while the merchant agreement is in signing. Use Unlock & Modify Details first.',
+          code: 'FORMS_LOCKED',
+        }, { status: 423 });
+      }
     }
 
     // If caller wants a new entity created, do it here with service role (avoids auth issues on magic-link sessions)

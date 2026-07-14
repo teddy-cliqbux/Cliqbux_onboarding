@@ -67,6 +67,21 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Portal form lock (signing phase)
+    {
+      const lockProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId: loc.corporateId });
+      const lockProfile = lockProfiles?.[0];
+      const lock = String(lockProfile?.portalLockStatus || 'unlocked').toLowerCase();
+      const formsLocked = lockProfile?.applicationStatus === 'Submitted'
+        || lock === 'signing' || lock === 'pending_signature' || lock === 'all_signed';
+      if (formsLocked) {
+        return Response.json({
+          error: 'Forms are locked while the merchant agreement is in signing. Use Unlock & Modify Details first.',
+          code: 'FORMS_LOCKED',
+        }, { status: 423 });
+      }
+    }
+
     const update: Record<string, any> = {};
     if (dbaName !== undefined) {
       const name = String(dbaName).trim();

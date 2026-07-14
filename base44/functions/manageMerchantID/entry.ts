@@ -80,6 +80,21 @@ Deno.serve(async (req) => {
       return Response.json({ merchantIDs: merchantMIDs || [] });
     }
 
+    // Portal form lock — block add/update/delete while signing packages are live
+    {
+      const lockProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
+      const lockProfile = lockProfiles?.[0];
+      const lock = String(lockProfile?.portalLockStatus || 'unlocked').toLowerCase();
+      const formsLocked = lockProfile?.applicationStatus === 'Submitted'
+        || lock === 'signing' || lock === 'pending_signature' || lock === 'all_signed';
+      if (formsLocked) {
+        return Response.json({
+          error: 'Forms are locked while the merchant agreement is in signing. Use Unlock & Modify Details first.',
+          code: 'FORMS_LOCKED',
+        }, { status: 423 });
+      }
+    }
+
     // — ADD —
     if (action === 'add') {
       if (!locationId) return Response.json({ error: 'locationId is required' }, { status: 400 });

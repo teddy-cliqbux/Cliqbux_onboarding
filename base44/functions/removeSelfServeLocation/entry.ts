@@ -59,6 +59,33 @@ Deno.serve(async (req) => {
       if (String(loc.corporateId) !== actor.corporateId) {
         return Response.json({ error: 'Unauthorized' }, { status: 401 });
       }
+      const lockProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId: loc.corporateId });
+      const lockProfile = lockProfiles?.[0];
+      const lock = String(lockProfile?.portalLockStatus || 'unlocked').toLowerCase();
+      const formsLocked = lockProfile?.applicationStatus === 'Submitted'
+        || lock === 'signing' || lock === 'pending_signature' || lock === 'all_signed';
+      if (formsLocked) {
+        return Response.json({
+          error: 'Forms are locked while the merchant agreement is in signing. Use Unlock & Modify Details first.',
+          code: 'FORMS_LOCKED',
+        }, { status: 423 });
+      }
+    } else {
+      // Admin path — still respect lock (use demoteApplication to unlock first)
+      const loc = await base44.asServiceRole.entities.MerchantLocations.get(locationId).catch(() => null);
+      if (loc?.corporateId) {
+        const lockProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId: loc.corporateId });
+        const lockProfile = lockProfiles?.[0];
+        const lock = String(lockProfile?.portalLockStatus || 'unlocked').toLowerCase();
+        const formsLocked = lockProfile?.applicationStatus === 'Submitted'
+          || lock === 'signing' || lock === 'pending_signature' || lock === 'all_signed';
+        if (formsLocked) {
+          return Response.json({
+            error: 'Forms are locked while the merchant agreement is in signing. Use Unlock & Modify Details first.',
+            code: 'FORMS_LOCKED',
+          }, { status: 423 });
+        }
+      }
     }
 
     // Delete all MIDs (MerchantMID) for this location first

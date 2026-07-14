@@ -237,6 +237,24 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Portal form lock — allow list / markSigned / invites / lookup; block data mutations
+    const LOCK_SAFE = new Set([
+      'list', 'markSigned', 'sendInvite', 'sendSigningInvite', 'getSigningInviteLink',
+      'lookupByEmail', 'setLifecycleStatus', 'markSigningFailed',
+    ]);
+    if (!LOCK_SAFE.has(String(action))) {
+      const lockProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
+      const lockProfile = lockProfiles?.[0];
+      const lock = String(lockProfile?.portalLockStatus || 'unlocked').toLowerCase();
+      const formsLocked = lockProfile?.applicationStatus === 'Submitted'
+        || lock === 'signing' || lock === 'pending_signature' || lock === 'all_signed';
+      if (formsLocked) {
+        return Response.json({
+          error: 'Forms are locked while the merchant agreement is in signing. Use Unlock & Modify Details first.',
+          code: 'FORMS_LOCKED',
+        }, { status: 423 });
+      }
+    }
 
     // --- CREATE ---
     if (action === 'create') {
@@ -419,6 +437,29 @@ Deno.serve(async (req) => {
         identityStatus: 'application signed',
         signedAt,
       });
+
+      // Promote portal lock to all_signed when every required owner has signed
+      try {
+        const allSigners = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
+        const required = (allSigners || []).filter((s: any) =>
+          Number(s.ownershipPercentage) >= 25 || s.isPrimarySigner
+        );
+        const allDone = required.length > 0 && required.every((s: any) => {
+          const st = String(s.id === signerId ? 'application signed' : (s.identityStatus || ''));
+          return st === 'application signed' || st === 'Signed';
+        });
+        if (allDone) {
+          const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
+          if (profiles?.[0]?.id) {
+            await base44.asServiceRole.entities.MerchantCorporateProfile.update(profiles[0].id, {
+              portalLockStatus: 'all_signed',
+            });
+          }
+        }
+      } catch (e: any) {
+        console.warn('[manageSigner.markSigned] portalLockStatus all_signed update failed:', e?.message);
+      }
+
       return Response.json({ success: true, signer: updated });
     }
 

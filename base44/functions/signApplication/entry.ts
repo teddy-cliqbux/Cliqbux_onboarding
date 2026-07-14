@@ -1104,7 +1104,25 @@ Deno.serve(async (req) => {
     const totalSigned = applications.filter((a: any) => a.allSigned).length;
     const allSigned   = totalCount > 0 && totalSigned === totalCount;
 
-    console.log(`[signApplication] Done. ${totalSigned}/${totalCount} signed.`);
+    // Lock portal forms once signing packages exist (idempotent).
+    // Merchants must call demoteApplication to unlock and edit again.
+    let portalLockStatus = String(profiles?.[0]?.portalLockStatus || 'unlocked').toLowerCase();
+    try {
+      if (totalCount > 0 && profiles?.[0]?.id) {
+        const nextLock = allSigned ? 'all_signed' : 'signing';
+        const alreadyLocked = ['signing', 'pending_signature', 'all_signed'].includes(portalLockStatus);
+        if (!alreadyLocked || (allSigned && portalLockStatus !== 'all_signed')) {
+          await base44.asServiceRole.entities.MerchantCorporateProfile.update(profiles[0].id, {
+            portalLockStatus: nextLock,
+          });
+          portalLockStatus = nextLock;
+        }
+      }
+    } catch (lockErr: any) {
+      console.warn('[signApplication] portalLockStatus update failed (non-fatal):', lockErr?.message);
+    }
+
+    console.log(`[signApplication] Done. ${totalSigned}/${totalCount} signed. portalLockStatus=${portalLockStatus}`);
 
     return Response.json({
       success: true,
@@ -1113,6 +1131,7 @@ Deno.serve(async (req) => {
       totalCount,
       totalSigned,
       allSigned,
+      portalLockStatus,
     });
 
   } catch (error: any) {
