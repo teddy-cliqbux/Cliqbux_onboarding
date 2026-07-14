@@ -701,12 +701,28 @@ function mapPortalCardSplit(cpIn: number, onlineIn: number, motoIn: number) {
   return { cp, cnp: moto, intPct: online };
 }
 
-/** Normalize URL for MSPWare website field. */
+/** Normalize URL for MSPWare business homepage field. */
 function normalizeWebsiteUrl(raw: string): string {
   const s = String(raw || '').trim();
   if (!s) return '';
   if (/^https?:\/\//i.test(s)) return s;
   return `https://${s}`;
+}
+
+/** Read homepage URL from a GET /form body (field name confirmed 2026-07-14 as business_website). */
+function extractFormWebsite(formData: any): string {
+  const f = formData?.form || formData?.validation?.form || formData || {};
+  return String(
+    f.business_website || f.website || f.business_homepage_url || f.homepage_url || ''
+  ).trim();
+}
+
+/** MSPWare wire fields for Business Homepage URL (required when int_percent > 0). */
+function mspWebsiteFields(url: string): Record<string, string> {
+  // Primary: business_website — matches business_email / business_phone naming.
+  // Also send website (Pulse/basics alias) — unknown keys are ignored; wrong-only
+  // `website` left MSPWare blank at 99% (Porky's 2026-07-14).
+  return { business_website: url, website: url };
 }
 
 async function diagnoseMspTemplate(
@@ -1163,9 +1179,9 @@ function buildFormPayload(
     // moto_percent intentionally omitted — MSPWare Omni totals CP+CNP+Internet only.
     // Portal MOTO maps to cnp_percent (Card Not Present). Sending a 4th share zeroed CNP (Porky's 2026-07-14).
     delayed_delivery: deliveryDelayDays,
-    // Website required by underwriting when Internet % > 0. Wire name `website` —
-    // confirm via debugMSPFormRaw if a fill ever rejects it.
-    ...(split.intPct > 0 && websiteUrl ? { website: websiteUrl } : {}),
+    // Business Homepage URL — required by underwriting when Internet % > 0.
+    // Wire primary: business_website (not bare `website` — that was ignored; Porky's 2026-07-14).
+    ...(split.intPct > 0 && websiteUrl ? mspWebsiteFields(websiteUrl) : {}),
     // cards_accepted / all_cards intentionally OMITTED as of 2026-07-08 — template #133
     // has all_cards: true (accept every card type, including UnionPay). Sending an
     // explicit cards_accepted list here overwrote that with a fixed 6-card list and
@@ -1633,7 +1649,21 @@ Deno.serve(async (req) => {
             `[signApplication] MCC mismatch for ${mspApplicationNo}: form=${formMcc} portal=${expectedMcc} — forcing re-fill`
           );
         }
-        if (refillPercentComplete !== 100 || forceOwnerRefill || mccMismatch) {
+        // Force re-fill when portal has Online volume + URL but MSPWare form still
+        // lacks Business Homepage URL (wrong wire key previously left it blank).
+        const portalInt = Math.max(0, Math.min(100, parseInt(String(merchantMID.internetPct ?? 0), 10) || 0));
+        const portalWebsite = normalizeWebsiteUrl(
+          merchantMID.businessWebsite || profile.businessWebsite || profile.website || ''
+        );
+        const formWebsite = extractFormWebsite(getData);
+        const websiteMismatch = portalInt > 0 && Boolean(portalWebsite) && !formWebsite;
+        if (websiteMismatch) {
+          console.log(
+            `[signApplication] Website missing on MSP form for ${mspApplicationNo} ` +
+            `(portal has ${portalWebsite}, form empty) — forcing re-fill with business_website`
+          );
+        }
+        if (refillPercentComplete !== 100 || forceOwnerRefill || mccMismatch || websiteMismatch) {
           const location = locationMap[merchantMID.locationId];
           if (location) {
             const refillEntityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;

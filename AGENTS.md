@@ -287,7 +287,7 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 **Also shipped:** when Online / `internetPct` > 0, require `businessWebsite` on the MID (UI + `manageMerchantID` 422 + boarding throw), send MSPWare `website` (normalized with `https://` if missing). Schema field `MerchantMID.businessWebsite` must be declared or Base44 strips it (Lesson #4).
 
-**Rule:** Omni = three peer percents totaling 100. Portal Online → Internet %, portal MOTO → Card Not Present %. Collect homepage URL whenever Internet % > 0.
+**Rule:** Omni = three peer percents totaling 100. Portal Online → Internet %, portal MOTO → Card Not Present %. Collect homepage URL whenever Internet % > 0. Send MSPWare `business_website` (not bare `website` alone — that key was ignored; Porky's homepage stayed blank at 99% while Omni split was correct).
 
 ---
 

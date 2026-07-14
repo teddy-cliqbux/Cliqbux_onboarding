@@ -705,6 +705,19 @@ function normalizeWebsiteUrl(raw: string): string {
   return `https://${s}`;
 }
 
+function extractFormWebsite(formData: any): string {
+  const f = formData?.form || formData?.validation?.form || formData || {};
+  return String(
+    f.business_website || f.website || f.business_homepage_url || f.homepage_url || ''
+  ).trim();
+}
+
+function mspWebsiteFields(url: string): Record<string, string> {
+  // Primary: business_website (matches business_email / business_phone).
+  // Also send website alias — bare `website` alone left MSPWare blank (Porky's 2026-07-14).
+  return { business_website: url, website: url };
+}
+
 async function diagnoseMspTemplate(
   mspBase: string,
   headers: Record<string, string>,
@@ -1252,7 +1265,7 @@ function buildFormPayload(
     delayed_delivery: deliveryDelayDays,
 
     // ── Card Acceptance ───────────────────────────────────────────────────────
-    ...(split.intPct > 0 && websiteUrl ? { website: websiteUrl } : {}),
+    ...(split.intPct > 0 && websiteUrl ? mspWebsiteFields(websiteUrl) : {}),
     // cards_accepted / all_cards intentionally OMITTED as of 2026-07-08 — template #133
     // has all_cards: true (accept every card type, including UnionPay). Sending an
     // explicit cards_accepted list here overwrote that with a fixed 6-card list and

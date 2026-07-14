@@ -98,7 +98,7 @@ When `int_percent` > 0, also send:
 
 | Field | Source | Notes |
 |---|---|---|
-| `website` | `MerchantMID.businessWebsite` (fallback profile website) | Homepage URL; normalize with `https://` if scheme missing. Wire name assumed `website` — re-confirm with `debugMSPFormRaw` if a fill ever rejects it. |
+| `business_website` | `MerchantMID.businessWebsite` (fallback profile website) | **Primary wire name** for Business Homepage URL (required when `int_percent` > 0). Matches `business_email` / `business_phone` naming. Bare `website` alone was ignored by PUT /form (Porky's 2026-07-14 — Omni split landed, homepage stayed blank at 99%). We also send `website` as a secondary alias. |
 
 ---
 

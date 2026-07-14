@@ -1672,3 +1672,25 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 
 **? Waiting on:** Teddy (push / publish / redeploy)
 ---
+
+---
+**[CURSOR]** · 2026-07-14
+**Type:** Bugfix · Business Homepage URL not writing to MSPWare (Porky's)
+
+**Evidence:** Portal MID has `https://porkyslechon.com/` + Online 10%. MSPWare Financial Info shows Internet 10% (card split OK) but Business Homepage URL blank/required ? form 99% ? "Merchant application is not complete."
+
+**Cause:** PUT /form sent bare `website`. MSPWare ignores that key for Elavon form type 24. Correct primary wire name is `business_website` (same family as `business_email` / `business_phone`).
+
+**Shipped:**
+- Send `business_website` (+ `website` alias) from signApplication / submitToMSP / refillMSPForms
+- Force re-fill when portal has Online+URL but MSP form still has empty homepage
+- Docs: AGENTS Lesson #18 rule, mspware-field-reference
+
+**Teddy action:**
+1. Push ? force-redeploy `signApplication`, `submitToMSP`, `refillMSPForms`
+2. Confirm MerchantMID schema has `businessWebsite` published
+3. Unlock if needed ? re-Save MID (URL) ? Retry Signing
+4. In MSPWare confirm Business Homepage URL is filled
+
+**? Waiting on:** Teddy (redeploy / retest)
+---

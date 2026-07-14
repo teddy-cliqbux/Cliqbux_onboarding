@@ -64,7 +64,7 @@
     },
     "businessWebsite": {
       "type": "string",
-      "description": "Business homepage URL. Required when internetPct > 0. Sent to MSPWare as website on PUT /form (2026-07-14)."
+      "description": "Business homepage URL. Required when internetPct > 0. Sent to MSPWare as business_website (primary) + website alias on PUT /form (2026-07-14)."
     },
     "alcoholSalesPercentage": {
       "type": "number",
