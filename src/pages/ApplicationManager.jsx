@@ -988,18 +988,36 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     if (!signer?.id) return;
     setSignerLinkBusy(prev => ({ ...prev, [signer.id]: 'copy' }));
     try {
-      const res = await base44.functions.invoke('manageSigner', {
-        action: 'getSigningInviteLink',
-        corporateId,
-        signerId: signer.id,
-      });
-      if (res.data?.error || !res.data?.link) throw new Error(res.data?.error || 'No link');
-      await navigator.clipboard.writeText(res.data.link);
+      // Prefer client-side URL when list already returned verifyToken — works even if
+      // getSigningInviteLink isn't force-redeployed yet (classic "Unknown action" 400).
+      let link = null;
+      if (signer.verifyToken) {
+        link = `${publicUrl}/verify?token=${encodeURIComponent(signer.verifyToken)}&intent=sign`;
+      } else {
+        const res = await base44.functions.invoke('manageSigner', {
+          action: 'getSigningInviteLink',
+          corporateId,
+          signerId: signer.id,
+        });
+        if (res.data?.error || !res.data?.link) {
+          throw new Error(res.data?.error || 'No link returned');
+        }
+        link = res.data.link;
+      }
+      await navigator.clipboard.writeText(link);
       setCopied(signer.id);
       setTimeout(() => setCopied(null), 2000);
     } catch (err) {
       console.error('[getSigningInviteLink]', err);
-      alert(err.message || 'Could not copy signer link');
+      const apiErr =
+        err?.response?.data?.error
+        || err?.data?.error
+        || (typeof err?.response?.data === 'string' ? err.response.data : null)
+        || err.message;
+      const hint = /Unknown action/i.test(String(apiErr || ''))
+        ? '\n\nFix: force-redeploy manageSigner in Base44 (getSigningInviteLink is missing on the live function).'
+        : '';
+      alert((apiErr || 'Could not copy signer link') + hint);
     } finally {
       setSignerLinkBusy(prev => {
         const next = { ...prev };

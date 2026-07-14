@@ -282,7 +282,7 @@ Deno.serve(async (req) => {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
       const ALLOWED = ['firstName','lastName','signerEmail','ownershipPercentage','isPrimarySigner',
         'identityStatus','dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl','titleType',
-        'invitedAt','openedAt','signedAt'];
+        'invitedAt','openedAt','signedAt','verifyToken','verifyTokenSentAt'];
       const update: Record<string, any> = {};
       for (const key of ALLOWED) {
         if (signerData[key] !== undefined) update[key] = signerData[key];
@@ -292,26 +292,36 @@ Deno.serve(async (req) => {
     }
 
     // --- GET SIGNING INVITE LINK (admin only — Copy Direct Link in Applications) ---
-    if (action === 'getSigningInviteLink') {
+    // Aliases avoid a bare "Unknown action" 400 if an older frontend typo reaches a new deploy.
+    if (
+      action === 'getSigningInviteLink'
+      || action === 'copySigningInviteLink'
+      || action === 'getSignerInviteLink'
+    ) {
       if (actor.actor !== 'admin') {
-        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+        return Response.json({ error: 'Unauthorized — admin session required to copy signer links' }, { status: 401 });
       }
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
-      const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
-      const signer = signers.find((s: any) => s.id === signerId);
+      const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId: String(corporateId) });
+      const signer = signers.find((s: any) => String(s.id) === String(signerId));
       if (!signer) return Response.json({ error: 'Signer not found' }, { status: 404 });
 
-      const token = signer.verifyToken || generateToken();
-      if (!signer.verifyToken) {
-        await base44.asServiceRole.entities.MerchantSigners.update(signerId, {
-          verifyToken: token,
-          verifyTokenSentAt: new Date().toISOString(),
-        });
+      let token = String(signer.verifyToken || '').trim();
+      if (!token) {
+        token = generateToken();
+        try {
+          await base44.asServiceRole.entities.MerchantSigners.update(signer.id, {
+            verifyToken: token,
+            verifyTokenSentAt: new Date().toISOString(),
+          });
+        } catch (e: any) {
+          console.warn('[manageSigner] getSigningInviteLink persist token failed:', e.message);
+        }
       }
       return Response.json({
         success: true,
         link: buildSigningInviteUrl(token),
-        signerId,
+        signerId: signer.id,
       });
     }
 
@@ -469,7 +479,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    return Response.json({ error: 'Unknown action' }, { status: 400 });
+    return Response.json({
+      error: 'Unknown action',
+      action: action ?? null,
+      hint: 'Expected one of: create, update, getSigningInviteLink, sendInvite, sendSigningInvite, markSigned, setLifecycleStatus, markSigningFailed, delete, list, inlineVerify, lookupByEmail',
+    }, { status: 400 });
   } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 });
   }
