@@ -1072,10 +1072,10 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           )}
           {avgMspPct !== null && <HealthBadge score={avgMspPct} />}
           {isSubmitted && <CheckCircle2 className="w-4 h-4 text-cb-success" />}
-          <button onClick={openMerchantView} disabled={impersonating || openingDashboard} title="Open merchant portal (30-min session)"
+          <button onClick={openMerchantView} disabled={impersonating || openingDashboard} title="Open merchant portal as agent (30-min session — preview & edit live)"
             className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40">
             {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
-            View
+            Open portal
           </button>
           <button onClick={openPostSignDashboard} disabled={impersonating || openingDashboard}
             title="Open post-signing dashboard (agents can preview before merchant signs)"
@@ -1086,14 +1086,14 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           <button onClick={(e) => copyInviteLink(e, linkStage)} title="Copy invite link"
             className={`flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all ${copied === (linkStage?.id || 'link') ? 'border-cb-success/30 text-cb-success' : 'border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong'}`}>
             {copied === (linkStage?.id || 'link') ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            {copied === (linkStage?.id || 'link') ? 'Copied!' : 'Copy'}
+            {copied === (linkStage?.id || 'link') ? 'Copied!' : 'Copy Link'}
           </button>
           <button onClick={() => onSend(linkStage, corporateId, p.signerEmail || profile?.signerEmail || '')}
             className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong">
-            <Send className="w-3 h-3" /> Send
+            <Send className="w-3 h-3" /> Send Link
           </button>
           <button onClick={() => onEdit(corporateId, merchantName, linkStage)}
-            title="Edit locations, signers & prefill"
+            title="Edit locations, signers & Quotes"
             className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong">
             <Pencil className="w-3 h-3" />
             Edit
