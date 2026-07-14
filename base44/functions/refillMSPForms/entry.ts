@@ -212,7 +212,7 @@ function buildFormPayload(profile: any, location: any, merchantMID: any, signer:
     cnp_percent: String(cnpPct),
     int_percent: intPct,
     // moto_percent omitted — Omni totals CP+CNP+Internet only (portal MOTO → cnp)
-    ...(online > 0 && websiteUrl ? { business_website: websiteUrl, website: websiteUrl } : {}),
+    ...(online > 0 && websiteUrl ? { business_homepage_url: websiteUrl } : {}),
     delayed_delivery: deliveryDelayDays,
     cards_accepted: ['VISA', 'VISA_DEBIT', 'MASTERCARD', 'MASTERCARD_DEBIT', 'DISCOVER', 'AMEX'],
     card_acceptance_split: cardPresentPct >= 100 ? 'CP' : 'OMNI',

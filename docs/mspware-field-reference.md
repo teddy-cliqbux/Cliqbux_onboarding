@@ -98,7 +98,7 @@ When `int_percent` > 0, also send:
 
 | Field | Source | Notes |
 |---|---|---|
-| `business_website` | `MerchantMID.businessWebsite` (fallback profile website) | **Primary wire name** for Business Homepage URL (required when `int_percent` > 0). Matches `business_email` / `business_phone` naming. Bare `website` alone was ignored by PUT /form (Porky's 2026-07-14 — Omni split landed, homepage stayed blank at 99%). We also send `website` as a secondary alias. |
+| `business_homepage_url` | `MerchantMID.businessWebsite` | **Primary wire name** for MSPWare UI "Business Homepage URL*" (required when `int_percent` > 0). Confirmed approach 2026-07-14: do **not** shotgun multiple aliases in one PUT — MSPWare rolls back the entire form if any key is invalid. `signApplication` discovers empty web/url/home keys from GET /form and writes only those; fallback is `business_homepage_url` alone. Bare `website` / multi-key guesses left Porky's homepage blank at 99%. |
 
 ---
 

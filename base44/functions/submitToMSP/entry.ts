@@ -706,17 +706,64 @@ function normalizeWebsiteUrl(raw: string): string {
   return `https://${s}`;
 }
 
-function extractFormWebsite(formData: any): string {
+function scanWebsiteFormKeys(formData: any): Record<string, unknown> {
   const f = formData?.form || formData?.validation?.form || formData || {};
-  return String(
-    f.business_website || f.website || f.business_homepage_url || f.homepage_url || ''
-  ).trim();
+  const hits: Record<string, unknown> = {};
+  if (!f || typeof f !== 'object' || Array.isArray(f)) return hits;
+  for (const [k, v] of Object.entries(f)) {
+    if (/web|url|home.?page|homepage/i.test(k)) hits[k] = v;
+  }
+  return hits;
 }
 
-function mspWebsiteFields(url: string): Record<string, string> {
-  // Primary: business_website (matches business_email / business_phone).
-  // Also send website alias — bare `website` alone left MSPWare blank (Porky's 2026-07-14).
-  return { business_website: url, website: url };
+function extractWebsiteKeysFromErrors(formData: any): string[] {
+  const bags = [
+    ...(formData?.completion_errors || formData?.validation?.errors?.completion || []),
+    ...(formData?.data_errors || formData?.validation?.errors?.data || []),
+    ...(formData?.errors || []),
+    ...(formData?.form?.errors || []),
+  ];
+  const keys = new Set<string>();
+  for (const e of bags) {
+    const field = String(
+      (typeof e === 'object' && e != null && (e.field || e.name || e.key || e.id)) || ''
+    ).trim();
+    if (field && /web|url|home.?page|homepage/i.test(field)) keys.add(field);
+    const msg = typeof e === 'string' ? e : String(e?.message || e?.description || '');
+    const m = msg.match(/\b([a-z][a-z0-9_]*(?:web|url|home.?page|homepage)[a-z0-9_]*)\b/i);
+    if (m) keys.add(m[1]);
+  }
+  return [...keys];
+}
+
+function extractFormWebsite(formData: any): string {
+  const hits = scanWebsiteFormKeys(formData);
+  for (const v of Object.values(hits)) {
+    const s = String(v ?? '').trim();
+    if (s) return s;
+  }
+  return '';
+}
+
+/** Single-key homepage PUT — never shotgun aliases (MSPWare full-form rollback). */
+function mspWebsiteFields(url: string, formDataOrKeys?: any): Record<string, string> {
+  const out: Record<string, string> = {};
+  const discovered =
+    formDataOrKeys && typeof formDataOrKeys === 'object' && !Array.isArray(formDataOrKeys)
+      && ('form' in formDataOrKeys || 'percent_complete' in formDataOrKeys || 'validation' in formDataOrKeys)
+      ? scanWebsiteFormKeys(formDataOrKeys)
+      : (formDataOrKeys && typeof formDataOrKeys === 'object' ? formDataOrKeys as Record<string, unknown> : {});
+
+  for (const [k, v] of Object.entries(discovered || {})) {
+    if (v === null || v === undefined || v === '') out[k] = url;
+  }
+  if (formDataOrKeys && typeof formDataOrKeys === 'object' && ('completion_errors' in formDataOrKeys || 'form' in formDataOrKeys)) {
+    for (const k of extractWebsiteKeysFromErrors(formDataOrKeys)) out[k] = url;
+  }
+  if (Object.keys(out).length === 0) {
+    out.business_homepage_url = url;
+  }
+  return out;
 }
 
 async function diagnoseMspTemplate(

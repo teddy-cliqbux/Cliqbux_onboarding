@@ -710,20 +710,76 @@ function normalizeWebsiteUrl(raw: string): string {
   return `https://${s}`;
 }
 
-/** Read homepage URL from a GET /form body (field name confirmed 2026-07-14 as business_website). */
-function extractFormWebsite(formData: any): string {
+/** Scan GET /form for keys that look like a homepage/website field (even when empty). */
+function scanWebsiteFormKeys(formData: any): Record<string, unknown> {
   const f = formData?.form || formData?.validation?.form || formData || {};
-  return String(
-    f.business_website || f.website || f.business_homepage_url || f.homepage_url || ''
-  ).trim();
+  const hits: Record<string, unknown> = {};
+  if (!f || typeof f !== 'object' || Array.isArray(f)) return hits;
+  for (const [k, v] of Object.entries(f)) {
+    if (/web|url|home.?page|homepage/i.test(k)) hits[k] = v;
+  }
+  return hits;
 }
 
-/** MSPWare wire fields for Business Homepage URL (required when int_percent > 0). */
-function mspWebsiteFields(url: string): Record<string, string> {
-  // Primary: business_website — matches business_email / business_phone naming.
-  // Also send website (Pulse/basics alias) — unknown keys are ignored; wrong-only
-  // `website` left MSPWare blank at 99% (Porky's 2026-07-14).
-  return { business_website: url, website: url };
+/** Pull field names from MSPWare completion/data errors (often includes the real wire key). */
+function extractWebsiteKeysFromErrors(formData: any): string[] {
+  const bags = [
+    ...(formData?.completion_errors || formData?.validation?.errors?.completion || []),
+    ...(formData?.data_errors || formData?.validation?.errors?.data || []),
+    ...(formData?.errors || []),
+    ...(formData?.form?.errors || []),
+  ];
+  const keys = new Set<string>();
+  for (const e of bags) {
+    const field = String(
+      (typeof e === 'object' && e != null && (e.field || e.name || e.key || e.id)) || ''
+    ).trim();
+    if (field && /web|url|home.?page|homepage/i.test(field)) keys.add(field);
+    const msg = typeof e === 'string' ? e : String(e?.message || e?.description || '');
+    // e.g. "Business Homepage URL is required" — no wire key; skip
+    // e.g. "business_homepage_url: This field is required"
+    const m = msg.match(/\b([a-z][a-z0-9_]*(?:web|url|home.?page|homepage)[a-z0-9_]*)\b/i);
+    if (m) keys.add(m[1]);
+  }
+  return [...keys];
+}
+
+function extractFormWebsite(formData: any): string {
+  const hits = scanWebsiteFormKeys(formData);
+  for (const v of Object.values(hits)) {
+    const s = String(v ?? '').trim();
+    if (s) return s;
+  }
+  return '';
+}
+
+/**
+ * Homepage URL fields for PUT /form.
+ * CRITICAL: Do NOT shotgun many guessed keys — MSPWare rolls back the ENTIRE
+ * form when any unknown/invalid field fails validation (Critical Lesson: -1%/rollback).
+ * Only send: (1) empty keys discovered on the live form, (2) keys from error payloads,
+ * (3) if neither, a single safest default.
+ */
+function mspWebsiteFields(url: string, formDataOrKeys?: any): Record<string, string> {
+  const out: Record<string, string> = {};
+  const discovered =
+    formDataOrKeys && typeof formDataOrKeys === 'object' && !Array.isArray(formDataOrKeys)
+      && ('form' in formDataOrKeys || 'percent_complete' in formDataOrKeys || 'validation' in formDataOrKeys)
+      ? scanWebsiteFormKeys(formDataOrKeys)
+      : (formDataOrKeys && typeof formDataOrKeys === 'object' ? formDataOrKeys as Record<string, unknown> : {});
+
+  for (const [k, v] of Object.entries(discovered || {})) {
+    if (v === null || v === undefined || v === '') out[k] = url;
+  }
+  if (formDataOrKeys && typeof formDataOrKeys === 'object' && ('completion_errors' in formDataOrKeys || 'form' in formDataOrKeys)) {
+    for (const k of extractWebsiteKeysFromErrors(formDataOrKeys)) out[k] = url;
+  }
+  // Single fallback only — UI label maps to business_homepage_url in most Fidano forms.
+  // Do not also send website/business_website/etc. in the same PUT (rollback risk).
+  if (Object.keys(out).length === 0) {
+    out.business_homepage_url = url;
+  }
+  return out;
 }
 
 async function diagnoseMspTemplate(
@@ -1181,7 +1237,10 @@ function buildFormPayload(
     // Portal MOTO maps to cnp_percent (Card Not Present). Sending a 4th share zeroed CNP (Porky's 2026-07-14).
     delayed_delivery: deliveryDelayDays,
     // Business Homepage URL — required by underwriting when Internet % > 0.
-    // Wire primary: business_website (not bare `website` — that was ignored; Porky's 2026-07-14).
+    // Business Homepage URL — required when Internet % > 0.
+    // Default wire key: business_homepage_url (UI label). signApplication overlays
+    // keys discovered from GET /form. Never shotgun multiple aliases in one PUT
+    // (MSPWare rolls back the entire form on any invalid field).
     ...(split.intPct > 0 && websiteUrl ? mspWebsiteFields(websiteUrl) : {}),
     // cards_accepted / all_cards intentionally OMITTED as of 2026-07-08 — template #133
     // has all_cards: true (accept every card type, including UnionPay). Sending an
@@ -1656,20 +1715,36 @@ Deno.serve(async (req) => {
         const portalWebsite = normalizeWebsiteUrl(
           merchantMID.businessWebsite || profile.businessWebsite || profile.website || ''
         );
+        const websiteKeysOnForm = scanWebsiteFormKeys(getData);
         const formWebsite = extractFormWebsite(getData);
         const websiteMismatch = portalInt > 0 && Boolean(portalWebsite) && !formWebsite;
         if (websiteMismatch) {
           console.log(
             `[signApplication] Website missing on MSP form for ${mspApplicationNo} ` +
-            `(portal has ${portalWebsite}, form empty) — forcing re-fill with business_website`
+            `(portal=${portalWebsite}, formKeys=${JSON.stringify(websiteKeysOnForm)}) — forcing re-fill`
           );
         }
+        let lastWebsiteKeysOnForm: Record<string, unknown> = websiteKeysOnForm;
         if (refillPercentComplete !== 100 || forceOwnerRefill || mccMismatch || websiteMismatch) {
           const location = locationMap[merchantMID.locationId];
           if (location) {
             const refillEntityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
           const { payload: formPayload, pricingSnapshot: refillSnap } = buildFormPayload(profile, resolveLocationAddress(location), merchantMID, primarySigner, additionalSigners, refillEntityMailing);
           if (refillSnap) lastPricingSnapshot = refillSnap;
+            // Overlay homepage onto discovered empty form keys only (never shotgun —
+            // multiple guessed keys can roll back the entire PUT).
+            if (portalInt > 0 && portalWebsite) {
+              const websitePut = mspWebsiteFields(portalWebsite, getData);
+              Object.assign(formPayload, websitePut);
+              console.log(
+                `[signApplication] Homepage PUT keys for ${mspApplicationNo}:`,
+                JSON.stringify(websitePut)
+              );
+            } else if (portalInt > 0 && !portalWebsite) {
+              console.warn(
+                `[signApplication] Online volume ${portalInt}% but MID has no businessWebsite — cannot fill homepage`
+              );
+            }
             const refillRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
               method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
             });
@@ -1690,7 +1765,9 @@ Deno.serve(async (req) => {
             const getData2 = await getRes2.json();
             const rawPct2 = getData2?.percent_complete ?? getData2?.validation?.percent_complete ?? null;
             refillPercentComplete = rawPct2 !== null ? Math.round(parseFloat(String(rawPct2))) : null;
+            lastWebsiteKeysOnForm = scanWebsiteFormKeys(getData2);
         console.log(`[signApplication] Full GET form response AFTER refill for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(getData2)));
+            console.log(`[signApplication] Website keys AFTER refill:`, JSON.stringify(lastWebsiteKeysOnForm));
 
             // PUT rejections are the authoritative cause; the GET list after a
             // rollback is misleading noise, so only fall back to it when the PUT
@@ -1704,12 +1781,26 @@ Deno.serve(async (req) => {
                   ...(getData2?.errors            || []),
                   ...(getData2?.form?.errors      || []),
                 ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
+            if (portalInt > 0 && portalWebsite && !extractFormWebsite(getData2)) {
+              refillErrors = [
+                ...refillErrors,
+                `Homepage URL not accepted by MSPWare. Portal sent "${portalWebsite}" on keys ${JSON.stringify(Object.keys(mspWebsiteFields(portalWebsite, getData)))}. Form keys matching web/url/home after PUT: ${JSON.stringify(lastWebsiteKeysOnForm)}.`,
+              ];
+            } else if (portalInt > 0 && !portalWebsite) {
+              refillErrors = [
+                ...refillErrors,
+                `Online volume is ${portalInt}% but this MID has no saved businessWebsite. Unlock → edit MID → enter Business homepage URL → Save → Retry Signing.`,
+              ];
+            }
             console.log(`[signApplication] After refill GET: ${refillPercentComplete ?? '?'}% complete, ${refillErrors.length} errors`);
             if (refillErrors.length) console.log(`[signApplication] Errors:`, JSON.stringify(refillErrors));
           }
         } else {
           console.log(`[signApplication] Form already at 100% — skipping re-fill`);
         }
+        // Stash for package-failure diagnostics
+        (merchantMID as any).__websiteKeysOnForm = lastWebsiteKeysOnForm;
+        (merchantMID as any).__portalWebsite = portalWebsite;
       }
 
       // Create package if not yet done

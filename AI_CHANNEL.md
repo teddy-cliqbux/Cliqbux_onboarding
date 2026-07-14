@@ -1694,3 +1694,28 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 
 **? Waiting on:** Teddy (redeploy / retest)
 ---
+
+---
+**[CURSOR]** · 2026-07-14
+**Type:** Bugfix · Homepage URL still blank ? stop multi-key shotgun; use `business_homepage_url`
+
+**Status:** Still broken after prior `website` / `business_website` attempts (Porky's MSPWare 99%, homepage required empty).
+
+**Likely causes (stacked):**
+1. Live Base44 may not have been force-redeployed (GitHub ? live functions)
+2. Multi-key website shotgun in one PUT can roll back the entire MSPWare form
+3. Wire key is likely `business_homepage_url` (matches UI label), not `website` / `business_website`
+
+**Shipped now:**
+- Send **one** key: discovered empty web/url/home keys from GET /form, else fallback `business_homepage_url` only
+- Clearer Retry Signing errors if MID lacks `businessWebsite` or PUT still leaves homepage blank
+- Do not shotgun aliases
+
+**Teddy action (required):**
+1. Push
+2. **Force-redeploy** `signApplication` + `submitToMSP` (confirm source contains `business_homepage_url`)
+3. Unlock ? Save MID with URL ? Retry Signing
+4. Optional 10s check: MSPWare Inspect on the red field ? copy `name=` attribute and tell Cursor if still blank
+
+**? Waiting on:** Teddy
+---
