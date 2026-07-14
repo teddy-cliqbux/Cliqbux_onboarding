@@ -29,10 +29,15 @@
         "Sent",
         "Verified",
         "Signed",
-        "Action Required"
+        "Action Required",
+        "invited",
+        "opened",
+        "verified",
+        "application signed",
+        "signing failed"
       ],
       "default": "Pending Invitation",
-      "description": "Pending Invitation → Sent (remote invite) → Verified (KYC done) → Signed (BoldSign complete). Signed is written locally so admin dashboards never poll MSPWare per row."
+      "description": "Signer micro-funnel (2026-07-13): invited → opened → verified → application signed (or signing failed). Legacy: Pending Invitation / Sent / Verified / Signed / Action Required still accepted and normalized in UI."
     },
     "verifyToken": {
       "type": "string",
@@ -41,6 +46,18 @@
     "verifyTokenSentAt": {
       "type": "string",
       "description": "ISO timestamp when verifyToken was last issued/resent — used to enforce the 7-day link expiry promised in the invite email"
+    },
+    "invitedAt": {
+      "type": "string",
+      "description": "ISO timestamp when the Verify & Sign invite was last emailed"
+    },
+    "openedAt": {
+      "type": "string",
+      "description": "ISO timestamp when the signer first opened their invite link"
+    },
+    "signedAt": {
+      "type": "string",
+      "description": "ISO timestamp when BoldSign package was marked signed locally"
     },
     "dobYear": {
       "type": "string"

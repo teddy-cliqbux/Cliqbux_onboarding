@@ -7,6 +7,11 @@ import {
   CheckCircle2, AlertCircle, Eye, BarChart2, Zap, LayoutDashboard,
   ChevronDown, ChevronRight, XCircle, RefreshCw
 } from 'lucide-react';
+import {
+  lifecycleLabel,
+  lifecycleBadgeClass,
+  isVerifiedOrHigher,
+} from '@/lib/signerLifecycle';
 
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
@@ -687,8 +692,9 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                         <p className="text-cb-caption text-gray-500 truncate">{s.signerEmail}</p>
                       </div>
                       <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
-                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${(s.identityStatus === 'Verified' || s.identityStatus === 'Signed') ? 'bg-cb-success' : 'bg-gray-500'}`} />
-                        {s.identityStatus || 'Pending'}
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${lifecycleBadgeClass(s.identityStatus)}`}>
+                          {lifecycleLabel(s.identityStatus)}
+                        </span>
                       </span>
                     </CheckRow>
                   ))
@@ -893,6 +899,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const [copied, setCopied]             = useState(null);
   const [impersonating, setImpersonating] = useState(false);
   const [openingDashboard, setOpeningDashboard] = useState(false);
+  const [signerLinkBusy, setSignerLinkBusy] = useState({}); // { [signerId]: 'copy' | 'send' }
 
   const p = trackStage?.prefilledData || {};
   const missingByStep = p.missingByStep || p.missingCounts || {};
@@ -954,6 +961,57 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
         }
       } catch (_) {}
       finally { setLoadingDetail(false); }
+    }
+  };
+
+  const copySignerDirectLink = async (e, signer) => {
+    e?.stopPropagation?.();
+    if (!signer?.id) return;
+    setSignerLinkBusy(prev => ({ ...prev, [signer.id]: 'copy' }));
+    try {
+      const res = await base44.functions.invoke('manageSigner', {
+        action: 'getSigningInviteLink',
+        corporateId,
+        signerId: signer.id,
+      });
+      if (res.data?.error || !res.data?.link) throw new Error(res.data?.error || 'No link');
+      await navigator.clipboard.writeText(res.data.link);
+      setCopied(signer.id);
+      setTimeout(() => setCopied(null), 2000);
+    } catch (err) {
+      console.error('[getSigningInviteLink]', err);
+      alert(err.message || 'Could not copy signer link');
+    } finally {
+      setSignerLinkBusy(prev => {
+        const next = { ...prev };
+        delete next[signer.id];
+        return next;
+      });
+    }
+  };
+
+  const sendSignerInvite = async (e, signer) => {
+    e?.stopPropagation?.();
+    if (!signer?.id) return;
+    setSignerLinkBusy(prev => ({ ...prev, [signer.id]: 'send' }));
+    try {
+      const res = await base44.functions.invoke('manageSigner', {
+        action: 'sendSigningInvite',
+        corporateId,
+        signerId: signer.id,
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      // Refresh local signer row status
+      setSigners(prev => prev.map(s => (s.id === signer.id ? { ...s, ...res.data.signer } : s)));
+    } catch (err) {
+      console.error('[sendSigningInvite]', err);
+      alert(err.message || 'Could not send invite email');
+    } finally {
+      setSignerLinkBusy(prev => {
+        const next = { ...prev };
+        delete next[signer.id];
+        return next;
+      });
     }
   };
 
@@ -1151,8 +1209,9 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                   <div className="space-y-1.5">
                     {signers.map(s => {
                       const miss = signerMissingFields(s);
-                      const verified = s.identityStatus === 'Verified' || s.identityStatus === 'Signed';
+                      const verified = isVerifiedOrHigher(s.identityStatus);
                       const hasIssues = !verified && miss.length > 0;
+                      const busy = signerLinkBusy[s.id];
                       return (
                         <div key={s.id} className={`px-3 py-2 rounded-cb border ${
                           verified ? 'border-cb-border bg-cb-surface-raised' :
@@ -1172,9 +1231,8 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                                   Primary
                                 </span>
                               )}
-                              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
-                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${verified ? 'bg-cb-success' : 'bg-gray-500'}`} />
-                                {s.identityStatus || 'Pending'}
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${lifecycleBadgeClass(s.identityStatus)}`}>
+                                {lifecycleLabel(s.identityStatus)}
                               </span>
                               {hasIssues && (
                                 <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
@@ -1182,6 +1240,24 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                                   {miss.length} missing
                                 </span>
                               )}
+                              <button
+                                type="button"
+                                onClick={(e) => copySignerDirectLink(e, s)}
+                                disabled={!!busy}
+                                title="Copy direct Verify & Sign link"
+                                className="p-1.5 text-gray-500 hover:text-white rounded-cb transition-colors disabled:opacity-40"
+                              >
+                                {busy === 'copy' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : copied === s.id ? <Check className="w-3.5 h-3.5 text-cb-success" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => sendSignerInvite(e, s)}
+                                disabled={!!busy}
+                                title="Email Verify & Sign invite"
+                                className="p-1.5 text-gray-500 hover:text-cb-accent rounded-cb transition-colors disabled:opacity-40"
+                              >
+                                {busy === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                              </button>
                             </div>
                           </div>
                           {hasIssues && (

@@ -706,17 +706,18 @@ Status locking: `manageMerchantID` blocks `update` and `delete` when `applicatio
 
 ---
 
-## Signer Verification UI + Persistence (reworked 2026-07-10; multi-signer 2026-07-13)
+## Signer Verification UI + Persistence (reworked 2026-07-10; multi-signer 2026-07-13; lifecycle 2026-07-13)
 
 **One modal per signer — `SignerDetailsModal.jsx`.** Teddy's direction 2026-07-10: splitting name/email/ownership editing (inline row fields) from identity verification (a separate expanding form) confused merchants, and ID upload/AI reading is unnecessary for now. Changes:
 
 - `InlineVerifyForm.jsx` and `SignerIdUpload.jsx` are **DELETED**. Do not recreate them. `SignerRoster` opens `SignerDetailsModal` from Edit / "Complete Identity Verification" / **"Sign here"** (colocated co-owners).
-- Identity fields show when `isPrimary` **or** `allowInlineKyc` (colocated multi-signer). Saving sets `identityStatus: 'Verified'`. Remote co-owners use **"Send Verify & Sign Invite"** → `/verify?token=&intent=sign` (KYC then BoldSign in one page).
-- `MerchantSigners.identityStatus` enum includes **`Signed`** (written locally after BoldSign complete — never derive from live MSP polls in admin lists).
+- Identity fields show when `isPrimary` **or** `allowInlineKyc` (colocated multi-signer). Saving sets `identityStatus: 'verified'`. Remote co-owners use **"Send Verify & Sign Invite"** → `/verify?token=&intent=sign` (KYC then BoldSign in one page).
+- **Signer lifecycle (`identityStatus`):** canonical writes `invited` → `opened` (first `/verify` get) → `verified` → `application signed` (or `signing failed`). Legacy `Sent`/`Verified`/`Signed`/`Action Required` still normalize via `src/lib/signerLifecycle.js`. Timestamps: `invitedAt`, `openedAt`, `signedAt`.
+- Admin Applications SIGNERS: lifecycle badges + Copy (`getSigningInviteLink`, admin-only) / Send (`sendSigningInvite`). Email CTA: gold "Review & Sign Documents".
 - **ID upload remains dormant** (`idDocumentUrl`, `inlineVerify`, `uploadSignerIDsToMSP` exist but unused in UI).
 - The "returning signer detected" lookup (`manageSigner action: 'lookupByEmail'`) lives on in the modal.
 
-`verifySignerToken` actions: `get`, `save` (→ Verified), `getSigningSession` (token-scoped BoldSign links only), `markSigned` (→ Signed).
+`verifySignerToken` actions: `get` (may set `opened`), `save` (→ `verified`), `getSigningSession` (token-scoped BoldSign links only), `markSigned` (→ `application signed`).
 
 ---
 

@@ -97,7 +97,8 @@ async function sendViaResend(to: string, subject: string, html: string): Promise
 }
 
 // Unified remote loop (2026-07-13): one email = identity KYC + BoldSign session.
-// Link uses intent=sign so /verify routes Verified signers straight into their iframe.
+// Link uses intent=sign so /verify routes verified+ signers straight into their iframe.
+// Lifecycle writes: invited → opened (on first get) → verified → application signed.
 function buildInviteEmail(firstName: string, verifyUrl: string, businessName: string | null): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -114,16 +115,16 @@ function buildInviteEmail(firstName: string, verifyUrl: string, businessName: st
         <tr>
           <td style="padding:36px 40px;">
             <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.06em;">Action Required</p>
-            <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">Verify Identity &amp; Sign Your Agreement</h1>
+            <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">Review &amp; Sign Your Documents</h1>
             <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
               Hi ${firstName},<br><br>
-              You've been added as a <strong>beneficial owner</strong> on the <strong>${businessName || 'Cliqbux'}</strong> merchant application. One secure link covers both steps: confirm your identity, then sign the Merchant Processing Agreement — no second email.
+              You've been added as a <strong>beneficial owner</strong> on the <strong>${businessName || 'Cliqbux'}</strong> merchant application. One secure link covers both steps: confirm your identity (if needed), then sign the Merchant Processing Agreement.
             </p>
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td align="center" style="padding:8px 0 28px;">
-                  <a href="${verifyUrl}" target="_blank" style="display:inline-block;background:#111827;color:#ffffff;font-size:15px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;letter-spacing:0.01em;">
-                    Verify &amp; Sign →
+                  <a href="${verifyUrl}" target="_blank" style="display:inline-block;background:#FEAC27;color:#111827;font-size:15px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;letter-spacing:0.01em;">
+                    Review &amp; Sign Documents
                   </a>
                 </td>
               </tr>
@@ -201,13 +202,19 @@ Deno.serve(async (req) => {
       if (sendInvite) {
         try {
           const verifyUrl = buildSigningInviteUrl(token);
+          const invitedAt = new Date().toISOString();
           await sendViaResend(
             signerData.signerEmail,
-            `Action Required: Verify & Sign — ${signerData.legalName || 'Cliqbux'} Merchant Application`,
+            `Action Required: Review & Sign — ${signerData.legalName || 'Cliqbux'} Merchant Application`,
             buildInviteEmail(signerData.firstName, verifyUrl, signerData.legalName)
           );
-          await base44.asServiceRole.entities.MerchantSigners.update(record.id, { identityStatus: 'Sent', verifyTokenSentAt: new Date().toISOString() });
-          record.identityStatus = 'Sent';
+          await base44.asServiceRole.entities.MerchantSigners.update(record.id, {
+            identityStatus: 'invited',
+            verifyTokenSentAt: invitedAt,
+            invitedAt,
+          });
+          record.identityStatus = 'invited';
+          record.invitedAt = invitedAt;
         } catch (emailErr: any) {
           console.error('[manageSigner] email send failed:', emailErr.message);
           emailError = emailErr.message;
@@ -221,7 +228,8 @@ Deno.serve(async (req) => {
     if (action === 'update') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
       const ALLOWED = ['firstName','lastName','signerEmail','ownershipPercentage','isPrimarySigner',
-        'identityStatus','dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl','titleType'];
+        'identityStatus','dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl','titleType',
+        'invitedAt','openedAt','signedAt'];
       const update: Record<string, any> = {};
       for (const key of ALLOWED) {
         if (signerData[key] !== undefined) update[key] = signerData[key];
@@ -230,16 +238,38 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, signer: updated });
     }
 
+    // --- GET SIGNING INVITE LINK (admin only — Copy Direct Link in Applications) ---
+    if (action === 'getSigningInviteLink') {
+      if (actor.actor !== 'admin') {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
+      const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
+      const signer = signers.find((s: any) => s.id === signerId);
+      if (!signer) return Response.json({ error: 'Signer not found' }, { status: 404 });
+
+      const token = signer.verifyToken || generateToken();
+      if (!signer.verifyToken) {
+        await base44.asServiceRole.entities.MerchantSigners.update(signerId, {
+          verifyToken: token,
+          verifyTokenSentAt: new Date().toISOString(),
+        });
+      }
+      return Response.json({
+        success: true,
+        link: buildSigningInviteUrl(token),
+        signerId,
+      });
+    }
+
     // --- SEND INVITE (unified Verify + Sign remote loop) ---
-    // Same action name as before — URL now includes intent=sign so /verify
-    // continues into the BoldSign iframe after KYC. Do not split into two emails.
+    // Portal merchants + admins may send. Writes lifecycle status `invited`.
     if (action === 'sendInvite' || action === 'sendSigningInvite') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
       const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
       const signer = signers.find((s: any) => s.id === signerId);
       if (!signer) return Response.json({ error: 'Signer not found' }, { status: 404 });
 
-      // Resolve business name for the email subject/body
       let businessName: string | null = null;
       try {
         const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
@@ -248,19 +278,21 @@ Deno.serve(async (req) => {
 
       const token = signer.verifyToken || generateToken();
       const verifyUrl = buildSigningInviteUrl(token);
+      const invitedAt = new Date().toISOString();
 
       await sendViaResend(
         signer.signerEmail,
-        `Action Required: Verify & Sign — ${businessName || 'Cliqbux'} Merchant Application`,
+        `Action Required: Review & Sign — ${businessName || 'Cliqbux'} Merchant Application`,
         buildInviteEmail(signer.firstName, verifyUrl, businessName)
       );
 
       const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, {
-        identityStatus: 'Sent',
+        identityStatus: 'invited',
         verifyToken: token,
-        verifyTokenSentAt: new Date().toISOString()
+        verifyTokenSentAt: invitedAt,
+        invitedAt,
       });
-      return Response.json({ success: true, signer: updated });
+      return Response.json({ success: true, signer: updated, link: verifyUrl });
     }
 
     // --- MARK SIGNED (local persistence — never poll MSPWare from admin list UIs) ---
@@ -269,11 +301,25 @@ Deno.serve(async (req) => {
       const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
       const signer = signers.find((s: any) => s.id === signerId);
       if (!signer) return Response.json({ error: 'Signer not found' }, { status: 404 });
-      if (signer.identityStatus === 'Signed') {
+      if (signer.identityStatus === 'Signed' || signer.identityStatus === 'application signed') {
         return Response.json({ success: true, signer });
       }
+      const signedAt = new Date().toISOString();
       const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, {
-        identityStatus: 'Signed',
+        identityStatus: 'application signed',
+        signedAt,
+      });
+      return Response.json({ success: true, signer: updated });
+    }
+
+    // --- MARK SIGNING FAILED (admin / system) ---
+    if (action === 'markSigningFailed') {
+      if (actor.actor !== 'admin') {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
+      const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, {
+        identityStatus: 'signing failed',
       });
       return Response.json({ success: true, signer: updated });
     }
@@ -295,7 +341,7 @@ Deno.serve(async (req) => {
     if (action === 'inlineVerify') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
       const ALLOWED = ['dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl','titleType'];
-      const update: Record<string, any> = { identityStatus: 'Verified' };
+      const update: Record<string, any> = { identityStatus: 'verified' };
       for (const key of ALLOWED) {
         if (signerData && signerData[key] !== undefined) update[key] = signerData[key];
       }
@@ -310,7 +356,7 @@ Deno.serve(async (req) => {
       const allMatches = await base44.asServiceRole.entities.MerchantSigners.filter({ signerEmail });
       const prior = allMatches.find((s: any) =>
         s.corporateId !== corporateId &&
-        s.identityStatus === 'Verified' &&
+        (s.identityStatus === 'Verified' || s.identityStatus === 'verified' || s.identityStatus === 'Signed' || s.identityStatus === 'application signed') &&
         s.dobYear && s.ssn
       );
       if (!prior) return Response.json({ found: false });

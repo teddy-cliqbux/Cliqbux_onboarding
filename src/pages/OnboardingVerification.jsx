@@ -5,6 +5,11 @@ import SigningErrorGuide from '@/components/onboarding/SigningErrorGuide';
 import SignerDetailsModal from '@/components/onboarding/SignerDetailsModal';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 import { isRequiredSigner } from '@/lib/signerRules';
+import {
+  isVerifiedOrHigher,
+  isApplicationSigned,
+  isInviteOutstanding,
+} from '@/lib/signerLifecycle';
 
 // How often to poll MSPWare for signing completion (ms) — ground truth / safety net
 const POLL_INTERVAL_MS = 5000;
@@ -60,19 +65,17 @@ export default function OnboardingVerification({ profile, locations, initialSign
   const [submitError, setSubmitError] = useState('');
 
   const requiredSigners = rosterSigners.filter(isRequiredSigner);
-  // Anyone Verified/Signed can use the on-device iframe; Sent = remote parallel lane
-  const localSigners = requiredSigners.filter(s =>
-    s.identityStatus === 'Verified' || s.identityStatus === 'Signed'
-  );
-  const remotesOutstanding = requiredSigners.filter(s => s.identityStatus === 'Sent');
+  // Anyone verified+ can use the on-device iframe; invited/opened = remote parallel lane
+  const localSigners = requiredSigners.filter(s => isVerifiedOrHigher(s.identityStatus));
+  const remotesOutstanding = requiredSigners.filter(s => isInviteOutstanding(s.identityStatus));
   const allRequiredSigned = requiredSigners.length > 0 &&
-    requiredSigners.every(s => s.identityStatus === 'Signed');
+    requiredSigners.every(s => isApplicationSigned(s.identityStatus));
 
   // Prefer primary as default selection
   const selectedSigner =
     localSigners.find(s => s.id === selectedSignerId)
     || localSigners.find(s => s.isPrimarySigner)
-    || localSigners.find(s => s.identityStatus === 'Verified')
+    || localSigners.find(s => !isApplicationSigned(s.identityStatus) && isVerifiedOrHigher(s.identityStatus))
     || localSigners[0]
     || null;
 
@@ -165,7 +168,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
   }, []);
 
   const markSignerSignedLocally = async (signer) => {
-    if (!signer?.id || signer.identityStatus === 'Signed') return signer;
+    if (!signer?.id || isApplicationSigned(signer.identityStatus)) return signer;
     try {
       const res = await invokePortalFunction('manageSigner', {
         action: 'markSigned',
@@ -216,7 +219,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
 
       // Pick next unsigned local signer for convenience (others may already be signing remotely)
       const nextLocal = localSigners.find(s =>
-        s.id !== signer.id && s.identityStatus === 'Verified'
+        s.id !== signer.id && isVerifiedOrHigher(s.identityStatus) && !isApplicationSigned(s.identityStatus)
       );
       if (nextLocal) {
         setSelectedSignerId(nextLocal.id);
@@ -275,7 +278,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
       } catch { /* non-fatal */ }
 
       for (const s of requiredSigners) {
-        if (s.identityStatus === 'Signed') continue;
+        if (isApplicationSigned(s.identityStatus)) continue;
         const email = signerEmailKey(s);
         if (!email) continue;
         const allDone = apps.length > 0 && apps.every(app => {
@@ -298,11 +301,11 @@ export default function OnboardingVerification({ profile, locations, initialSign
         corporateId: profile.corporateId,
       }).catch(() => null))?.data?.signers?.filter(isRequiredSigner) || requiredSigners;
 
-      if (req.length > 0 && req.every(s => s.identityStatus === 'Signed')) {
+      if (req.length > 0 && req.every(s => isApplicationSigned(s.identityStatus))) {
         setPhase('complete');
       } else if (apps.length > 0 && apps.every(a => a.allSigned || a.error)) {
         for (const s of req) {
-          if (s.identityStatus !== 'Signed') await markSignerSignedLocally(s);
+          if (!isApplicationSigned(s.identityStatus)) await markSignerSignedLocally(s);
         }
         setPhase('complete');
       }
@@ -331,8 +334,8 @@ export default function OnboardingVerification({ profile, locations, initialSign
   };
 
   const selectSignerForDevice = (signer) => {
-    if (!signer || signer.identityStatus === 'Sent') return;
-    if (signer.identityStatus !== 'Verified' && signer.identityStatus !== 'Signed') {
+    if (!signer || isInviteOutstanding(signer.identityStatus)) return;
+    if (!isVerifiedOrHigher(signer.identityStatus)) {
       setKycSigner(signer);
       return;
     }
@@ -425,7 +428,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
               </div>
               <div className="flex flex-wrap gap-2">
                 {localSigners.map(s => {
-                  const done = s.identityStatus === 'Signed';
+                  const done = isApplicationSigned(s.identityStatus);
                   const active = selectedSigner?.id === s.id;
                   return (
                     <button

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { CheckCircle, Loader2, AlertTriangle, PenLine } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
+import { isApplicationSigned, isVerifiedOrHigher } from '@/lib/signerLifecycle';
 
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
@@ -138,9 +139,9 @@ export default function VerifyIdentity() {
         corporatePhone: s.corporatePhone || '',
       });
 
-      if (s.identityStatus === 'Signed') {
+      if (isApplicationSigned(s.identityStatus)) {
         setPhase('done');
-      } else if (s.identityStatus === 'Verified' && wantsSign) {
+      } else if (isVerifiedOrHigher(s.identityStatus) && wantsSign) {
         await loadSigningSession(t);
       } else {
         setPhase('kyc');

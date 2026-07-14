@@ -178,7 +178,7 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
           homeZip: form.homeZip,
           corporatePhone: rawPhone(form.corporatePhone),
           titleType: form.titleType,
-          identityStatus: 'Verified',
+          identityStatus: 'verified',
         });
       }
       const res = await invokePortalFunction('manageSigner', {

@@ -4,20 +4,28 @@ import SignerModal from './SignerModal';
 import SignerDetailsModal from './SignerDetailsModal';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 import { isRequiredSigner, isClearedForSigning } from '@/lib/signerRules';
+import {
+  lifecycleLabel,
+  normalizeSignerLifecycle,
+  isVerifiedOrHigher,
+  isApplicationSigned,
+  isInviteOutstanding,
+} from '@/lib/signerLifecycle';
 
 function StatusBadge({ status }) {
+  const n = normalizeSignerLifecycle(status);
   const dot = {
-    'Verified':            'bg-cb-success',
-    'Signed':              'bg-cb-success',
-    'Sent':                'bg-cb-accent',
-    'Pending Invitation':  'bg-cb-border-strong',
-    'Action Required':     'bg-cb-danger',
+    verified: 'bg-cb-success',
+    'application signed': 'bg-cb-success',
+    invited: 'bg-cb-accent',
+    opened: 'bg-sky-400',
+    pending: 'bg-cb-border-strong',
+    'signing failed': 'bg-cb-danger',
   };
-  const label = status === 'Signed' ? 'Signed' : status;
   return (
     <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot[status] || dot['Pending Invitation']}`} />
-      {label}
+      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot[n] || dot.pending}`} />
+      {lifecycleLabel(status)}
     </span>
   );
 }
@@ -129,9 +137,7 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
   const allRequiredCleared = requiredSigners.length > 0 && requiredSigners.every(isClearedForSigning);
 
   const isSoleSigner = signers.length === 1 && signers[0]?.isPrimarySigner === true;
-  const soleSignerVerified = isSoleSigner && (
-    signers[0]?.identityStatus === 'Verified' || signers[0]?.identityStatus === 'Signed'
-  );
+  const soleSignerVerified = isSoleSigner && isVerifiedOrHigher(signers[0]?.identityStatus);
 
   return (
     <div className="border border-cb-border rounded-cb overflow-hidden">
@@ -181,13 +187,12 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
             const required = isRequiredSigner(signer);
             const catalogOnly = !required;
             const needsRemoteInvite = required && !isPrimary && (
-              signer.identityStatus === 'Pending Invitation' || signer.identityStatus === 'Sent'
+              normalizeSignerLifecycle(signer.identityStatus) === 'pending'
+              || isInviteOutstanding(signer.identityStatus)
             );
-            // Any Verified required owner can open their concurrent signing session on this device
-            const canSignHere = required &&
-              (signer.identityStatus === 'Verified' || signer.identityStatus === 'Signed') &&
-              signer.identityStatus !== 'Signed';
-            const inviteBtnLabel = signer.identityStatus === 'Sent' ? 'Resend Invite' : 'Send Verify & Sign Invite';
+            // Any verified required owner can open their concurrent signing session on this device
+            const canSignHere = required && isVerifiedOrHigher(signer.identityStatus) && !isApplicationSigned(signer.identityStatus);
+            const inviteBtnLabel = isInviteOutstanding(signer.identityStatus) ? 'Resend Invite' : 'Send Verify & Sign Invite';
             const isSelected = selectedSignerId && signer.id === selectedSignerId;
 
             return (
@@ -211,7 +216,7 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
                     </div>
                     <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
                   </div>
-                  {!(isPrimary && signer.identityStatus === 'Pending Invitation') && (
+                  {!(isPrimary && normalizeSignerLifecycle(signer.identityStatus) === 'pending') && (
                     <StatusBadge status={signer.identityStatus} />
                   )}
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -225,7 +230,7 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
                         {isSelected ? 'Signing…' : 'Sign here'}
                       </button>
                     )}
-                    {required && !isPrimary && signer.identityStatus === 'Pending Invitation' && (
+                    {required && !isPrimary && normalizeSignerLifecycle(signer.identityStatus) === 'pending' && (
                       <button
                         onClick={() => openDetail(signer, { allowKyc: true })}
                         className="text-cb-body text-gray-300 hover:text-white border border-cb-border hover:border-cb-border-strong px-2.5 py-1.5 rounded-cb font-medium transition-colors flex items-center gap-1.5"
@@ -246,7 +251,7 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
                         {inviteBtnLabel}
                       </button>
                     )}
-                    <button onClick={() => openDetail(signer, { allowKyc: isPrimary || signer.identityStatus === 'Pending Invitation' })}
+                    <button onClick={() => openDetail(signer, { allowKyc: isPrimary || normalizeSignerLifecycle(signer.identityStatus) === 'pending' })}
                       className="text-cb-body text-gray-400 hover:text-white font-medium px-2 py-1.5 rounded-cb flex items-center gap-1.5 transition-colors whitespace-nowrap"
                       title="Edit details">
                       <Pencil className="w-3.5 h-3.5" /> Edit
@@ -260,7 +265,7 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
                     </button>
                   </div>
                 </div>
-                {isPrimary && signer.identityStatus !== 'Verified' && signer.identityStatus !== 'Signed' && (
+                {isPrimary && !isVerifiedOrHigher(signer.identityStatus) && (
                   <button onClick={() => openDetail(signer, { allowKyc: true })}
                     className="mt-4 w-full flex items-center justify-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 py-3 rounded-cb transition-colors">
                     <ShieldCheck className="w-4 h-4" /> Complete Identity Verification

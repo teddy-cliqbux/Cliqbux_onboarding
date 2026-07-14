@@ -27,6 +27,31 @@ function isExpired(sentAt: string | undefined): boolean {
   return Date.now() - sentMs > TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000;
 }
 
+function normalizeLifecycle(status: string | undefined): string {
+  const s = String(status || '').trim();
+  if (!s || s === 'Pending Invitation') return 'pending';
+  if (s === 'Sent' || s === 'invited') return 'invited';
+  if (s === 'opened') return 'opened';
+  if (s === 'Verified' || s === 'verified') return 'verified';
+  if (s === 'Signed' || s === 'application signed') return 'application signed';
+  if (s === 'Action Required' || s === 'signing failed') return 'signing failed';
+  return s.toLowerCase();
+}
+
+function isVerifiedOrHigher(status: string | undefined): boolean {
+  const n = normalizeLifecycle(status);
+  return n === 'verified' || n === 'application signed';
+}
+
+function isApplicationSigned(status: string | undefined): boolean {
+  return normalizeLifecycle(status) === 'application signed';
+}
+
+function canMarkOpened(status: string | undefined): boolean {
+  const n = normalizeLifecycle(status);
+  return n === 'pending' || n === 'invited';
+}
+
 // Only the fields VerifyIdentity.jsx actually needs to render — never return
 // the full record's internal bookkeeping (verifyToken itself, etc.) to the client.
 function toSafeSigner(s: any) {
@@ -36,6 +61,9 @@ function toSafeSigner(s: any) {
     lastName: s.lastName,
     signerEmail: s.signerEmail || '',
     identityStatus: s.identityStatus,
+    invitedAt: s.invitedAt || null,
+    openedAt: s.openedAt || null,
+    signedAt: s.signedAt || null,
     dobYear: s.dobYear || '',
     dobMonth: s.dobMonth || '',
     dobDay: s.dobDay || '',
@@ -123,14 +151,28 @@ Deno.serve(async (req) => {
         legalName = profiles?.[0]?.legalName || '';
       } catch (_) { /* non-fatal — just skip the business name in the header */ }
 
-      return Response.json({ success: true, signer: toSafeSigner(signer), legalName });
+      // First open: invited / Sent / Pending Invitation → opened (never regress verified+)
+      let current = signer;
+      if (canMarkOpened(signer.identityStatus)) {
+        const openedAt = new Date().toISOString();
+        try {
+          current = await base44.asServiceRole.entities.MerchantSigners.update(signer.id, {
+            identityStatus: 'opened',
+            openedAt,
+          });
+        } catch (e: any) {
+          console.warn('[verifySignerToken] opened transition failed:', e.message);
+        }
+      }
+
+      return Response.json({ success: true, signer: toSafeSigner(current), legalName });
     }
 
     if (action === 'save') {
       if (isExpired(signer.verifyTokenSentAt)) {
         return Response.json({ error: 'This verification link has expired. Please ask the business to resend your invite.' }, { status: 410 });
       }
-      if (signer.identityStatus === 'Verified' || signer.identityStatus === 'Signed') {
+      if (isVerifiedOrHigher(signer.identityStatus)) {
         // Already verified (e.g. double-submit) — treat as success, don't re-validate/overwrite.
         return Response.json({ success: true, signer: toSafeSigner(signer) });
       }
@@ -157,7 +199,7 @@ Deno.serve(async (req) => {
       const update: Record<string, any> = {
         dobYear, dobMonth, dobDay, ssn,
         homeStreet, homeCity, homeState, homeZip,
-        identityStatus: 'Verified',
+        identityStatus: 'verified',
       };
       if (signerData?.firstName) update.firstName = signerData.firstName;
       if (signerData?.lastName) update.lastName = signerData.lastName;
@@ -174,7 +216,7 @@ Deno.serve(async (req) => {
       if (isExpired(signer.verifyTokenSentAt)) {
         return Response.json({ error: 'This verification link has expired. Please ask the business to resend your invite.' }, { status: 410 });
       }
-      if (signer.identityStatus !== 'Verified' && signer.identityStatus !== 'Signed') {
+      if (!isVerifiedOrHigher(signer.identityStatus)) {
         return Response.json({
           error: 'Complete identity verification before signing.',
           needsKyc: true,
@@ -186,7 +228,7 @@ Deno.serve(async (req) => {
         return Response.json({ error: 'Signer email is missing on this record.' }, { status: 400 });
       }
 
-      if (signer.identityStatus === 'Signed') {
+      if (isApplicationSigned(signer.identityStatus)) {
         return Response.json({
           success: true,
           applications: [],
@@ -253,15 +295,17 @@ Deno.serve(async (req) => {
       if (isExpired(signer.verifyTokenSentAt)) {
         return Response.json({ error: 'This verification link has expired. Please ask the business to resend your invite.' }, { status: 410 });
       }
-      if (signer.identityStatus === 'Signed') {
+      if (isApplicationSigned(signer.identityStatus)) {
         return Response.json({ success: true, signer: toSafeSigner(signer) });
       }
-      // Only allow Verified → Signed (never skip KYC)
-      if (signer.identityStatus !== 'Verified') {
+      // Only allow verified → application signed (never skip KYC)
+      if (normalizeLifecycle(signer.identityStatus) !== 'verified') {
         return Response.json({ error: 'Identity must be verified before marking signed.' }, { status: 409 });
       }
+      const signedAt = new Date().toISOString();
       const updated = await base44.asServiceRole.entities.MerchantSigners.update(signer.id, {
-        identityStatus: 'Signed',
+        identityStatus: 'application signed',
+        signedAt,
       });
       return Response.json({ success: true, signer: toSafeSigner(updated) });
     }
