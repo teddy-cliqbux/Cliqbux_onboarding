@@ -75,14 +75,13 @@ function activityActorDot(actor) {
 function PortalActivityPanel({ activity }) {
   const a = activity || {};
   const recent = Array.isArray(a.recent) ? a.recent : [];
+  // Empty state still considers invite/signer events (timeline-only; no metric cards for those).
   const hasAny = (
     a.invitesSent || a.merchantOpens || a.agentOpens || a.merchantSeconds
     || a.signerInvitesSent || a.signerLinkOpens
+    || recent.length > 0
   );
   const stats = [
-    { label: 'Portal invites', value: a.invitesSent || 0, sub: a.lastInviteAt ? `Last ${formatActivityAt(a.lastInviteAt)}` : 'None yet' },
-    { label: 'Signer links sent', value: a.signerInvitesSent || 0, sub: a.signerLastInviteAt ? `Last ${formatActivityAt(a.signerLastInviteAt)}` : 'None yet' },
-    { label: 'Signer links opened', value: a.signerLinkOpens || 0, sub: a.signerLastOpenAt ? `Last ${formatActivityAt(a.signerLastOpenAt)}` : 'None yet' },
     { label: 'Merchant opens', value: a.merchantOpens || 0, sub: a.merchantLastOpenAt ? `Last ${formatActivityAt(a.merchantLastOpenAt)}` : 'None yet' },
     { label: 'Merchant time', value: formatDuration(a.merchantSeconds), sub: 'Time in portal' },
     { label: 'Agent opens', value: a.agentOpens || 0, sub: a.agentLastOpenAt ? `Last ${formatActivityAt(a.agentLastOpenAt)}` : 'None yet' },
@@ -91,7 +90,7 @@ function PortalActivityPanel({ activity }) {
   return (
     <div>
       <p className="text-cb-caption uppercase text-gray-500 mb-2">Portal activity</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
         {stats.map(st => (
           <div key={st.label} className="rounded-cb border border-cb-border bg-cb-surface-raised px-2.5 py-2">
             <p className="text-cb-caption uppercase text-gray-500">{st.label}</p>
