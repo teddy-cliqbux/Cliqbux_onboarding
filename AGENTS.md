@@ -262,7 +262,9 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 **Draft create follow-up (same day):** Signing then failed with a generic "Could not create MSPWare draft" while Porky's never appeared in MSPWare Drafts. `signApplication` was swallowing POST/location failures. Now returns `draftErrors` in `hint`; locationId string-normalized; create accepts `merchantapplicationno` even if `success` is omitted.
 
-**Rule:** Blank HubSpot `processing_pricing_tier` must not write `STANDARD`. Pricing tab complete = canonical CD **or** custom with all three fees — never markup-only. Applications list pricing label must come from the profile (not stale track prefill). Never return a generic MSP draft failure without the underlying create/location/MCC error text.
+**Template 133 follow-up (same day):** MSPWare returned `An error has occurred` when cloning template **133** for Porky's Cash Discount. Likely a broken/un-cloneable template or DBA special chars. Code now sanitizes DBA on create, diagnoses template via GET on failure, and supports `MSP_CD_TEMPLATE_NO` env override without code change.
+
+**Rule:** Blank HubSpot `processing_pricing_tier` must not write `STANDARD`. Pricing tab complete = canonical CD **or** custom with all three fees — never markup-only. Applications list pricing label must come from the profile (not stale track prefill). Never return a generic MSP draft failure without the underlying create/location/MCC error text. If MSPWare refuses `templatemerchantapplicationno: 133`, verify the Cash Discount record is still a **Template** (not a Draft) and update `MSP_CD_TEMPLATE_NO` to the working number.
 
 ---
 
@@ -416,6 +418,8 @@ When a new `MerchantMID` is created via `manageMerchantID` (action="add") **and 
 | `MSP_APP_ID` | `cliqbux` |
 | `MSP_BASE_URL` | `https://api.msppulsepoint.com/v2` (optional override) |
 | `MSP_SALESPERSON_ID` | `76764` |
+| `MSP_CD_TEMPLATE_NO` | Cash Discount MSPWare template number (default `133`). Set if #133 stops cloning. |
+| `MSP_DEFAULT_TEMPLATE_NO` | ICPLS template number (default `209`) |
 | `MSP_SUBMIT_ENABLED` | `true` to actually submit to Elavon; omit for safe draft-only mode |
 | `ELAVON_USERNAME` / `ELAVON_PASSWORD` | Only used by `getDocuments`/`listDocuments` (direct Elavon doc API) |
 | `HUBSPOT_API_KEY` | HubSpot Private App token — used by `createHubspotDeal`, `pushStatusToHubspot`, `syncFromHubspot`, `getHubspotQuote`, `cleanupTestHubspot` |

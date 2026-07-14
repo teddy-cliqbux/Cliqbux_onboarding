@@ -63,10 +63,69 @@ const MSP_APP_TYPE = 24;
 // entity_number 48603-17, all_cards true (incl UnionPay), tokenization none, markup
 // fields correctly blank (per-merchant, sent by buildFormPayload for custom tiers).
 const DEFAULT_TEMPLATE_NO = 209;      // Custom Interchange Plus
-const CD_TEMPLATE_NO = 133;           // Self-Serve Cash Discount
+// 2026-07-07: default CD #133. Override via MSP_CD_TEMPLATE_NO if clone fails (Porky's 2026-07-14).
+const CD_TEMPLATE_NO_DEFAULT = 133;
 const FLAT_TEMPLATE_NO = 0;           // TODO: Custom Flat Rate — fill in once created (this session, see task tracker)
 // Self-Serve Flat Rate has NO template — on hold, Elavon doesn't support it yet.
 // Do not create one or route real merchants through it. See Critical Lesson #12.
+
+function resolveCdTemplateNo(): number {
+  const raw = Deno.env.get('MSP_CD_TEMPLATE_NO');
+  const n = raw != null && raw !== '' ? parseInt(String(raw), 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : CD_TEMPLATE_NO_DEFAULT;
+}
+
+function resolveDefaultTemplateNo(): number {
+  const raw = Deno.env.get('MSP_DEFAULT_TEMPLATE_NO');
+  const n = raw != null && raw !== '' ? parseInt(String(raw), 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_TEMPLATE_NO;
+}
+
+function sanitizeDbaForMspCreate(dba: string): string {
+  const cleaned = String(dba || 'Merchant')
+    .replace(/[''`´]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^\w\s.\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60);
+  return cleaned || 'Merchant';
+}
+
+async function diagnoseMspTemplate(
+  mspBase: string,
+  headers: Record<string, string>,
+  templateNo: number | string,
+): Promise<string> {
+  try {
+    const res = await fetch(`${mspBase}/applications/${templateNo}`, { headers });
+    const data = await res.json().catch(() => ({}));
+    const app = data?.application || data?.data || data || {};
+    const status = app.status || app.applicationstatus || app.ApplicationStatus || data?.status;
+    const dba = app.dba || app.DBA || app.full_dba_name;
+    if (!res.ok) {
+      return `Template #${templateNo} GET HTTP ${res.status}` +
+        (data?.error || data?.message ? `: ${data.error || data.message}` : ' (not found or inaccessible)');
+    }
+    return `Template #${templateNo} reachable (status=${status ?? '?'}, dba=${dba ?? '?'})`;
+  } catch (e: any) {
+    return `Template #${templateNo} diagnose failed: ${e.message}`;
+  }
+}
+
+function tierToTemplate(tierKey: string): number {
+  const CD = resolveCdTemplateNo();
+  const DEF = resolveDefaultTemplateNo();
+  const map: Record<string, number> = {
+    'CUSTOM_FLAT_RATE': FLAT_TEMPLATE_NO,
+    'CUSTOM_INTERCHANGE_PLUS': DEF,
+    'SELF_SERVE_CASH_DISCOUNT': CD,
+    'TRADITIONAL': DEF, 'STANDARD': DEF, 'PREMIUM': DEF,
+    'CASH_DISCOUNT': CD, 'SELF_CASH_DISCOUNT': CD,
+    'SELF_SWIPED': DEF, 'SELF_KEYED': DEF,
+  };
+  return map[tierKey] ?? DEF;
+}
 
 // Maps pricingTier -> MSPWare pricing_method and -> MSPWare template number.
 // MerchantMID.pricingMethod has a schema-level default of 'ICPLS', which will
@@ -90,15 +149,6 @@ const TIER_TO_METHOD: Record<string, string> = {
   // cannot execute this agreement. Do not build a template for these or route real
   // merchants through them until Elavon adds support. See Critical Lesson #12.
   'SELF_SWIPED': 'ICPLS', 'SELF_KEYED': 'ICPLS',
-};
-
-const TIER_TO_TEMPLATE: Record<string, number> = {
-  'CUSTOM_FLAT_RATE': FLAT_TEMPLATE_NO,
-  'CUSTOM_INTERCHANGE_PLUS': DEFAULT_TEMPLATE_NO,
-  'SELF_SERVE_CASH_DISCOUNT': CD_TEMPLATE_NO,
-  'TRADITIONAL': DEFAULT_TEMPLATE_NO, 'STANDARD': DEFAULT_TEMPLATE_NO, 'PREMIUM': DEFAULT_TEMPLATE_NO,
-  'CASH_DISCOUNT': CD_TEMPLATE_NO, 'SELF_CASH_DISCOUNT': CD_TEMPLATE_NO,
-  'SELF_SWIPED': DEFAULT_TEMPLATE_NO, 'SELF_KEYED': DEFAULT_TEMPLATE_NO,
 };
 
 // Pricing tiers that are ALWAYS a custom, individually-negotiated deal — no
@@ -954,16 +1004,17 @@ Deno.serve(async (req) => {
         }
 
         if (!mspApplicationNo) {
-          // Pick the template via pricingTier first (canonical, see TIER_TO_TEMPLATE
-          // above); fall back to the old pricingMethod-based cash-discount detection
-          // for any record that only has pricingMethod set and no pricingTier.
+          // Pick the template via pricingTier first (canonical); fall back to the
+          // old pricingMethod-based cash-discount detection for any record that
+          // only has pricingMethod set and no pricingTier.
           const tierKey = (merchantMID.pricingTier || profile.pricingTier || '').toUpperCase();
           const isCashDiscountByMethod = ['TIERD', 'CLEAR'].includes((merchantMID.pricingMethod || '').toUpperCase());
-          const templateNo = merchantMID.mspTemplateNo || profile.mspTemplateNo
-            || TIER_TO_TEMPLATE[tierKey]
-            || (isCashDiscountByMethod ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
+          const templateNo = Number(merchantMID.mspTemplateNo || profile.mspTemplateNo)
+            || tierToTemplate(tierKey)
+            || (isCashDiscountByMethod ? resolveCdTemplateNo() : resolveDefaultTemplateNo());
+          const rawDba = merchantMID.dbaName || location.dbaName || profile.legalName || 'Merchant';
           const createBody = {
-            dba: merchantMID.dbaName || location.dbaName || profile.legalName,
+            dba: sanitizeDbaForMspCreate(rawDba),
             merchantapplicationtypeno: MSP_APP_TYPE,
             salespersonid: salespersonId,
             templatemerchantapplicationno: templateNo,
@@ -974,17 +1025,19 @@ Deno.serve(async (req) => {
             headers: mspHeaders,
             body: JSON.stringify(createBody),
           });
-          const createData = await createRes.json();
+          const createData = await createRes.json().catch(() => ({ error: `non-JSON HTTP ${createRes.status}` }));
 
           if (!createRes.ok || createData.success === false || !(createData.merchantapplicationno ?? createData.MerchantApplicationNo)) {
-            console.error(`[submitToMSP] Failed to create application for "${merchantMID.dbaName}":`, JSON.stringify(createData));
+            const tplDiag = await diagnoseMspTemplate(mspBase, mspHeaders, templateNo);
+            console.error(`[submitToMSP] Failed to create application for "${merchantMID.dbaName}":`, JSON.stringify(createData), tplDiag);
             await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, { applicationStepStatus: 'Error' });
             results.push({
               midId: merchantMID.id,
               locationId: merchantMID.locationId,
               dbaName: merchantMID.dbaName,
               status: 'error',
-              error: createData.error || createData.message || `HTTP ${createRes.status}`,
+              error: `${createData.error || createData.message || `HTTP ${createRes.status}`} (template ${templateNo}). ${tplDiag}`,
+              templateNo,
             });
             allSuccessful = false;
             continue;

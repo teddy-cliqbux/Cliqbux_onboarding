@@ -64,22 +64,72 @@ async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merc
 const MSP_APP_TYPE = 24;           // Elavon US Application
 // 2026-07-09: switched from #6 to #209 ('Custom InterchangePlus Template') — see submitToMSP.
 const DEFAULT_TEMPLATE_NO = 209;  // Custom InterchangePlus Template
-// 2026-07-07: CD_TEMPLATE_NO switched from 154 to 133. #154 ("Cliqbux Template Cash
-// Discount") was missing key data and is no longer used for anything. #133 ("Cash
-// Discount Template") is the new standard — a properly MSPWare-typed Template record
-// with fields confirmed by Teddy. See AGENTS.md.
-const CD_TEMPLATE_NO = 133;       // Cash Discount Template — Self-Serve Cash Discount
+// 2026-07-07: default CD template #133. Override live via MSP_CD_TEMPLATE_NO if #133
+// becomes un-cloneable in MSPWare (Porky's 2026-07-14: POST with 133 → "An error has occurred").
+const CD_TEMPLATE_NO_DEFAULT = 133;
 const FLAT_TEMPLATE_NO = 0;       // TODO: Custom Flat Rate — fill in once created (see submitToMSP)
 const DEFAULT_SALESPERSON_ID = 0;
+
+function resolveCdTemplateNo(): number {
+  const raw = Deno.env.get('MSP_CD_TEMPLATE_NO');
+  const n = raw != null && raw !== '' ? parseInt(String(raw), 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : CD_TEMPLATE_NO_DEFAULT;
+}
+
+function resolveDefaultTemplateNo(): number {
+  const raw = Deno.env.get('MSP_DEFAULT_TEMPLATE_NO');
+  const n = raw != null && raw !== '' ? parseInt(String(raw), 10) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_TEMPLATE_NO;
+}
+
+/** MSPWare create can choke on apostrophes/ampersands in dba — form fill still gets the real name. */
+function sanitizeDbaForMspCreate(dba: string): string {
+  const cleaned = String(dba || 'Merchant')
+    .replace(/[''`´]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/[^\w\s.\-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 60);
+  return cleaned || 'Merchant';
+}
+
+async function diagnoseMspTemplate(
+  mspBase: string,
+  headers: Record<string, string>,
+  templateNo: number | string,
+): Promise<string> {
+  try {
+    const res = await fetch(`${mspBase}/applications/${templateNo}`, { headers });
+    const data = await res.json().catch(() => ({}));
+    const app = data?.application || data?.data || data || {};
+    const status = app.status || app.applicationstatus || app.ApplicationStatus || data?.status;
+    const dba = app.dba || app.DBA || app.full_dba_name;
+    const type = app.merchantapplicationtypeno || app.type;
+    if (!res.ok) {
+      return `Template #${templateNo} GET HTTP ${res.status}` +
+        (data?.error || data?.message ? `: ${data.error || data.message}` : ' (not found or inaccessible)');
+    }
+    return `Template #${templateNo} reachable (status=${status ?? '?'}, dba=${dba ?? '?'}, type=${type ?? '?'})`;
+  } catch (e: any) {
+    return `Template #${templateNo} diagnose failed: ${e.message}`;
+  }
+}
+
 // Self-Serve Flat Rate has NO template — on hold, Elavon doesn't support it yet.
-const TIER_TO_TEMPLATE: Record<string, number> = {
-  'CUSTOM_FLAT_RATE': FLAT_TEMPLATE_NO,
-  'CUSTOM_INTERCHANGE_PLUS': DEFAULT_TEMPLATE_NO,
-  'SELF_SERVE_CASH_DISCOUNT': CD_TEMPLATE_NO,
-  'TRADITIONAL': DEFAULT_TEMPLATE_NO, 'STANDARD': DEFAULT_TEMPLATE_NO, 'PREMIUM': DEFAULT_TEMPLATE_NO,
-  'CASH_DISCOUNT': CD_TEMPLATE_NO, 'SELF_CASH_DISCOUNT': CD_TEMPLATE_NO,
-  'SELF_SWIPED': DEFAULT_TEMPLATE_NO, 'SELF_KEYED': DEFAULT_TEMPLATE_NO,
-};
+function tierToTemplate(tierKey: string): number {
+  const CD = resolveCdTemplateNo();
+  const DEF = resolveDefaultTemplateNo();
+  const map: Record<string, number> = {
+    'CUSTOM_FLAT_RATE': FLAT_TEMPLATE_NO,
+    'CUSTOM_INTERCHANGE_PLUS': DEF,
+    'SELF_SERVE_CASH_DISCOUNT': CD,
+    'TRADITIONAL': DEF, 'STANDARD': DEF, 'PREMIUM': DEF,
+    'CASH_DISCOUNT': CD, 'SELF_CASH_DISCOUNT': CD,
+    'SELF_SWIPED': DEF, 'SELF_KEYED': DEF,
+  };
+  return map[tierKey] ?? DEF;
+}
 // Pricing tiers that are ALWAYS a custom, individually-negotiated deal — no
 // off-the-shelf template. See Critical Lesson #12.
 const CUSTOM_PRICING_TIERS = ['CUSTOM_FLAT_RATE', 'CUSTOM_INTERCHANGE_PLUS'];
@@ -829,11 +879,12 @@ Deno.serve(async (req) => {
           // only has pricingMethod set and no pricingTier.
           const tierKeyForTemplate = (merchantMID.pricingTier || profile.pricingTier || '').toUpperCase();
           const isCashDiscountByMethod = ['TIERD', 'CLEAR'].includes((merchantMID.pricingMethod || '').toUpperCase());
-          const templateNo = merchantMID.mspTemplateNo || profile.mspTemplateNo
-            || TIER_TO_TEMPLATE[tierKeyForTemplate]
-            || (isCashDiscountByMethod ? CD_TEMPLATE_NO : DEFAULT_TEMPLATE_NO);
+          const templateNo = Number(merchantMID.mspTemplateNo || profile.mspTemplateNo)
+            || tierToTemplate(tierKeyForTemplate)
+            || (isCashDiscountByMethod ? resolveCdTemplateNo() : resolveDefaultTemplateNo());
+          const rawDba = merchantMID.dbaName || location.dbaName || profile.legalName || 'Merchant';
           const createBody = {
-            dba: merchantMID.dbaName || location.dbaName || profile.legalName,
+            dba: sanitizeDbaForMspCreate(rawDba),
             merchantapplicationtypeno: MSP_APP_TYPE,
             salespersonid: salespersonId,
             templatemerchantapplicationno: templateNo,
@@ -856,7 +907,11 @@ Deno.serve(async (req) => {
             const mspErr = createData.error || createData.message || createData.Message
               || (Array.isArray(createData.errors) ? createData.errors.join('; ') : null)
               || `HTTP ${createRes.status}`;
-            const msg = `MSPWare refused draft for "${merchantMID.dbaName || merchantMID.id}" (template ${templateNo}): ${mspErr}`;
+            const tplDiag = await diagnoseMspTemplate(mspBase, mspHeaders, templateNo);
+            const msg =
+              `MSPWare refused draft for "${merchantMID.dbaName || merchantMID.id}" (template ${templateNo}): ${mspErr}. ` +
+              `${tplDiag}. ` +
+              `If template ${templateNo} is broken, set Base44 env MSP_CD_TEMPLATE_NO to a working Cash Discount template number (MSPWare → Templates → check URL), then redeploy is not required — env alone is enough after function restart.`;
             console.error(`[signApplication] ${msg}`, createData);
             draftErrors.push(msg);
             continue;

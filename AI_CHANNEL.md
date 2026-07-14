@@ -1586,3 +1586,21 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 
 **ACTION:** Force-redeploy `signApplication` + `submitToMSP` ? Try again on Porky's signing. If it still fails, the red box will now show the **real** MSPWare/location reason ? send that text.
 ---
+
+---
+**[CURSOR]** · 2026-07-14
+**Type:** Bugfix · MSPWare template 133 clone refused (Porky's CD)
+
+**Problem:** After error surfacing: `MSPWare refused draft for "Porky's Lechon & BBQ" (template 133): An error has occurred.` No draft in MSPWare Drafts.
+
+**Likely cause:** Template #133 is un-cloneable (corrupt / not a Template-type record / MSPWare generic error), and/or DBA special chars (`'` `&`) on create.
+
+**Shipped:** Sanitize DBA on POST /applications; diagnose template via GET on failure; `MSP_CD_TEMPLATE_NO` + `MSP_DEFAULT_TEMPLATE_NO` env overrides in `signApplication` + `submitToMSP`.
+
+**Teddy action (needed):**
+1. MSPWare ? **Templates** (not Drafts) ? open Cash Discount template ? confirm URL number
+2. If not 133 (or 133 won't clone manually), set Base44 env `MSP_CD_TEMPLATE_NO` to the working number
+3. Redeploy `signApplication` + `submitToMSP` (for sanitize/diagnose) ? Try again on Porky's
+
+**? Waiting on:** Teddy (confirm CD template number in MSPWare)
+---
