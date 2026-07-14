@@ -215,6 +215,34 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 ---
 
+### 16. Portal form lock + demoteApplication (signing-phase edit guard)
+
+**Shipped 2026-07-14.** Once `signApplication` issues BoldSign packages (via MSPWare), merchant data-entry (locations, MIDs, banking, legal entities, signer KYC) must freeze until an explicit unlock. Editing after packages exist caused stale MSPWare forms and invalid signature links (Quick Stage / concurrent multi-signer era).
+
+**Model (not HubSpot-style invented enums on `applicationStatus`):**
+- `MerchantCorporateProfile.portalLockStatus`: `unlocked` | `signing` | `pending_signature` | `all_signed`
+- Forms also lock when `applicationStatus === 'Submitted'`
+- UI helper: `src/lib/portalLock.js` + `PortalLockContext`
+
+**Lock triggers:**
+- `signApplication` success → `portalLockStatus = signing` (or `all_signed` if MSP already shows all signed)
+- `manageSigner` `markSigned` when every required owner is signed → `all_signed`
+- Submit → persist `applicationStatus: Submitted` on the profile (was previously track/React-only)
+
+**Unlock:** `POST /functions/demoteApplication` `{ corporateId, reason? }`
+1. `getPortalActor` gate (merchant own corp or admin)
+2. Refuse if any MID is `Pending MID` / `Active` / `Active (Existing)` (Elavon boarding already started)
+3. `DELETE /applications/{no}/signatures` via MSPWare (this is how BoldSign envelopes are revoked in our stack — we do **not** call BoldSign revoke directly; no BoldSign API key)
+4. If anyone signed and revoke failed → void MSPWare draft + clear `mspApplicationNo` (intentional; same spirit as `retractMSPApplication`)
+5. Reset signers `application signed` → `verified` (KYC kept)
+6. `portalLockStatus = unlocked`; if was `Submitted` → `Incomplete`
+
+**UI:** FormsLockedBanner + Unlock & Modify Details confirm; MidCard/Entity/Banking/SignerDetails honor lock; backend write functions return HTTP 423 `FORMS_LOCKED`.
+
+**Rule:** Never bypass `getPortalActor` on demote. Never clear `mspApplicationNo` except intentional void / explicit 404. Do not invent a separate BoldSign API path.
+
+---
+
 ## What This App Does
 
 Merchant onboarding portal for Cliqbux, an ISO/ISV that boards merchants to Elavon via **MSPWare/PulsePoint** (NOT Elavon's direct eBanking API). Merchants complete an online application, connect their bank account via Plaid, and their processing application is submitted to Elavon through MSPWare.
@@ -333,6 +361,7 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 | `uploadSignerIDsToMSP` | Uploads signer ID document files to all pending MSPWare applications for a corporateId. Call after signers upload their IDs via the portal. |
 | `getMSPFormStatus` | Merchant-facing form status check (no admin required). Returns completion %, errors, and raw form fields for a given `mspApplicationNo`. |
 | `getHubspotQuote` | Portal-auth'd HubSpot quote + line items. Returns `isSigned` / `isPaid` / `quoteLifecycle` / `invoiceUrl` for EquipmentOrderPanel + SetupGate. Read-only; payment via HubSpot Payments. |
+| `demoteApplication` | Unlock portal forms after signing packages exist: revoke MSPWare/BoldSign packages (`DELETE /signatures`), reset signed→verified, `portalLockStatus=unlocked`. Refuses if MID already Pending MID/Active. |
 
 ### Other active functions
 `createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `updatePricing`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `submitLegacyPOSConnection`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`

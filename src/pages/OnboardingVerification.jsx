@@ -10,6 +10,7 @@ import {
   isApplicationSigned,
   isInviteOutstanding,
 } from '@/lib/signerLifecycle';
+import { usePortalLock } from '@/lib/PortalLockContext';
 
 // How often to poll MSPWare for signing completion (ms) — ground truth / safety net
 const POLL_INTERVAL_MS = 5000;
@@ -37,6 +38,7 @@ function findSignerLink(app, email) {
  * required owner is locally `Signed` (poll + postMessage remain dual signals).
  */
 export default function OnboardingVerification({ profile, locations, initialSignersVerified, onSignersVerified, onBack, onComplete, onNavigate }) {
+  const { setPortalLockStatus } = usePortalLock();
   const [allVerified, setAllVerified] = useState(initialSignersVerified || false);
   const [rosterSigners, setRosterSigners] = useState([]);
 
@@ -255,6 +257,9 @@ export default function OnboardingVerification({ profile, locations, initialSign
         corporateId: profile.corporateId,
         merchantIDName: a.merchantIDName || a.merchantName,
       })));
+      if (data.portalLockStatus && setPortalLockStatus) {
+        setPortalLockStatus(data.portalLockStatus);
+      }
       setActiveMidIndex(0);
     } catch (err) {
       setSigningError(err.message || 'Failed to prepare signing documents.');

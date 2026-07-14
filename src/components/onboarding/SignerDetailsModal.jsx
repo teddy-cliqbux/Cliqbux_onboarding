@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ShieldCheck, CheckCircle2, Loader2, Eye, EyeOff, Sparkles, Save } from 'lucide-react';
-import { formatSSN, rawSSN, formatPhone, rawPhone } from '@/lib/textUtils';
+import { X, ShieldCheck, CheckCircle2, Loader2, Eye, EyeOff, Sparkles, Save, Lock } from 'lucide-react';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+import { usePortalLock } from '@/lib/PortalLockContext';
+import { FORMS_LOCKED_MESSAGE } from '@/lib/portalLock';
+import { formatSSN, rawSSN, formatPhone, rawPhone } from '@/lib/textUtils';
 
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
@@ -59,6 +61,7 @@ function useAddressAutocomplete(onParsed) {
 // phone) when the signer is primary OR colocated (`allowInlineKyc`). Remote
 // owners verify via their Verify & Sign email (/verify?intent=sign).
 export default function SignerDetailsModal({ signer, corporateId, profile, onSaved, onClose, allowInlineKyc = false }) {
+  const { formsLocked } = usePortalLock();
   const isPrimary = signer.isPrimarySigner === true;
   const showKyc = isPrimary || allowInlineKyc === true;
   const inheritedTitle = signer.titleType || profile?.titleType || '';
@@ -371,11 +374,16 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
           )}
 
           <div className="flex gap-3 pt-1">
-            <button type="button" onClick={handleSave} disabled={saving}
+            <button type="button" onClick={handleSave} disabled={saving || formsLocked}
               className="flex-1 flex items-center justify-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 px-5 py-3 rounded-cb transition-all">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (showKyc ? <ShieldCheck className="w-4 h-4" /> : <Save className="w-4 h-4" />)}
-              {saving ? 'Saving...' : (showKyc ? 'Save & Verify' : 'Save')}
+              {formsLocked ? <Lock className="w-4 h-4" /> : saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (showKyc ? <ShieldCheck className="w-4 h-4" /> : <Save className="w-4 h-4" />)}
+              {formsLocked ? 'Forms Locked' : saving ? 'Saving...' : (showKyc ? 'Save & Verify' : 'Save')}
             </button>
+            {formsLocked && (
+              <p className="text-cb-caption normal-case tracking-normal text-gray-500 mt-2 text-center col-span-full">
+                {FORMS_LOCKED_MESSAGE}
+              </p>
+            )}
             <button type="button" onClick={onClose} className="px-4 py-3 text-cb-body font-medium text-gray-400 border border-cb-border hover:text-white hover:border-cb-border-strong rounded-cb transition-colors">
               Cancel
             </button>

@@ -17,6 +17,9 @@ import ApplicationTracker from '@/components/onboarding/ApplicationTracker';
 import { Lock, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AgentPricingBubble from '@/components/pricing/AgentPricingBubble';
+import FormsLockedBanner from '@/components/onboarding/FormsLockedBanner';
+import { PortalLockContext } from '@/lib/PortalLockContext';
+import { isPortalFormsLocked, DEMOTE_CONFIRM_MESSAGE } from '@/lib/portalLock';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
 // 2026-07-06: fixed a real bug here — this array checked for 'Self_CashDiscount'
@@ -124,6 +127,7 @@ export default function OnboardingPortal() {
   const [mode, setMode]               = useState(null); // 'sales' | 'self_serve'
   const [dealId, setDealId]           = useState(null);
   const [profile, setProfile]         = useState(null);
+  const [unlocking, setUnlocking]     = useState(false);
   const [locations, setLocations]     = useState([]);
   // Backend-computed data-completeness report (entity/location/MID missing fields)
   const [readiness, setReadiness]     = useState(null);
@@ -507,6 +511,35 @@ export default function OnboardingPortal() {
 
   const onBackStep = () => goToStep(STEP_WELCOME);
 
+  const handleRequestUnlock = async () => {
+    if (!profile?.corporateId || unlocking) return;
+    if (!window.confirm(DEMOTE_CONFIRM_MESSAGE)) return;
+    setUnlocking(true);
+    try {
+      const res = await invokePortalFunction('demoteApplication', {
+        corporateId: profile.corporateId,
+        reason: 'Application demoted for modifications',
+      });
+      if (res.data?.error) {
+        window.alert(res.data.error);
+        return;
+      }
+      const nextStatus = res.data?.profile?.applicationStatus || 'Incomplete';
+      setProfile((prev) => ({
+        ...prev,
+        applicationStatus: nextStatus,
+        portalLockStatus: 'unlocked',
+      }));
+      setSignersVerified(false);
+      goToStep(STEP_LOCATIONS);
+    } catch (err) {
+      console.error('[demoteApplication]', err);
+      window.alert(err?.message || 'Could not unlock the application. Please try again or contact support.');
+    } finally {
+      setUnlocking(false);
+    }
+  };
+
   // Step key → internal step constant
   const handleNavigate = (stepKey) => {
     const map = { quote: null, locations: STEP_LOCATIONS, banking: STEP_BANKING, verify: STEP_VERIFICATION };
@@ -515,10 +548,18 @@ export default function OnboardingPortal() {
   };
 
   const handleSigningComplete = async () => {
-    // Mark submitted, sync to HubSpot, redirect to dashboard
+    // Persist Submitted on the profile (not just React/track state) so refresh + lock stay correct.
+    try {
+      await invokePortalFunction('updateMerchantProfile', {
+        corporateId: profile?.corporateId,
+        fields: { applicationStatus: 'Submitted' },
+      });
+    } catch (err) {
+      console.error('[handleSigningComplete] failed to persist Submitted', err);
+    }
     pushMilestoneToHubspot(profile?.corporateId, 'application_submitted');
     trackProgress(profile?.corporateId, { currentStep: 'submitted', completedSteps: { agreement: true, locations: true, banking: true, verify: true }, applicationStatus: 'Submitted' });
-    setProfile(prev => ({ ...prev, applicationStatus: 'Submitted' }));
+    setProfile(prev => ({ ...prev, applicationStatus: 'Submitted', portalLockStatus: 'all_signed' }));
     navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`, { replace: true });
   };
 
@@ -547,6 +588,7 @@ export default function OnboardingPortal() {
   const { applicationStatus, pricingTier } = profile;
   const isSelfServe = SELF_SERVE_TIERS.includes(pricingTier);
   const pricingTierLabel = TIER_LABELS[pricingTier] || pricingTier;
+  const formsLocked = isPortalFormsLocked(profile);
 
   const renderStep = () => {
     // Welcome Hub — macro-level landing page merchants see immediately upon
@@ -703,6 +745,12 @@ export default function OnboardingPortal() {
   const allCompletedSteps = { ...completedSteps, ...(quoteSigned ? { quote: true } : {}) };
 
   return (
+    <PortalLockContext.Provider value={{
+      formsLocked,
+      unlocking,
+      onRequestUnlock: handleRequestUnlock,
+      setPortalLockStatus: (status) => setProfile((prev) => (prev ? { ...prev, portalLockStatus: status } : prev)),
+    }}>
     <div className="portal-bg" style={{ fontFamily: 'Inter, sans-serif' }}>
       <TopNav
         applicationStatus={applicationStatus}
@@ -783,6 +831,16 @@ export default function OnboardingPortal() {
           </div>
         </div>
 
+        {formsLocked && (
+          <div className="w-full max-w-4xl mb-4">
+            <FormsLockedBanner
+              profile={profile}
+              onUnlock={handleRequestUnlock}
+              unlocking={unlocking}
+            />
+          </div>
+        )}
+
         {/* Main card — directional step transitions via framer-motion */}
         <div className="w-full max-w-4xl portal-card overflow-hidden">
           <AnimatePresence mode="wait" initial={false} custom={stepDir}>
@@ -806,5 +864,6 @@ export default function OnboardingPortal() {
         </div>
       </div>
     </div>
+    </PortalLockContext.Provider>
   );
 }

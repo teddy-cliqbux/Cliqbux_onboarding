@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+import { usePortalLock } from '@/lib/PortalLockContext';
+import { FORMS_LOCKED_MESSAGE } from '@/lib/portalLock';
 
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
@@ -67,7 +69,8 @@ function BankConfirmationCard({ details, justSaved, onChange }) {
         <button
           type="button"
           onClick={onChange}
-          className="text-cb-caption normal-case tracking-normal text-gray-400 hover:text-white border border-cb-border hover:border-cb-border-strong rounded-cb px-2.5 py-1.5 transition-colors flex-shrink-0"
+          disabled={!onChange}
+          className="text-cb-caption normal-case tracking-normal text-gray-400 hover:text-white border border-cb-border hover:border-cb-border-strong rounded-cb px-2.5 py-1.5 transition-colors flex-shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400"
         >
           Change
         </button>
@@ -79,6 +82,7 @@ function BankConfirmationCard({ details, justSaved, onChange }) {
 // ─── Banking Panel ────────────────────────────────────────────────────────────
 
 function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccountsConnected, bankDetails, reuseDetails, onBankSaved }) {
+  const { formsLocked } = usePortalLock();
   const entityAccounts = plaidAccounts[entityId] || [];
 
   const [mode, setMode] = useState(() => {
@@ -201,8 +205,12 @@ function BankingPanel({ location, corporateId, entityId, plaidAccounts, onAccoun
           key="confirm"
           details={confirmed || bankDetails}
           justSaved={justSaved}
-          onChange={handleChange}
+          onChange={formsLocked ? undefined : handleChange}
         />
+      ) : formsLocked ? (
+        <div className="rounded-cb border border-cb-border bg-cb-bg px-4 py-3 text-cb-caption text-gray-500">
+          {FORMS_LOCKED_MESSAGE}
+        </div>
       ) : (
         <motion.div
           key="form"

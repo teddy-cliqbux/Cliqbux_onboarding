@@ -17,6 +17,8 @@ import {
   setMerchantToken,
   merchantTokenHasImp,
 } from '@/lib/merchantAuthFetch';
+import FormsLockedBanner from '@/components/onboarding/FormsLockedBanner';
+import { isPortalFormsLocked, DEMOTE_CONFIRM_MESSAGE } from '@/lib/portalLock';
 
 const QUOTE_POLL_MS = 10_000;
 
@@ -84,6 +86,7 @@ export default function PostSubmissionDashboard() {
   const [agentPreview, setAgentPreview] = useState(false);
   /** QuoteSignModal open — drives 10s pull poll (HubSpot tier has no workflow webhooks). */
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
   const lifecycleAtModalOpen = useRef(null);
   const profileRef = useRef(profile);
   profileRef.current = profile;
@@ -299,6 +302,33 @@ export default function PostSubmissionDashboard() {
                 : 'Finish storefront setup below while Elavon reviews your application.'}
             </p>
           </motion.div>
+
+          {isPortalFormsLocked(profile) && (
+            <FormsLockedBanner
+              profile={profile}
+              unlocking={unlocking}
+              onUnlock={async () => {
+                if (!profile?.corporateId || unlocking) return;
+                if (!window.confirm(DEMOTE_CONFIRM_MESSAGE)) return;
+                setUnlocking(true);
+                try {
+                  const res = await invokePortalFunction('demoteApplication', {
+                    corporateId: profile.corporateId,
+                    reason: 'Application demoted for modifications',
+                  });
+                  if (res.data?.error) {
+                    window.alert(res.data.error);
+                    return;
+                  }
+                  navigate(`/?dealId=${encodeURIComponent(profile.corporateId)}`, { replace: true });
+                } catch (err) {
+                  window.alert(err?.message || 'Could not unlock the application.');
+                } finally {
+                  setUnlocking(false);
+                }
+              }}
+            />
+          )}
 
           {merchantIDs.length > 0 && <UnderwritingTracker locations={locations} merchantIDs={merchantIDs} />}
 

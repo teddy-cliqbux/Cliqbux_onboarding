@@ -8,6 +8,8 @@ import {
   AlertTriangle, Check, ArrowLeft, Pencil, GripVertical, Cloud, Mail, Lock, Info
 } from 'lucide-react';
 import { isLocked as getMidLocked, isImported as getMidImported } from '@/utils/statusUtils';
+import { usePortalLock } from '@/lib/PortalLockContext';
+import { FORMS_LOCKED_MESSAGE } from '@/lib/portalLock';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 import {
@@ -123,7 +125,8 @@ function StatusBadge({ status }) {
 // ─── MID Card (draggable) ─────────────────────────────────────────────────────
 
 function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, onUpdated, onDelete }) {
-  const locked = getMidLocked(mid);
+  const { formsLocked } = usePortalLock();
+  const locked = getMidLocked(mid) || formsLocked;
   const imported = getMidImported(mid);
   const [editing, setEditing] = useState(!mid.mccCode && !locked);
   const [form, setForm] = useState({
@@ -352,6 +355,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
 // ─── Location Card (nested inside Entity, draggable) ──────────────────────────
 
 function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, index, showValidation }) {
+  const { formsLocked } = usePortalLock();
   const locMids = merchantIDs.filter(c => c.locationId === location.id);
   // Quick inline edit for the (often prefilled) name + address — 2026-07-10
   const [editingLoc, setEditingLoc] = useState(false);
@@ -469,12 +473,19 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
               <span className="text-cb-caption text-gray-500">
                 {locMids.length} MID{locMids.length !== 1 ? 's' : ''}
               </span>
-              <button onClick={e => { e.stopPropagation(); startLocEdit(); }} title="Edit location name / address"
-                className="p-1.5 text-gray-600 hover:text-white rounded-cb transition-colors">
+              <button
+                onClick={e => { e.stopPropagation(); if (!formsLocked) startLocEdit(); }}
+                title={formsLocked ? FORMS_LOCKED_MESSAGE : 'Edit location name / address'}
+                disabled={formsLocked}
+                className="p-1.5 text-gray-600 hover:text-white rounded-cb transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
-              <button onClick={e => { e.stopPropagation(); onDelete(location); }}
-                className="p-1.5 text-gray-600 hover:text-cb-danger rounded-cb transition-colors">
+              <button
+                onClick={e => { e.stopPropagation(); if (!formsLocked) onDelete(location); }}
+                disabled={formsLocked}
+                className="p-1.5 text-gray-600 hover:text-cb-danger rounded-cb transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
               <button onClick={() => setExpanded(e => !e)} className="p-1.5 text-gray-500 hover:text-white transition-colors">
@@ -634,6 +645,7 @@ function deriveOwnership(year) {
 }
 
 function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
+  const { formsLocked } = usePortalLock();
   const [ownershipType, setOwnershipType] = useState(entity.ownershipType || '');
   const [taxClassType, setTaxClassType]   = useState(entity.taxClassType  || '');
   const [estYear, setEstYear]             = useState(entity.establishmentYear || '');
@@ -754,13 +766,15 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
           <div className="flex items-center gap-3 pt-1">
             <button
               onClick={handleSave}
-              disabled={!canSave || saving}
+              disabled={!canSave || saving || formsLocked}
               className="flex items-center gap-1.5 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface-raised disabled:text-gray-600 disabled:cursor-not-allowed text-cb-bg text-cb-body font-semibold px-4 py-2 rounded-cb transition-all"
             >
-              {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : saved ? <Check className="w-3 h-3" /> : null}
-              {saving ? 'Saving…' : saved ? 'Saved' : 'Save Details'}
+              {formsLocked ? <Lock className="w-3 h-3" /> : saving ? <Loader2 className="w-3 h-3 animate-spin" /> : saved ? <Check className="w-3 h-3" /> : null}
+              {formsLocked ? 'Forms Locked' : saving ? 'Saving…' : saved ? 'Saved' : 'Save Details'}
             </button>
-            {!canSave && <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">Fill all fields to save</p>}
+            {formsLocked
+              ? <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">{FORMS_LOCKED_MESSAGE}</p>
+              : !canSave && <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">Fill all fields to save</p>}
             {saveError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">⚠ {saveError}</p>}
           </div>
         </div>
