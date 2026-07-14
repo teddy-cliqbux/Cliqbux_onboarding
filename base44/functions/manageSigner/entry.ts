@@ -326,7 +326,8 @@ Deno.serve(async (req) => {
     }
 
     // --- SEND INVITE (unified Verify + Sign remote loop) ---
-    // Portal merchants + admins may send. Writes lifecycle status `invited`.
+    // Portal merchants + admins may send. Sets `invited` only when KYC is not done yet.
+    // Never regress verified / opened / application signed — re-sends are signing reminders.
     if (action === 'sendInvite' || action === 'sendSigningInvite') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
       const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
@@ -341,7 +342,7 @@ Deno.serve(async (req) => {
 
       const token = signer.verifyToken || generateToken();
       const verifyUrl = buildSigningInviteUrl(token);
-      const invitedAt = new Date().toISOString();
+      const sentAt = new Date().toISOString();
 
       await sendViaResend(
         signer.signerEmail,
@@ -349,12 +350,24 @@ Deno.serve(async (req) => {
         buildInviteEmail(signer.firstName, verifyUrl, businessName)
       );
 
-      const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, {
-        identityStatus: 'invited',
+      const st = String(signer.identityStatus || '').trim();
+      const preserveStatus =
+        st === 'verified' || st === 'Verified'
+        || st === 'opened'
+        || st === 'application signed' || st === 'Signed';
+
+      const patch: Record<string, any> = {
         verifyToken: token,
-        verifyTokenSentAt: invitedAt,
-        invitedAt,
-      });
+        verifyTokenSentAt: sentAt,
+      };
+      if (!preserveStatus) {
+        patch.identityStatus = 'invited';
+        patch.invitedAt = sentAt;
+      } else if (!signer.invitedAt) {
+        patch.invitedAt = sentAt;
+      }
+
+      const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, patch);
       await logSignerActivity(base44, String(corporateId), {
         type: 'signer_invite_sent',
         actor: actor.actor === 'admin' ? 'agent' : 'merchant',

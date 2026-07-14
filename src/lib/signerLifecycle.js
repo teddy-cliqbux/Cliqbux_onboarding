@@ -71,6 +71,15 @@ export function isInviteOutstanding(status) {
   return n === 'invited' || n === 'opened';
 }
 
+/**
+ * Re-sending a signing invite must NOT regress these statuses.
+ * Verified+ openers skip KYC and go straight to BoldSign (`intent=sign`).
+ */
+export function shouldPreserveLifecycleOnInviteResend(status) {
+  const n = normalizeSignerLifecycle(status);
+  return n === 'opened' || n === 'verified' || n === 'application signed';
+}
+
 /** Statuses that may transition to `opened` on first link click. */
 export function canMarkOpened(status) {
   const n = normalizeSignerLifecycle(status);
