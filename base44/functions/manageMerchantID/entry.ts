@@ -155,12 +155,44 @@ Deno.serve(async (req) => {
       if (d.motoPct !== undefined) updateFields.motoPct = Number(d.motoPct);
       if (d.locationId !== undefined) updateFields.locationId = d.locationId;
       if (d.applicationStepStatus !== undefined) updateFields.applicationStepStatus = d.applicationStepStatus;
+      if (d.alcoholSalesPercentage !== undefined) {
+        if (d.alcoholSalesPercentage === null || d.alcoholSalesPercentage === '') {
+          updateFields.alcoholSalesPercentage = null;
+        } else {
+          const alcoholPct = Number(d.alcoholSalesPercentage);
+          if (!Number.isFinite(alcoholPct) || alcoholPct < 0 || alcoholPct > 100) {
+            return Response.json({ error: 'alcoholSalesPercentage must be a number from 0 to 100' }, { status: 422 });
+          }
+          updateFields.alcoholSalesPercentage = alcoholPct;
+        }
+      }
 
       // Reject restricted MCC at the write boundary so it never reaches MSPWare.
       if (updateFields.mccCode !== undefined && String(updateFields.mccCode).trim() === '5999') {
         return Response.json({
           error: 'MCC 5999 is not allowed (restricted merchant category — rejected in CA/CO/NY). Choose a specific retail MCC.',
         }, { status: 422 });
+      }
+
+      // CA/NY + 5813: require alcohol sales % (liquor license is post-sign only — do not block here).
+      const effectiveMccForCompliance = String(
+        updateFields.mccCode !== undefined ? updateFields.mccCode : (existing?.mccCode || '')
+      ).trim();
+      const locForCompliance = existing?.locationId
+        ? await base44.asServiceRole.entities.MerchantLocations.get(existing.locationId).catch(() => null)
+        : null;
+      const locState = String(locForCompliance?.businessState || '').trim().toUpperCase();
+      const needsLiquorCompliance = (locState === 'CA' || locState === 'NY') && effectiveMccForCompliance === '5813';
+      if (needsLiquorCompliance) {
+        const alcoholVal = updateFields.alcoholSalesPercentage !== undefined
+          ? updateFields.alcoholSalesPercentage
+          : existing?.alcoholSalesPercentage;
+        const alcoholNum = Number(alcoholVal);
+        if (alcoholVal === null || alcoholVal === undefined || alcoholVal === '' || !Number.isFinite(alcoholNum) || alcoholNum < 0 || alcoholNum > 100) {
+          return Response.json({
+            error: 'Alcohol sales percentage (0–100) is required for Bar/Tavern (MCC 5813) locations in CA and NY.',
+          }, { status: 422 });
+        }
       }
 
       const updated = await base44.asServiceRole.entities.MerchantMID.update(merchantIDId, updateFields);

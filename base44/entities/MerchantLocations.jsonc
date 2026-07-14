@@ -168,6 +168,18 @@
     "hubspotQuoteId": {
       "type": "string",
       "description": "HubSpot Quote object ID for this location's equipment/services order. Nullable until sync resolves a deal-associated quote. Same quote id is typically written to all locations for a corporateId (deal-scoped quotes)."
+    },
+    "liquorLicenseDocUrl": {
+      "type": "string",
+      "description": "Uploaded state-issued liquor license file URL. Collected post-signing for CA/NY locations with an MCC 5813 MID. Does not block application signing — ops attach to MSPWare after. Nullable until uploaded."
+    },
+    "liquorLicenseFileName": {
+      "type": "string",
+      "description": "Original filename for the liquor license upload (display only)."
+    },
+    "liquorLicenseUploadedAt": {
+      "type": "string",
+      "description": "ISO timestamp when liquorLicenseDocUrl was last set."
     }
   },
   "required": [

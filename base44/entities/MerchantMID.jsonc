@@ -62,6 +62,10 @@
       "description": "Percentage of transactions that are mail/telephone order (MOTO). 0-100. Added 2026-07-10 \u2014 same stripped-field bug as internetPct.",
       "default": 0
     },
+    "alcoholSalesPercentage": {
+      "type": "number",
+      "description": "Percent of sales that are alcohol (0-100). Required on the MID when the parent location businessState is CA or NY and this MID mccCode is 5813 (Bar/Tavern). Values above 50 trigger a High-Risk Tavern advisory. Not sent to MSPWare PUT /form."
+    },
     "deliveryDelayDays": {
       "type": "number",
       "description": "Days between sale and delivery/fulfillment. 0 for immediate. Used for delayed delivery risk.",

@@ -8,7 +8,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // boarding fields are owned by their own functions.
 //
 // POST /functions/updateLocationDetails
-// Body: { locationId, dbaName?, businessStreet?, businessCity?, businessState?, businessZip? }
+// Body: { locationId, dbaName?, businessStreet?, businessCity?, businessState?, businessZip?,
+//         liquorLicenseDocUrl?, liquorLicenseFileName?, liquorLicenseUploadedAt? }
 
 // ─── Portal auth (inlined) ─────────────────────────────────────────────────────────────────────
 // Base44 bundles each function in isolation, so this is duplicated from
@@ -48,7 +49,10 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
-    const { locationId, dbaName, businessStreet, businessCity, businessState, businessZip } = body;
+    const {
+      locationId, dbaName, businessStreet, businessCity, businessState, businessZip,
+      liquorLicenseDocUrl, liquorLicenseFileName, liquorLicenseUploadedAt,
+    } = body;
 
     if (!locationId) {
       return Response.json({ error: 'locationId is required' }, { status: 400 });
@@ -92,6 +96,19 @@ Deno.serve(async (req) => {
       update.businessState = state;
       update.businessZip = zip;
       update.businessAddress = [street, city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    }
+
+    // Post-sign liquor license upload (CA/NY + 5813). Does not gate application signing.
+    if (liquorLicenseDocUrl !== undefined) {
+      const url = String(liquorLicenseDocUrl || '').trim();
+      if (!url) return Response.json({ error: 'liquorLicenseDocUrl cannot be empty' }, { status: 400 });
+      update.liquorLicenseDocUrl = url;
+      if (liquorLicenseFileName !== undefined) {
+        update.liquorLicenseFileName = String(liquorLicenseFileName || '').trim();
+      }
+      update.liquorLicenseUploadedAt = liquorLicenseUploadedAt
+        ? String(liquorLicenseUploadedAt)
+        : new Date().toISOString();
     }
 
     if (!Object.keys(update).length) {

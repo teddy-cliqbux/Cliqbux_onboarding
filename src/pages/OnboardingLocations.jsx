@@ -10,6 +10,12 @@ import {
 import { isLocked as getMidLocked, isImported as getMidImported } from '@/utils/statusUtils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+import {
+  requiresLiquorCompliance,
+  isAlcoholSalesPercentageSet,
+  isHighRiskTavern,
+  liquorComplianceBannerText,
+} from '@/lib/liquorCompliance';
 
 // Motion communicates expand/collapse state — never decoration.
 const SPRING = { type: 'spring', stiffness: 150, damping: 20 };
@@ -116,7 +122,7 @@ function StatusBadge({ status }) {
 
 // ─── MID Card (draggable) ─────────────────────────────────────────────────────
 
-function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDelete }) {
+function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, onUpdated, onDelete }) {
   const locked = getMidLocked(mid);
   const imported = getMidImported(mid);
   const [editing, setEditing] = useState(!mid.mccCode && !locked);
@@ -130,22 +136,34 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
     cardPresentPct: mid.cardPresentPct != null ? String(mid.cardPresentPct) : '100',
     internetPct: mid.internetPct != null ? String(mid.internetPct) : '0',
     motoPct: mid.motoPct != null ? String(mid.motoPct) : '0',
+    alcoholSalesPercentage: mid.alcoholSalesPercentage != null && mid.alcoholSalesPercentage !== ''
+      ? String(mid.alcoholSalesPercentage)
+      : '',
   });
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
 
   const pctSum = (parseInt(form.cardPresentPct) || 0) + (parseInt(form.internetPct) || 0) + (parseInt(form.motoPct) || 0);
-  const canSave = form.mccCode && pctSum === 100;
+  const needsLiquorCompliance = requiresLiquorCompliance(businessState, form.mccCode);
+  const alcoholOk = !needsLiquorCompliance || isAlcoholSalesPercentageSet(form.alcoholSalesPercentage);
+  const canSave = form.mccCode && pctSum === 100 && alcoholOk;
   // isComplete reads from form state (not stale mid prop) so the header updates immediately after save
-  const isComplete = !!(form.mccCode && form.monthlyCardSales);
+  const isComplete = !!(form.mccCode && form.monthlyCardSales && alcoholOk);
 
   const doSave = async () => {
     if (!canSave) return;
     setSaving(true);
     try {
+      const payload = {
+        ...form,
+        merchantName: form.merchantName || dbaName,
+      };
+      if (needsLiquorCompliance) {
+        payload.alcoholSalesPercentage = Number(form.alcoholSalesPercentage);
+      }
       const res = await invokePortalFunction('manageMerchantID', {
         action: 'update', locationId, corporateId, merchantIDId: mid.id,
-        data: { ...form, merchantName: form.merchantName || dbaName },
+        data: payload,
       });
       const saved = res.data?.updatedMerchantID || res.data?.merchantID;
       if (saved) { onUpdated(saved); setSavedAt(Date.now()); }
@@ -270,6 +288,36 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
                 </div>
                 {pctSum !== 100 && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">Total: {pctSum}% (must be 100%)</p>}
               </div>
+
+              {needsLiquorCompliance && (
+                <div className="space-y-3 rounded-cb border border-cb-border bg-cb-bg py-3 pr-3 pl-3 relative overflow-hidden">
+                  <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-cb-accent" aria-hidden />
+                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-300 leading-relaxed pl-2">
+                    {liquorComplianceBannerText(businessState)}
+                  </p>
+                  <div className="pl-2">
+                    <label className={labelCls}>Alcohol Sales Percentage (0–100%) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={form.alcoholSalesPercentage}
+                      onChange={e => setField('alcoholSalesPercentage', e.target.value)}
+                      placeholder="e.g. 35"
+                      className={inputCls}
+                    />
+                    {isHighRiskTavern(form.alcoholSalesPercentage) && (
+                      <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">
+                        Note: Alcohol sales exceeding 50% classifies this business as a High-Risk Tavern. Stricter processing limits and reserve requirements may apply.
+                      </p>
+                    )}
+                  </div>
+                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 pl-2">
+                    After you sign, you&apos;ll upload your state-issued liquor license in post-signing setup. Cliqbux will attach it to this MID in MSPWare — it does not block submitting your application now.
+                  </p>
+                </div>
+              )}
+
               {/* Save button + collapse */}
               <div className="flex items-center justify-between pt-2">
                 <div className="flex items-center gap-3">
@@ -281,7 +329,13 @@ function MidCard({ mid, locationId, corporateId, dbaName, index, onUpdated, onDe
                     {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : savedAt ? <Cloud className="w-3 h-3" /> : null}
                     {saving ? 'Saving…' : savedAt ? 'Saved' : 'Save'}
                   </button>
-                  {!canSave && <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">Fill MCC &amp; card split to save</span>}
+                  {!canSave && (
+                    <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">
+                      {needsLiquorCompliance && !alcoholOk
+                        ? 'Fill MCC, card split, and alcohol sales % to save'
+                        : 'Fill MCC & card split to save'}
+                    </span>
+                  )}
                 </div>
                 <button onClick={() => setEditing(false)} className="text-cb-body text-gray-500 hover:text-white transition-colors">Cancel</button>
               </div>
@@ -354,8 +408,15 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
   const [addingMid, setAddingMid] = useState(false);
   const [addMidName, setAddMidName] = useState('');
   const [addMidSaving, setAddMidSaving] = useState(false);
-  const allMidsComplete = locMids.length > 0 && locMids.every(m => m.mccCode && m.monthlyCardSales);
+  const allMidsComplete = locMids.length > 0 && locMids.every(m => {
+    if (!(m.mccCode && m.monthlyCardSales)) return false;
+    if (requiresLiquorCompliance(location.businessState, m.mccCode) && !isAlcoholSalesPercentageSet(m.alcoholSalesPercentage)) {
+      return false;
+    }
+    return true;
+  });
   const locationError = showValidation && !allMidsComplete;
+  const locNeedsLiquorDocs = locMids.some(m => requiresLiquorCompliance(location.businessState, m.mccCode));
 
   // Auto-expand when validation fires and this location is incomplete
   useEffect(() => {
@@ -472,6 +533,11 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
                       {...drop.droppableProps}
                       className={`space-y-2 min-h-[32px] rounded-cb transition-colors ${dropSnap.isDraggingOver ? 'bg-cb-accent-muted' : ''}`}
                     >
+                      {locNeedsLiquorDocs && (
+                        <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 px-1">
+                          Bar/Tavern (5813) in {location.businessState}: alcohol sales % is required now. Liquor license upload comes after signing.
+                        </p>
+                      )}
                       {locMids.map((mid, idx) => (
                         <MidCard
                           key={mid.id}
@@ -480,6 +546,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
                           locationId={location.id}
                           corporateId={corporateId}
                           dbaName={location.dbaName}
+                          businessState={location.businessState || ''}
                           onUpdated={onMerchantIDUpdated}
                           onDelete={getMidLocked(mid) ? () => {} : onMerchantIDDeleted}
                         />
@@ -825,7 +892,13 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
   const entityLocs = locations.filter(l => l.entityId === entity.entityId);
   const entityMids = merchantIDs.filter(m => entityLocs.some(l => l.id === m.locationId));
   const allComplete = entityLocs.length > 0 && entityLocs.every(l =>
-    merchantIDs.some(m => m.locationId === l.id && m.mccCode && m.monthlyCardSales)
+    merchantIDs.some(m => {
+      if (m.locationId !== l.id || !(m.mccCode && m.monthlyCardSales)) return false;
+      if (requiresLiquorCompliance(l.businessState, m.mccCode) && !isAlcoholSalesPercentageSet(m.alcoholSalesPercentage)) {
+        return false;
+      }
+      return true;
+    })
   );
   const entityDetailsComplete = !!(entity.ownershipType && entity.taxClassType && entity.establishmentYear);
   const highlightError = showValidation && !allComplete;
@@ -1346,10 +1419,23 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   );
 
   const totalMids = merchantIDs.length;
-  const completeMids = merchantIDs.filter(c => c.mccCode && c.monthlyCardSales).length;
+  const completeMids = merchantIDs.filter(c => {
+    if (!(c.mccCode && c.monthlyCardSales)) return false;
+    const loc = locations.find(l => l.id === c.locationId);
+    if (requiresLiquorCompliance(loc?.businessState, c.mccCode) && !isAlcoholSalesPercentageSet(c.alcoholSalesPercentage)) {
+      return false;
+    }
+    return true;
+  }).length;
 
   const allMidsComplete = businessComplete && locations.length > 0 && locations.every(l =>
-    merchantIDs.some(c => c.locationId === l.id && c.mccCode && c.monthlyCardSales)
+    merchantIDs.some(c => {
+      if (c.locationId !== l.id || !(c.mccCode && c.monthlyCardSales)) return false;
+      if (requiresLiquorCompliance(l.businessState, c.mccCode) && !isAlcoholSalesPercentageSet(c.alcoholSalesPercentage)) {
+        return false;
+      }
+      return true;
+    })
   );
 
   // Build a list of specific validation issues for user feedback
@@ -1368,8 +1454,21 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     validationIssues.push('At least one location is required');
   } else {
     locations.forEach(l => {
-      const mid = merchantIDs.find(c => c.locationId === l.id && c.mccCode && c.monthlyCardSales);
-      if (!mid) validationIssues.push(`${l.dbaName}: MCC code and monthly volume are required`);
+      const mid = merchantIDs.find(c => {
+        if (c.locationId !== l.id || !(c.mccCode && c.monthlyCardSales)) return false;
+        if (requiresLiquorCompliance(l.businessState, c.mccCode) && !isAlcoholSalesPercentageSet(c.alcoholSalesPercentage)) {
+          return false;
+        }
+        return true;
+      });
+      if (!mid) {
+        const barMid = merchantIDs.find(c => c.locationId === l.id && requiresLiquorCompliance(l.businessState, c.mccCode));
+        if (barMid && !isAlcoholSalesPercentageSet(barMid.alcoholSalesPercentage)) {
+          validationIssues.push(`${l.dbaName}: alcohol sales % required for Bar/Tavern (5813) in ${l.businessState}`);
+        } else {
+          validationIssues.push(`${l.dbaName}: MCC code and monthly volume are required`);
+        }
+      }
     });
   }
 

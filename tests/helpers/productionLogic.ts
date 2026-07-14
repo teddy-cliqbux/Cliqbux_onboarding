@@ -84,17 +84,20 @@ export function hubspotBypassForCorporateId(corporateId: string): boolean {
   return !isNumericCorporateId(corporateId);
 }
 
-/** Soft state×MCC check the portal SHOULD run (desired). Production currently has none. */
+/** Soft state×MCC check the portal SHOULD run (desired). */
 export function desiredStateMccViolation(state: string, mcc: string): string | null {
   const restricted = DESIRED_RESTRICTED[state];
   if (restricted?.has(mcc)) {
-    return `MCC ${mcc} is restricted for state ${state} (desired underwriting rule — not enforced in portal today)`;
+    return `MCC ${mcc} requires liquor compliance for state ${state}`;
   }
   return null;
 }
 
-/** Production portal check — always null today (gap for liquor/bar underwriting). */
-export function productionStateMccViolation(_state: string, _mcc: string): string | null {
+/** Production: CA/NY + 5813 triggers liquor compliance (alcohol % required; license post-sign). */
+export function productionStateMccViolation(state: string, mcc: string): string | null {
+  if ((state === 'CA' || state === 'NY') && mcc === '5813') {
+    return `MCC 5813 requires liquor compliance for state ${state} (alcohol % on MID; liquor license post-sign)`;
+  }
   return null;
 }
 

@@ -997,6 +997,15 @@ Never accept plaintext `password` in the API (400). `ipAddress` / `authorizedUse
 
 Playwright suite at `tests/onboardingStress.spec.ts` (run: `npm run test:stress`). Safe by default — in-memory simulation of production MCC/draft/HubSpot-bypass gates; does **not** call live MSPWare or HubSpot. Report: `stress-test-report.md`.
 
-Covers: empty-MCC draft deferral, CA/CO/NY×MCC matrix, live MCC swap refill, TX→CA restricted MCC, alphanumeric HubSpot bypass, empty MID refusal, multi-MID split MCC, signApplication partial-fill / MCC-mismatch recovery.
+Covers: empty-MCC draft deferral, CA/CO/NY×MCC matrix, live MCC swap refill, TX→CA liquor compliance, alphanumeric HubSpot bypass, empty MID refusal, multi-MID split MCC, signApplication partial-fill / MCC-mismatch recovery.
 
-**Latest result:** 6 PASS / 2 WARN. Remaining product gap: no portal inline warning for CA/NY + MCC 5813 (liquor) underwriting. 5999 silent-default bug is fixed in production code (see Critical Lessons / AI_CHANNEL 2026-07-13).
+### CA/NY Bar & Tavern compliance (MCC 5813) — 2026-07-14
+
+**Trigger:** `businessState ∈ {CA,NY}` AND MID `mccCode === '5813'` (derived — not a stored flag). Helper: `src/lib/liquorCompliance.js`.
+
+| Field | Entity | Gate |
+|---|---|---|
+| `alcoholSalesPercentage` (0–100) | `MerchantMID` | Required to Save MID / Continue Locations / readiness when trigger applies. `>50` shows High-Risk Tavern advisory. |
+| `liquorLicenseDocUrl` (+ fileName / uploadedAt) | `MerchantLocations` | **Post-signing only** via `InventoryUpload` + `updateLocationDetails`. Soft prompt on Locations MID UI — does **not** block Continue, signing, or Ready-to-Submit. Ops attach to MSPWare after. |
+
+**Do not** send alcohol % or license URL in MSPWare `PUT /form` (template preservation). Republish `MerchantMID` + `MerchantLocations` schemas in Base44 after push or fields will strip.

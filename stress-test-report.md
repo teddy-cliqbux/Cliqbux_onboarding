@@ -1,7 +1,7 @@
 # Onboarding Portal Stress Test Report
 
-**Generated:** 2026-07-14T06:19:34.325Z
-**Suite started:** 2026-07-14T06:19:03.828Z
+**Generated:** 2026-07-14T06:38:11.610Z
+**Suite started:** 2026-07-14T06:37:41.160Z
 **Playwright status:** passed
 **Mode:** Safe in-memory simulation mirroring production function behavior (no live MSPWare / HubSpot calls).
 
@@ -10,9 +10,9 @@
 | Metric | Count |
 |--------|------:|
 | Scenarios recorded | 8 |
-| PASS | 6 |
+| PASS | 8 |
 | FAIL | 0 |
-| WARN | 2 |
+| WARN | 0 |
 
 > **PASS** = desired safety/validation behavior is present.  
 > **FAIL** = production behavior allows a silent default, missing gate, or stale draft.  
@@ -47,23 +47,23 @@ System deferred draft creation and refused payload compile when MCC was empty.
 - `base44/functions/submitToMSP/entry.ts:421` — ``MCC code is required before creating or filling an MSPWare application for "${merchantMID.dbaName || merchantMID.merchantName || 'this MID'}". ` +`
 - `base44/functions/manageMerchantID/entry.ts:130` — `console.log('[manageMerchantID] Skipping submitToMSP on add — MCC not set yet (will create draft on MCC save)');`
 - `base44/functions/manageMerchantID/entry.ts:105` — `mccCode: data?.mccCode || '',`
-- `src/pages/OnboardingLocations.jsx:370` — `data: { merchantName: addMidName || location.dbaName, mccCode: '' },`
+- `src/pages/OnboardingLocations.jsx:431` — `data: { merchantName: addMidName || location.dbaName, mccCode: '' },`
 
 ## 2. State/MCC Matrix Test
 
-**Status:** `WARN`
+**Status:** `PASS`
 
 ### Observed behavior
 
-Cycled 3 states × 12 MCCs = 36 combos (36 drafts). Production enforced 0 liquor-style restrictions. Desired heuristic flagged 2 (CA/NY + 5813). 5999 no longer in portal options.
+Cycled 3 states × 12 MCCs = 36 combos (36 drafts). Production enforced 2 liquor-compliance flags (CA/NY + 5813). Desired heuristic flagged 2.
 
 ### Database / draft state
 
-All allowed MCCs produced drafts. Remaining gap: no portal-side CA/NY bar (5813) underwriting warning.
+Allowed MCCs produce drafts. CA/NY+5813 requires alcoholSalesPercentage on MID; liquor license is post-sign only.
 
 ### Details
 
-5999 removed. Exploratory WARN only for desired CA/NY+5813 liquor rules not yet in portal.
+Liquor compliance is advisory+alcohol% on Locations; license upload after signing does not block the matrix draft create.
 
 ### State × MCC matrix
 
@@ -71,7 +71,7 @@ All allowed MCCs produced drafts. Remaining gap: no portal-side CA/NY bar (5813)
 |------:|----:|----------------|-----------------|
 | CA | 5812 | ALLOWED (draft mcc=5812, pct=100) | ALLOW |
 | CA | 5814 | ALLOWED (draft mcc=5814, pct=100) | ALLOW |
-| CA | 5813 | ALLOWED (draft mcc=5813, pct=79) | SHOULD BLOCK: MCC 5813 is restricted for state CA (desired underwriting rule — not enforced in portal today) |
+| CA | 5813 | BLOCKED: MCC 5813 requires liquor compliance for state CA (alcohol % on MID; liquor license post-sign) | SHOULD BLOCK: MCC 5813 requires liquor compliance for state CA |
 | CA | 5411 | ALLOWED (draft mcc=5411, pct=100) | ALLOW |
 | CA | 7230 | ALLOWED (draft mcc=7230, pct=100) | ALLOW |
 | CA | 5651 | ALLOWED (draft mcc=5651, pct=100) | ALLOW |
@@ -95,7 +95,7 @@ All allowed MCCs produced drafts. Remaining gap: no portal-side CA/NY bar (5813)
 | CO | 5211 | ALLOWED (draft mcc=5211, pct=100) | ALLOW |
 | NY | 5812 | ALLOWED (draft mcc=5812, pct=100) | ALLOW |
 | NY | 5814 | ALLOWED (draft mcc=5814, pct=100) | ALLOW |
-| NY | 5813 | ALLOWED (draft mcc=5813, pct=79) | SHOULD BLOCK: MCC 5813 is restricted for state NY (desired underwriting rule — not enforced in portal today) |
+| NY | 5813 | BLOCKED: MCC 5813 requires liquor compliance for state NY (alcohol % on MID; liquor license post-sign) | SHOULD BLOCK: MCC 5813 requires liquor compliance for state NY |
 | NY | 5411 | ALLOWED (draft mcc=5411, pct=100) | ALLOW |
 | NY | 7230 | ALLOWED (draft mcc=7230, pct=100) | ALLOW |
 | NY | 5651 | ALLOWED (draft mcc=5651, pct=100) | ALLOW |
@@ -140,17 +140,17 @@ MSPWare draft MCC updated automatically after 5813→5812→5411 swaps.
 
 ### File / line references
 
-- `base44/functions/manageMerchantID/entry.ts:181` — `console.warn('[manageMerchantID] submitToMSP after update failed (non-fatal):', e.message);`
+- `base44/functions/manageMerchantID/entry.ts:213` — `console.warn('[manageMerchantID] submitToMSP after update failed (non-fatal):', e.message);`
 - `base44/functions/submitToMSP/entry.ts:421` — ``MCC code is required before creating or filling an MSPWare application for "${merchantMID.dbaName || merchantMID.merchantName || 'this MID'}". ` +`
 - `base44/functions/signApplication/entry.ts:930` — `const mccMismatch = Boolean(expectedMcc && formMcc && formMcc !== expectedMcc);`
 
 ## 4. State Swap with Restricted MCC
 
-**Status:** `WARN`
+**Status:** `PASS`
 
 ### Observed behavior
 
-State changed TX→CA with MCC 5813. No production inline validation yet. Desired rule: MCC 5813 is restricted for state CA (desired underwriting rule — not enforced in portal today). (5999 restriction IS enforced elsewhere.)
+Inline compliance warning fired on TX→CA: MCC 5813 requires liquor compliance for state CA (alcohol % on MID; liquor license post-sign)
 
 ### Database / draft state
 
@@ -177,22 +177,22 @@ State changed TX→CA with MCC 5813. No production inline validation yet. Desire
     "state": "TX",
     "percentComplete": 100,
     "formErrors": [],
-    "createdAt": 1784009974231,
-    "lastFilledAt": 1784009974231,
+    "createdAt": 1784011091544,
+    "lastFilledAt": 1784011091544,
     "lastFillSource": "create"
   },
   "warnings": [
-    "GAP: MCC 5813 is restricted for state CA (desired underwriting rule — not enforced in portal today)"
+    "MCC 5813 requires liquor compliance for state CA (alcohol % on MID; liquor license post-sign)"
   ]
 }
 
 ### Details
 
-Remaining gap: CA/NY liquor underwriting for 5813. Not blocking — separate from the 5999 fix.
+CA/NY+5813: alcohol % required on MID; liquor license prompted for post-sign upload (does not block signing).
 
 ### File / line references
 
-- `src/pages/OnboardingLocations.jsx:138` — `const canSave = form.mccCode && pctSum === 100;`
+- `src/pages/OnboardingLocations.jsx:149` — `const canSave = form.mccCode && pctSum === 100 && alcoholOk;`
 - `base44/functions/submitToMSP/entry.ts:425` — `if (mcc === '5999') {`
 
 ## 5. End-to-End HubSpot Bypass Test
@@ -249,8 +249,8 @@ Local stage "Danono's Donuts" → corporateId=danonos-donuts. Locations/banking/
     "state": "CA",
     "percentComplete": 100,
     "formErrors": [],
-    "createdAt": 1784009974250,
-    "lastFilledAt": 1784009974250,
+    "createdAt": 1784011091558,
+    "lastFilledAt": 1784011091558,
     "lastFillSource": "create"
   },
   "hubspotCalls": [
@@ -283,7 +283,7 @@ Local stage "Danono's Donuts" → corporateId=danonos-donuts. Locations/banking/
 
 - `base44/functions/syncFromHubspot/entry.ts:225` — `hubspotBypass: true,`
 - `base44/functions/pushStatusToHubspot/entry.ts:112` — `hubspotBypass: true,`
-- `src/pages/OnboardingLocations.jsx:370` — `data: { merchantName: addMidName || location.dbaName, mccCode: '' },`
+- `src/pages/OnboardingLocations.jsx:431` — `data: { merchantName: addMidName || location.dbaName, mccCode: '' },`
 
 ## 6. Empty MID Refusal
 
@@ -328,10 +328,10 @@ UI and backend both refuse empty MCC; no draft created on empty add.
 
 ### File / line references
 
-- `src/pages/OnboardingLocations.jsx:138` — `const canSave = form.mccCode && pctSum === 100;`
+- `src/pages/OnboardingLocations.jsx:149` — `const canSave = form.mccCode && pctSum === 100 && alcoholOk;`
 - `base44/functions/manageMerchantID/entry.ts:105` — `mccCode: data?.mccCode || '',`
 - `base44/functions/submitToMSP/entry.ts:421` — ``MCC code is required before creating or filling an MSPWare application for "${merchantMID.dbaName || merchantMID.merchantName || 'this MID'}". ` +`
-- `base44/functions/getMerchantData/entry.ts:176` — `if (!c.mccCode) missing.push('MCC code');`
+- `base44/functions/getMerchantData/entry.ts:186` — `if (!c.mccCode) missing.push('MCC code');`
 
 ## 7. Multi-MID Split-MCC Test
 
@@ -383,8 +383,8 @@ Two drafts at same CA address inherited distinct MCCs: 5812 vs 5411 (appNos msp_
     "state": "CA",
     "percentComplete": 100,
     "formErrors": [],
-    "createdAt": 1784009974284,
-    "lastFilledAt": 1784009974284,
+    "createdAt": 1784011091576,
+    "lastFilledAt": 1784011091576,
     "lastFillSource": "create"
   },
   "draftB": {
@@ -395,8 +395,8 @@ Two drafts at same CA address inherited distinct MCCs: 5812 vs 5411 (appNos msp_
     "state": "CA",
     "percentComplete": 100,
     "formErrors": [],
-    "createdAt": 1784009974284,
-    "lastFilledAt": 1784009974284,
+    "createdAt": 1784011091576,
+    "lastFilledAt": 1784011091576,
     "lastFillSource": "create"
   }
 }
@@ -404,7 +404,7 @@ Two drafts at same CA address inherited distinct MCCs: 5812 vs 5411 (appNos msp_
 ### File / line references
 
 - `base44/functions/submitToMSP/entry.ts:421` — ``MCC code is required before creating or filling an MSPWare application for "${merchantMID.dbaName || merchantMID.merchantName || 'this MID'}". ` +`
-- `base44/functions/manageMerchantID/entry.ts:181` — `console.warn('[manageMerchantID] submitToMSP after update failed (non-fatal):', e.message);`
+- `base44/functions/manageMerchantID/entry.ts:213` — `console.warn('[manageMerchantID] submitToMSP after update failed (non-fatal):', e.message);`
 
 ## 8. Partial Fill Recovery
 
@@ -428,8 +428,8 @@ signApplication on 79% draft: refilled=true, blocked=true. Stale-100% MCC mismat
       "formErrors": [
         "MCC 5813 restricted for CA (simulated underwriting)"
       ],
-      "createdAt": 1784009974297,
-      "lastFilledAt": 1784009974297,
+      "createdAt": 1784011091585,
+      "lastFilledAt": 1784011091585,
       "lastFillSource": "create"
     },
     "after": {
@@ -440,10 +440,10 @@ signApplication on 79% draft: refilled=true, blocked=true. Stale-100% MCC mismat
       "state": "CA",
       "percentComplete": 79,
       "formErrors": [
-        "MCC 5813 is restricted for state CA (desired underwriting rule — not enforced in portal today)"
+        "MCC 5813 requires liquor compliance for state CA"
       ],
-      "createdAt": 1784009974297,
-      "lastFilledAt": 1784009974297,
+      "createdAt": 1784011091585,
+      "lastFilledAt": 1784011091585,
       "lastFillSource": "refill"
     },
     "refilled": true,
@@ -460,8 +460,8 @@ signApplication on 79% draft: refilled=true, blocked=true. Stale-100% MCC mismat
       "state": "CA",
       "percentComplete": 100,
       "formErrors": [],
-      "createdAt": 1784009974297,
-      "lastFilledAt": 1784009974297,
+      "createdAt": 1784011091585,
+      "lastFilledAt": 1784011091585,
       "lastFillSource": "refill"
     }
   }

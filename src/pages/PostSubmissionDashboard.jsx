@@ -344,7 +344,11 @@ export default function PostSubmissionDashboard() {
                 title="Menu & inventory locked"
                 lockedMessage="Available after your quote is signed."
               >
-                <InventoryUpload corporateId={profile.corporateId} />
+                <InventoryUpload
+                  corporateId={profile.corporateId}
+                  locations={locations}
+                  merchantIDs={merchantIDs}
+                />
               </SetupGate>
 
               <SetupGate

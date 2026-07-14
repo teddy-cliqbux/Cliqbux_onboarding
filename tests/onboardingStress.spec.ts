@@ -124,23 +124,22 @@ test.describe('Onboarding stress scenarios', () => {
       CITATIONS.mccReject5999(),
     ].filter(Boolean) as Array<{ file: string; line: number; snippet: string }>;
 
-    // 5999 removed from dropdown — remaining gap is liquor/bar underwriting (CA/NY + 5813)
+    // 5999 removed; CA/NY+5813 now triggers liquor compliance (alcohol % + post-sign license)
     const status = desiredRestrictCount > 0 && enforcedCount === 0 ? 'WARN' : 'PASS';
 
     recordScenario({
       name: '2. State/MCC Matrix Test',
       status,
-      observed: `Cycled ${MATRIX_STATES.length} states × ${MCC_OPTIONS.length} MCCs = ${matrix.length} combos (${draftsCreated} drafts). Production enforced ${enforcedCount} liquor-style restrictions. Desired heuristic flagged ${desiredRestrictCount} (CA/NY + 5813). 5999 no longer in portal options.`,
-      dbState: `All allowed MCCs produced drafts. Remaining gap: no portal-side CA/NY bar (5813) underwriting warning.`,
+      observed: `Cycled ${MATRIX_STATES.length} states × ${MCC_OPTIONS.length} MCCs = ${matrix.length} combos (${draftsCreated} drafts). Production enforced ${enforcedCount} liquor-compliance flags (CA/NY + 5813). Desired heuristic flagged ${desiredRestrictCount}.`,
+      dbState: `Allowed MCCs produce drafts. CA/NY+5813 requires alcoholSalesPercentage on MID; liquor license is post-sign only.`,
       citations,
       matrix,
-      details: '5999 removed. Exploratory WARN only for desired CA/NY+5813 liquor rules not yet in portal.',
+      details: 'Liquor compliance is advisory+alcohol% on Locations; license upload after signing does not block the matrix draft create.',
     });
 
     expect(matrix.length).toBe(MATRIX_STATES.length * MCC_OPTIONS.length);
     expect(MCC_OPTIONS.includes('5999' as any)).toBe(false);
-    // Soft: do not hard-fail the suite on liquor underwriting gap
-    expect(status === 'PASS' || status === 'WARN').toBe(true);
+    expect(enforcedCount).toBe(desiredRestrictCount);
   });
 
   // ─── 3. Live MCC Swap Test ─────────────────────────────────────────────────
@@ -220,14 +219,14 @@ test.describe('Onboarding stress scenarios', () => {
       CITATIONS.mccReject5999(),
     ].filter(Boolean) as Array<{ file: string; line: number; snippet?: string }>;
 
-    // Still a known gap — record WARN, do not hard-fail suite
-    const status = result.inlineWarningFired ? 'PASS' : 'WARN';
+    // Inline compliance warning fires for CA/NY + 5813 (alcohol % / license advisory)
+    const status = result.inlineWarningFired ? 'PASS' : 'FAIL';
     recordScenario({
       name: '4. State Swap with Restricted MCC',
       status,
       observed: result.inlineWarningFired
-        ? `Inline warning fired on TX→CA: ${result.warnings.join('; ')}`
-        : `State changed TX→CA with MCC 5813. No production inline validation yet. Desired rule: ${desired}. (5999 restriction IS enforced elsewhere.)`,
+        ? `Inline compliance warning fired on TX→CA: ${result.warnings.join('; ')}`
+        : `State changed TX→CA with MCC 5813 but no compliance warning. Desired: ${desired}`,
       dbState: JSON.stringify({
         location: portal.locations.get(loc.id),
         mid: { id: mid.id, mccCode: mid.mccCode },
@@ -235,10 +234,10 @@ test.describe('Onboarding stress scenarios', () => {
         warnings: result.warnings,
       }, null, 2),
       citations,
-      details: 'Remaining gap: CA/NY liquor underwriting for 5813. Not blocking — separate from the 5999 fix.',
+      details: 'CA/NY+5813: alcohol % required on MID; liquor license prompted for post-sign upload (does not block signing).',
     });
 
-    expect(status === 'PASS' || status === 'WARN').toBe(true);
+    expect(result.inlineWarningFired).toBe(true);
   });
 
   // ─── 5. End-to-End HubSpot Bypass Test ─────────────────────────────────────

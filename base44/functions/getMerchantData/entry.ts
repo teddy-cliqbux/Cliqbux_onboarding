@@ -121,7 +121,10 @@ Deno.serve(async (req) => {
       },
       routingNumber: loc.routingNumber || '',
       accountNumber: loc.accountNumber || '',
-      applicationStepStatus: loc.applicationStepStatus
+      applicationStepStatus: loc.applicationStepStatus,
+      liquorLicenseDocUrl: loc.liquorLicenseDocUrl || '',
+      liquorLicenseFileName: loc.liquorLicenseFileName || '',
+      liquorLicenseUploadedAt: loc.liquorLicenseUploadedAt || null,
     }));
 
     const merchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId });
@@ -139,6 +142,13 @@ Deno.serve(async (req) => {
       applicationStepStatus: c.applicationStepStatus || 'In Review',
       isExistingAccount: !!c.isExistingAccount,
       pricingMethod: c.pricingMethod || 'ICPLS',
+      monthlyCardSales: c.monthlyCardSales ?? 0,
+      avgSaleAmount: c.avgSaleAmount ?? 0,
+      highestTicketAmount: c.highestTicketAmount ?? 0,
+      cardPresentPct: c.cardPresentPct ?? 100,
+      internetPct: c.internetPct ?? 0,
+      motoPct: c.motoPct ?? 0,
+      alcoholSalesPercentage: c.alcoholSalesPercentage ?? null,
     }));
 
     // ── Readiness — drives the portal's milestone states ──────────────────────
@@ -179,13 +189,32 @@ Deno.serve(async (req) => {
       if (!(parseFloat(c.avgSaleAmount) > 0)) missing.push('average sale');
       if (!(parseFloat(c.highestTicketAmount) > 0)) missing.push('highest ticket');
       if (c.cardPresentPct == null || c.cardPresentPct === '') missing.push('card split');
+      const parentLoc = (locations || []).find((l) => l.id === c.locationId);
+      const locState = String(parentLoc?.businessState || '').trim().toUpperCase();
+      if ((locState === 'CA' || locState === 'NY') && String(c.mccCode || '').trim() === '5813') {
+        const alcoholNum = Number(c.alcoholSalesPercentage);
+        if (c.alcoholSalesPercentage == null || c.alcoholSalesPercentage === '' || !Number.isFinite(alcoholNum) || alcoholNum < 0 || alcoholNum > 100) {
+          missing.push('alcohol sales percentage (CA/NY Bar & Tavern)');
+        }
+      }
       return { id: c.id, dbaName: c.dbaName || c.merchantName || 'Merchant ID', missing };
     }).filter((c) => c.missing.length > 0);
+
+    // Soft post-sign checklist only — missing liquor license does NOT mark readiness incomplete.
+    const liquorLicenseFollowUps = (locations || []).map((l) => {
+      const needs = (merchantMIDs || []).some((c) => {
+        const st = String(l.businessState || '').trim().toUpperCase();
+        return c.locationId === l.id && (st === 'CA' || st === 'NY') && String(c.mccCode || '').trim() === '5813';
+      });
+      if (!needs || l.liquorLicenseDocUrl) return null;
+      return { id: l.id, dbaName: l.dbaName || 'Location', missing: ['state liquor license (upload after signing)'] };
+    }).filter(Boolean);
 
     const readiness = {
       entities: entityIssues,
       locations: locationIssues,
       mids: midIssues,
+      liquorLicenseFollowUps,
       complete: (locations || []).length > 0 && entityIssues.length === 0 && locationIssues.length === 0 && midIssues.length === 0,
     };
 
