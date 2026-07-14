@@ -155,6 +155,54 @@ function buildSigningInviteUrl(token: string): string {
   return `${getVerifyBaseUrl()}/verify?token=${encodeURIComponent(token)}&intent=sign`;
 }
 
+/** Log signer invite/open onto __auto_track__.prefilledData.activity (Applications panel). */
+async function logSignerActivity(base44: any, corporateId: string, event: any) {
+  try {
+    const existing = await base44.asServiceRole.entities.StagedApplication.filter(
+      { corporateId, label: '__auto_track__' }, '-created_date', 1
+    );
+    const prev = (existing[0]?.prefilledData && typeof existing[0].prefilledData === 'object')
+      ? existing[0].prefilledData
+      : {};
+    const prevAct = (prev.activity && typeof prev.activity === 'object') ? prev.activity : {};
+    const at = new Date().toISOString();
+    const type = String(event?.type || '');
+    const actor = event?.actor === 'agent' ? 'agent' : event?.actor === 'signer' ? 'signer' : 'merchant';
+    const detail = event?.email || event?.detail || undefined;
+    const recent = [
+      { type, at, actor, detail },
+      ...(Array.isArray(prevAct.recent) ? prevAct.recent : []),
+    ].slice(0, 25);
+    const activity: any = { ...prevAct, recent };
+    if (type === 'signer_invite_sent') {
+      activity.signerInvitesSent = (prevAct.signerInvitesSent || 0) + 1;
+      activity.signerLastInviteAt = at;
+    } else if (type === 'signer_link_opened') {
+      activity.signerLinkOpens = (prevAct.signerLinkOpens || 0) + 1;
+      activity.signerLastOpenAt = at;
+    }
+    const prefilledData = { ...prev, activity, lastSeenAt: at };
+    if (existing.length > 0) {
+      await base44.asServiceRole.entities.StagedApplication.update(existing[0].id, {
+        prefilledData,
+      });
+    } else {
+      const bytes = new Uint8Array(24);
+      crypto.getRandomValues(bytes);
+      const accessToken = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      await base44.asServiceRole.entities.StagedApplication.create({
+        corporateId,
+        label: '__auto_track__',
+        status: 'draft',
+        accessToken,
+        prefilledData,
+      });
+    }
+  } catch (e: any) {
+    console.warn('[manageSigner] logSignerActivity failed:', e.message);
+  }
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -215,6 +263,11 @@ Deno.serve(async (req) => {
           });
           record.identityStatus = 'invited';
           record.invitedAt = invitedAt;
+          await logSignerActivity(base44, String(corporateId), {
+            type: 'signer_invite_sent',
+            actor: actor.actor === 'admin' ? 'agent' : 'merchant',
+            email: signerData.signerEmail,
+          });
         } catch (emailErr: any) {
           console.error('[manageSigner] email send failed:', emailErr.message);
           emailError = emailErr.message;
@@ -292,10 +345,16 @@ Deno.serve(async (req) => {
         verifyTokenSentAt: invitedAt,
         invitedAt,
       });
+      await logSignerActivity(base44, String(corporateId), {
+        type: 'signer_invite_sent',
+        actor: actor.actor === 'admin' ? 'agent' : 'merchant',
+        email: signer.signerEmail,
+      });
       return Response.json({ success: true, signer: updated, link: verifyUrl });
     }
 
     // --- MARK SIGNED (local persistence — never poll MSPWare from admin list UIs) ---
+    // Only Verified → application signed. Callers must confirm BoldSign completed.
     if (action === 'markSigned') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
       const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
@@ -304,11 +363,44 @@ Deno.serve(async (req) => {
       if (signer.identityStatus === 'Signed' || signer.identityStatus === 'application signed') {
         return Response.json({ success: true, signer });
       }
+      const st = String(signer.identityStatus || '');
+      if (st !== 'Verified' && st !== 'verified') {
+        return Response.json({
+          error: 'Identity must be verified before marking application signed.',
+          identityStatus: signer.identityStatus,
+        }, { status: 409 });
+      }
       const signedAt = new Date().toISOString();
       const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, {
         identityStatus: 'application signed',
         signedAt,
       });
+      return Response.json({ success: true, signer: updated });
+    }
+
+    // --- SET LIFECYCLE (admin only — correct false promotions / manual ops) ---
+    if (action === 'setLifecycleStatus') {
+      if (actor.actor !== 'admin') {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
+      const next = String(body.status || body.identityStatus || '').trim();
+      const allowed = new Set([
+        'Pending Invitation', 'invited', 'opened', 'verified', 'application signed', 'signing failed',
+        // legacy accepted for repair
+        'Sent', 'Verified', 'Signed', 'Action Required',
+      ]);
+      if (!allowed.has(next)) {
+        return Response.json({ error: `Invalid status: ${next}` }, { status: 400 });
+      }
+      const patch: Record<string, any> = { identityStatus: next };
+      if (next === 'verified' || next === 'Verified') {
+        patch.signedAt = null;
+      }
+      if (next === 'application signed' || next === 'Signed') {
+        patch.signedAt = new Date().toISOString();
+      }
+      const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, patch);
       return Response.json({ success: true, signer: updated });
     }
 

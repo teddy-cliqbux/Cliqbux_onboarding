@@ -11,6 +11,7 @@ import {
   lifecycleLabel,
   lifecycleBadgeClass,
   isVerifiedOrHigher,
+  isApplicationSigned,
 } from '@/lib/signerLifecycle';
 
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
@@ -52,17 +53,36 @@ function formatActivityAt(iso) {
 }
 
 const ACTIVITY_EVENT_LABELS = {
-  invite_sent: 'Invite email sent',
+  invite_sent: 'Portal invite sent',
+  signer_invite_sent: 'Signer link sent',
+  signer_link_opened: 'Signer link opened',
   portal_open: 'Portal opened',
   session_tick: 'Session time',
 };
 
+function activityActorLabel(actor) {
+  if (actor === 'agent') return 'Agent';
+  if (actor === 'signer') return 'Signer';
+  return 'Merchant';
+}
+
+function activityActorDot(actor) {
+  if (actor === 'agent') return 'bg-cb-accent';
+  if (actor === 'signer') return 'bg-sky-400';
+  return 'bg-gray-500';
+}
+
 function PortalActivityPanel({ activity }) {
   const a = activity || {};
   const recent = Array.isArray(a.recent) ? a.recent : [];
-  const hasAny = (a.invitesSent || a.merchantOpens || a.agentOpens || a.merchantSeconds);
+  const hasAny = (
+    a.invitesSent || a.merchantOpens || a.agentOpens || a.merchantSeconds
+    || a.signerInvitesSent || a.signerLinkOpens
+  );
   const stats = [
-    { label: 'Invites sent', value: a.invitesSent || 0, sub: a.lastInviteAt ? `Last ${formatActivityAt(a.lastInviteAt)}` : 'None yet' },
+    { label: 'Portal invites', value: a.invitesSent || 0, sub: a.lastInviteAt ? `Last ${formatActivityAt(a.lastInviteAt)}` : 'None yet' },
+    { label: 'Signer links sent', value: a.signerInvitesSent || 0, sub: a.signerLastInviteAt ? `Last ${formatActivityAt(a.signerLastInviteAt)}` : 'None yet' },
+    { label: 'Signer links opened', value: a.signerLinkOpens || 0, sub: a.signerLastOpenAt ? `Last ${formatActivityAt(a.signerLastOpenAt)}` : 'None yet' },
     { label: 'Merchant opens', value: a.merchantOpens || 0, sub: a.merchantLastOpenAt ? `Last ${formatActivityAt(a.merchantLastOpenAt)}` : 'None yet' },
     { label: 'Merchant time', value: formatDuration(a.merchantSeconds), sub: 'Time in portal' },
     { label: 'Agent opens', value: a.agentOpens || 0, sub: a.agentLastOpenAt ? `Last ${formatActivityAt(a.agentLastOpenAt)}` : 'None yet' },
@@ -71,7 +91,7 @@ function PortalActivityPanel({ activity }) {
   return (
     <div>
       <p className="text-cb-caption uppercase text-gray-500 mb-2">Portal activity</p>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
         {stats.map(st => (
           <div key={st.label} className="rounded-cb border border-cb-border bg-cb-surface-raised px-2.5 py-2">
             <p className="text-cb-caption uppercase text-gray-500">{st.label}</p>
@@ -85,8 +105,8 @@ function PortalActivityPanel({ activity }) {
           {recent.slice(0, 12).map((ev, i) => (
             <div key={`${ev.at}-${i}`} className="flex items-center gap-2 px-3 py-1.5">
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
-                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${ev.actor === 'agent' ? 'bg-cb-accent' : 'bg-gray-500'}`} />
-                {ev.actor === 'agent' ? 'Agent' : 'Merchant'}
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${activityActorDot(ev.actor)}`} />
+                {activityActorLabel(ev.actor)}
               </span>
               <p className="text-cb-caption text-gray-300 flex-1 truncate">
                 {ACTIVITY_EVENT_LABELS[ev.type] || ev.type}
@@ -1015,6 +1035,32 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     }
   };
 
+  const revertSignerToVerified = async (e, signer) => {
+    e?.stopPropagation?.();
+    if (!signer?.id) return;
+    if (!window.confirm(`Mark ${signer.firstName} ${signer.lastName} as Verified only?\n\nUse this when they completed identity but have not signed BoldSign yet.`)) return;
+    setSignerLinkBusy(prev => ({ ...prev, [signer.id]: 'revert' }));
+    try {
+      const res = await base44.functions.invoke('manageSigner', {
+        action: 'setLifecycleStatus',
+        corporateId,
+        signerId: signer.id,
+        status: 'verified',
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      setSigners(prev => prev.map(s => (s.id === signer.id ? { ...s, ...res.data.signer } : s)));
+    } catch (err) {
+      console.error('[setLifecycleStatus]', err);
+      alert(err.message || 'Could not update signer status');
+    } finally {
+      setSignerLinkBusy(prev => {
+        const next = { ...prev };
+        delete next[signer.id];
+        return next;
+      });
+    }
+  };
+
   const openMerchantView = async (e) => {
     e?.stopPropagation?.();
     setImpersonating(true);
@@ -1258,6 +1304,17 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                               >
                                 {busy === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                               </button>
+                              {isApplicationSigned(s.identityStatus) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => revertSignerToVerified(e, s)}
+                                  disabled={!!busy}
+                                  title="Correct status: verified but not signed"
+                                  className="text-[10px] font-semibold text-amber-400/90 hover:text-amber-300 px-1.5 py-1 rounded-cb border border-amber-500/30 disabled:opacity-40"
+                                >
+                                  {busy === 'revert' ? <Loader2 className="w-3 h-3 animate-spin" /> : '→ Verified'}
+                                </button>
+                              )}
                             </div>
                           </div>
                           {hasIssues && (

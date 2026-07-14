@@ -80,6 +80,52 @@ function isPackageSignedStatus(status: string): boolean {
   return ['signed', 'complete', 'completed'].includes((status || '').toLowerCase());
 }
 
+/** Log signer link opens onto Applications portal activity (__auto_track__). */
+async function logSignerActivity(base44: any, corporateId: string, event: any) {
+  try {
+    const existing = await base44.asServiceRole.entities.StagedApplication.filter(
+      { corporateId, label: '__auto_track__' }, '-created_date', 1
+    );
+    const prev = (existing[0]?.prefilledData && typeof existing[0].prefilledData === 'object')
+      ? existing[0].prefilledData
+      : {};
+    const prevAct = (prev.activity && typeof prev.activity === 'object') ? prev.activity : {};
+    const at = new Date().toISOString();
+    const type = String(event?.type || '');
+    const actor = event?.actor === 'agent' ? 'agent' : event?.actor === 'signer' ? 'signer' : 'merchant';
+    const detail = event?.email || event?.detail || undefined;
+    const recent = [
+      { type, at, actor, detail },
+      ...(Array.isArray(prevAct.recent) ? prevAct.recent : []),
+    ].slice(0, 25);
+    const activity: any = { ...prevAct, recent };
+    if (type === 'signer_invite_sent') {
+      activity.signerInvitesSent = (prevAct.signerInvitesSent || 0) + 1;
+      activity.signerLastInviteAt = at;
+    } else if (type === 'signer_link_opened') {
+      activity.signerLinkOpens = (prevAct.signerLinkOpens || 0) + 1;
+      activity.signerLastOpenAt = at;
+    }
+    const prefilledData = { ...prev, activity, lastSeenAt: at };
+    if (existing.length > 0) {
+      await base44.asServiceRole.entities.StagedApplication.update(existing[0].id, { prefilledData });
+    } else {
+      const bytes = new Uint8Array(24);
+      crypto.getRandomValues(bytes);
+      const accessToken = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+      await base44.asServiceRole.entities.StagedApplication.create({
+        corporateId,
+        label: '__auto_track__',
+        status: 'draft',
+        accessToken,
+        prefilledData,
+      });
+    }
+  } catch (e: any) {
+    console.warn('[verifySignerToken] logSignerActivity failed:', e.message);
+  }
+}
+
 async function fetchSignerLink(
   mspBase: string,
   mspHeaders: Record<string, string>,
@@ -159,6 +205,13 @@ Deno.serve(async (req) => {
           current = await base44.asServiceRole.entities.MerchantSigners.update(signer.id, {
             identityStatus: 'opened',
             openedAt,
+          });
+          const who = [signer.firstName, signer.lastName].filter(Boolean).join(' ') || signer.signerEmail;
+          await logSignerActivity(base44, String(signer.corporateId), {
+            type: 'signer_link_opened',
+            actor: 'signer',
+            email: signer.signerEmail,
+            detail: who,
           });
         } catch (e: any) {
           console.warn('[verifySignerToken] opened transition failed:', e.message);

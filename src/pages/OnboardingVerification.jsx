@@ -214,8 +214,16 @@ export default function OnboardingVerification({ profile, locations, initialSign
         return;
       }
 
-      // This person finished all MIDs on this device
-      await markSignerSignedLocally(signer);
+      // Finished the on-device queue — only persist "application signed" if every
+      // non-error MID actually has this signer marked signed (not merely skipped errors).
+      const signable = applications.filter(a => !a.error);
+      const reallyDone = signable.length > 0 && signable.every(app => {
+        const row = findSignerLink(app, signer.signerEmail);
+        return row?.signed === true;
+      });
+      if (reallyDone) {
+        await markSignerSignedLocally(signer);
+      }
 
       // Pick next unsigned local signer for convenience (others may already be signing remotely)
       const nextLocal = localSigners.find(s =>
@@ -277,12 +285,16 @@ export default function OnboardingVerification({ profile, locations, initialSign
         if (listRes.data?.signers) setRosterSigners(listRes.data.signers);
       } catch { /* non-fatal */ }
 
+      // Only mark application signed when THIS signer's BoldSign rows are actually
+      // signed. Never treat app.error / missing package as completion — that was
+      // falsely promoting Verified owners to "application signed".
       for (const s of requiredSigners) {
         if (isApplicationSigned(s.identityStatus)) continue;
         const email = signerEmailKey(s);
         if (!email) continue;
-        const allDone = apps.length > 0 && apps.every(app => {
-          if (app.error) return true;
+        const signableApps = apps.filter(app => !app.error);
+        if (signableApps.length === 0) continue;
+        const allDone = signableApps.every(app => {
           const link = findSignerLink(app, email);
           return link?.signed === true;
         });
@@ -303,12 +315,8 @@ export default function OnboardingVerification({ profile, locations, initialSign
 
       if (req.length > 0 && req.every(s => isApplicationSigned(s.identityStatus))) {
         setPhase('complete');
-      } else if (apps.length > 0 && apps.every(a => a.allSigned || a.error)) {
-        for (const s of req) {
-          if (!isApplicationSigned(s.identityStatus)) await markSignerSignedLocally(s);
-        }
-        setPhase('complete');
       }
+      // Do NOT blanket-mark all signers when apps have errors or package prep failed.
     } catch (err) {
       console.error('[OnboardingVerification.pollSigningStatus]', err?.message || 'Unknown error');
     }

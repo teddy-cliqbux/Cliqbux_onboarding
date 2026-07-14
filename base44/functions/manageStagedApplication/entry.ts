@@ -113,6 +113,10 @@ function emptyActivity() {
     agentOpens: 0,
     agentLastOpenAt: null as string | null,
     // agentSeconds intentionally omitted — impersonation time is not tracked
+    signerInvitesSent: 0,
+    signerLastInviteAt: null as string | null,
+    signerLinkOpens: 0,
+    signerLastOpenAt: null as string | null,
     recent: [] as Array<{ type: string; at: string; actor?: string; detail?: string }>,
   };
 }
@@ -122,7 +126,7 @@ function applyActivityEvent(prevActivity: any, event: any) {
   const a = { ...emptyActivity(), ...(prevActivity && typeof prevActivity === 'object' ? prevActivity : {}) };
   const at = new Date().toISOString();
   const type = String(event?.type || '');
-  const actor = event?.actor === 'agent' ? 'agent' : 'merchant';
+  const actor = event?.actor === 'agent' ? 'agent' : event?.actor === 'signer' ? 'signer' : 'merchant';
   const push = (detail?: string) => {
     const recent = [{ type, at, actor, detail: detail || undefined }, ...(Array.isArray(a.recent) ? a.recent : [])];
     a.recent = recent.slice(0, ACTIVITY_RECENT_MAX);
@@ -133,6 +137,14 @@ function applyActivityEvent(prevActivity: any, event: any) {
     a.lastInviteAt = at;
     if (event?.email) a.lastInviteEmail = String(event.email);
     push(event?.email ? String(event.email) : undefined);
+  } else if (type === 'signer_invite_sent') {
+    a.signerInvitesSent = (a.signerInvitesSent || 0) + 1;
+    a.signerLastInviteAt = at;
+    push(event?.email ? String(event.email) : (event?.detail ? String(event.detail) : undefined));
+  } else if (type === 'signer_link_opened') {
+    a.signerLinkOpens = (a.signerLinkOpens || 0) + 1;
+    a.signerLastOpenAt = at;
+    push(event?.email ? String(event.email) : (event?.detail ? String(event.detail) : undefined));
   } else if (type === 'portal_open') {
     if (actor === 'agent') {
       a.agentOpens = (a.agentOpens || 0) + 1;
