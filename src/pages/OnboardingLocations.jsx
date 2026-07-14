@@ -644,7 +644,20 @@ function deriveOwnership(year) {
   return { years: String(yrs), months: String(mos) };
 }
 
-function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
+/** Exact missing business-detail fields — used by the Continue banner (live form + saved entity). */
+function entityMissingFields({ ownershipType, taxClassType, establishmentYear, federalEIN } = {}) {
+  const missing = [];
+  if (!ownershipType) missing.push('Business Entity Type');
+  if (!taxClassType) missing.push('IRS Tax Classification');
+  if (!establishmentYear) missing.push('Year Established');
+  const ein = String(federalEIN || '').replace(/\D/g, '');
+  if (ein.length !== 9) {
+    missing.push(ein.length === 0 ? 'Federal EIN (9 digits)' : `Federal EIN (need 9 digits, ${ein.length} entered)`);
+  }
+  return missing;
+}
+
+function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, forceExpand }) {
   const { formsLocked } = usePortalLock();
   const [ownershipType, setOwnershipType] = useState(entity.ownershipType || '');
   const [taxClassType, setTaxClassType]   = useState(entity.taxClassType  || '');
@@ -655,7 +668,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
   // later, using the same required-field gating pattern as the fields below.
   const [federalEIN, setFederalEIN]       = useState(entity.federalEIN || '');
   const einDigits = federalEIN.replace(/\D/g, '');
-  const [saved, setSaved] = useState(!!(entity.ownershipType && entity.taxClassType && entity.establishmentYear && entity.federalEIN));
+  const [saved, setSaved] = useState(entityMissingFields(entity).length === 0);
   const [expanded, setExpanded] = useState(!saved);
 
   // Re-sync when parent reloads entity data (e.g. after navigating away and back)
@@ -664,18 +677,53 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
     setTaxClassType(entity.taxClassType || '');
     setEstYear(entity.establishmentYear || '');
     setFederalEIN(entity.federalEIN || '');
-    const complete = !!(entity.ownershipType && entity.taxClassType && entity.establishmentYear && entity.federalEIN);
+    const complete = entityMissingFields(entity).length === 0;
     setSaved(complete);
     setExpanded(!complete);
   }, [entity.entityId, entity.ownershipType, entity.taxClassType, entity.establishmentYear, entity.federalEIN]);
 
+  useEffect(() => {
+    if (forceExpand) setExpanded(true);
+  }, [forceExpand]);
+
+  // Report live form gaps to the parent Continue banner (avoids listing fields
+  // the merchant already typed but hasn't saved yet).
+  useEffect(() => {
+    if (!onDraftStatus) return;
+    const liveMissing = entityMissingFields({
+      ownershipType, taxClassType, establishmentYear: estYear, federalEIN,
+    });
+    const persistedMissing = entityMissingFields({
+      ownershipType: entity.ownershipType,
+      taxClassType: entity.taxClassType,
+      establishmentYear: entity.establishmentYear,
+      federalEIN: entity.federalEIN,
+    });
+    onDraftStatus({
+      entityId: entity.entityId,
+      name: entity.legalBusinessName || 'Legal Entity',
+      missing: liveMissing,
+      needsSave: liveMissing.length === 0 && persistedMissing.length > 0,
+    });
+  }, [
+    ownershipType, taxClassType, estYear, federalEIN,
+    entity.entityId, entity.legalBusinessName,
+    entity.ownershipType, entity.taxClassType, entity.establishmentYear, entity.federalEIN,
+    onDraftStatus,
+  ]);
+
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveError] = useState(null);
 
-  const isComplete = saved || !!(ownershipType && taxClassType && estYear && einDigits.length === 9 && entity.ownershipType);
+  const liveMissing = entityMissingFields({
+    ownershipType, taxClassType, establishmentYear: estYear, federalEIN,
+  });
+  const canSave = liveMissing.length === 0;
+  const isComplete = saved && canSave;
+  const showComplete = isComplete;
 
   const handleSave = async () => {
-    if (!ownershipType || !taxClassType || !estYear || einDigits.length !== 9) return;
+    if (!canSave) return;
     setSaving(true);
     setSaveError(null);
     try {
@@ -698,9 +746,6 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
       setSaving(false);
     }
   };
-
-  const canSave = !!(ownershipType && taxClassType && estYear && einDigits.length === 9);
-  const showComplete = saved && canSave;
 
   return (
     <div className="border-t border-cb-border px-5 py-2.5">
@@ -758,9 +803,18 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
             </div>
             <div>
               <label className={labelCls}>Federal EIN *</label>
-              <input value={federalEIN} onChange={e => setFederalEIN(e.target.value.replace(/\D/g, '').slice(0, 9))}
-                placeholder="9 digits" className={`${inputCls} font-mono`} />
-              {federalEIN.length > 0 && einDigits.length !== 9 && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">{einDigits.length}/9 digits</p>}
+              <input
+                value={federalEIN}
+                onChange={e => setFederalEIN(e.target.value.replace(/\D/g, '').slice(0, 9))}
+                placeholder="9 digits"
+                className={`${inputCls} font-mono ${forceExpand && einDigits.length !== 9 ? 'border-cb-danger focus:ring-cb-danger' : ''}`}
+              />
+              {federalEIN.length > 0 && einDigits.length !== 9 && (
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">{einDigits.length}/9 digits</p>
+              )}
+              {forceExpand && einDigits.length === 0 && (
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger mt-1.5">Required to continue — enter the 9-digit EIN, then Save Details</p>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-3 pt-1">
@@ -774,7 +828,11 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated }) {
             </button>
             {formsLocked
               ? <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">{FORMS_LOCKED_MESSAGE}</p>
-              : !canSave && <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">Fill all fields to save</p>}
+              : !canSave && (
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">
+                  Still need: {liveMissing.join(', ')}
+                </p>
+              )}
             {saveError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">⚠ {saveError}</p>}
           </div>
         </div>
@@ -902,7 +960,7 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
 
 // ─── Entity Section (top-level group) ────────────────────────────────────────
 
-function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, onAddLocation, isOnly, onEntityUpdated, onDeleteEntity, showValidation }) {
+function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, onAddLocation, isOnly, onEntityUpdated, onDeleteEntity, showValidation, onEntityDraftStatus }) {
   const entityLocs = locations.filter(l => l.entityId === entity.entityId);
   const entityMids = merchantIDs.filter(m => entityLocs.some(l => l.id === m.locationId));
   const allComplete = entityLocs.length > 0 && entityLocs.every(l =>
@@ -914,8 +972,8 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
       return true;
     })
   );
-  const entityDetailsComplete = !!(entity.ownershipType && entity.taxClassType && entity.establishmentYear);
-  const highlightError = showValidation && !allComplete;
+  const entityDetailsComplete = entityMissingFields(entity).length === 0;
+  const highlightError = showValidation && (!allComplete || !entityDetailsComplete);
 
   // Quick inline edit for the (often prefilled) legal name + EIN — 2026-07-10
   const [editingHeader, setEditingHeader] = useState(false);
@@ -996,7 +1054,13 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
       </div>
 
       {/* Business details panel */}
-      <EntityDetailsPanel entity={entity} corporateId={corporateId} onUpdated={onEntityUpdated} />
+      <EntityDetailsPanel
+        entity={entity}
+        corporateId={corporateId}
+        onUpdated={onEntityUpdated}
+        onDraftStatus={onEntityDraftStatus}
+        forceExpand={showValidation && !entityDetailsComplete}
+      />
 
       {/* Mailing address panel */}
       <EntityMailingAddress entity={entity} corporateId={corporateId} onUpdated={onEntityUpdated} />
@@ -1427,10 +1491,28 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   };
 
   const [showValidation, setShowValidation] = useState(false);
+  // Live Business Details drafts — so the Continue banner lists only what's
+  // still empty in the form (not every unsaved field as "missing").
+  const [entityDrafts, setEntityDrafts] = useState({});
+  const handleEntityDraftStatus = useCallback((status) => {
+    if (!status?.entityId) return;
+    setEntityDrafts((prev) => {
+      const cur = prev[status.entityId];
+      if (
+        cur
+        && cur.missing.join('|') === status.missing.join('|')
+        && cur.needsSave === status.needsSave
+        && cur.name === status.name
+      ) return prev;
+      return { ...prev, [status.entityId]: status };
+    });
+  }, []);
 
-  const businessComplete = entities.length > 0 && entities.every(e =>
-    e.ownershipType && e.taxClassType && e.establishmentYear && e.federalEIN
-  );
+  const businessComplete = entities.length > 0 && entities.every((e) => {
+    const draft = entityDrafts[e.entityId];
+    if (draft) return draft.missing.length === 0 && !draft.needsSave;
+    return entityMissingFields(e).length === 0;
+  });
 
   const totalMids = merchantIDs.length;
   const completeMids = merchantIDs.filter(c => {
@@ -1455,13 +1537,17 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   // Build a list of specific validation issues for user feedback
   const validationIssues = [];
   if (!businessComplete) {
-    entities.forEach(e => {
-      const missing = [];
-      if (!e.ownershipType) missing.push('Business Entity Type');
-      if (!e.taxClassType) missing.push('IRS Tax Classification');
-      if (!e.establishmentYear) missing.push('Year Established');
-      if (!e.federalEIN) missing.push('Federal EIN');
-      if (missing.length) validationIssues.push(`${e.legalBusinessName || 'Legal Entity'}: missing ${missing.join(', ')}`);
+    entities.forEach((e) => {
+      const draft = entityDrafts[e.entityId];
+      const name = draft?.name || e.legalBusinessName || 'Legal Entity';
+      const missing = draft?.missing ?? entityMissingFields(e);
+      if (missing.length) {
+        validationIssues.push(`${name}: still need ${missing.join(', ')}`);
+      } else if (draft?.needsSave) {
+        validationIssues.push(`${name}: click Save Details to store your business details`);
+      } else {
+        validationIssues.push(`${name}: still need ${entityMissingFields(e).join(', ') || 'business details'}`);
+      }
     });
   }
   if (locations.length === 0) {
@@ -1480,7 +1566,22 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         if (barMid && !isAlcoholSalesPercentageSet(barMid.alcoholSalesPercentage)) {
           validationIssues.push(`${l.dbaName}: alcohol sales % required for Bar/Tavern (5813) in ${l.businessState}`);
         } else {
-          validationIssues.push(`${l.dbaName}: MCC code and monthly volume are required`);
+          const locMids = merchantIDs.filter(c => c.locationId === l.id);
+          if (locMids.length === 0) {
+            validationIssues.push(`${l.dbaName}: add a Merchant ID (MCC + monthly volume)`);
+          } else {
+            locMids.forEach((c) => {
+              const gaps = [];
+              if (!c.mccCode) gaps.push('MCC code');
+              if (!c.monthlyCardSales) gaps.push('monthly volume');
+              if (requiresLiquorCompliance(l.businessState, c.mccCode) && !isAlcoholSalesPercentageSet(c.alcoholSalesPercentage)) {
+                gaps.push('alcohol sales %');
+              }
+              if (gaps.length) {
+                validationIssues.push(`${c.merchantName || c.dbaName || l.dbaName}: still need ${gaps.join(', ')}`);
+              }
+            });
+          }
         }
       }
     });
@@ -1573,6 +1674,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                 onEntityUpdated={handleEntityUpdated}
                 onDeleteEntity={e => setDeleteEntityConfirm(e)}
                 showValidation={showValidation}
+                onEntityDraftStatus={handleEntityDraftStatus}
               />
             ))}
           </div>
