@@ -80,7 +80,9 @@ function isPackageSignedStatus(status: string): boolean {
   return ['signed', 'complete', 'completed'].includes((status || '').toLowerCase());
 }
 
-/** Log signer link opens onto Applications portal activity (__auto_track__). */
+/** Log signer link opens onto Applications portal activity (__auto_track__).
+ *  signer_link_opened is idempotent per email for 5 minutes (refresh spam guard).
+ */
 async function logSignerActivity(base44: any, corporateId: string, event: any) {
   try {
     const existing = await base44.asServiceRole.entities.StagedApplication.filter(
@@ -92,8 +94,26 @@ async function logSignerActivity(base44: any, corporateId: string, event: any) {
     const prevAct = (prev.activity && typeof prev.activity === 'object') ? prev.activity : {};
     const at = new Date().toISOString();
     const type = String(event?.type || '');
-    const actor = event?.actor === 'agent' ? 'agent' : event?.actor === 'signer' ? 'signer' : 'merchant';
-    const detail = event?.email || event?.detail || undefined;
+    // Remote signers render as Merchant (grey) in the Applications feed.
+    const actor = event?.actor === 'agent' ? 'agent' : 'merchant';
+    const detail = event?.email
+      ? String(event.email).trim().toLowerCase()
+      : (event?.detail ? String(event.detail) : undefined);
+
+    if (type === 'signer_link_opened' && detail) {
+      const windowMs = 5 * 60 * 1000;
+      const now = Date.now();
+      const recentList = Array.isArray(prevAct.recent) ? prevAct.recent : [];
+      const duplicate = recentList.some((ev: any) => {
+        if (ev?.type !== 'signer_link_opened') return false;
+        const evEmail = String(ev.detail || '').trim().toLowerCase();
+        if (evEmail !== detail) return false;
+        const t = ev?.at ? new Date(ev.at).getTime() : 0;
+        return Number.isFinite(t) && (now - t) < windowMs;
+      });
+      if (duplicate) return; // refresh within 5 min — skip write
+    }
+
     const recent = [
       { type, at, actor, detail },
       ...(Array.isArray(prevAct.recent) ? prevAct.recent : []),
@@ -206,16 +226,18 @@ Deno.serve(async (req) => {
             identityStatus: 'opened',
             openedAt,
           });
-          const who = [signer.firstName, signer.lastName].filter(Boolean).join(' ') || signer.signerEmail;
-          await logSignerActivity(base44, String(signer.corporateId), {
-            type: 'signer_link_opened',
-            actor: 'signer',
-            email: signer.signerEmail,
-            detail: who,
-          });
         } catch (e: any) {
           console.warn('[verifySignerToken] opened transition failed:', e.message);
         }
+      }
+
+      // Activity feed: "Merchant  Signer link opened · email" (5-min debounce per email)
+      if (signer.signerEmail) {
+        await logSignerActivity(base44, String(signer.corporateId), {
+          type: 'signer_link_opened',
+          actor: 'merchant',
+          email: signer.signerEmail,
+        });
       }
 
       return Response.json({ success: true, signer: toSafeSigner(current), legalName });

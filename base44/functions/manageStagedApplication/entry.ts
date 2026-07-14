@@ -126,7 +126,10 @@ function applyActivityEvent(prevActivity: any, event: any) {
   const a = { ...emptyActivity(), ...(prevActivity && typeof prevActivity === 'object' ? prevActivity : {}) };
   const at = new Date().toISOString();
   const type = String(event?.type || '');
-  const actor = event?.actor === 'agent' ? 'agent' : event?.actor === 'signer' ? 'signer' : 'merchant';
+  // signer_link_opened always displays as Merchant (grey) in Applications feed
+  const actor = type === 'signer_link_opened'
+    ? 'merchant'
+    : (event?.actor === 'agent' ? 'agent' : event?.actor === 'signer' ? 'signer' : 'merchant');
   const push = (detail?: string) => {
     const recent = [{ type, at, actor, detail: detail || undefined }, ...(Array.isArray(a.recent) ? a.recent : [])];
     a.recent = recent.slice(0, ACTIVITY_RECENT_MAX);
