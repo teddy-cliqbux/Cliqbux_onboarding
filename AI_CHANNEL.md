@@ -1719,3 +1719,21 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 
 **? Waiting on:** Teddy
 ---
+
+---
+**[CURSOR]** · 2026-07-14
+**Type:** Note + Bugfix · Full MSP OpenAPI already in repo; homepage discovery via completion label?key
+
+**Swagger file:** `mspware-swagger.json` at repo root already contains the full MSPWare Boarding API OpenAPI (same payload Teddy pasted). It documents API routes ? **not** every Elavon electronic-form field name. Form field `name`s come from:
+- `GET /applications/types/{merchantapplicationtypeno}/schema` (type **24** for Elavon US), or
+- PUT/GET completion errors: `{ label: "Business Homepage URL", key: "<wire_name>" }` (PartialSaveResponse in swagger)
+
+**Shipped in `signApplication`:**
+1. Match Homepage/Website on **label**, then use **key** (even if key doesn't look like web/url/home)
+2. Second partial PUT with only discovered homepage key(s) when first fill leaves URL blank
+3. Richer Retry Signing diagnostics (label?key hints + form neighbor keys)
+
+**Teddy action:** Push ? force-redeploy `signApplication` ? Unlock ? Save MID URL ? Retry Signing. If still blank, paste the new "Homepage completion hints (label?key)" line from the error.
+
+**? Waiting on:** Teddy
+---

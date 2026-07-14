@@ -710,35 +710,98 @@ function normalizeWebsiteUrl(raw: string): string {
   return `https://${s}`;
 }
 
+/** Flatten form object from GET /form (handles nested shapes). */
+function getFormObject(formData: any): Record<string, unknown> {
+  const f = formData?.form || formData?.validation?.form || formData?.data?.form || formData;
+  if (!f || typeof f !== 'object' || Array.isArray(f)) return {};
+  return f as Record<string, unknown>;
+}
+
+/**
+ * Homepage-like key matcher. Expanded after Porky's 2026-07-14: form had ZERO
+ * keys matching web|url|home — so the real wire name may use site/domain/www/link.
+ */
+function isWebsiteLikeKey(k: string): boolean {
+  return /web|url|home.?page|homepage|site|domain|www|link/i.test(k);
+}
+
 /** Scan GET /form for keys that look like a homepage/website field (even when empty). */
 function scanWebsiteFormKeys(formData: any): Record<string, unknown> {
-  const f = formData?.form || formData?.validation?.form || formData || {};
   const hits: Record<string, unknown> = {};
-  if (!f || typeof f !== 'object' || Array.isArray(f)) return hits;
-  for (const [k, v] of Object.entries(f)) {
-    if (/web|url|home.?page|homepage/i.test(k)) hits[k] = v;
+  for (const [k, v] of Object.entries(getFormObject(formData))) {
+    if (isWebsiteLikeKey(k)) hits[k] = v;
   }
   return hits;
 }
 
-/** Pull field names from MSPWare completion/data errors (often includes the real wire key). */
+/** Empty scalar keys on the form — useful when the homepage key doesn't match our regex. */
+function listEmptyFormKeys(formData: any, limit = 40): string[] {
+  const out: string[] = [];
+  for (const [k, v] of Object.entries(getFormObject(formData))) {
+    if (v === null || v === undefined || v === '') out.push(k);
+    if (out.length >= limit) break;
+  }
+  return out.sort();
+}
+
+/** Keys alphabetically near customer_service_phone (UI neighbor of Business Homepage URL). */
+function keysNearCustomerServicePhone(formData: any, radius = 8): string[] {
+  const keys = Object.keys(getFormObject(formData)).sort();
+  const i = keys.findIndex((k) => k === 'customer_service_phone' || /customer_service/i.test(k));
+  if (i < 0) return [];
+  return keys.slice(Math.max(0, i - radius), i + radius + 1);
+}
+
+/** Diagnostics blob for signing errors — so we can see the real wire key next Retry. */
+function websiteFormDiagnostics(formData: any): Record<string, unknown> {
+  const form = getFormObject(formData);
+  const allKeys = Object.keys(form).sort();
+  return {
+    websiteLikeKeys: scanWebsiteFormKeys(formData),
+    emptyKeysSample: listEmptyFormKeys(formData, 50),
+    nearCustomerServicePhone: keysNearCustomerServicePhone(formData),
+    formKeyCount: allKeys.length,
+    // Tiny sample of keys containing "service" / "int_" / "cp_" / "cnp" for context
+    financialNeighborKeys: allKeys.filter((k) =>
+      /service|int_|cp_|cnp|moto|card_accept|omni|phone|email|dba/i.test(k)
+    ).slice(0, 40),
+    completion_errors: formData?.completion_errors || formData?.validation?.errors?.completion || [],
+    data_errors: formData?.data_errors || formData?.validation?.errors?.data || [],
+  };
+}
+
+/** Pull wire keys from MSPWare completion/data errors.
+ * Swagger shape: { errors: "This field is required.", label: "Business Homepage URL", key: "<wire_name>" }
+ * Match on LABEL (Homepage/Website), then use KEY even if the key name is unexpected.
+ */
 function extractWebsiteKeysFromErrors(formData: any): string[] {
   const bags = [
-    ...(formData?.completion_errors || formData?.validation?.errors?.completion || []),
-    ...(formData?.data_errors || formData?.validation?.errors?.data || []),
+    ...(formData?.completion_errors || []),
+    ...(formData?.validation?.errors?.completion || []),
+    ...(formData?.data_errors || []),
+    ...(formData?.validation?.errors?.data || []),
     ...(formData?.errors || []),
     ...(formData?.form?.errors || []),
   ];
   const keys = new Set<string>();
   for (const e of bags) {
-    const field = String(
-      (typeof e === 'object' && e != null && (e.field || e.name || e.key || e.id)) || ''
-    ).trim();
-    if (field && /web|url|home.?page|homepage/i.test(field)) keys.add(field);
-    const msg = typeof e === 'string' ? e : String(e?.message || e?.description || '');
-    // e.g. "Business Homepage URL is required" — no wire key; skip
-    // e.g. "business_homepage_url: This field is required"
-    const m = msg.match(/\b([a-z][a-z0-9_]*(?:web|url|home.?page|homepage)[a-z0-9_]*)\b/i);
+    if (typeof e !== 'object' || e == null) {
+      const msg = String(e || '');
+      const m = msg.match(/\b([a-zA-Z][a-zA-Z0-9_]*(?:web|url|home.?page|homepage|site|domain|www)[a-zA-Z0-9_]*)\b/);
+      if (m) keys.add(m[1]);
+      continue;
+    }
+    const label = String(e.label || e.Label || '').trim();
+    const field = String(e.field || e.name || e.key || e.id || e.property || '').trim();
+    // Prefer label → key (swagger PartialSaveResponse completion items)
+    if (/homepage|web\s*site|website|internet\s*url/i.test(label) && field) {
+      keys.add(field);
+      continue;
+    }
+    if (field && isWebsiteLikeKey(field)) keys.add(field);
+    const msg = String(e.message || e.description || e.errors || '');
+    if (/homepage|web\s*site|website/i.test(msg) && field) keys.add(field);
+    const m = msg.match(/\b([a-zA-Z][a-zA-Z0-9_]*(?:web|url|home.?page|homepage|site|domain|www)[a-zA-Z0-9_]*)\b/);
     if (m) keys.add(m[1]);
   }
   return [...keys];
@@ -756,29 +819,29 @@ function extractFormWebsite(formData: any): string {
 /**
  * Homepage URL fields for PUT /form.
  * CRITICAL: Do NOT shotgun many guessed keys — MSPWare rolls back the ENTIRE
- * form when any unknown/invalid field fails validation (Critical Lesson: -1%/rollback).
- * Only send: (1) empty keys discovered on the live form, (2) keys from error payloads,
- * (3) if neither, a single safest default.
+ * form when any unknown/invalid field fails validation.
+ * Prefer discovered empty keys; else keys from errors; else no blind fallback
+ * (blind business_homepage_url was ignored — Porky's form had zero web/url/home keys).
  */
 function mspWebsiteFields(url: string, formDataOrKeys?: any): Record<string, string> {
   const out: Record<string, string> = {};
-  const discovered =
+  const isFullForm =
     formDataOrKeys && typeof formDataOrKeys === 'object' && !Array.isArray(formDataOrKeys)
-      && ('form' in formDataOrKeys || 'percent_complete' in formDataOrKeys || 'validation' in formDataOrKeys)
-      ? scanWebsiteFormKeys(formDataOrKeys)
-      : (formDataOrKeys && typeof formDataOrKeys === 'object' ? formDataOrKeys as Record<string, unknown> : {});
+    && ('form' in formDataOrKeys || 'percent_complete' in formDataOrKeys || 'validation' in formDataOrKeys
+      || 'completion_errors' in formDataOrKeys);
+
+  const discovered = isFullForm
+    ? scanWebsiteFormKeys(formDataOrKeys)
+    : (formDataOrKeys && typeof formDataOrKeys === 'object' ? formDataOrKeys as Record<string, unknown> : {});
 
   for (const [k, v] of Object.entries(discovered || {})) {
     if (v === null || v === undefined || v === '') out[k] = url;
   }
-  if (formDataOrKeys && typeof formDataOrKeys === 'object' && ('completion_errors' in formDataOrKeys || 'form' in formDataOrKeys)) {
+  if (isFullForm) {
     for (const k of extractWebsiteKeysFromErrors(formDataOrKeys)) out[k] = url;
   }
-  // Single fallback only — UI label maps to business_homepage_url in most Fidano forms.
-  // Do not also send website/business_website/etc. in the same PUT (rollback risk).
-  if (Object.keys(out).length === 0) {
-    out.business_homepage_url = url;
-  }
+  // No blind fallback — wrong key does nothing; wrong+invalid key can roll back the form.
+  // Caller must use diagnostics / Inspect name= if out is empty.
   return out;
 }
 
@@ -1781,10 +1844,57 @@ Deno.serve(async (req) => {
                   ...(getData2?.errors            || []),
                   ...(getData2?.form?.errors      || []),
                 ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
+            // If homepage still blank, use completion error label→key (swagger shape)
+            // for a second partial PUT with only the discovered wire name(s).
             if (portalInt > 0 && portalWebsite && !extractFormWebsite(getData2)) {
+              const discoveredKeys = [
+                ...extractWebsiteKeysFromErrors(getData2),
+                ...extractWebsiteKeysFromErrors(refillData),
+              ].filter((k, i, a) => a.indexOf(k) === i);
+              if (discoveredKeys.length) {
+                const retryBody = Object.fromEntries(discoveredKeys.map((k) => [k, portalWebsite]));
+                console.log(
+                  `[signApplication] Homepage retry PUT for ${mspApplicationNo} with keys:`,
+                  JSON.stringify(retryBody)
+                );
+                const retryRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
+                  method: 'PUT', headers: mspHeaders, body: JSON.stringify(retryBody),
+                });
+                const retryData = await retryRes.json().catch(() => ({}));
+                console.log(
+                  `[signApplication] Homepage retry PUT ${retryRes.status}:`,
+                  JSON.stringify(redactSensitive(retryData))
+                );
+                const getRes3 = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, { headers: mspHeaders });
+                const getData3 = await getRes3.json();
+                const rawPct3 = getData3?.percent_complete ?? getData3?.validation?.percent_complete ?? null;
+                if (rawPct3 !== null) refillPercentComplete = Math.round(parseFloat(String(rawPct3)));
+                lastWebsiteKeysOnForm = scanWebsiteFormKeys(getData3);
+                // Replace getData2 contents so downstream checks use the post-retry form
+                for (const k of Object.keys(getData2)) delete (getData2 as any)[k];
+                Object.assign(getData2, getData3);
+                if (extractFormWebsite(getData2)) {
+                  refillErrors = [
+                    ...(getData2?.completion_errors || getData2?.validation?.errors?.completion || []),
+                    ...(getData2?.data_errors || getData2?.validation?.errors?.data || []),
+                    ...(getData2?.rule_violations || getData2?.validation?.errors?.rules || []),
+                    ...(getData2?.errors || []),
+                  ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
+                }
+              }
+            }
+
+            if (portalInt > 0 && portalWebsite && !extractFormWebsite(getData2)) {
+              const homepageHints = [
+                ...(getData2?.completion_errors || getData2?.validation?.errors?.completion || []),
+                ...(refillData?.validation?.errors?.completion || []),
+              ]
+                .filter((e: any) => e && typeof e === 'object'
+                  && /homepage|web\s*site|website/i.test(String(e.label || e.errors || e.message || '')))
+                .map((e: any) => ({ label: e.label, key: e.key || e.field || e.name }));
               refillErrors = [
                 ...refillErrors,
-                `Homepage URL not accepted by MSPWare. Portal sent "${portalWebsite}" on keys ${JSON.stringify(Object.keys(mspWebsiteFields(portalWebsite, getData)))}. Form keys matching web/url/home after PUT: ${JSON.stringify(lastWebsiteKeysOnForm)}.`,
+                `Homepage URL not accepted by MSPWare. Portal sent "${portalWebsite}" on keys ${JSON.stringify(Object.keys(mspWebsiteFields(portalWebsite, getData)))}. Form keys matching web/url/home after PUT: ${JSON.stringify(lastWebsiteKeysOnForm)}. Homepage completion hints (label→key): ${JSON.stringify(homepageHints)}. Diagnostics: ${JSON.stringify(websiteFormDiagnostics(getData2))}.`,
               ];
             } else if (portalInt > 0 && !portalWebsite) {
               refillErrors = [
