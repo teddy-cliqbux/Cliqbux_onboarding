@@ -22,7 +22,7 @@ function StatusBadge({ status }) {
   );
 }
 
-export default function SignerRoster({ profile, onValidChange, onSignersChange }) {
+export default function SignerRoster({ profile, onValidChange, onSignersChange, onSignHere, selectedSignerId }) {
   const [signers, setSigners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -183,13 +183,15 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange }
             const needsRemoteInvite = required && !isPrimary && (
               signer.identityStatus === 'Pending Invitation' || signer.identityStatus === 'Sent'
             );
-            const canSignHere = required && !isPrimary &&
-              signer.identityStatus !== 'Signed' &&
-              signer.identityStatus !== 'Sent';
+            // Any Verified required owner can open their concurrent signing session on this device
+            const canSignHere = required &&
+              (signer.identityStatus === 'Verified' || signer.identityStatus === 'Signed') &&
+              signer.identityStatus !== 'Signed';
             const inviteBtnLabel = signer.identityStatus === 'Sent' ? 'Resend Invite' : 'Send Verify & Sign Invite';
+            const isSelected = selectedSignerId && signer.id === selectedSignerId;
 
             return (
-              <div key={signer.id} className={`px-5 py-4 ${catalogOnly ? 'opacity-70' : ''}`}>
+              <div key={signer.id} className={`px-5 py-4 ${catalogOnly ? 'opacity-70' : ''} ${isSelected ? 'bg-cb-accent-muted/30' : ''}`}>
                 <div className="flex items-center gap-4">
                   <div className="w-9 h-9 rounded-full bg-cb-bg border border-cb-border flex items-center justify-center flex-shrink-0 text-cb-caption font-semibold text-gray-400">
                     {signer.firstName?.[0]}{signer.lastName?.[0]}
@@ -203,6 +205,9 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange }
                       {catalogOnly && (
                         <span className="text-cb-caption normal-case tracking-normal text-gray-500 border border-cb-border px-1.5 py-0.5 rounded">&lt;25% — roster only</span>
                       )}
+                      {isSelected && (
+                        <span className="text-cb-caption normal-case tracking-normal text-cb-accent border border-cb-accent/40 px-1.5 py-0.5 rounded">Signing here</span>
+                      )}
                     </div>
                     <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
                   </div>
@@ -212,12 +217,22 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange }
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {canSignHere && (
                       <button
-                        onClick={() => openDetail(signer, { allowKyc: true })}
+                        onClick={() => onSignHere ? onSignHere(signer) : openDetail(signer, { allowKyc: true })}
                         className="text-cb-body text-cb-bg bg-cb-accent hover:opacity-90 px-2.5 py-1.5 rounded-cb font-medium transition-opacity flex items-center gap-1.5"
-                        title="Verify and sign on this device"
+                        title="Open this owner's signing session on this device"
                       >
                         <UserCheck className="w-3 h-3" />
-                        Sign here
+                        {isSelected ? 'Signing…' : 'Sign here'}
+                      </button>
+                    )}
+                    {required && !isPrimary && signer.identityStatus === 'Pending Invitation' && (
+                      <button
+                        onClick={() => openDetail(signer, { allowKyc: true })}
+                        className="text-cb-body text-gray-300 hover:text-white border border-cb-border hover:border-cb-border-strong px-2.5 py-1.5 rounded-cb font-medium transition-colors flex items-center gap-1.5"
+                        title="Verify on this device"
+                      >
+                        <UserCheck className="w-3 h-3" />
+                        Verify here
                       </button>
                     )}
                     {needsRemoteInvite && (
@@ -225,13 +240,13 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange }
                         onClick={() => handleSendSigningInvite(signer)}
                         disabled={resendingId === signer.id}
                         className="text-cb-body text-gray-300 hover:text-white border border-cb-border hover:border-cb-border-strong px-2.5 py-1.5 rounded-cb font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                        title="Email a combined Verify & Sign link"
+                        title="Email a combined Verify & Sign link for their own device"
                       >
                         {resendingId === signer.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                         {inviteBtnLabel}
                       </button>
                     )}
-                    <button onClick={() => openDetail(signer, { allowKyc: isPrimary || canSignHere })}
+                    <button onClick={() => openDetail(signer, { allowKyc: isPrimary || signer.identityStatus === 'Pending Invitation' })}
                       className="text-cb-body text-gray-400 hover:text-white font-medium px-2 py-1.5 rounded-cb flex items-center gap-1.5 transition-colors whitespace-nowrap"
                       title="Edit details">
                       <Pencil className="w-3.5 h-3.5" /> Edit

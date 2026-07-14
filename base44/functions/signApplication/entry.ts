@@ -820,6 +820,16 @@ Deno.serve(async (req) => {
 
     console.log(`[signApplication] corporateId=${corporateId} signable merchantMIDs: ${signable.length}`);
 
+    // Required owners (≥25% or primary) — used to detect stale BoldSign packages
+    // created before a co-owner was added (concurrent signing needs every email present).
+    const requiredSignerEmails = (signers || [])
+      .filter((s: any) => s?.isPrimarySigner === true || (Number(s?.ownershipPercentage) || 0) >= 25)
+      .map((s: any) => String(s.signerEmail || '').toLowerCase().trim())
+      .filter(Boolean);
+
+    const isSigSigned = (s: any) =>
+      ['signed', 'complete', 'completed'].includes(String(s?.localstatus || s?.status || '').toLowerCase());
+
     // ── 4. Process each merchantMID ───────────────────────────────────────────────
     const applications: any[] = [];
 
@@ -836,6 +846,43 @@ Deno.serve(async (req) => {
       const statusData = await statusRes.json();
 
       let packageExists = statusRes.ok && statusData?.success && statusData?.signers?.length > 0;
+      let forceOwnerRefill = false;
+
+      // If a required owner is missing from an unsigned package, rebuild so concurrent
+      // per-signer links exist. Do NOT rebuild once anyone has already signed.
+      if (packageExists) {
+        const packageEmails = new Set(
+          (statusData?.signers || [])
+            .map((s: any) => String(s.emailAddress || s.email || '').toLowerCase().trim())
+            .filter(Boolean)
+        );
+        const missingOwners = requiredSignerEmails.filter((e: string) => !packageEmails.has(e));
+        const anyoneSigned = (statusData?.signers || []).some(isSigSigned)
+          || statusData?.signed === true
+          || statusData?.status === 'complete';
+
+        if (missingOwners.length > 0 && !anyoneSigned) {
+          console.warn(
+            `[signApplication] App ${mspApplicationNo} package missing owners [${missingOwners.join(', ')}] — rebuilding unsigned package`
+          );
+          forceOwnerRefill = true;
+          packageExists = false;
+          // Best-effort clear of the stale package so POST can recreate with full owner set
+          try {
+            const delRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/signatures`, {
+              method: 'DELETE',
+              headers: mspHeaders,
+            });
+            console.log(`[signApplication] DELETE /signatures ${delRes.status} for ${mspApplicationNo}`);
+          } catch (delErr: any) {
+            console.warn(`[signApplication] DELETE /signatures failed (continuing):`, delErr?.message);
+          }
+        } else if (missingOwners.length > 0 && anyoneSigned) {
+          console.warn(
+            `[signApplication] App ${mspApplicationNo} missing [${missingOwners.join(', ')}] but signing already started — cannot rebuild`
+          );
+        }
+      }
 
       // Check current form completion via GET first — template defaults may already satisfy all fields
       let refillPercentComplete: number | null = null;
@@ -859,8 +906,9 @@ Deno.serve(async (req) => {
             ].map((e: any) => (typeof e === 'string' ? e : e?.message || e?.description || e?.errors || JSON.stringify(e)));
         console.log(`[signApplication] GET form status for ${mspApplicationNo}: ${refillPercentComplete ?? '?'}% complete, ${getErrors.length} errors`);
 
-        // Only re-fill if the form is not already at 100%
-        if (refillPercentComplete !== 100) {
+        // Re-fill when not at 100%, OR when co-owners were added after the last package
+        // (forceOwnerRefill) so MSPWare's owners[] includes every required signer email.
+        if (refillPercentComplete !== 100 || forceOwnerRefill) {
           const location = locationMap[merchantMID.locationId];
           if (location) {
             const refillEntityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
@@ -947,42 +995,54 @@ Deno.serve(async (req) => {
       const signerList: any[] = freshData?.signers || [];
       const overallSigned = freshData?.signed === true || freshData?.status === 'complete';
 
-      // Get signing link for each signer; track primary
+      // Get signing link for each package signer + any required roster email still missing
+      // (concurrent signing: every required owner needs their own BoldSign URL).
       let primarySigningUrl: string | null = null;
       const signerLinks: any[] = [];
-
+      const emailsToFetch = new Set<string>();
       for (const s of signerList) {
-        const email = s.emailAddress || s.email || '';
-        if (!email) continue;
+        const email = String(s.emailAddress || s.email || '').toLowerCase().trim();
+        if (email) emailsToFetch.add(email);
+      }
+      for (const e of requiredSignerEmails) emailsToFetch.add(e);
 
-        // Fetch link — retry once after 1s if not yet available (BoldSign may need a moment after package creation)
+      for (const email of emailsToFetch) {
+        const pkgRow = signerList.find((s: any) =>
+          String(s.emailAddress || s.email || '').toLowerCase().trim() === email
+        );
+        const alreadySigned = pkgRow ? isSigSigned(pkgRow) : false;
+
         let link: string | null = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
-          if (attempt > 0) await new Promise(r => setTimeout(r, 1000));
-          const linkRes = await fetch(
-            `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(email)}`,
-            { headers: mspHeaders }
-          );
-          const linkData = await linkRes.json();
-          link = linkData?.link || null;
-          if (link) break;
+        if (!alreadySigned) {
+          // Fetch link — retry once after 1s if not yet available (BoldSign may need a moment after package creation)
+          for (let attempt = 0; attempt < 2; attempt++) {
+            if (attempt > 0) await new Promise(r => setTimeout(r, 1000));
+            const linkRes = await fetch(
+              `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(email)}`,
+              { headers: mspHeaders }
+            );
+            const linkData = await linkRes.json();
+            link = linkData?.link || null;
+            if (link) break;
+          }
         }
 
         signerLinks.push({
           email,
-          name: s.name || '',
-          status: s.localstatus || s.status || 'unknown',
-          signed: ['signed', 'complete', 'completed'].includes((s.localstatus || s.status || '').toLowerCase()),
+          name: pkgRow?.name || '',
+          status: pkgRow?.localstatus || pkgRow?.status || (link ? 'ready' : 'missing'),
+          signed: alreadySigned,
           signingUrl: link,
+          inPackage: !!pkgRow,
         });
 
-        if (email.toLowerCase() === primaryEmail.toLowerCase() && link) {
+        if (email === primaryEmail.toLowerCase() && link) {
           primarySigningUrl = link;
         }
       }
 
       // Fallback: try primaryEmail directly if not found in signer list
-      if (!primarySigningUrl) {
+      if (!primarySigningUrl && primaryEmail) {
         const fallbackRes = await fetch(
           `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(primaryEmail)}`,
           { headers: mspHeaders }
@@ -991,20 +1051,26 @@ Deno.serve(async (req) => {
         primarySigningUrl = fallbackData?.link || null;
       }
 
-      const appAllSigned = signerList.length > 0 && signerList.every((s: any) =>
-        ['signed', 'complete', 'completed'].includes((s.localstatus || s.status || '').toLowerCase())
-      );
+      const appAllSigned = requiredSignerEmails.length > 0
+        ? requiredSignerEmails.every((email: string) => {
+            const row = signerLinks.find((s: any) => s.email === email);
+            return row?.signed === true;
+          })
+        : (signerList.length > 0 && signerList.every((s: any) => isSigSigned(s)));
 
-      // signingUrl = primary convenience link (legacy single-signer UI).
-      // Multi-signer coordinator MUST use signers[].signingUrl for the active owner
-      // (signer-outer / MID-inner). Never assume primarySigningUrl for co-signers.
+      const missingLinks = signerLinks
+        .filter((s: any) => requiredSignerEmails.includes(s.email) && !s.signed && !s.signingUrl)
+        .map((s: any) => s.email);
+
+      // signingUrl = primary convenience link (legacy). Concurrent UI uses signers[].signingUrl.
       applications.push({
         mspApplicationNo,
         merchantName,
-        merchantIDName: merchantName, // OnboardingVerification alias
+        merchantIDName: merchantName,
         signingUrl: primarySigningUrl,
         signers: signerLinks,
         allSigned: appAllSigned || overallSigned,
+        missingSignerEmails: missingLinks,
         error: null,
       });
     }

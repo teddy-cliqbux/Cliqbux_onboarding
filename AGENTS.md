@@ -430,18 +430,19 @@ After application submit, `PostSubmissionDashboard` shows underwriting + setup c
 
 `signApplication` packages MSPWare applications for BoldSign e-signature and returns iframe-embeddable signing URLs.
 
-### Multi-signer coordinator (shipped 2026-07-13)
+### Multi-signer coordinator (shipped 2026-07-13; concurrent 2026-07-13 evening)
 
-Portal signing is a **signer-outer / MID-inner** state machine in `OnboardingVerification.jsx`:
+Portal signing is **concurrent per owner**, not a serialized hot-seat:
 
-1. **Required owners** = `ownershipPercentage >= 25` OR `isPrimarySigner`. Under-25% non-primaries stay on the roster but are **bypassed** by the signing loop (`src/lib/signerRules.js`).
-2. **Colocated:** primary (+ any co-owner who chose "Sign here") verify via `SignerDetailsModal` (`allowInlineKyc`), then each stays in the hot seat until they sign **all** MID packages before the device passes to the next human. Iframe URL comes from `app.signers[].signingUrl` for that email — never always-primary.
-3. **Remote:** one Resend email (`manageSigner` `sendInvite`) → `/verify?token=…&intent=sign`. `VerifyIdentity.jsx` runs KYC then `verifySignerToken` `getSigningSession` (token-scoped links only — no merchant JWT) → iframe → `markSigned`.
-4. **Completion signals:** BoldSign `postMessage` `onDocumentSigned` (origin `https://app.boldsign.com`) for snappy UI; **5s `signApplication` / `getSigningSession` poll is ground truth**.
-5. **Local status:** write `identityStatus: 'Signed'` via `manageSigner` `markSigned` / `verifySignerToken` `markSigned`. Do **not** poll MSPWare from admin list renders — that reintroduces rate-limit risk.
-6. Submit unlocks only when every required owner is `Signed` (or packages show allSigned and remotes are cleared).
+1. **Required owners** = `ownershipPercentage >= 25` OR `isPrimarySigner`. Under-25% non-primaries stay on the roster but are **bypassed** (`src/lib/signerRules.js`).
+2. **Each required owner gets their own BoldSign URL** from `signApplication` (`signers[].signingUrl`). They can sign from separate devices/instances at the same time.
+3. **This portal session:** pick any Verified owner (defaults to primary) and run MID-inner for *their* links. Switching owners does not lock others out.
+4. **Remote:** Resend invite → `/verify?token=…&intent=sign` on their device (parallel).
+5. **Stale packages:** if a co-owner is added after `POST /signatures`, `signApplication` detects missing required emails on an **unsigned** package, DELETEs it (best-effort), refills `owners[]`, and recreates so every email has a link. Never rebuild once anyone has signed.
+6. **Completion:** BoldSign `onDocumentSigned` + 5s poll; persist `identityStatus: 'Signed'` locally.
+7. Submit when every required owner is `Signed`.
 
-`signApplication` still: GET form first (skip refill at 100%), `POST /signatures` with `sendEmail: false`, per-email link fetch + **exactly one 1s retry**, clear `mspApplicationNo` **only on HTTP 404**.
+`signApplication` still: GET form first (skip refill at 100% unless owner-rebuild), `POST /signatures` with `sendEmail: false`, per-email link fetch + **exactly one 1s retry**, clear `mspApplicationNo` **only on HTTP 404**.
 
 ### Flow
 1. Load profile, signers, MIDs, locations

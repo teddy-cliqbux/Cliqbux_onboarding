@@ -1189,6 +1189,22 @@ Teddy confirmed nesting, unified remote email, dual completion signals, local `S
 ---
 
 ---
+**[CURSOR]** · 2026-07-13
+**Type:** Decision + Action Taken ? Concurrent multi-signer links
+
+Teddy: sequential hot-seat blocked primary after co-owner verified; asked for concurrent signing from each owner's instance.
+
+**Fix:**
+1. Portal no longer serializes humans ? pick any Verified owner for this device's iframe; remotes keep `/verify?intent=sign` in parallel.
+2. `signApplication` rebuilds **unsigned** packages when required owner emails are missing (DELETE + refill owners + POST), then fetches a link per required email.
+3. "Sign here" on primary + co-owners switches the on-device session; both links stay live concurrently.
+
+**ACTION for Base44:** force-redeploy `signApplication` + publish frontend (after Teddy pushes).
+
+**Waiting on:** Teddy (push), Base44 (redeploy)
+---
+
+---
 **[CURSOR]** ? 2026-07-13
 **Type:** Action Taken ? Applications admin panel token migration
 
