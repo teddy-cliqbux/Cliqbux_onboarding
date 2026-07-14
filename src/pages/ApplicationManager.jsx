@@ -5,7 +5,7 @@ import {
   Pencil, Loader2, Send, Trash2, Check, X, Copy, ExternalLink,
   Clock, Store, Users, FileText, Search, Building2, CreditCard,
   CheckCircle2, AlertCircle, Eye, BarChart2, Zap, LayoutDashboard,
-  ChevronDown, ChevronRight, XCircle, RefreshCw
+  ChevronDown, ChevronRight, XCircle, RefreshCw, Percent
 } from 'lucide-react';
 import {
   lifecycleLabel,
@@ -13,7 +13,7 @@ import {
   isVerifiedOrHigher,
   isApplicationSigned,
 } from '@/lib/signerLifecycle';
-
+import PricingEditorPanel from '@/components/pricing/PricingEditorPanel';
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 
@@ -605,14 +605,16 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
   const [error, setError]             = useState('');
   const [syncMsg, setSyncMsg]         = useState('');
   const [activeTab, setActiveTab]     = useState('locations');
+  const [pricing, setPricing]         = useState(null);
 
   useEffect(() => { loadData(); }, []);
 
   const fetchLists = async () => {
-    const [locRes, conRes, sigRes] = await Promise.all([
+    const [locRes, conRes, sigRes, pricingRes] = await Promise.all([
       base44.functions.invoke('listLocations', { corporateId }),
       base44.functions.invoke('manageMerchantID', { action: 'list', corporateId }),
       base44.functions.invoke('manageSigner', { action: 'list', corporateId }),
+      base44.functions.invoke('updatePricing', { action: 'get', corporateId }).catch(() => ({ data: null })),
     ]);
     const locs = locRes.data?.locations || [];
     const mids = conRes.data?.merchantIDs || [];
@@ -620,6 +622,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
     setLocations(locs);
     setMids(mids);
     setSigners(sigs);
+    if (pricingRes?.data?.pricing) setPricing(pricingRes.data.pricing);
     return { locs, mids, sigs };
   };
 
@@ -742,6 +745,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
     { key: 'locations', label: 'Locations', count: selLocs.size, total: locations.length, icon: Store },
     { key: 'signers',   label: 'Signers',   count: selSigners.size, total: signers.length, icon: Users },
     { key: 'quotes',    label: 'Quotes',    count: selectedQuoteId ? 1 : 0, total: quotes.length, icon: FileText },
+    { key: 'pricing',   label: 'Pricing',   count: pricing?.customMarkupPercentage != null ? 1 : 0, total: 1, icon: Percent },
   ];
 
   const formatMoney = (n) => (n == null || Number.isNaN(n) ? '—' : `$${Number(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`);
@@ -933,6 +937,22 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                   </div>
                 )}
               </>
+            )}
+            {activeTab === 'pricing' && (
+              <div className="max-w-lg">
+                <p className="text-cb-caption text-gray-500 mb-3">
+                  Sets live rates on the merchant profile. Existing MSPWare drafts re-fill in the background. Monthly/service fees stay on the MSPWare template.
+                </p>
+                <PricingEditorPanel
+                  initialPricing={pricing}
+                  saveLabel="Save Pricing"
+                  onSave={async (payload) => {
+                    const res = await base44.functions.invoke('updatePricing', { corporateId, ...payload });
+                    if (res.data?.error) throw new Error(res.data.error);
+                    setPricing(res.data?.pricing || null);
+                  }}
+                />
+              </div>
             )}
           </div>
           {error && (

@@ -1496,3 +1496,20 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 
 **? Waiting on:** Teddy (push + Base44 schema publish)
 ---
+
+---
+**[CURSOR]** · 2026-07-13
+**Type:** Feature · Dual-surface agent pricing editor
+
+**Decisions (Teddy):** Profile + stage mirror; markup as percent `0.15` (not 15 bps); separate per-txn + auth inputs; monthly fee hidden (MSP template); High Volume Tavern deferred; bubble only on Welcome Hub / onboarding (not dashboard).
+
+**Shipped:**
+1. `base44/functions/updatePricing/entry.ts` ? admin or `imp` JWT; writes profile; mirrors stage; background `submitToMSP` refill
+2. `MerchantCorporateProfile.pricingType` schema field
+3. `PricingEditorPanel` + `pricingPresets.js` + `AgentPricingBubble`
+4. Applications StageEditor **Pricing** tab; portal bubble when impersonating
+
+**ACTION:** Push ? publish MerchantCorporateProfile schema ? redeploy `updatePricing` (+ ensure `submitToMSP` callable) ? publish frontend.
+
+**? Waiting on:** Teddy (push), Base44 (schema + redeploy)
+---

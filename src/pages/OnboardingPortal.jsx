@@ -16,6 +16,7 @@ import PortalEntry from '@/components/onboarding/PortalEntry';
 import ApplicationTracker from '@/components/onboarding/ApplicationTracker';
 import { Lock, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import AgentPricingBubble from '@/components/pricing/AgentPricingBubble';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
 // 2026-07-06: fixed a real bug here — this array checked for 'Self_CashDiscount'
@@ -710,6 +711,24 @@ export default function OnboardingPortal() {
         onNavigate={handleNavigate}
       />
 
+      {(isImpersonating || merchantTokenHasImp()) && profile?.corporateId && (
+        <AgentPricingBubble
+          corporateId={profile.corporateId}
+          onPricingApplied={(data) => {
+            const next = data?.pricing || data?.profile;
+            if (!next) return;
+            setProfile(prev => prev ? {
+              ...prev,
+              pricingType: next.pricingType ?? prev.pricingType,
+              pricingTier: next.pricingTier ?? prev.pricingTier,
+              customMarkupPercentage: next.customMarkupPercentage ?? prev.customMarkupPercentage,
+              customPerTxFee: next.customPerTxFee ?? prev.customPerTxFee,
+              customAuthPerCard: next.customAuthPerCard ?? prev.customAuthPerCard,
+            } : prev);
+          }}
+        />
+      )}
+
       <div className="pt-16 min-h-screen flex flex-col items-center justify-start px-4 py-10">
         {isImpersonating && (
           <div className="w-full max-w-4xl mb-4 bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-accent text-gray-300 text-cb-body px-4 py-2.5 rounded-cb flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -737,6 +756,21 @@ export default function OnboardingPortal() {
               {pricingTier && (
                 <span className="text-cb-caption normal-case tracking-normal font-medium text-gray-300 border border-cb-border px-3 py-1 rounded-full">
                   {pricingTierLabel} Plan
+                </span>
+              )}
+              {isImpersonating && (profile.customMarkupPercentage != null || profile.customPerTxFee != null) && (
+                <span className="text-cb-caption text-gray-500">
+                  {[
+                    profile.customMarkupPercentage != null && Number.isFinite(Number(profile.customMarkupPercentage))
+                      ? `${Number(profile.customMarkupPercentage)}%`
+                      : null,
+                    profile.customPerTxFee != null && Number.isFinite(Number(profile.customPerTxFee))
+                      ? `$${Number(profile.customPerTxFee).toFixed(2)}/txn`
+                      : null,
+                    profile.customAuthPerCard != null && Number.isFinite(Number(profile.customAuthPerCard))
+                      ? `$${Number(profile.customAuthPerCard).toFixed(2)} auth`
+                      : null,
+                  ].filter(Boolean).join(' · ')}
                 </span>
               )}
               {isSelfServe && (

@@ -80,11 +80,22 @@
         "SELF_SERVE_CASH_DISCOUNT"
       ]
     },
+    "pricingType": {
+      "type": "string",
+      "enum": [
+        "template",
+        "custom"
+      ],
+      "default": "template",
+      "description": "Agent pricing editor mode (2026-07-13). template = preset dropdown; custom = negotiated markup % / per-txn / auth fee overrides. Canonical fees still live in customMarkupPercentage / customPerTxFee / customAuthPerCard."
+    },
     "customMarkupPercentage": {
-      "type": "number"
+      "type": "number",
+      "description": "Markup as a percent number (0.15 = 0.15%). NOT basis points. Feeds MSPWare all_markup_discount."
     },
     "customPerTxFee": {
-      "type": "number"
+      "type": "number",
+      "description": "Per-transaction fee in dollars. Feeds MSPWare all_markup_per_item."
     },
     "customAuthPerCard": {
       "type": "number",
