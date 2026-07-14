@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-07-14b — force-redeploy to pick up latest GitHub-synced changes
 // redeployed 2026-07-10j — cnp_percent is now the RESIDUAL of the four MSPWare acceptance buckets (was 100−cp, double-counting int/moto → processor rejected cnp_percent:100 on app #210)
 // redeployed 2026-07-10i — card-split fields (internetPct/motoPct) sourced from MerchantMID, parseInt(cardPresentPct) no longer forces 0→100, PUT-response validation errors take priority over GET rollback noise
 
