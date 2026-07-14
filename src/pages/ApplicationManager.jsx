@@ -14,9 +14,17 @@ import {
   isApplicationSigned,
 } from '@/lib/signerLifecycle';
 import PricingEditorPanel from '@/components/pricing/PricingEditorPanel';
-import { isPricingComplete } from '@/lib/pricingPresets';
+import { isPricingComplete, TIER_LABELS } from '@/lib/pricingPresets';
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
+
+/** Prefer live profile tier; track prefilledData is a stale copy (Porky's STANDARD bug 2026-07-14). */
+function displayPricingTier(profile, trackPrefill = {}) {
+  const raw = profile?.pricingTier || trackPrefill?.pricingTier || '';
+  if (!raw) return null;
+  const key = String(raw).toUpperCase();
+  return TIER_LABELS[key] || TIER_LABELS[raw] || raw;
+}
 
 /** Pure digits = HubSpot deal id. Anything else = local Quick Stage. */
 function isHubSpotDealId(id) {
@@ -588,7 +596,7 @@ function CheckRow({ checked, onChange, children }) {
 }
 
 // ── Stage Editor ──────────────────────────────────────────────────────────────
-function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
+function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved, onClose }) {
   const hubspotDeal = isHubSpotDealId(corporateId);
   const [label, setLabel]             = useState(stage?.label || '');
   const [locations, setLocations]     = useState([]);
@@ -955,8 +963,20 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onClose }) {
                       if (!data?.success) {
                         throw new Error(data?.error || 'Pricing save did not succeed — is updatePricing published?');
                       }
-                      setPricing(data.pricing || null);
+                      const nextPricing = data.pricing || null;
+                      // Guard: Base44 can silently strip enum values — refuse to look "saved" if tier didn't stick.
+                      if (
+                        payload.pricingTier
+                        && String(nextPricing?.pricingTier || '').toUpperCase() !== String(payload.pricingTier).toUpperCase()
+                      ) {
+                        throw new Error(
+                          `Pricing did not persist (wanted ${payload.pricingTier}, got ${nextPricing?.pricingTier || 'null'}). ` +
+                          `Republish MerchantCorporateProfile schema so pricingTier includes SELF_SERVE_CASH_DISCOUNT.`
+                        );
+                      }
+                      setPricing(nextPricing);
                       setError('');
+                      onPricingSaved?.(data.profile || nextPricing);
                     } catch (err) {
                       const msg =
                         err?.response?.data?.error
@@ -1339,7 +1359,9 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           </div>
           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
             {(p.signerEmail || profile?.signerEmail) && <p className="text-cb-caption text-gray-500 truncate">{p.signerEmail || profile?.signerEmail}</p>}
-            {(p.pricingTier || profile?.pricingTier) && <span className="text-cb-caption text-gray-600">{p.pricingTier || profile?.pricingTier}</span>}
+            {(displayPricingTier(profile, p)) && (
+              <span className="text-cb-caption text-gray-600">{displayPricingTier(profile, p)}</span>
+            )}
             {lastSeen && <p className="hidden sm:flex items-center gap-1 text-cb-caption text-gray-600"><Clock className="w-2.5 h-2.5" /> {lastSeen}</p>}
           </div>
         </div>
@@ -1614,6 +1636,44 @@ export default function ApplicationManager() {
     setEditing(null);
   };
 
+  const handlePricingSaved = (profileOrPricing) => {
+    if (!editing?.corporateId || !profileOrPricing) return;
+    const cid = String(editing.corporateId);
+    const tier = profileOrPricing.pricingTier;
+    const pricingType = profileOrPricing.pricingType;
+    setProfiles(prev => prev.map(p => {
+      if (String(p.corporateId) !== cid) return p;
+      return {
+        ...p,
+        ...(tier != null ? { pricingTier: tier } : {}),
+        ...(pricingType != null ? { pricingType } : {}),
+        ...(profileOrPricing.customMarkupPercentage !== undefined
+          ? { customMarkupPercentage: profileOrPricing.customMarkupPercentage } : {}),
+        ...(profileOrPricing.customPerTxFee !== undefined
+          ? { customPerTxFee: profileOrPricing.customPerTxFee } : {}),
+        ...(profileOrPricing.customAuthPerCard !== undefined
+          ? { customAuthPerCard: profileOrPricing.customAuthPerCard } : {}),
+      };
+    }));
+    // Keep track prefill badge in sync (server also patches this; update local list immediately).
+    setAllStages(prev => prev.map(s => {
+      if (String(s.corporateId) !== cid || s.label !== '__auto_track__') return s;
+      const prevData = (s.prefilledData && typeof s.prefilledData === 'object') ? s.prefilledData : {};
+      return {
+        ...s,
+        prefilledData: {
+          ...prevData,
+          ...(tier != null ? { pricingTier: tier } : {}),
+          pricing: {
+            ...(prevData.pricing || {}),
+            pricingTier: tier,
+            pricingType: pricingType || prevData.pricing?.pricingType,
+          },
+        },
+      };
+    }));
+  };
+
   const handleDeleteMerchant = async () => {
     if (!deleteMerchantConfirm) return;
     setDeletingMerchant(true);
@@ -1767,6 +1827,7 @@ export default function ApplicationManager() {
               corporateId={editing.corporateId}
               merchantName={editing.merchantName}
               onSaved={handleStageSaved}
+              onPricingSaved={handlePricingSaved}
               onClose={() => setEditing(null)}
             />
           </div>
