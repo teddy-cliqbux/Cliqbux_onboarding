@@ -55,6 +55,9 @@ export default function OnboardingVerification({ profile, locations, initialSign
   const [signingError, setSigningError]     = useState('');
   const [applications, setApplications]     = useState([]);
   const pollRef = useRef(null);
+  // Sticky BoldSign URLs per signer+MID — poll refreshes often return a new link
+  // token; if we swap iframe src/key, the frame remounts and wipes in-progress signing.
+  const stickySigningUrlsRef = useRef({});
 
   // Which Verified owner is using the iframe on THIS device (others can sign elsewhere concurrently)
   const [selectedSignerId, setSelectedSignerId] = useState(null);
@@ -85,11 +88,19 @@ export default function OnboardingVerification({ profile, locations, initialSign
   const activeLink = selectedSigner
     ? findSignerLink(activeApp, selectedSigner.signerEmail)
     : null;
-  const iframeUrl = activeLink?.signingUrl
+  const rawIframeUrl = activeLink?.signingUrl
     || (selectedSigner && profile?.signerEmail &&
         signerEmailKey(selectedSigner) === (profile.signerEmail || '').toLowerCase()
           ? activeApp?.signingUrl
           : null);
+  // Hold the first good URL for this signer+MID so 5s polls don't remount BoldSign
+  const stickyFrameKey = selectedSigner && activeApp?.mspApplicationNo != null
+    ? `${selectedSigner.id}:${activeApp.mspApplicationNo}`
+    : null;
+  if (stickyFrameKey && rawIframeUrl && !stickySigningUrlsRef.current[stickyFrameKey]) {
+    stickySigningUrlsRef.current[stickyFrameKey] = rawIframeUrl;
+  }
+  const iframeUrl = (stickyFrameKey && stickySigningUrlsRef.current[stickyFrameKey]) || rawIframeUrl || null;
 
   const totalCount = applications.length;
   const packagesAllSigned = totalCount > 0 && applications.every(a => a.allSigned || a.error);
@@ -243,6 +254,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
   const fetchSigningState = async () => {
     setLoadingSigning(true);
     setSigningError('');
+    stickySigningUrlsRef.current = {};
     try {
       const res  = await invokePortalFunction('signApplication', { corporateId: profile.corporateId });
       const data = res.data;
@@ -276,12 +288,39 @@ export default function OnboardingVerification({ profile, locations, initialSign
       const data = res.data;
       if (!data?.applications) return;
 
-      const apps = data.applications.map(a => ({
+      const incoming = data.applications.map(a => ({
         ...a,
         corporateId: profile.corporateId,
         merchantIDName: a.merchantIDName || a.merchantName,
       }));
-      setApplications(apps);
+
+      // Merge poll results but KEEP existing signing URLs while unsigned.
+      // BoldSign link endpoints often return a new token each call; swapping
+      // iframe src remounts the frame and wipes signature progress (~every 5s).
+      setApplications(prev => incoming.map((app) => {
+        const prevApp = prev.find(
+          p => String(p.mspApplicationNo) === String(app.mspApplicationNo)
+        );
+        const mergedSigners = (app.signers || []).map((s) => {
+          const prevS = (prevApp?.signers || []).find(
+            ps => (ps.email || '').toLowerCase().trim() === (s.email || '').toLowerCase().trim()
+          );
+          const keepUrl = !s.signed && prevS?.signingUrl;
+          return {
+            ...s,
+            signingUrl: keepUrl ? prevS.signingUrl : (s.signingUrl || prevS?.signingUrl || null),
+          };
+        });
+        return {
+          ...app,
+          signers: mergedSigners,
+          signingUrl: (!app.allSigned && prevApp?.signingUrl)
+            ? prevApp.signingUrl
+            : (app.signingUrl || prevApp?.signingUrl || null),
+        };
+      }));
+
+      const apps = incoming; // use fresh signed flags for completion checks below
 
       // Refresh roster so remote markSigned shows up
       try {
@@ -551,7 +590,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
                 </div>
               </div>
               <iframe
-                key={`${selectedSigner.id}-${activeApp.mspApplicationNo}-${iframeUrl}`}
+                key={stickyFrameKey || `${selectedSigner.id}-${activeApp.mspApplicationNo}`}
                 src={iframeUrl}
                 title={`Merchant Processing Agreement — ${activeApp.merchantIDName || activeApp.merchantName}`}
                 className="w-full"

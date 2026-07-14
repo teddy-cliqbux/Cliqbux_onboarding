@@ -1737,3 +1737,22 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 
 **? Waiting on:** Teddy
 ---
+
+---
+**[CURSOR]** · 2026-07-14
+**Type:** Bugfix · Signing iframe remount loop every 5s
+
+**Symptom:** After MSP form filled, BoldSign iframe showed Loading... / blank white box, resetting every ~4?5 seconds and wiping signature progress (Porky's).
+
+**Cause:** Portal polls `signApplication` every 5s. Each poll often returns a new BoldSign signingUrl token. The iframe `key` included that URL, so React remounted the frame on every poll.
+
+**Fix (frontend only ? no function redeploy):**
+- Sticky signing URL per signer+MID (first URL wins until signed)
+- Poll merge keeps prior signingUrl while unsigned
+- iframe key is signer+app only (not the URL)
+- Same fix on remote `/verify` page (`VerifyIdentity.jsx`)
+
+**Teddy:** Push / hard-refresh the portal, then sign again. Document should stay loaded.
+
+**? Waiting on:** Teddy (refresh + retest sign)
+---

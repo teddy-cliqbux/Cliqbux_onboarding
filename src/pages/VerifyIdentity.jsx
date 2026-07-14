@@ -41,6 +41,7 @@ export default function VerifyIdentity() {
   const [loadingSession, setLoadingSession] = useState(false);
   const advancingRef = useRef(false);
   const pollRef = useRef(null);
+  const stickySigningUrlsRef = useRef({});
 
   const [form, setForm] = useState({
     firstName: '', lastName: '', dobMonth: '', dobDay: '', dobYear: '',
@@ -179,7 +180,18 @@ export default function VerifyIdentity() {
         }
         const apps = res.data?.applications || [];
         if (apps.length) {
-          setApplications(apps);
+          // Keep sticky signing URLs so poll-refreshed tokens don't remount the iframe
+          setApplications(prev => apps.map((app) => {
+            const prevApp = prev.find(
+              p => String(p.mspApplicationNo) === String(app.mspApplicationNo)
+            );
+            return {
+              ...app,
+              signingUrl: (!app.signed && prevApp?.signingUrl)
+                ? prevApp.signingUrl
+                : (app.signingUrl || prevApp?.signingUrl || null),
+            };
+          }));
           const cur = apps[activeMidIndex];
           if (cur?.signed) {
             await advanceAfterMidSigned(apps, activeMidIndex, token);
@@ -227,7 +239,14 @@ export default function VerifyIdentity() {
   };
 
   const activeApp = applications[activeMidIndex];
-  const iframeUrl = activeApp && !activeApp.signed ? activeApp.signingUrl : null;
+  const stickyKey = activeApp?.mspApplicationNo != null ? String(activeApp.mspApplicationNo) : null;
+  const rawIframeUrl = activeApp && !activeApp.signed ? activeApp.signingUrl : null;
+  if (stickyKey && rawIframeUrl && !stickySigningUrlsRef.current[stickyKey]) {
+    stickySigningUrlsRef.current[stickyKey] = rawIframeUrl;
+  }
+  const iframeUrl = (stickyKey && !activeApp?.signed && stickySigningUrlsRef.current[stickyKey])
+    || rawIframeUrl
+    || null;
 
   return (
     <div style={{ background: '#111827', minHeight: '100vh', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 16px' }}>
@@ -400,7 +419,7 @@ export default function VerifyIdentity() {
             {iframeUrl && (
               <div className="rounded-xl border border-gray-200 overflow-hidden">
                 <iframe
-                  key={`${activeApp?.mspApplicationNo}-${iframeUrl}`}
+                  key={stickyKey || activeApp?.mspApplicationNo}
                   src={iframeUrl}
                   title={`Sign — ${activeApp?.merchantName}`}
                   className="w-full"
