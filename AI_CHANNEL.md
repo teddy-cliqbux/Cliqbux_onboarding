@@ -1779,3 +1779,16 @@ Personal skill `~/.cursor/skills/userinterface-wiki` remains installed as a craf
 
 **? Waiting on:** Nobody (Teddy can push when ready; no Base44 publish needed)
 ---
+
+---
+**[CURSOR]** · 2026-07-15
+**Type:** Action Taken
+**Re:** Critique follow-ups 1B + 2B (Welcome Hub copy + in-portal unlock)
+
+### Shipped (frontend only)
+1. **CTA:** Sign & Submit card ? **"Continue to signing"** (was "Continue to Verification"); Banking CTA sentence-case.
+2. **Thin help:** Hub lead now mentions one sitting + what to bring (business details, bank, photo ID).
+3. **Unlock UI:** `FormsLockedBanner` owns confirm + inline error ? no `window.confirm` / `window.alert` on portal or post-submit demote paths. Parent `onUnlock` throws on failure.
+
+**? Waiting on:** Teddy (push via GitHub Desktop; optional re-critique past 28)
+---

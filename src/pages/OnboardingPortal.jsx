@@ -14,11 +14,11 @@ import OnboardingVerification from './OnboardingVerification';
 import MobilePricing from '@/components/onboarding/MobilePricing';
 import PortalEntry from '@/components/onboarding/PortalEntry';
 import { Lock, Check } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import AgentPricingBubble from '@/components/pricing/AgentPricingBubble';
 import FormsLockedBanner from '@/components/onboarding/FormsLockedBanner';
 import { PortalLockContext } from '@/lib/PortalLockContext';
-import { isPortalFormsLocked, DEMOTE_CONFIRM_MESSAGE } from '@/lib/portalLock';
+import { isPortalFormsLocked } from '@/lib/portalLock';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
 // 2026-07-06: fixed a real bug here — this array checked for 'Self_CashDiscount'
@@ -54,12 +54,49 @@ const TIER_LABELS = {
 // regardless of tier. TIER_LABELS above still supplies the display text.
 
 // Named export so /dev/portal-preview can render the card states in isolation
+const FIELD_LABELS = {
+  ownershipType: 'Business type',
+  taxClassType: 'Tax classification',
+  establishmentYear: 'Year established',
+  legalBusinessName: 'Legal business name',
+  federalEIN: 'EIN',
+  mailingStreet: 'Mailing street',
+  mailingCity: 'Mailing city',
+  mailingState: 'Mailing state',
+  mailingZip: 'Mailing ZIP',
+  dbaName: 'Doing-business-as name',
+  businessStreet: 'Street address',
+  businessCity: 'City',
+  businessState: 'State',
+  businessZip: 'ZIP',
+  mccCode: 'Business category',
+  industryType: 'Industry',
+  monthlyCardSales: 'Monthly card sales',
+  avgSaleAmount: 'Average sale',
+  highestTicketAmount: 'Highest ticket',
+  cardPresentPct: 'In-person card share',
+  internetPct: 'Online card share',
+  motoPct: 'Phone/mail card share',
+  businessWebsite: 'Website',
+  alcoholSalesPercentage: 'Alcohol sales %',
+};
+
+function humanizeFieldKey(key) {
+  if (FIELD_LABELS[key]) return FIELD_LABELS[key];
+  return String(key)
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
+    .replace(/^./, (c) => c.toUpperCase())
+    .trim();
+}
+
 export function MilestoneCard({ index, title, description, done, unlocked, ctaLabel, onCta, ctaDisabled, attention, attentionItems = [] }) {
+  const reduceMotion = useReducedMotion();
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={reduceMotion ? false : { opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ type: 'spring', stiffness: 150, damping: 20, delay: index * 0.05 }}
+      transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 150, damping: 20, delay: index * 0.05 }}
       className={`flex flex-col sm:flex-row sm:items-start gap-4 rounded-cb border px-5 py-4 transition-colors ${
         unlocked || done
           ? 'bg-cb-surface-raised border-cb-border hover:border-cb-border-strong'
@@ -84,7 +121,7 @@ export function MilestoneCard({ index, title, description, done, unlocked, ctaLa
               {attentionItems.slice(0, 5).map((it, i) => (
                 <li key={i} className="text-cb-body text-gray-400 flex items-start gap-2">
                   <span className="mt-1.5 w-1 h-1 rounded-full bg-cb-accent flex-shrink-0" />
-                  <span><span className="font-medium text-gray-300">{it.label}:</span> {it.missing.join(', ')}</span>
+                  <span><span className="font-medium text-gray-300">{it.label}:</span> {(it.missing || []).map(humanizeFieldKey).join(', ')}</span>
                 </li>
               ))}
               {attentionItems.length > 5 && (
@@ -514,7 +551,6 @@ export default function OnboardingPortal() {
 
   const handleRequestUnlock = async () => {
     if (!profile?.corporateId || unlocking) return;
-    if (!window.confirm(DEMOTE_CONFIRM_MESSAGE)) return;
     setUnlocking(true);
     try {
       const res = await invokePortalFunction('demoteApplication', {
@@ -522,8 +558,7 @@ export default function OnboardingPortal() {
         reason: 'Application demoted for modifications',
       });
       if (res.data?.error) {
-        window.alert(res.data.error);
-        return;
+        throw new Error(res.data.error);
       }
       const nextStatus = res.data?.profile?.applicationStatus || 'Incomplete';
       setProfile((prev) => ({
@@ -535,7 +570,9 @@ export default function OnboardingPortal() {
       goToStep(STEP_LOCATIONS);
     } catch (err) {
       console.error('[demoteApplication]', err);
-      window.alert(err?.message || 'Could not unlock the application. Please try again or contact support.');
+      throw err instanceof Error
+        ? err
+        : new Error(err?.message || 'Could not unlock the application. Please try again or contact support.');
     } finally {
       setUnlocking(false);
     }
@@ -614,21 +651,12 @@ export default function OnboardingPortal() {
       const attentionItems = readiness ? [
         ...readiness.entities.map(e => ({ label: e.name, missing: e.missing })),
         ...readiness.locations.map(l => ({ label: l.dbaName, missing: l.missing })),
-        ...readiness.mids.map(m => ({ label: `${m.dbaName} (store account)`, missing: m.missing })),
+        ...readiness.mids.map(m => ({ label: m.dbaName, missing: m.missing })),
       ] : [];
       const m2Done = !!allCompletedSteps.banking || hasBanking;
       const m3Done = applicationStatus === 'Submitted';
       const m2Unlocked = hasLocations;
       const m3Unlocked = m1Done && m2Done;
-      // Agents may open the post-signing dashboard before the merchant signs.
-      // Prefer live signals over React state alone (View sessions sometimes
-      // re-enter with portal_impersonating / imp JWT already set).
-      const agentSession = !!(
-        isImpersonating
-        || merchantTokenHasImp()
-        || (profile?.corporateId && sessionStorage.getItem('portal_impersonating') === String(profile.corporateId))
-      );
-      const m4Unlocked = m3Done || agentSession;
 
       return (
         <div className="px-6 sm:px-8 py-10 flex flex-col gap-8">
@@ -636,53 +664,55 @@ export default function OnboardingPortal() {
             <p className="text-cb-caption uppercase text-gray-500 mb-2">Your application</p>
             <h2 className="font-display text-cb-display text-white">{profile.legalName}</h2>
             <p className="text-cb-body-lg text-gray-400 mt-2 max-w-xl">
-              Work through each step below to finish KYC, banking, and signing — then submit for approval.
+              Work through Locations, Banking, and Sign & Submit — usually one sitting. Have your business details, bank account, and a photo ID ready.
             </p>
           </div>
 
           <div className="flex flex-col gap-3">
             <MilestoneCard
               index={1}
-              title="Complete Merchant Profile & Storefronts"
+              title="Locations"
               description={m1Attention
                 ? 'We prefilled what we could from your Cliqbux representative — a few details still need your input:'
-                : 'Review and confirm your legal entities, storefront locations, and store accounts.'}
+                : 'Confirm your legal entities, storefronts, and how each location takes cards.'}
               done={m1Done}
               attention={m1Attention}
               attentionItems={attentionItems}
               unlocked={true}
-              ctaLabel={m1Attention ? 'Finish Details' : 'Set up stores & accounts'}
+              ctaLabel={m1Attention ? 'Finish Details' : 'Set up locations'}
               onCta={() => goToStep(STEP_LOCATIONS)}
             />
             <MilestoneCard
               index={2}
-              title="Link Deposit Bank Account"
+              title="Banking"
               description="Connect or manually enter the bank account where your processing funds will deposit."
               done={m2Done}
               unlocked={m2Unlocked}
-              ctaLabel="Set Up Banking"
+              ctaLabel="Set up banking"
               onCta={() => goToStep(STEP_BANKING)}
             />
             <MilestoneCard
               index={3}
-              title="Verify Identity & Sign Merchant Agreement"
+              title="Sign & Submit"
               description="Verify signer identities, sign your merchant processing agreement, and submit for underwriting approval."
               done={m3Done}
               unlocked={m3Unlocked}
-              ctaLabel="Continue to Verification"
+              ctaLabel="Continue to signing"
               onCta={() => goToStep(STEP_VERIFICATION)}
             />
-            <MilestoneCard
-              index={4}
-              title="Review & Sign Equipment Quote"
-              description={agentSession && !m3Done
-                ? 'Agent preview — open the post-signing dashboard before the merchant finishes signing.'
-                : 'Your equipment and services order — signed on your dashboard after the merchant application is submitted.'}
-              done={quoteSigned}
-              unlocked={m4Unlocked}
-              ctaLabel={m3Done ? 'Open Dashboard' : (agentSession ? 'Preview Dashboard' : 'Open Dashboard')}
-              onCta={() => navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`)}
-            />
+            {/* Equipment is dashboard-only until Submitted (critique 2026-07-15).
+                Agents still reach the dashboard via the impersonation banner CTA. */}
+            {m3Done && (
+              <MilestoneCard
+                index={4}
+                title="Equipment"
+                description="Your equipment and services order — review and sign on the post-signing dashboard."
+                done={quoteSigned}
+                unlocked={true}
+                ctaLabel="Open Dashboard"
+                onCta={() => navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`)}
+              />
+            )}
           </div>
         </div>
       );
@@ -733,15 +763,29 @@ export default function OnboardingPortal() {
     );
   };
 
-  // Map internal step → tracker key
+  // Map internal step → tracker key. On the Welcome Hub, highlight the next
+  // incomplete merchant step so ProgressTracker matches the worklist.
   const stepToKey = { [STEP_LOCATIONS]: 'locations', [STEP_BANKING]: 'banking', [STEP_VERIFICATION]: 'verify' };
-  const currentTrackerStep = stepToKey[step] || 'locations';
-
   // 2026-07-10 flow reorder: the equipment quote is signed LAST (embedded on the
   // post-submission dashboard). 'Quote Signed' status = HubSpot esign came back
   // SIGNED via syncFromHubspot or the quote_signed webhook.
   const quoteSigned = applicationStatus === 'Quote Signed';
   const allCompletedSteps = { ...completedSteps, ...(quoteSigned ? { quote: true } : {}) };
+  const hasLocsForTracker = (locations?.length ?? 0) > 0;
+  const hasBankForTracker = hasLocsForTracker && locations.every((l) => l.bankDetails?.routingNumber);
+  const dataReadyForTracker = readiness ? readiness.complete : hasLocsForTracker;
+  let currentTrackerStep = stepToKey[step] || 'locations';
+  if (step === STEP_WELCOME) {
+    if (!(hasLocsForTracker && dataReadyForTracker)) currentTrackerStep = 'locations';
+    else if (!(completedSteps.banking || hasBankForTracker)) currentTrackerStep = 'banking';
+    else if (applicationStatus !== 'Submitted') currentTrackerStep = 'verify';
+    else currentTrackerStep = quoteSigned ? 'quote' : 'verify';
+  }
+
+  const reduceMotion = useReducedMotion();
+  const stepSpring = reduceMotion
+    ? { duration: 0 }
+    : { type: 'spring', stiffness: 150, damping: 20 };
 
   return (
     <PortalLockContext.Provider value={{
@@ -750,12 +794,13 @@ export default function OnboardingPortal() {
       onRequestUnlock: handleRequestUnlock,
       setPortalLockStatus: (status) => setProfile((prev) => (prev ? { ...prev, portalLockStatus: status } : prev)),
     }}>
-    <div className="portal-bg" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="portal-bg font-body">
       <TopNav
         applicationStatus={applicationStatus}
         currentStep={currentTrackerStep}
         completedSteps={allCompletedSteps}
         onNavigate={handleNavigate}
+        includeEquipment={applicationStatus === 'Submitted'}
       />
 
       {(isImpersonating || merchantTokenHasImp()) && profile?.corporateId && (
@@ -778,14 +823,14 @@ export default function OnboardingPortal() {
 
       <div className="pt-16 min-h-screen flex flex-col items-center justify-start px-4 py-10">
         {isImpersonating && (
-          <div className="w-full max-w-4xl mb-4 bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-accent text-gray-300 text-cb-body px-4 py-2.5 rounded-cb flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="w-full max-w-4xl mb-4 bg-cb-surface-raised border border-cb-border border-l border-l-cb-accent text-gray-300 text-cb-body px-4 py-2.5 rounded-cb flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <span>
               Impersonating merchant · Corp {profile.corporateId} · Saves write to the live record · session ~30 min
             </span>
             <button
               type="button"
               onClick={() => navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`)}
-              className="text-cb-caption font-semibold px-3 py-1.5 rounded-cb bg-cb-accent text-cb-bg hover:opacity-90 whitespace-nowrap self-start sm:self-auto"
+              className="text-cb-caption font-semibold px-3 py-1.5 rounded-cb bg-cb-accent text-cb-bg hover:opacity-90 whitespace-nowrap self-start sm:self-auto min-h-11"
             >
               Post-signing dashboard
             </button>
@@ -851,10 +896,10 @@ export default function OnboardingPortal() {
             <motion.div
               key={step}
               custom={stepDir}
-              initial={(dir) => ({ opacity: 0, x: dir * 24 })}
+              initial={reduceMotion ? false : (dir) => ({ opacity: 0, x: dir * 24 })}
               animate={{ opacity: 1, x: 0 }}
-              exit={(dir) => ({ opacity: 0, x: dir * -24 })}
-              transition={{ type: 'spring', stiffness: 150, damping: 20 }}
+              exit={reduceMotion ? undefined : (dir) => ({ opacity: 0, x: dir * -24 })}
+              transition={stepSpring}
             >
               {renderStep()}
             </motion.div>

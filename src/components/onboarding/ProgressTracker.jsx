@@ -1,39 +1,51 @@
 import { Check } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 
 // Motion communicates state — same spring everywhere in this file.
 const SPRING = { type: 'spring', stiffness: 150, damping: 20 };
 
 // 2026-07-10 flow reorder: data entry and the merchant agreement come first;
 // the equipment quote is signed LAST (on the post-submission dashboard).
-const STEPS = [
+const CORE_STEPS = [
   { id: 1, label: 'Locations',      key: 'locations' },
   { id: 2, label: 'Banking',        key: 'banking'   },
   { id: 3, label: 'Sign & Submit',  key: 'verify'    },
-  { id: 4, label: 'Equipment',      key: 'quote'     },
 ];
 
-export default function ProgressTracker({ currentStep, completedSteps = {}, onNavigate }) {
-  // Map step key → index (0-based)
-  const keyToIdx = { locations: 0, banking: 1, verify: 2, quote: 3 };
-  const activeIdx = keyToIdx[currentStep] ?? 0;
+const EQUIPMENT_STEP = { id: 4, label: 'Equipment', key: 'quote' };
+
+export default function ProgressTracker({
+  currentStep,
+  completedSteps = {},
+  onNavigate,
+  includeEquipment = false,
+}) {
+  const reduceMotion = useReducedMotion();
+  const transition = reduceMotion ? { duration: 0 } : SPRING;
+  const STEPS = includeEquipment ? [...CORE_STEPS, EQUIPMENT_STEP] : CORE_STEPS;
+  // Map step key → index (0-based) within the visible step list
+  const keyToIdx = Object.fromEntries(STEPS.map((s, i) => [s.key, i]));
+  // If Equipment is hidden but currentStep is quote, fall back to Sign & Submit
+  const activeIdx = keyToIdx[currentStep] ?? (currentStep === 'quote' ? STEPS.length - 1 : 0);
   const completedCount = STEPS.filter(s => completedSteps[s.key]).length;
   const progressPct = Math.max(completedCount, activeIdx + 0.5) / STEPS.length * 100;
+  const activeLabel = STEPS[activeIdx]?.label || 'Locations';
 
   return (
     <>
-      {/* Compact mobile variant — "Step N of 4" with a mini progress capsule */}
+      {/* Compact mobile variant — named step + progress capsule */}
       <div className="flex sm:hidden items-center gap-2.5">
         <div className="flex flex-col items-end gap-1">
-          <span className="text-cb-caption uppercase text-gray-500">
-            Step {activeIdx + 1} of {STEPS.length}
+          <span className="text-cb-caption normal-case tracking-normal font-medium text-white">
+            {activeLabel}
+            <span className="text-gray-500 font-normal"> · {activeIdx + 1}/{STEPS.length}</span>
           </span>
           <div className="w-20 h-1 rounded-full bg-cb-bg overflow-hidden border border-cb-border">
             <motion.div
               className="h-full rounded-full bg-cb-accent"
               initial={false}
               animate={{ width: `${progressPct}%` }}
-              transition={SPRING}
+              transition={transition}
             />
           </div>
         </div>
@@ -60,37 +72,37 @@ export default function ProgressTracker({ currentStep, completedSteps = {}, onNa
           else labelClass = 'text-gray-600';
 
           return (
-            <div key={step.id} className="flex items-center">
+            <div key={step.key} className="flex items-center">
               <button
                 onClick={() => canClick && onNavigate(step.key)}
                 disabled={!canClick}
-                className={`group relative flex flex-col items-center gap-1.5 ${canClick ? 'cursor-pointer' : 'cursor-default'}`}
+                className={`group relative flex flex-col items-center gap-1.5 min-h-11 ${canClick ? 'cursor-pointer' : 'cursor-default'}`}
                 title={canClick ? `Go to ${step.label}` : step.label}
               >
                 {/* Gold capsule — single shared layoutId glides under the active step */}
                 {isActive && (
                   <motion.div
-                    layoutId="cb-progress-capsule"
+                    layoutId={reduceMotion ? undefined : 'cb-progress-capsule'}
                     className="absolute -top-1 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full bg-cb-accent-muted border border-cb-accent/35 pointer-events-none"
-                    transition={SPRING}
+                    transition={transition}
                   />
                 )}
                 <motion.div
                   className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-cb-body font-semibold ${circleClass}`}
-                  whileTap={canClick ? { scale: 0.94 } : undefined}
-                  transition={SPRING}
+                  whileTap={!reduceMotion && canClick ? { scale: 0.94 } : undefined}
+                  transition={transition}
                 >
                   {isComplete ? (
                     <motion.span
-                      initial={{ scale: 0.6, opacity: 0 }}
+                      initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
-                      transition={SPRING}
+                      transition={transition}
                       className="flex"
                     >
                       <Check className="w-4 h-4" strokeWidth={3} />
                     </motion.span>
                   ) : (
-                    <span>{step.id}</span>
+                    <span>{idx + 1}</span>
                   )}
                 </motion.div>
                 <span className={`relative z-10 text-cb-caption normal-case tracking-normal font-medium whitespace-nowrap transition-colors duration-200 ${labelClass} ${canClick ? 'group-hover:text-white' : ''}`}>
@@ -103,7 +115,7 @@ export default function ProgressTracker({ currentStep, completedSteps = {}, onNa
                     className="absolute inset-y-0 left-0 bg-cb-accent"
                     initial={false}
                     animate={{ width: isComplete ? '100%' : '0%' }}
-                    transition={SPRING}
+                    transition={transition}
                   />
                 </div>
               )}

@@ -62,7 +62,7 @@ export default function ApplicationTracker({ currentStatus = 'DRAFT' }) {
         </div>
 
         {isHold && (
-          <div className="mt-6 flex items-start gap-3 rounded-cb border border-cb-border border-l-2 border-l-cb-accent bg-cb-bg px-4 py-3.5">
+          <div className="mt-6 flex items-start gap-3 rounded-cb border border-cb-border border-l border-l-cb-accent bg-cb-bg px-4 py-3.5">
             <AlertTriangle className="h-4 w-4 text-cb-accent flex-shrink-0 mt-0.5" />
             <div>
               <p className="text-cb-body font-medium text-white">Action Required</p>

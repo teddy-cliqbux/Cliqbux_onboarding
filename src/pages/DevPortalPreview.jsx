@@ -249,7 +249,7 @@ export default function DevPortalPreview() {
           <div className="portal-card p-6 flex flex-col gap-6">
             <ProgressTracker currentStep="locations" completedSteps={{}} onNavigate={noop} />
             <ProgressTracker currentStep="banking" completedSteps={{ locations: true }} onNavigate={noop} />
-            <ProgressTracker currentStep="quote" completedSteps={{ locations: true, banking: true, verify: true }} onNavigate={noop} />
+            <ProgressTracker currentStep="quote" completedSteps={{ locations: true, banking: true, verify: true }} onNavigate={noop} includeEquipment />
           </div>
         </div>
 
@@ -265,7 +265,7 @@ export default function DevPortalPreview() {
             <MilestoneCard index={1} title="Complete Merchant Profile & Storefronts" description="Review and confirm your legal entities, storefront locations, and Merchant IDs." done unlocked ctaLabel="Review" onCta={noop} />
             <MilestoneCard index={2} title="Link Deposit Bank Account" description="Connect or manually enter the bank account where your processing funds will deposit." unlocked ctaLabel="Set Up Banking" onCta={noop} />
             <MilestoneCard index={2} title="Complete Merchant Profile & Storefronts" description="We prefilled what we could — a few details still need your input:" unlocked attention attentionItems={[{ label: 'Northside Hospitality Inc', missing: ['Business Entity Type', 'Federal EIN'] }]} ctaLabel="Finish Details" onCta={noop} />
-            <MilestoneCard index={3} title="Verify Identity & Sign Merchant Agreement" description="Verify signer identities and sign your merchant processing agreement." unlocked={false} ctaLabel="Continue to Verification" onCta={noop} />
+            <MilestoneCard index={3} title="Sign & Submit" description="Verify signer identities and sign your merchant processing agreement." unlocked={false} ctaLabel="Continue to signing" onCta={noop} />
           </div>
         </div>
 

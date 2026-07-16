@@ -19,7 +19,7 @@ import {
   merchantTokenHasImp,
 } from '@/lib/merchantAuthFetch';
 import FormsLockedBanner from '@/components/onboarding/FormsLockedBanner';
-import { isPortalFormsLocked, DEMOTE_CONFIRM_MESSAGE } from '@/lib/portalLock';
+import { isPortalFormsLocked } from '@/lib/portalLock';
 
 const QUOTE_POLL_MS = 10_000;
 
@@ -310,7 +310,6 @@ export default function PostSubmissionDashboard() {
               unlocking={unlocking}
               onUnlock={async () => {
                 if (!profile?.corporateId || unlocking) return;
-                if (!window.confirm(DEMOTE_CONFIRM_MESSAGE)) return;
                 setUnlocking(true);
                 try {
                   const res = await invokePortalFunction('demoteApplication', {
@@ -318,12 +317,13 @@ export default function PostSubmissionDashboard() {
                     reason: 'Application demoted for modifications',
                   });
                   if (res.data?.error) {
-                    window.alert(res.data.error);
-                    return;
+                    throw new Error(res.data.error);
                   }
                   navigate(`/?dealId=${encodeURIComponent(profile.corporateId)}`, { replace: true });
                 } catch (err) {
-                  window.alert(err?.message || 'Could not unlock the application.');
+                  throw err instanceof Error
+                    ? err
+                    : new Error(err?.message || 'Could not unlock the application.');
                 } finally {
                   setUnlocking(false);
                 }

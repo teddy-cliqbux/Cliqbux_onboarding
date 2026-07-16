@@ -1,34 +1,85 @@
+import { useState } from 'react';
 import { Lock } from 'lucide-react';
-import { FORMS_LOCKED_MESSAGE, portalLockLabel } from '@/lib/portalLock';
+import { FORMS_LOCKED_MESSAGE, DEMOTE_CONFIRM_MESSAGE, portalLockLabel } from '@/lib/portalLock';
 
 /**
  * Quiet lock banner shown above locked portal steps.
- * Primary CTA is Unlock & Modify Details (parent supplies onUnlock).
+ * Unlock uses an in-banner confirm (no window.confirm / alert) — critique 2026-07-15.
+ * Parent onUnlock should perform demoteApplication and throw/return an Error on failure.
  */
-export default function FormsLockedBanner({ profile, onUnlock, unlocking = false, canUnlock = true }) {
+export default function FormsLockedBanner({
+  profile,
+  onUnlock,
+  unlocking = false,
+  canUnlock = true,
+  confirmMessage = DEMOTE_CONFIRM_MESSAGE,
+}) {
   const label = portalLockLabel(profile);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleConfirmUnlock = async () => {
+    if (!onUnlock || unlocking) return;
+    setError(null);
+    try {
+      await onUnlock();
+      setConfirming(false);
+    } catch (err) {
+      setError(err?.message || 'Could not unlock the application. Please try again or contact support.');
+    }
+  };
+
   return (
-    <div className="rounded-cb border border-cb-border bg-cb-bg px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
-      <div className="flex items-start gap-3 min-w-0">
-        <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-cb-accent-muted text-cb-accent">
-          <Lock className="w-3.5 h-3.5" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-cb-body font-medium text-white">Forms locked ({label})</p>
-          <p className="text-cb-caption normal-case tracking-normal text-gray-500 mt-0.5">
-            {FORMS_LOCKED_MESSAGE}
-          </p>
+    <div className="rounded-cb border border-cb-border bg-cb-bg px-4 py-3 flex flex-col gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
+        <div className="flex items-start gap-3 min-w-0">
+          <span className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-cb-accent-muted text-cb-accent">
+            <Lock className="w-3.5 h-3.5" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-cb-body font-medium text-white">Forms locked ({label})</p>
+            <p className="text-cb-caption normal-case tracking-normal text-gray-500 mt-0.5">
+              {FORMS_LOCKED_MESSAGE}
+            </p>
+          </div>
         </div>
+        {canUnlock && onUnlock && !confirming && (
+          <button
+            type="button"
+            onClick={() => { setError(null); setConfirming(true); }}
+            disabled={unlocking}
+            className="flex-shrink-0 min-h-11 px-4 py-2 rounded-cb bg-cb-accent text-cb-bg text-cb-body font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+          >
+            Unlock & Modify Details
+          </button>
+        )}
       </div>
-      {canUnlock && onUnlock && (
-        <button
-          type="button"
-          onClick={onUnlock}
-          disabled={unlocking}
-          className="flex-shrink-0 px-4 py-2 rounded-cb bg-cb-accent text-cb-bg text-cb-body font-semibold hover:brightness-110 disabled:opacity-50 transition-all"
-        >
-          {unlocking ? 'Unlocking…' : 'Unlock & Modify Details'}
-        </button>
+
+      {confirming && (
+        <div className="rounded-cb border border-cb-border border-l-cb-accent bg-cb-surface-raised px-4 py-3 space-y-3">
+          <p className="text-cb-body text-gray-300">{confirmMessage}</p>
+          {error && (
+            <p className="text-cb-body text-cb-danger" role="alert">{error}</p>
+          )}
+          <div className="flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+            <button
+              type="button"
+              onClick={() => { setConfirming(false); setError(null); }}
+              disabled={unlocking}
+              className="min-h-11 px-4 py-2 rounded-cb border border-cb-border text-cb-body text-gray-300 hover:text-white hover:border-cb-border-strong transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmUnlock}
+              disabled={unlocking}
+              className="min-h-11 px-4 py-2 rounded-cb bg-cb-accent text-cb-bg text-cb-body font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {unlocking ? 'Unlocking…' : 'Yes, unlock'}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
