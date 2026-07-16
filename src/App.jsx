@@ -10,6 +10,10 @@ import VerifyIdentity from './pages/VerifyIdentity';
 import PostSubmissionDashboard from './pages/PostSubmissionDashboard';
 import SystemAdminHidden from './pages/SystemAdminHidden';
 import ApplicationManager from './pages/ApplicationManager';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import DevTrackerPreview from './pages/DevTrackerPreview';
 import DevSignerPreview from './pages/DevSignerPreview';
 import DevPortalPreview from './pages/DevPortalPreview';
@@ -26,6 +30,13 @@ function App() {
             <Route path="/onboarding/dashboard" element={<PostSubmissionDashboard />} />
             <Route path="/admin/architecture" element={<SystemAdminHidden />} />
             <Route path="/admin/applications" element={<ApplicationManager />} />
+            {/* Auth pages — required when base44.auth.redirectToLogin() lands on /login
+                (e.g. agent opens /?corporateId= without a workspace session). Without
+                these routes the SPA catch-all rendered a blank/404 "login" page. */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             {import.meta.env.DEV && (
               <>
                 <Route path="/dev/tracker-preview" element={<DevTrackerPreview />} />

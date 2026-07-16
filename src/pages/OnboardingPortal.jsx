@@ -263,15 +263,18 @@ export default function OnboardingPortal() {
       setMode('sales');
       setDealId(id);
     } catch {
-      // No merchant token and no workspace session — wipe state and redirect
-      // to Base44's hosted login, returning here afterward if they sign in.
+      // No merchant token and no workspace session. Agents sign in via /login
+      // (wired in App.jsx — previously missing, which made this path a blank/404).
+      // Merchants should use their email invite link, not a bare corporateId URL.
       setProfile(null);
       setLocations([]);
       setDealId(null);
       setMode(null);
       clearMerchantToken();
       sessionStorage.removeItem('portal_impersonating');
-      base44.auth.redirectToLogin(window.location.href);
+      setLoading(false);
+      const from = encodeURIComponent(window.location.href);
+      window.location.replace(`/login?from_url=${from}`);
     }
   };
 
@@ -649,9 +652,9 @@ export default function OnboardingPortal() {
       const m1Done = hasLocations && dataReady;
       const m1Attention = hasLocations && !dataReady;
       const attentionItems = readiness ? [
-        ...readiness.entities.map(e => ({ label: e.name, missing: e.missing })),
-        ...readiness.locations.map(l => ({ label: l.dbaName, missing: l.missing })),
-        ...readiness.mids.map(m => ({ label: m.dbaName, missing: m.missing })),
+        ...(readiness.entities || []).map(e => ({ label: e.name, missing: e.missing })),
+        ...(readiness.locations || []).map(l => ({ label: l.dbaName, missing: l.missing })),
+        ...(readiness.mids || []).map(m => ({ label: m.dbaName, missing: m.missing })),
       ] : [];
       const m2Done = !!allCompletedSteps.banking || hasBanking;
       const m3Done = applicationStatus === 'Submitted';

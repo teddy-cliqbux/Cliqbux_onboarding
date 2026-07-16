@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,20 @@ import { LogIn, Mail, Lock, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 
+/** Only allow same-origin relative paths or our own app origin (open-redirect safe). */
+function safeReturnUrl(raw) {
+  if (!raw || typeof raw !== "string") return "/";
+  try {
+    if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+    const u = new URL(raw);
+    if (u.origin === window.location.origin) return u.pathname + u.search + u.hash;
+  } catch { /* ignore */ }
+  return "/";
+}
+
 export default function Login() {
+  const [searchParams] = useSearchParams();
+  const returnTo = safeReturnUrl(searchParams.get("from_url") || searchParams.get("returnTo"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -20,7 +33,7 @@ export default function Login() {
     setLoading(true);
     try {
       await base44.auth.loginViaEmailPassword(email, password);
-      window.location.href = "/";
+      window.location.href = returnTo;
     } catch (err) {
       setError(err.message || "Invalid email or password");
     } finally {
@@ -29,7 +42,7 @@ export default function Login() {
   };
 
   const handleGoogle = () => {
-    base44.auth.loginWithProvider("google", "/");
+    base44.auth.loginWithProvider("google", returnTo);
   };
 
   return (

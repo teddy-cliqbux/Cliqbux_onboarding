@@ -1837,3 +1837,20 @@ Dual-agent critique after the UX pass: **28/40 (up from 22)**, detector clean, z
 
 **? Waiting on:** Teddy ? push via GitHub Desktop, republish MerchantMID schema in Base44, redeploy the 3 functions.
 ---
+
+---
+**[CURSOR]** ? 2026-07-16
+**Type:** Bug Fix
+**Re:** White / blank page on `/?corporateId=?` merchant view
+
+### Root cause
+Opening `/?corporateId=` without a merchant JWT calls `base44.auth.me()`. On failure the portal redirected to `/login` ? but **Login / Register / Forgot / Reset were never registered in `App.jsx`**, so React's catch-all rendered Page Not Found for `"login"` (or a blank dead-end). Reproduced live: URL became `/login?from_url=?` with 404 for page "login".
+
+### Fix
+1. Wired `/login`, `/register`, `/forgot-password`, `/reset-password` in `App.jsx`
+2. Login now returns to `from_url` after sign-in (same-origin only)
+3. Direct-access catch uses `/login?from_url=` explicitly and clears loading
+4. Welcome Hub readiness maps use `(readiness.entities || [])` etc. so a partial readiness payload can't white-screen the portal
+
+**? Waiting on:** Teddy ? push via GitHub Desktop. Then open the Porky's URL again: you should see the login form; after workspace sign-in you'll land back on the merchant portal. For true merchant (no Base44 login), use the Applications **View** impersonate link or the merchant's magic resume link.
+---
