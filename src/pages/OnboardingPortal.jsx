@@ -13,7 +13,6 @@ import OnboardingVerification from './OnboardingVerification';
 // OnboardingSummary import removed — the summary step was retired 2026-07-10
 import MobilePricing from '@/components/onboarding/MobilePricing';
 import PortalEntry from '@/components/onboarding/PortalEntry';
-import ApplicationTracker from '@/components/onboarding/ApplicationTracker';
 import { Lock, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import AgentPricingBubble from '@/components/pricing/AgentPricingBubble';
@@ -61,42 +60,44 @@ export function MilestoneCard({ index, title, description, done, unlocked, ctaLa
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 150, damping: 20, delay: index * 0.05 }}
-      className={`flex items-start gap-4 rounded-cb border px-5 py-4 transition-colors ${
+      className={`flex flex-col sm:flex-row sm:items-start gap-4 rounded-cb border px-5 py-4 transition-colors ${
         unlocked || done
           ? 'bg-cb-surface-raised border-cb-border hover:border-cb-border-strong'
           : 'bg-cb-surface-raised border-cb-border opacity-55'
       }`}
     >
-      <div
-        className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-cb-body font-semibold ${
-          done ? 'bg-cb-success text-cb-bg' : attention ? 'bg-cb-accent text-cb-bg' : unlocked ? 'bg-cb-accent-muted text-cb-accent border border-cb-accent/40' : 'bg-cb-bg text-gray-600 border border-cb-border'
-        }`}
-      >
-        {done ? <Check className="w-4 h-4" strokeWidth={3} /> : unlocked ? index : <Lock className="w-3.5 h-3.5" />}
+      <div className="flex items-start gap-4 min-w-0 flex-1">
+        <div
+          className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-cb-body font-semibold ${
+            done ? 'bg-cb-success text-cb-bg' : attention ? 'bg-cb-accent text-cb-bg' : unlocked ? 'bg-cb-accent-muted text-cb-accent border border-cb-accent/40' : 'bg-cb-bg text-gray-600 border border-cb-border'
+          }`}
+        >
+          {done ? <Check className="w-4 h-4" strokeWidth={3} /> : unlocked ? index : <Lock className="w-3.5 h-3.5" />}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <h3 className={`text-cb-body font-semibold ${unlocked || done ? 'text-white' : 'text-gray-500'}`}>{title}</h3>
+          <p className={`text-cb-body mt-0.5 ${unlocked || done ? 'text-gray-400' : 'text-gray-600'}`}>{description}</p>
+          {/* Per-record list of what the applicant still needs to fill in */}
+          {attention && attentionItems.length > 0 && (
+            <ul className="mt-2.5 flex flex-col gap-1.5">
+              {attentionItems.slice(0, 5).map((it, i) => (
+                <li key={i} className="text-cb-body text-gray-400 flex items-start gap-2">
+                  <span className="mt-1.5 w-1 h-1 rounded-full bg-cb-accent flex-shrink-0" />
+                  <span><span className="font-medium text-gray-300">{it.label}:</span> {it.missing.join(', ')}</span>
+                </li>
+              ))}
+              {attentionItems.length > 5 && (
+                <li className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 pl-3">…and {attentionItems.length - 5} more</li>
+              )}
+            </ul>
+          )}
+        </div>
       </div>
 
-      <div className="flex-1 min-w-0">
-        <h3 className={`text-cb-body font-semibold ${unlocked || done ? 'text-white' : 'text-gray-500'}`}>{title}</h3>
-        <p className={`text-cb-body mt-0.5 ${unlocked || done ? 'text-gray-400' : 'text-gray-600'}`}>{description}</p>
-        {/* Per-record list of what the applicant still needs to fill in */}
-        {attention && attentionItems.length > 0 && (
-          <ul className="mt-2.5 flex flex-col gap-1.5">
-            {attentionItems.slice(0, 5).map((it, i) => (
-              <li key={i} className="text-cb-body text-gray-400 flex items-start gap-2">
-                <span className="mt-1.5 w-1 h-1 rounded-full bg-cb-accent flex-shrink-0" />
-                <span><span className="font-medium text-gray-300">{it.label}:</span> {it.missing.join(', ')}</span>
-              </li>
-            ))}
-            {attentionItems.length > 5 && (
-              <li className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 pl-3">…and {attentionItems.length - 5} more</li>
-            )}
-          </ul>
-        )}
-      </div>
-
-      <div className="flex-shrink-0">
+      <div className="flex-shrink-0 w-full sm:w-auto sm:self-center">
         {done ? (
-          <span className="inline-flex items-center gap-2.5">
+          <span className="inline-flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
             <span className="inline-flex items-center gap-1.5 text-cb-caption normal-case tracking-normal text-gray-400">
               <Check className="w-3.5 h-3.5 text-cb-success" strokeWidth={3} /> Complete
             </span>
@@ -113,7 +114,7 @@ export function MilestoneCard({ index, title, description, done, unlocked, ctaLa
           <button
             onClick={onCta}
             disabled={!unlocked || ctaDisabled}
-            className="text-cb-body font-semibold px-4 py-2 rounded-cb transition-colors bg-cb-accent hover:opacity-90 text-cb-bg disabled:bg-cb-bg disabled:text-gray-600 disabled:border disabled:border-cb-border disabled:cursor-not-allowed"
+            className="w-full sm:w-auto text-cb-body font-semibold px-4 py-2.5 sm:py-2 rounded-cb transition-colors bg-cb-accent hover:opacity-90 text-cb-bg disabled:bg-cb-bg disabled:text-gray-600 disabled:border disabled:border-cb-border disabled:cursor-not-allowed"
           >
             {ctaLabel}
           </button>
@@ -613,7 +614,7 @@ export default function OnboardingPortal() {
       const attentionItems = readiness ? [
         ...readiness.entities.map(e => ({ label: e.name, missing: e.missing })),
         ...readiness.locations.map(l => ({ label: l.dbaName, missing: l.missing })),
-        ...readiness.mids.map(m => ({ label: `${m.dbaName} (Merchant ID)`, missing: m.missing })),
+        ...readiness.mids.map(m => ({ label: `${m.dbaName} (store account)`, missing: m.missing })),
       ] : [];
       const m2Done = !!allCompletedSteps.banking || hasBanking;
       const m3Done = applicationStatus === 'Submitted';
@@ -632,14 +633,12 @@ export default function OnboardingPortal() {
       return (
         <div className="px-6 sm:px-8 py-10 flex flex-col gap-8">
           <div>
-            <p className="text-cb-caption uppercase text-gray-500 mb-2">Welcome back</p>
+            <p className="text-cb-caption uppercase text-gray-500 mb-2">Your application</p>
             <h2 className="font-display text-cb-display text-white">{profile.legalName}</h2>
             <p className="text-cb-body-lg text-gray-400 mt-2 max-w-xl">
-              Here's where things stand with your Cliqbux onboarding. Work through each milestone below to get processing.
+              Work through each step below to finish KYC, banking, and signing — then submit for approval.
             </p>
           </div>
-
-          <ApplicationTracker currentStatus={applicationStatus === 'Submitted' ? 'SUBMITTED' : 'DRAFT'} />
 
           <div className="flex flex-col gap-3">
             <MilestoneCard
@@ -647,12 +646,12 @@ export default function OnboardingPortal() {
               title="Complete Merchant Profile & Storefronts"
               description={m1Attention
                 ? 'We prefilled what we could from your Cliqbux representative — a few details still need your input:'
-                : 'Review and confirm your legal entities, storefront locations, and Merchant IDs.'}
+                : 'Review and confirm your legal entities, storefront locations, and store accounts.'}
               done={m1Done}
               attention={m1Attention}
               attentionItems={attentionItems}
               unlocked={true}
-              ctaLabel={m1Attention ? 'Finish Details' : 'Configure Locations & MIDs'}
+              ctaLabel={m1Attention ? 'Finish Details' : 'Set up stores & accounts'}
               onCta={() => goToStep(STEP_LOCATIONS)}
             />
             <MilestoneCard
@@ -792,44 +791,49 @@ export default function OnboardingPortal() {
             </button>
           </div>
         )}
-        {/* Merchant greeting */}
-        <div className="w-full max-w-4xl mb-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div>
-              <p className="text-cb-caption uppercase text-gray-500 mb-1">Welcome</p>
-              <h1 className="font-display text-cb-title text-white">{profile.legalName}</h1>
-              <p className="text-cb-body text-gray-500 mt-0.5">{profile.signerEmail}</p>
-            </div>
-            <div className="flex flex-col items-end gap-1.5">
-              {pricingTier && (
-                <span className="text-cb-caption normal-case tracking-normal font-medium text-gray-300 border border-cb-border px-3 py-1 rounded-full">
-                  {pricingTierLabel} Plan
-                </span>
-              )}
-              {isImpersonating && (profile.customMarkupPercentage != null || profile.customPerTxFee != null) && (
-                <span className="text-cb-caption text-gray-500">
-                  {[
-                    profile.customMarkupPercentage != null && Number.isFinite(Number(profile.customMarkupPercentage))
-                      ? `${Number(profile.customMarkupPercentage)}%`
-                      : null,
-                    profile.customPerTxFee != null && Number.isFinite(Number(profile.customPerTxFee))
-                      ? `$${Number(profile.customPerTxFee).toFixed(2)}/txn`
-                      : null,
-                    profile.customAuthPerCard != null && Number.isFinite(Number(profile.customAuthPerCard))
-                      ? `$${Number(profile.customAuthPerCard).toFixed(2)} auth`
-                      : null,
-                  ].filter(Boolean).join(' · ')}
-                </span>
-              )}
-              {isSelfServe && (
-                <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
-                  Self-Serve
-                </span>
-              )}
-              <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-600 font-mono">ID: {profile.corporateId}</span>
+        {/* Merchant greeting — hidden on Welcome Hub (card has its own header).
+            Corp ID is agent-only (critique 2026-07-15: ops chrome on merchant hub). */}
+        {step !== STEP_WELCOME && (
+          <div className="w-full max-w-4xl mb-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <p className="text-cb-caption uppercase text-gray-500 mb-1">Welcome</p>
+                <h1 className="font-display text-cb-title text-white">{profile.legalName}</h1>
+                <p className="text-cb-body text-gray-500 mt-0.5">{profile.signerEmail}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1.5">
+                {pricingTier && (
+                  <span className="text-cb-caption normal-case tracking-normal font-medium text-gray-300 border border-cb-border px-3 py-1 rounded-full">
+                    {pricingTierLabel} Plan
+                  </span>
+                )}
+                {isImpersonating && (profile.customMarkupPercentage != null || profile.customPerTxFee != null) && (
+                  <span className="text-cb-caption text-gray-500">
+                    {[
+                      profile.customMarkupPercentage != null && Number.isFinite(Number(profile.customMarkupPercentage))
+                        ? `${Number(profile.customMarkupPercentage)}%`
+                        : null,
+                      profile.customPerTxFee != null && Number.isFinite(Number(profile.customPerTxFee))
+                        ? `$${Number(profile.customPerTxFee).toFixed(2)}/txn`
+                        : null,
+                      profile.customAuthPerCard != null && Number.isFinite(Number(profile.customAuthPerCard))
+                        ? `$${Number(profile.customAuthPerCard).toFixed(2)} auth`
+                        : null,
+                    ].filter(Boolean).join(' · ')}
+                  </span>
+                )}
+                {isSelfServe && (
+                  <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
+                    Self-Serve
+                  </span>
+                )}
+                {isImpersonating && (
+                  <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-600 font-mono">ID: {profile.corporateId}</span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {formsLocked && (
           <div className="w-full max-w-4xl mb-4">

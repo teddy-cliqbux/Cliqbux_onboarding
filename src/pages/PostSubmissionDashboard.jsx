@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
 import UnderwritingTracker from '@/components/onboarding/UnderwritingTracker';
+import ApplicationTracker from '@/components/onboarding/ApplicationTracker';
 import EquipmentShippingModal from '@/components/onboarding/EquipmentShippingModal';
 import EquipmentOrderPanel from '@/components/onboarding/EquipmentOrderPanel';
 import InventoryUpload from '@/components/onboarding/InventoryUpload';
@@ -331,6 +332,9 @@ export default function PostSubmissionDashboard() {
           )}
 
           {merchantIDs.length > 0 && <UnderwritingTracker locations={locations} merchantIDs={merchantIDs} />}
+
+          {/* Underwriting pipeline — post-submit only (moved off Welcome Hub 2026-07-15) */}
+          <ApplicationTracker currentStatus="SUBMITTED" />
 
           <div>
             <h2 className="text-cb-caption uppercase text-gray-400 mb-4">Complete Your Setup</h2>

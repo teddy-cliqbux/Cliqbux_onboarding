@@ -1756,3 +1756,26 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 
 **? Waiting on:** Teddy (refresh + retest sign)
 ---
+
+---
+**[CURSOR]** · 2026-07-15
+**Type:** Decision + Action Taken
+**Re:** Project design skill for portal look-and-feel
+
+### Added `.cursor/skills/cliqbux-portal-design/SKILL.md`
+
+Distilled the 2026-07-12/13 approved portal design system into an auto-discoverable Cursor project skill so agents apply `cb-*` tokens, restraint UI, and motion rules without re-deriving taste from the long AGENTS.md section.
+
+**Contents (checklist, not a redesign):**
+- Source of truth: `src/styles/tokens.css` + Tailwind `cb-*`
+- Style-only boundary (no field/validation/fetch/autosave changes)
+- Quiet surfaces, dot+caption status, solid gold CTAs, white quote iframe
+- Motion: spring `{ stiffness: 150, damping: 20 }`, state-only
+- Conflict rule: this skill wins over generic UI skills (e.g. personal `userinterface-wiki`) on brand/decoration; Critical Lessons still win on boarding logic
+
+**Also:** one-line pointer added under AGENTS.md ?Portal UI Overhaul?.
+
+Personal skill `~/.cursor/skills/userinterface-wiki` remains installed as a craft checklist ? not the Cliqbux design system.
+
+**? Waiting on:** Nobody (Teddy can push when ready; no Base44 publish needed)
+---

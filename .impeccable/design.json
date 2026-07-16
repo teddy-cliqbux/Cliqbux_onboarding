@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-16T05:30:00.000Z",
+  "title": "Design System: Cliqbux E-Onboarding",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Cliqbux Gold",
+        "canonical": "#FEAC27",
+        "cssVar": "--cb-accent",
+        "tonalRamp": ["#3D2A0A", "#6B4A12", "#9A6B1A", "#C98C22", "#FEAC27", "#FFC45C", "#FFD88F", "#FFEBC2"]
+      },
+      "accent-muted": {
+        "role": "primary",
+        "displayName": "Gold Tint",
+        "canonical": "rgba(254, 172, 39, 0.14)",
+        "cssVar": "--cb-accent-muted",
+        "tonalRamp": ["#FEAC2714", "#FEAC2724", "#FEAC2733", "#FEAC2747"]
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "Ink Charcoal",
+        "canonical": "#0E1319",
+        "cssVar": "--cb-bg",
+        "tonalRamp": ["#070A0D", "#0E1319", "#161C26", "#1A212C", "#242B36", "#3A4250", "#8B93A1", "#E8EAEE"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Slate Panel",
+        "canonical": "#161C26",
+        "cssVar": "--cb-surface",
+        "tonalRamp": ["#0E1319", "#161C26", "#1A212C", "#222A36"]
+      },
+      "surface-raised": {
+        "role": "neutral",
+        "displayName": "Raised Slate",
+        "canonical": "#1A212C",
+        "cssVar": "--cb-surface-raised",
+        "tonalRamp": ["#161C26", "#1A212C", "#222A36", "#2A3340"]
+      },
+      "success": {
+        "role": "semantic",
+        "displayName": "Success",
+        "canonical": "#4ADE80",
+        "cssVar": "--cb-success",
+        "tonalRamp": ["#14532D", "#166534", "#22C55E", "#4ADE80", "#86EFAC", "#BBF7D0"]
+      },
+      "danger": {
+        "role": "semantic",
+        "displayName": "Danger",
+        "canonical": "#F87171",
+        "cssVar": "--cb-danger",
+        "tonalRamp": ["#7F1D1D", "#B91C1C", "#EF4444", "#F87171", "#FCA5A5", "#FECACA"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page headline only (Poppins)." },
+      "title": { "displayName": "Title", "purpose": "Section and entity headings (Poppins)." },
+      "body-lg": { "displayName": "Body LG", "purpose": "Lead paragraphs under page titles." },
+      "body": { "displayName": "Body", "purpose": "Default UI text and controls." },
+      "caption": { "displayName": "Caption", "purpose": "Uppercase labels and field captions." }
+    },
+    "shadows": [
+      {
+        "name": "raised",
+        "value": "0 1px 2px rgba(0, 0, 0, 0.40)",
+        "purpose": "Cards resting on the page."
+      },
+      {
+        "name": "overlay",
+        "value": "0 24px 48px -12px rgba(0, 0, 0, 0.55)",
+        "purpose": "Modals, dropdowns, popovers only."
+      }
+    ],
+    "motion": [
+      {
+        "name": "spring-standard",
+        "value": "stiffness: 150, damping: 20",
+        "purpose": "Default framer-motion spring for state transitions."
+      },
+      {
+        "name": "skeleton-shimmer",
+        "value": "1.6s infinite",
+        "purpose": "Loading placeholders via .skeleton — not decorative idle chrome."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Solid gold CTA — scarce action signal.",
+      "html": "<button class=\"ds-btn-primary\" type=\"button\">Save Details</button>",
+      "css": ".ds-btn-primary { background: var(--cb-accent, #FEAC27); color: var(--cb-bg, #0E1319); padding: 8px 16px; border: none; border-radius: 12px; font: 600 14px/20px Inter, system-ui, sans-serif; cursor: pointer; transition: opacity 0.15s ease; } .ds-btn-primary:hover { opacity: 0.9; } .ds-btn-primary:focus-visible { outline: 2px solid var(--cb-accent, #FEAC27); outline-offset: 2px; } .ds-btn-primary:disabled { background: var(--cb-surface-raised, #1A212C); color: #6B7280; opacity: 1; cursor: not-allowed; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Secondary / Back — quiet, no gold fill.",
+      "html": "<button class=\"ds-btn-ghost\" type=\"button\">Back</button>",
+      "css": ".ds-btn-ghost { background: transparent; color: #fff; padding: 8px 16px; border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; font: 400 14px/20px Inter, system-ui, sans-serif; cursor: pointer; transition: border-color 0.15s ease; } .ds-btn-ghost:hover { border-color: rgba(255,255,255,0.16); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--cb-accent, #FEAC27); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Ink well + hairline; gold focus ring.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">City</span><input class=\"ds-input\" type=\"text\" placeholder=\"City\" /></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; } .ds-field-label { font: 600 12px/16px Inter, system-ui, sans-serif; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(255,255,255,0.65); } .ds-input { width: 100%; background: var(--cb-bg, #0E1319); color: #fff; border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 10px 12px; font: 400 14px/20px Inter, system-ui, sans-serif; } .ds-input::placeholder { color: #6B7280; } .ds-input:hover { border-color: rgba(255,255,255,0.16); } .ds-input:focus { outline: none; border-color: transparent; box-shadow: 0 0 0 2px var(--cb-accent, #FEAC27); }"
+    },
+    {
+      "name": "Surface Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Quiet panel with hairline — no heavy chrome.",
+      "html": "<div class=\"ds-card\"><p class=\"ds-card-title\">Locations</p><p class=\"ds-card-body\">Add storefronts and MIDs.</p></div>",
+      "css": ".ds-card { background: var(--cb-surface, #161C26); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.40); } .ds-card-title { margin: 0 0 4px; font: 600 20px/28px Poppins, Inter, sans-serif; letter-spacing: -0.015em; color: #fff; } .ds-card-body { margin: 0; font: 400 14px/20px Inter, system-ui, sans-serif; color: rgba(255,255,255,0.7); }"
+    },
+    {
+      "name": "Status Dot",
+      "kind": "chip",
+      "refersTo": "status-dot",
+      "description": "Status as 6px dot + caption — not a tinted pill.",
+      "html": "<span class=\"ds-status\"><span class=\"ds-status-dot\" aria-hidden=\"true\"></span><span class=\"ds-status-label\">Ready to Submit</span></span>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 6px; font: 400 12px/16px Inter, system-ui, sans-serif; color: rgba(255,255,255,0.75); } .ds-status-dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--cb-success, #4ADE80); flex-shrink: 0; }"
+    },
+    {
+      "name": "Progress Capsule",
+      "kind": "nav",
+      "refersTo": "progress-active",
+      "description": "Active step — muted gold fill + hairline.",
+      "html": "<div class=\"ds-progress\" role=\"list\"><span class=\"ds-progress-step ds-progress-step--done\">1</span><span class=\"ds-progress-step ds-progress-step--active\">2</span><span class=\"ds-progress-step\">3</span></div>",
+      "css": ".ds-progress { display: flex; gap: 8px; } .ds-progress-step { width: 28px; height: 28px; border-radius: 9999px; display: grid; place-items: center; font: 600 12px/16px Inter, system-ui, sans-serif; color: rgba(255,255,255,0.55); border: 1px solid rgba(255,255,255,0.07); background: transparent; } .ds-progress-step--active { background: rgba(254,172,39,0.14); border-color: rgba(255,255,255,0.16); color: var(--cb-accent, #FEAC27); } .ds-progress-step--done { background: var(--cb-accent, #FEAC27); border-color: transparent; color: var(--cb-bg, #0E1319); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Gold Wire",
+    "overview": "One bright signal runs through charcoal structure. The portal is a dark, quiet tool for finishing KYC, banking, and e-sign — modern and confident, never theatrical. Gold appears where the merchant must act. Everything else stays tonal. This system rejects generic purple/gradient AI SaaS dashboards, busy traditional bank portals, and playful consumer apps.",
+    "keyCharacteristics": [
+      "Restrained dark fintech: one accent ≤ ~10% of any screen",
+      "Hierarchy via indentation, 1px rails, and type — not colored chrome",
+      "Solid gold primary CTAs; ghost secondary",
+      "Exactly five type sizes; Poppins for titles, Inter for UI",
+      "Motion only for state (spring 150/20); quote documents stay white"
+    ],
+    "rules": [
+      { "name": "The One Wire Rule", "body": "Cliqbux Gold is for action and selection only. Do not decorate inactive chrome with gold.", "section": "colors" },
+      { "name": "The Token File Rule", "body": "Approved hex values live only in src/styles/tokens.css. Never invent parallel hex in JSX.", "section": "colors" },
+      { "name": "The Five Size Rule", "body": "No other font sizes in the portal.", "section": "typography" },
+      { "name": "The Display Ceiling Rule", "body": "Display letter-spacing stays ≥ −0.04em.", "section": "typography" },
+      { "name": "The Two Shadow Rule", "body": "If you need a third shadow, use a surface step or hairline instead.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use cb-* Tailwind utilities and change values only in src/styles/tokens.css.",
+      "Do keep primary actions solid Cliqbux Gold (#FEAC27) and scarce.",
+      "Do show status as a small colored dot + plain caption.",
+      "Do use hierarchy via indentation, 1px rails, and type weight.",
+      "Do keep quote/document iframes white.",
+      "Do keep explicit Save buttons (no debounce autosave for entity/MID fields).",
+      "Do respect reduced motion; motion communicates state only."
+    ],
+    "donts": [
+      "Don't ship Generic purple / gradient “AI SaaS” dashboards.",
+      "Don't imitate Busy traditional bank portals with cluttered forms and dense chrome.",
+      "Don't build Playful consumer apps heavy on illustration, bounce, and novelty.",
+      "Don't use purple/indigo gradients, glow rings, or multi-layer decorative shadows.",
+      "Don't use blue MID pills, green “Complete” pills, or color-coded pricing-tier badges.",
+      "Don't hardcode hex in JSX or invent a parallel palette (including soft dashboard gold #F0AD4E as a second accent).",
+      "Don't add font sizes outside the five-token scale.",
+      "Don't change form fields, validation, fetch paths, or save semantics in a “visual” pass."
+    ]
+  }
+}

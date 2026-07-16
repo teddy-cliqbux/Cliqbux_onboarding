@@ -1019,6 +1019,17 @@ After the merchant completes portal signing, `PostSubmissionDashboard` shows:
 
 ## Portal UI Overhaul — Design System (2026-07-12, approved by Teddy)
 
+### Design Context (Impeccable — 2026-07-15)
+
+Strategic + visual specs for design agents (do not duplicate here — read the files):
+
+- **`PRODUCT.md`** — register `product`, platform `web`, merchants primary; personality *Fast, modern, confident*; north-star companion in DESIGN.md
+- **`DESIGN.md`** — Creative North Star **"The Gold Wire"**; `cb-*` tokens from `src/styles/tokens.css` are normative
+- **`.impeccable/design.json`** — live-panel sidecar (components, motion, narrative)
+- **Project skill:** `.cursor/skills/cliqbux-portal-design/SKILL.md` — day-to-day checklist; wins over generic UI skills on brand/decoration
+
+**Project skill (2026-07-15):** `.cursor/skills/cliqbux-portal-design/SKILL.md` — concise agent-facing rules for `cb-*` tokens, restraint UI, motion, and style-only boundaries. Prefer that skill over generic UI skills (e.g. personal `userinterface-wiki`) when they conflict on brand/decoration. Full history stays in this section; the skill is the day-to-day checklist.
+
 Visual-only redesign of the onboarding portal to mirror dashboard.cliqbux.com. **No data fields, form keys, validation rules, save-button semantics, or fetch paths were changed** — explicit Save buttons remain everywhere (Critical Lesson #2 still applies; never replace them with debounce/autosave).
 
 **Design tokens:**
