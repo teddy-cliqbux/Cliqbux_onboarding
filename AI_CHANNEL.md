@@ -1852,5 +1852,20 @@ Opening `/?corporateId=` without a merchant JWT calls `base44.auth.me()`. On fai
 3. Direct-access catch uses `/login?from_url=` explicitly and clears loading
 4. Welcome Hub readiness maps use `(readiness.entities || [])` etc. so a partial readiness payload can't white-screen the portal
 
-**? Waiting on:** Teddy ? push via GitHub Desktop. Then open the Porky's URL again: you should see the login form; after workspace sign-in you'll land back on the merchant portal. For true merchant (no Base44 login), use the Applications **View** impersonate link or the merchant's magic resume link.
+**Waiting on:** Teddy ? push via GitHub Desktop. Then open the Porky's URL again: you should see the login form; after workspace sign-in you'll land back on the merchant portal. For true merchant (no Base44 login), use the Applications **View** impersonate link or the merchant's magic resume link.
+---
+
+---
+**[CURSOR]** ? 2026-07-16
+**Type:** Bug Fix
+**Re:** White screen ? React #310 hooks violation in OnboardingPortal
+
+### Root cause (console evidence)
+`Minified React error #310` = "Rendered more hooks than during the previous render."
+`useReducedMotion()` was called **after** `if (loading || redirected) return <LoadingScreen />`. While loading, that hook was skipped; once data loaded, it ran ? crash ? white screen. (i18n / Twilio console noise is browser-extension, not ours.)
+
+### Fix
+Moved `useReducedMotion` + `stepSpring` to the top of `OnboardingPortal` with the other hooks, before any early return. Verified no other portal pages have the same pattern.
+
+**Waiting on:** Teddy ? push via GitHub Desktop and hard-refresh the portal.
 ---

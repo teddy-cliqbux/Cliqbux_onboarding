@@ -204,6 +204,13 @@ export default function OnboardingPortal() {
     if (v) setCompletedSteps(prev => ({ ...prev, verify: true }));
   };
   const navigate                      = useNavigate();
+  // Must be called unconditionally — before any early return. Calling it after
+  // the loading/error gates caused React #310 ("Rendered more hooks than during
+  // the previous render") and a white screen once the portal finished loading.
+  const reduceMotion = useReducedMotion();
+  const stepSpring = reduceMotion
+    ? { duration: 0 }
+    : { type: 'spring', stiffness: 150, damping: 20 };
 
   useEffect(() => {
     const params  = new URLSearchParams(window.location.search);
@@ -784,11 +791,6 @@ export default function OnboardingPortal() {
     else if (applicationStatus !== 'Submitted') currentTrackerStep = 'verify';
     else currentTrackerStep = quoteSigned ? 'quote' : 'verify';
   }
-
-  const reduceMotion = useReducedMotion();
-  const stepSpring = reduceMotion
-    ? { duration: 0 }
-    : { type: 'spring', stiffness: 150, damping: 20 };
 
   return (
     <PortalLockContext.Provider value={{
