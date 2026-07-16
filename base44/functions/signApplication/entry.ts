@@ -1127,6 +1127,14 @@ function buildFormPayload(
   // 2026-07-13: NEVER default to 5999 (restricted category; rejected in CA/CO/NY).
   const mcc = String(merchantMID.mccCode || profile.mccCode || '').trim();
   if (!mcc) {
+    // Merchant-friendly message when they used the portal's "My business isn't
+    // listed" escape hatch — an agent must set the real MCC before signing.
+    if (merchantMID.mccHelpRequested) {
+      throw new Error(
+        `The business category for "${merchantMID.dbaName || merchantMID.merchantName || 'this account'}" is still being confirmed by Cliqbux. ` +
+        `Your specialist will set it shortly — signing will be available right after.`
+      );
+    }
     throw new Error(
       `MCC code is required before signing for "${merchantMID.dbaName || merchantMID.merchantName || 'this MID'}". ` +
       `Set the MCC on the MID in Locations & MIDs, then try again.`
@@ -1577,7 +1585,9 @@ Deno.serve(async (req) => {
         // Fail fast on MCC before creating a stranded MSPWare draft
         const mccPrecheck = String(merchantMID.mccCode || profile.mccCode || '').trim();
         if (!mccPrecheck) {
-          draftErrors.push(`MCC is required on MID "${merchantMID.dbaName || merchantMID.id}" before an MSPWare draft can be created.`);
+          draftErrors.push(merchantMID.mccHelpRequested
+            ? `The business category for "${merchantMID.dbaName || merchantMID.id}" is still being confirmed by Cliqbux — your specialist will set it shortly.`
+            : `MCC is required on MID "${merchantMID.dbaName || merchantMID.id}" before an MSPWare draft can be created.`);
           continue;
         }
         if (mccPrecheck === '5999') {

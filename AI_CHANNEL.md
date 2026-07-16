@@ -1189,7 +1189,7 @@ Teddy confirmed nesting, unified remote email, dual completion signals, local `S
 ---
 
 ---
-**[CURSOR]** ï¿½ 2026-07-13
+**[CURSOR]** ? 2026-07-13
 **Type:** Decision + Action Taken ? Concurrent multi-signer links
 
 Teddy: sequential hot-seat blocked primary after co-owner verified; asked for concurrent signing from each owner's instance.
@@ -1358,8 +1358,8 @@ HubSpot tier cannot run automated workflow webhooks. Pivot:
 ---
 
 ---
-**[CURSOR]** ï¿½ 2026-07-13
-**Type:** Bug Fix ï¿½ Copy signer link 400
+**[CURSOR]** ? 2026-07-13
+**Type:** Bug Fix ? Copy signer link 400
 
 **Symptom:** Admin Applications ? SIGNERS ? Copy Link showed alert `Request failed with status code 400` (preview iframe).
 
@@ -1376,8 +1376,8 @@ HubSpot tier cannot run automated workflow webhooks. Pivot:
 ---
 
 ---
-**[CURSOR]** ï¿½ 2026-07-13
-**Type:** Bug Fix ï¿½ Re-invite must not regress Verified ? Invited
+**[CURSOR]** ? 2026-07-13
+**Type:** Bug Fix ? Re-invite must not regress Verified ? Invited
 
 **Bug:** `manageSigner` `sendInvite` / `sendSigningInvite` always wrote `identityStatus: 'invited'`, so Send Link on a Verified signer (e.g. Levi) rolled them back. Link still skips KYC when verified, but the admin badge lied.
 
@@ -1389,10 +1389,10 @@ HubSpot tier cannot run automated workflow webhooks. Pivot:
 ---
 
 ---
-**[CURSOR]** ï¿½ 2026-07-13
-**Type:** Bug Fix ï¿½ Signer link opened missing from Portal activity feed
+**[CURSOR]** ? 2026-07-13
+**Type:** Bug Fix ? Signer link opened missing from Portal activity feed
 
-**Symptom:** Feed shows Signer link sent / Portal opened, but never "Signer link opened ï¿½ email" after `/verify` visits.
+**Symptom:** Feed shows Signer link sent / Portal opened, but never "Signer link opened ? email" after `/verify` visits.
 
 **Likely causes:**
 1. Live `verifySignerToken` missing open-log (needs force-redeploy).
@@ -1410,8 +1410,8 @@ HubSpot tier cannot run automated workflow webhooks. Pivot:
 ---
 
 ---
-**[CURSOR]** ï¿½ 2026-07-13
-**Type:** Feature ï¿½ Quick Stage alphanumeric / no-HubSpot corporateIds
+**[CURSOR]** ? 2026-07-13
+**Type:** Feature ? Quick Stage alphanumeric / no-HubSpot corporateIds
 
 **Shipped:**
 1. `manageStagedApplication` helpers `isHubSpotDealId` + `slugifyCorporateId`; admin action `createLocalStage` (Profile + Location dbaName + primary Signer + Stage + auto-track).
@@ -1424,8 +1424,8 @@ HubSpot tier cannot run automated workflow webhooks. Pivot:
 ---
 
 ---
-**[CURSOR]** ï¿½ 2026-07-13
-**Type:** Bug Fix ï¿½ Silent MCC 5999 fallback poisoned CA drafts
+**[CURSOR]** ? 2026-07-13
+**Type:** Bug Fix ? Silent MCC 5999 fallback poisoned CA drafts
 
 **Symptom (Quick Stage, no HubSpot):** Portal MID showed `5813` (Bar, Imperial Beach CA). MSPWare showed `5999` Ammunition Stores + "invalid for CA/CO/NY". Form ~79%; other sections looked like data never flowed.
 
@@ -1447,14 +1447,14 @@ HubSpot tier cannot run automated workflow webhooks. Pivot:
 ---
 
 ---
-**[CURSOR]** â€” 2026-07-14
-**Type:** Action Taken â€” Onboarding stress suite (Playwright) + report
+**[CURSOR]** ? 2026-07-14
+**Type:** Action Taken ? Onboarding stress suite (Playwright) + report
 **Re:** QA automation for 8 critical MCC/draft/HubSpot scenarios
 
 ### Shipped
-- `tests/onboardingStress.spec.ts` â€” 8 scenarios (MCC delay, stateÃ—MCC matrix, live MCC swap, state swap+restricted MCC, HubSpot bypass, empty MID refusal, multi-MID split MCC, partial fill recovery)
+- `tests/onboardingStress.spec.ts` ? 8 scenarios (MCC delay, state×MCC matrix, live MCC swap, state swap+restricted MCC, HubSpot bypass, empty MID refusal, multi-MID split MCC, partial fill recovery)
 - Helpers: `tests/helpers/{productionLogic,simulatedPortal,reportStore}.ts`
-- Reporter â†’ `stress-test-report.md`
+- Reporter ? `stress-test-report.md`
 - Run: `npm run test:stress` (safe in-memory sim of production gates; no live MSPWare/HubSpot)
 
 ### Latest run (2026-07-14)
@@ -1462,14 +1462,14 @@ Playwright: **8 passed**. Scenario scores: **6 PASS / 0 FAIL / 2 WARN**.
 
 | # | Scenario | Status |
 |---|---|---|
-| 1 | MCC Delay (empty MCC, 30s) | PASS â€” draft deferred; no 5999 |
-| 2 | State/MCC Matrix (CA/CO/NY Ã— 12 MCCs) | WARN â€” 36 drafts OK; no CA/NY+5813 liquor gate |
-| 3 | Live MCC Swap 5813â†’5812â†’5411 | PASS â€” update re-fills draft |
-| 4 | TXâ†’CA with 5813 | WARN â€” no inline stateÃ—MCC warning |
-| 5 | HubSpot bypass "Danono's Donuts" | PASS â€” hubspotBypass, zero API |
-| 6 | Empty MID refusal | PASS â€” UI + backend refuse |
-| 7 | Multi-MID split MCC | PASS â€” 5812 vs 5411 distinct drafts |
-| 8 | Partial fill recovery | PASS â€” refill at 79% + MCC mismatch |
+| 1 | MCC Delay (empty MCC, 30s) | PASS ? draft deferred; no 5999 |
+| 2 | State/MCC Matrix (CA/CO/NY × 12 MCCs) | WARN ? 36 drafts OK; no CA/NY+5813 liquor gate |
+| 3 | Live MCC Swap 5813?5812?5411 | PASS ? update re-fills draft |
+| 4 | TX?CA with 5813 | WARN ? no inline state×MCC warning |
+| 5 | HubSpot bypass "Danono's Donuts" | PASS ? hubspotBypass, zero API |
+| 6 | Empty MID refusal | PASS ? UI + backend refuse |
+| 7 | Multi-MID split MCC | PASS ? 5812 vs 5411 distinct drafts |
+| 8 | Partial fill recovery | PASS ? refill at 79% + MCC mismatch |
 
 ### Remaining gap
 CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scenarios 2 & 4 WARN). Separate from the 5999 fix already shipped.
@@ -1478,28 +1478,28 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** â€” 2026-07-14
-**Type:** Feature â€” CA/NY Bar & Tavern (MCC 5813) compliance
+**[CURSOR]** ? 2026-07-14
+**Type:** Feature ? CA/NY Bar & Tavern (MCC 5813) compliance
 
 ### Shipped
 1. Schema: `MerchantMID.alcoholSalesPercentage`; `MerchantLocations.liquorLicenseDocUrl` (+ fileName, uploadedAt).
-2. Helper `src/lib/liquorCompliance.js` â€” CA/NY + 5813 trigger.
+2. Helper `src/lib/liquorCompliance.js` ? CA/NY + 5813 trigger.
 3. Locations MID UI: compliance banner, required alcohol %, High-Risk Tavern note if >50%, soft prompt that liquor license is post-sign only (does not block Continue/signing).
 4. `manageMerchantID` update: 422 if CA/NY+5813 without alcohol %.
 5. `getMerchantData` readiness: alcohol % hard-missing; `liquorLicenseFollowUps` soft list only.
-6. Post-sign `InventoryUpload`: State Liquor License slot per qualifying location â†’ `updateLocationDetails`.
+6. Post-sign `InventoryUpload`: State Liquor License slot per qualifying location ? `updateLocationDetails`.
 7. Stress suite scenarios 2 & 4 now expect production liquor compliance flags.
 
 **Not blocked:** signing / Ready-to-Submit / application flow on missing liquor license (ops attach in MSPWare after).
 
-**ACTION:** Push â†’ republish MerchantMID + MerchantLocations entity schemas in Base44 â†’ redeploy `manageMerchantID`, `getMerchantData`, `updateLocationDetails` + publish frontend.
+**ACTION:** Push ? republish MerchantMID + MerchantLocations entity schemas in Base44 ? redeploy `manageMerchantID`, `getMerchantData`, `updateLocationDetails` + publish frontend.
 
 **? Waiting on:** Teddy (push + Base44 schema publish)
 ---
 
 ---
-**[CURSOR]** · 2026-07-13
-**Type:** Feature · Dual-surface agent pricing editor
+**[CURSOR]** ? 2026-07-13
+**Type:** Feature ? Dual-surface agent pricing editor
 
 **Decisions (Teddy):** Profile + stage mirror; markup as percent `0.15` (not 15 bps); separate per-txn + auth inputs; monthly fee hidden (MSP template); High Volume Tavern deferred; bubble only on Welcome Hub / onboarding (not dashboard).
 
@@ -1515,8 +1515,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Feature · Portal form lock + demoteApplication
+**[CURSOR]** ? 2026-07-14
+**Type:** Feature ? Portal form lock + demoteApplication
 
 **Problem:** Merchants/agents could edit locations/MIDs/banking/signers after BoldSign packages were issued, leaving MSPWare forms and signature links stale.
 
@@ -1538,8 +1538,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Bugfix · Pricing preset / Cash Discount + HubSpot Sync overwrite (Porky's)
+**[CURSOR]** ? 2026-07-14
+**Type:** Bugfix ? Pricing preset / Cash Discount + HubSpot Sync overwrite (Porky's)
 
 **Problem:** Live applicant Porky's (`334067326709`) could not sign. Portal showed `pricingTier=STANDARD` and demanded custom fees. Admin Applications ? Pricing ? Cash Discount looked broken (tab stayed **0/1**); HubSpot Sync after save could wipe CD.
 
@@ -1562,8 +1562,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Bugfix · Applications list badge stuck on STANDARD after Cash Discount save
+**[CURSOR]** ? 2026-07-14
+**Type:** Bugfix ? Applications list badge stuck on STANDARD after Cash Discount save
 
 **Problem:** After Save Pricing showed Cash Discount / Pricing 1/1 in the drawer, the Applications row for Porky's still showed **STANDARD**.
 
@@ -1575,8 +1575,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Bugfix · MSPWare draft create failed silently (Porky's signing)
+**[CURSOR]** ? 2026-07-14
+**Type:** Bugfix ? MSPWare draft create failed silently (Porky's signing)
 
 **Problem:** Portal showed Cash Discount Plan but signing failed with generic "Could not create MSPWare draft applications. Check MSPWare API status." Porky's not in MSPWare Drafts. Console noise (HubSpot I18n/Twilio) is unrelated.
 
@@ -1588,8 +1588,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Bugfix · MSPWare template 133 clone refused (Porky's CD)
+**[CURSOR]** ? 2026-07-14
+**Type:** Bugfix ? MSPWare template 133 clone refused (Porky's CD)
 
 **Problem:** After error surfacing: `MSPWare refused draft for "Porky's Lechon & BBQ" (template 133): An error has occurred.` No draft in MSPWare Drafts.
 
@@ -1606,8 +1606,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Bugfix · `isCustomPricingTier is not defined` after draft create (Porky's)
+**[CURSOR]** ? 2026-07-14
+**Type:** Bugfix ? `isCustomPricingTier is not defined` after draft create (Porky's)
 
 **Problem:** Draft was created in MSPWare but form fill crashed: `isCustomPricingTier is not defined`. Signing showed that ReferenceError.
 
@@ -1619,8 +1619,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Bugfix · MSPWare form fill rejected DBA chars + Omni split (Porky's)
+**[CURSOR]** ? 2026-07-14
+**Type:** Bugfix ? MSPWare form fill rejected DBA chars + Omni split (Porky's)
 
 **Problem:** Signing Form Incomplete 62%: full_dba_name special chars, legal_dba_name apostrophe, Omni split != 100%. DOB/SSN/bank often cascade after reject.
 
@@ -1630,8 +1630,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Bugfix · Omni card split not flowing + homepage URL for Online volume
+**[CURSOR]** ? 2026-07-14
+**Type:** Bugfix ? Omni card split not flowing + homepage URL for Online volume
 
 **Problem:** Portal Card Split 80/10/10 (In-Person/Online/MOTO) landed in MSPWare as CP 80 / CNP 0 / Internet 0 ? Omni must total 100%. Also need business homepage URL when Online > 0.
 
@@ -1654,8 +1654,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Action Taken · Canonical pricing mapper wired into MSP boarding
+**[CURSOR]** ? 2026-07-14
+**Type:** Action Taken ? Canonical pricing mapper wired into MSP boarding
 
 **Shipped:**
 - Inlined `helpers/pricingMapper.ts` into `submitToMSP` + `signApplication` (BEGIN/END sync markers; no `export`)
@@ -1674,8 +1674,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Bugfix · Business Homepage URL not writing to MSPWare (Porky's)
+**[CURSOR]** ? 2026-07-14
+**Type:** Bugfix ? Business Homepage URL not writing to MSPWare (Porky's)
 
 **Evidence:** Portal MID has `https://porkyslechon.com/` + Online 10%. MSPWare Financial Info shows Internet 10% (card split OK) but Business Homepage URL blank/required ? form 99% ? "Merchant application is not complete."
 
@@ -1696,8 +1696,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Bugfix · Homepage URL still blank ? stop multi-key shotgun; use `business_homepage_url`
+**[CURSOR]** ? 2026-07-14
+**Type:** Bugfix ? Homepage URL still blank ? stop multi-key shotgun; use `business_homepage_url`
 
 **Status:** Still broken after prior `website` / `business_website` attempts (Porky's MSPWare 99%, homepage required empty).
 
@@ -1721,8 +1721,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Note + Bugfix · Full MSP OpenAPI already in repo; homepage discovery via completion label?key
+**[CURSOR]** ? 2026-07-14
+**Type:** Note + Bugfix ? Full MSP OpenAPI already in repo; homepage discovery via completion label?key
 
 **Swagger file:** `mspware-swagger.json` at repo root already contains the full MSPWare Boarding API OpenAPI (same payload Teddy pasted). It documents API routes ? **not** every Elavon electronic-form field name. Form field `name`s come from:
 - `GET /applications/types/{merchantapplicationtypeno}/schema` (type **24** for Elavon US), or
@@ -1739,8 +1739,8 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-14
-**Type:** Bugfix · Signing iframe remount loop every 5s
+**[CURSOR]** ? 2026-07-14
+**Type:** Bugfix ? Signing iframe remount loop every 5s
 
 **Symptom:** After MSP form filled, BoldSign iframe showed Loading... / blank white box, resetting every ~4?5 seconds and wiping signature progress (Porky's).
 
@@ -1758,7 +1758,7 @@ CA/NY + 5813 liquor underwriting inline warning is still not in the portal (scen
 ---
 
 ---
-**[CURSOR]** · 2026-07-15
+**[CURSOR]** ? 2026-07-15
 **Type:** Decision + Action Taken
 **Re:** Project design skill for portal look-and-feel
 
@@ -1781,7 +1781,7 @@ Personal skill `~/.cursor/skills/userinterface-wiki` remains installed as a craf
 ---
 
 ---
-**[CURSOR]** · 2026-07-15
+**[CURSOR]** ? 2026-07-15
 **Type:** Action Taken
 **Re:** Critique follow-ups 1B + 2B (Welcome Hub copy + in-portal unlock)
 
@@ -1791,4 +1791,49 @@ Personal skill `~/.cursor/skills/userinterface-wiki` remains installed as a craf
 3. **Unlock UI:** `FormsLockedBanner` owns confirm + inline error ? no `window.confirm` / `window.alert` on portal or post-submit demote paths. Parent `onUnlock` throws on failure.
 
 **? Waiting on:** Teddy (push via GitHub Desktop; optional re-critique past 28)
+---
+
+---
+**[CURSOR]** ? 2026-07-15
+**Type:** Action Taken
+**Re:** OnboardingLocations full UX pass (critique 22/40 ? clarify + distill + harden + adapt + polish)
+
+### Decision: "MID" never appears in merchant chrome
+Teddy 2026-07-15: merchants see **"processing account"**; MCC ? **"Business Category"**; MOTO ? **"Phone / mail"**. Backend enums, field keys, and payloads unchanged ? display labels only (StatusBadge maps `Pending MID` ? "Awaiting approval").
+
+### Shipped (frontend only, `src/pages/OnboardingLocations.jsx`)
+1. **Clarify:** header "Your Business & Locations"; section "Processing Accounts"; "Needs category & sales info"; MSPWare removed from website/liquor helper copy; validation strings de-jargoned.
+2. **Distill:** MidCard editor chunked (account ? Card Sales Estimates ? How You Take Cards); Industry Type moved behind an **Advanced** disclosure (auto-derive from MCC unchanged).
+3. **Harden:** inline save/add errors on MidCard + Add account (no more silent console.error); page-level load-failure state with Try Again; delete failures ? dismissible inline banner (browser `alert()` removed); **EIN edits in one place only** (Business details panel ? header edit is name-only now); footer shows "unsaved business details" cue when fields are typed but not saved.
+4. **Adapt:** `px-4 sm:px-8` page padding; drag grips hidden on mobile; icon buttons enlarged to p-2; volume grid stacks on mobile; rails `ml-3 sm:ml-6`.
+5. **Polish:** liquor callout 2px stripe ? 1px hairline; dead "Org Structure" caption removed (toolbar only shows for 2+ entities); "Valid EIN" overclaim ? "9 digits ? format looks good"; delete-entity copy matches actual reassign behavior.
+
+**Verified:** eslint 0 errors (4 pre-existing unused-var warnings), impeccable detect clean `[]`. No field keys / validation rules / fetch paths / save semantics changed.
+
+**? Waiting on:** Teddy (push via GitHub Desktop; re-run `$impeccable critique OnboardingLocations` to re-score past 22)
+---
+
+---
+**[CURSOR]** ? 2026-07-15 (late)
+**Type:** Action Taken
+**Re:** Locations re-critique 28/40 ? remaining P1/P2/P3 fixes + progressive org disclosure
+
+### Re-critique result
+Dual-agent critique after the UX pass: **28/40 (up from 22)**, detector clean, zero merchant-facing MID/MCC/MOTO/MSPWare leaks. Snapshot: `.impeccable/critique/2026-07-16T06-52-00Z__*.md`.
+
+### Shipped this session
+1. **[P1] Save gate = completeness gate** (`OnboardingLocations.jsx`): MidCard `canSave` now requires business category + all three sales figures (monthly/typical/largest, matching `getMerchantData` readiness) + split 100% + alcohol/website. Asterisks added; "Still need: ?" hint enumerates exactly what's missing. A successful Save can no longer immediately show "Needs category & sales info".
+2. **[P1] Business Category escape hatch:** new dropdown option **"My business isn't listed ? Cliqbux will help"** ? saves `{ mccCode: '', mccHelpRequested: true }`. **NEW SCHEMA FIELD `MerchantMID.mccHelpRequested` (boolean) ? Teddy must republish the MerchantMID schema in Base44 or the flag strips (Lesson #4).** Never invents an MCC (Lesson #15). Counts as merchant-complete on Locations + Welcome Hub readiness; `signApplication` returns a friendly "category is being confirmed by Cliqbux" message if signing is attempted before an agent sets the real code; admin Applications MID row shows **"MERCHANT NEEDS MCC HELP"**. Picking a real category later auto-clears the flag (frontend sends `mccHelpRequested: false`; backend also clears when a non-empty mccCode arrives without the flag).
+3. **[P2] Silent failures gone:** drag-move failures (location?entity, account?location) now surface in the actionError banner ("your layout was restored") instead of silently snapping back; EntityMailingAddress save/clear failures show inline error + Retry, and a failed clear restores the address instead of lying.
+4. **[P2] Mobile restructuring:** new mobile-only **"Move"** button on location + processing-account rows (drag grips stay desktop-only) ? tap-to-move menus wired to the same `batchUpdateStatus` / `manageMerchantID` calls as drag. Icon buttons enlarged to ~40px touch targets on mobile (`p-3 -m-1 sm:p-2`); card-split inputs stack on mobile.
+5. **[P3] Sales cross-field rules inline:** typical < monthly, largest > typical, largest < monthly validated in the editor with plain-English messages ? backend no longer has to silently cap typed figures.
+6. **Progressive org disclosure** (Teddy said yes to the critique's provocation): single-entity + ?1-location merchants see no entity rails/indent and no "N locations · N accounts" caption; the "Processing Accounts" caption + rail inside a location only appears with 2+ accounts. The tree reveals itself when a 2nd location/entity/account is added.
+7. **Cleanup:** dead in-file `AddEntityModal` (~60 lines, never rendered) deleted + unused duplicate `src/components/onboarding/AddEntityModal.jsx` deleted; unused `onEntityAdded`/`handleEntityAdded`/`setCurrentProfile` removed; unreachable no-op `onDelete` removed; `Ready to Submit` dot `bg-gray-300` ? `bg-cb-success` token; completeness predicate deduped into one `isMidComplete()` helper (was copy-pasted 5×); `getMerchantData` readiness labels de-jargoned ("business category", "typical sale amount").
+
+### Backend files touched (redeploy needed)
+`manageMerchantID` (accept/clear `mccHelpRequested`; `??` fix so a cleared MCC doesn't refill from stale code), `signApplication` (friendly pending-category messages), `getMerchantData` (readiness honors help flag + label rename + projection carries flag). Plus `base44/entities/MerchantMID.jsonc` ? **republish required**.
+
+**Verified:** eslint 0 errors on changed files, impeccable detect clean `[]`.
+
+**? Waiting on:** Teddy ? push via GitHub Desktop, republish MerchantMID schema in Base44, redeploy the 3 functions.
 ---

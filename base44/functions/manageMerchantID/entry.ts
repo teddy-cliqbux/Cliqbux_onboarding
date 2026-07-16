@@ -127,6 +127,7 @@ Deno.serve(async (req) => {
         internetPct: data?.internetPct != null ? Number(data.internetPct) : 0,
         motoPct: data?.motoPct != null ? Number(data.motoPct) : 0,
         ...(data?.businessWebsite ? { businessWebsite: String(data.businessWebsite).trim() } : {}),
+        ...(data?.mccHelpRequested !== undefined ? { mccHelpRequested: Boolean(data.mccHelpRequested) } : {}),
         applicationStepStatus: 'In Review',
       };
       const merchantMID = await base44.asServiceRole.entities.MerchantMID.create(merchantMIDData);
@@ -162,6 +163,13 @@ Deno.serve(async (req) => {
       // Renaming the merchant name also updates the DBA sent to Elavon, mirroring the prior behavior.
       if (d.merchantName !== undefined) { updateFields.merchantName = d.merchantName; updateFields.dbaName = d.merchantName; }
       if (d.mccCode !== undefined) updateFields.mccCode = d.mccCode;
+      // Merchant asked for help picking a category ("My business isn't listed").
+      // Never invent an MCC (Critical Lesson #15) — mccCode stays empty and an
+      // agent sets the real code later. Picking a real MCC clears the flag.
+      if (d.mccHelpRequested !== undefined) updateFields.mccHelpRequested = Boolean(d.mccHelpRequested);
+      if (d.mccCode !== undefined && String(d.mccCode).trim() && d.mccHelpRequested === undefined) {
+        updateFields.mccHelpRequested = false;
+      }
       if (d.industryType !== undefined) updateFields.industryType = d.industryType;
       if (d.monthlyCardSales !== undefined) updateFields.monthlyCardSales = Number(d.monthlyCardSales);
       if (d.avgSaleAmount !== undefined) updateFields.avgSaleAmount = Number(d.avgSaleAmount);
@@ -237,7 +245,9 @@ Deno.serve(async (req) => {
       const boardingKeys = ['mccCode', 'industryType', 'monthlyCardSales', 'avgSaleAmount',
         'highestTicketAmount', 'cardPresentPct', 'internetPct', 'motoPct', 'businessWebsite', 'merchantName', 'dbaName'];
       const touchedBoarding = boardingKeys.some((k) => d[k] !== undefined);
-      const effectiveMcc = String(updated?.mccCode || existing?.mccCode || '').trim();
+      // ?? not || — an explicitly-cleared MCC ('' via the "my business isn't
+      // listed" help path) must not fall back to the stale stored code.
+      const effectiveMcc = String((updated?.mccCode ?? existing?.mccCode) || '').trim();
       const corpId = String(existing?.corporateId || corporateId || '');
       if (touchedBoarding && effectiveMcc && effectiveMcc !== '5999' && corpId
           && !LOCKED.includes(updated?.applicationStepStatus || existing?.applicationStepStatus || '')) {

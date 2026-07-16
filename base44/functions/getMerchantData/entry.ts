@@ -149,6 +149,7 @@ Deno.serve(async (req) => {
       internetPct: c.internetPct ?? 0,
       motoPct: c.motoPct ?? 0,
       alcoholSalesPercentage: c.alcoholSalesPercentage ?? null,
+      mccHelpRequested: !!c.mccHelpRequested,
     }));
 
     // ── Readiness — drives the portal's milestone states ──────────────────────
@@ -183,11 +184,14 @@ Deno.serve(async (req) => {
 
     const midIssues = (merchantMIDs || []).map((c) => {
       const missing = [];
-      if (!c.mccCode) missing.push('MCC code');
-      if (!c.industryType) missing.push('industry type');
-      if (!(parseFloat(c.monthlyCardSales) > 0)) missing.push('monthly volume');
-      if (!(parseFloat(c.avgSaleAmount) > 0)) missing.push('average sale');
-      if (!(parseFloat(c.highestTicketAmount) > 0)) missing.push('highest ticket');
+      // mccHelpRequested = merchant used the "my business isn't listed" escape
+      // hatch; a Cliqbux agent sets the real MCC (and derived industry) before
+      // signing, so neither counts against the merchant's readiness.
+      if (!c.mccCode && !c.mccHelpRequested) missing.push('business category');
+      if (!c.industryType && !c.mccHelpRequested) missing.push('industry type');
+      if (!(parseFloat(c.monthlyCardSales) > 0)) missing.push('monthly card sales');
+      if (!(parseFloat(c.avgSaleAmount) > 0)) missing.push('typical sale amount');
+      if (!(parseFloat(c.highestTicketAmount) > 0)) missing.push('largest expected sale');
       if (c.cardPresentPct == null || c.cardPresentPct === '') missing.push('card split');
       const parentLoc = (locations || []).find((l) => l.id === c.locationId);
       const locState = String(parentLoc?.businessState || '').trim().toUpperCase();

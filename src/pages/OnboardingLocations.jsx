@@ -73,6 +73,28 @@ function mccToIndustry(mcc) {
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 
+// Sentinel select value for "My business isn't listed". Never persisted as an
+// MCC — it maps to { mccCode: '', mccHelpRequested: true } so an agent sets the
+// real code later (never invent an MCC — Critical Lesson #15).
+const MCC_HELP_VALUE = '__HELP__';
+
+/** Single source of truth for "is this processing account complete?" —
+ *  used by the card header, location/entity rollups, the page counters, and
+ *  the Continue gate so they can never disagree. Mirrors the backend
+ *  readiness check in getMerchantData (all three sales figures are required
+ *  by the MSPWare form). A category-help request counts as complete here
+ *  (the merchant did their part; an agent sets the real MCC before signing). */
+function isMidComplete(mid, businessState) {
+  if (!(mid.mccCode || mid.mccHelpRequested)) return false;
+  if (!(Number(mid.monthlyCardSales) > 0)) return false;
+  if (!(Number(mid.avgSaleAmount) > 0)) return false;
+  if (!(Number(mid.highestTicketAmount) > 0)) return false;
+  if (requiresLiquorCompliance(businessState, mid.mccCode) && !isAlcoholSalesPercentageSet(mid.alcoholSalesPercentage)) {
+    return false;
+  }
+  return true;
+}
+
 function formatEIN(raw) {
   const d = (raw || '').replace(/\D/g, '');
   return d.length >= 9 ? `${d.slice(0, 2)}-${d.slice(2, 9)}` : raw || '';
@@ -110,28 +132,39 @@ function StatusBadge({ status }) {
     'Active':            'bg-cb-success',
     'Active (Existing)': 'bg-cb-success',
     'Pending MID':       'bg-cb-accent',
-    'Ready to Submit':   'bg-gray-300',
+    'Ready to Submit':   'bg-cb-success',
     'In Review':         'bg-cb-border-strong',
     'Error':             'bg-cb-danger',
+  };
+  // Merchant-facing labels for the backend applicationStepStatus enum —
+  // never show processor terms like "MID" in merchant chrome (critique 2026-07-15).
+  const label = {
+    'Active':            'Active',
+    'Active (Existing)': 'Active',
+    'Pending MID':       'Awaiting approval',
+    'Ready to Submit':   'Ready',
+    'In Review':         'In Review',
+    'Error':             'Needs attention',
   };
   return (
     <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
       <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot[status] || dot['In Review']}`} />
-      {status || 'In Review'}
+      {label[status] || status || 'In Review'}
     </span>
   );
 }
 
 // ─── MID Card (draggable) ─────────────────────────────────────────────────────
 
-function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, onUpdated, onDelete }) {
+function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, onUpdated, onDelete, moveTargets = [], onMove }) {
   const { formsLocked } = usePortalLock();
   const locked = getMidLocked(mid) || formsLocked;
   const imported = getMidImported(mid);
-  const [editing, setEditing] = useState(!mid.mccCode && !locked);
+  const [editing, setEditing] = useState(!mid.mccCode && !mid.mccHelpRequested && !locked);
   const [form, setForm] = useState({
     merchantName: mid.merchantName || mid.dbaName || dbaName || '',
     mccCode: mid.mccCode || '',
+    mccHelpRequested: !!mid.mccHelpRequested,
     industryType: mid.industryType || '',
     monthlyCardSales: mid.monthlyCardSales || '',
     avgSaleAmount: mid.avgSaleAmount || '',
@@ -146,19 +179,46 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
   });
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
+  const [saveError, setSaveError] = useState('');
+  // Industry auto-derives from the business category; the manual override
+  // lives behind Advanced so the default editor stays a short form.
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  // Mobile alternative to drag-and-drop (grips are hidden below sm).
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
 
   const pctSum = (parseInt(form.cardPresentPct) || 0) + (parseInt(form.internetPct) || 0) + (parseInt(form.motoPct) || 0);
   const onlinePct = parseInt(form.internetPct) || 0;
   const websiteOk = onlinePct <= 0 || String(form.businessWebsite || '').trim().length > 0;
   const needsLiquorCompliance = requiresLiquorCompliance(businessState, form.mccCode);
   const alcoholOk = !needsLiquorCompliance || isAlcoholSalesPercentageSet(form.alcoholSalesPercentage);
-  const canSave = form.mccCode && pctSum === 100 && alcoholOk && websiteOk;
+  const categoryOk = !!(form.mccCode || form.mccHelpRequested);
+  // Cross-field sales rules (mirrors MSPWare's own validation so the backend
+  // never has to silently cap what the merchant typed): typical < monthly,
+  // largest > typical, largest < monthly. Only checked once both sides are entered.
+  const monthlyNum = Number(form.monthlyCardSales) || 0;
+  const typicalNum = Number(form.avgSaleAmount) || 0;
+  const largestNum = Number(form.highestTicketAmount) || 0;
+  let salesIssue = '';
+  if (monthlyNum > 0 && typicalNum > 0 && typicalNum >= monthlyNum) {
+    salesIssue = 'Your typical sale should be smaller than your total monthly card sales.';
+  } else if (typicalNum > 0 && largestNum > 0 && largestNum <= typicalNum) {
+    salesIssue = 'Your largest expected sale should be bigger than your typical sale.';
+  } else if (monthlyNum > 0 && largestNum > 0 && largestNum >= monthlyNum) {
+    salesIssue = 'Your largest single sale should be smaller than your total monthly card sales.';
+  }
+  // Save and "complete" now demand the same things — a Save that immediately
+  // shows "needs sales info" read as a broken save (critique 2026-07-15). The
+  // required set mirrors getMerchantData's readiness check: all three sales
+  // figures are needed to build a valid application.
+  const salesOk = monthlyNum > 0 && typicalNum > 0 && largestNum > 0 && !salesIssue;
+  const canSave = categoryOk && salesOk && pctSum === 100 && alcoholOk && websiteOk;
   // isComplete reads from form state (not stale mid prop) so the header updates immediately after save
-  const isComplete = !!(form.mccCode && form.monthlyCardSales && alcoholOk);
+  const isComplete = !!(categoryOk && salesOk && alcoholOk);
 
   const doSave = async () => {
     if (!canSave) return;
     setSaving(true);
+    setSaveError('');
     try {
       const payload = {
         ...form,
@@ -171,10 +231,14 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
         action: 'update', locationId, corporateId, merchantIDId: mid.id,
         data: payload,
       });
+      if (res.data?.error) throw new Error(res.data.error);
       const saved = res.data?.updatedMerchantID || res.data?.merchantID;
-      if (saved) { onUpdated(saved); setSavedAt(Date.now()); }
+      if (saved) { onUpdated(saved); setSavedAt(Date.now()); return true; }
+      throw new Error('Save did not complete — please try again.');
     } catch (err) {
       console.error('[MidCard.doSave]', err);
+      setSaveError(err?.message || 'Save failed — please try again.');
+      return false;
     }
     finally { setSaving(false); }
   };
@@ -192,14 +256,14 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
           className={`rounded-cb border transition-all ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locked ? 'border-cb-border bg-transparent opacity-60' : 'border-cb-border bg-transparent hover:border-cb-border-strong'}`}
         >
           <div className="flex items-center gap-2.5 px-3 py-2.5">
-            <span {...provided.dragHandleProps} className={`text-gray-600 flex-shrink-0 ${locked ? 'cursor-not-allowed' : 'hover:text-gray-400 cursor-grab active:cursor-grabbing'}`}>
+            <span {...provided.dragHandleProps} className={`hidden sm:block text-gray-600 flex-shrink-0 ${locked ? 'cursor-not-allowed' : 'hover:text-gray-400 cursor-grab active:cursor-grabbing'}`}>
               <GripVertical className="w-3.5 h-3.5" />
             </span>
             <div className="flex-1 min-w-0">
               <p className="text-cb-body font-medium text-white truncate">{form.merchantName || dbaName}</p>
               {isComplete
-                ? <p className="text-cb-caption normal-case tracking-normal text-gray-500 font-mono">{mid.mccCode} · ${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo</p>
-                : <p className="text-cb-caption normal-case tracking-normal text-cb-accent font-normal">Needs MCC &amp; volume</p>
+                ? <p className="text-cb-caption normal-case tracking-normal text-gray-500 font-mono">{mid.mccCode || 'Category: Cliqbux will confirm'} · ${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo</p>
+                : <p className="text-cb-caption normal-case tracking-normal text-cb-accent font-normal">Needs category &amp; sales info</p>
               }
             </div>
             <div className="flex items-center gap-2.5 flex-shrink-0">
@@ -220,15 +284,36 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
             </div>
             {!locked && (
               <>
-                <button onClick={() => setEditing(e => !e)} className="p-1 text-gray-500 hover:text-white transition-colors">
+                {moveTargets.length > 0 && (
+                  <button onClick={() => setShowMoveMenu(m => !m)}
+                    className="sm:hidden p-3 -m-1 text-cb-caption normal-case tracking-normal text-gray-500 hover:text-white transition-colors">
+                    Move
+                  </button>
+                )}
+                <button onClick={() => setEditing(e => !e)} aria-label="Edit processing account"
+                  className="p-3 -m-1 sm:p-2 sm:m-0 text-gray-500 hover:text-white transition-colors">
                   <Pencil className="w-3 h-3" />
                 </button>
-                <button onClick={() => onDelete(mid)} className="p-1 text-gray-600 hover:text-cb-danger transition-colors">
+                <button onClick={() => onDelete(mid)} aria-label="Remove processing account"
+                  className="p-3 -m-1 sm:p-2 sm:m-0 text-gray-600 hover:text-cb-danger transition-colors">
                   <Trash2 className="w-3 h-3" />
                 </button>
               </>
             )}
           </div>
+
+          {/* Mobile "Move to…" — drag handles are hidden below sm */}
+          {showMoveMenu && !locked && moveTargets.length > 0 && (
+            <div className="sm:hidden border-t border-cb-border px-3 py-2.5 space-y-1.5">
+              <p className="text-cb-caption uppercase text-gray-500">Move to</p>
+              {moveTargets.map(t => (
+                <button key={t.id} onClick={() => { setShowMoveMenu(false); onMove?.(mid.id, t.id); }}
+                  className="w-full text-left text-cb-body text-gray-300 hover:text-white py-2.5 px-3 rounded-cb border border-cb-border transition-colors">
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <AnimatePresence initial={false}>
           {editing && !locked && (
@@ -237,54 +322,70 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
               {...accordionProps}
               className="overflow-hidden"
             >
-            <div className="border-t border-cb-border px-4 pb-4 pt-3 space-y-3">
-              <div>
-                <label className={labelCls}>MID Label</label>
-                <input value={form.merchantName} onChange={e => setField('merchantName', e.target.value)}
-                  placeholder={`e.g. ${dbaName} – Bar`} className={inputCls} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+            <div className="border-t border-cb-border px-4 pb-4 pt-3 space-y-4">
+              {/* Chunk 1 — what this account is */}
+              <div className="space-y-3">
                 <div>
-                  <label className={labelCls}>MCC Code *</label>
-                  <select value={form.mccCode}
+                  <label className={labelCls}>Account Name</label>
+                  <input value={form.merchantName} onChange={e => setField('merchantName', e.target.value)}
+                    placeholder={`e.g. ${dbaName} – Bar`} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Business Category *</label>
+                  <select value={form.mccHelpRequested && !form.mccCode ? MCC_HELP_VALUE : form.mccCode}
                     onChange={e => {
-                      const mcc = e.target.value;
-                      // Auto-derive industry from the MCC (merchant can still override below)
-                      setForm(f => ({ ...f, mccCode: mcc, industryType: mcc ? mccToIndustry(mcc) : f.industryType }));
+                      const v = e.target.value;
+                      if (v === MCC_HELP_VALUE) {
+                        // Escape hatch — never force a wrong code; an agent sets the real MCC.
+                        setForm(f => ({ ...f, mccCode: '', mccHelpRequested: true }));
+                        return;
+                      }
+                      // Auto-derive industry from the MCC (manual override under Advanced)
+                      setForm(f => ({ ...f, mccCode: v, mccHelpRequested: false, industryType: v ? mccToIndustry(v) : f.industryType }));
                     }}
                     className={inputCls} style={{ colorScheme: 'dark' }}>
                     <option value="">Select…</option>
                     {MCC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    <option value={MCC_HELP_VALUE}>My business isn&apos;t listed — Cliqbux will help</option>
                   </select>
-                </div>
-                <div>
-                  <label className={labelCls}>Industry Type</label>
-                  <select value={form.industryType} onChange={e => setField('industryType', e.target.value)}
-                    className={inputCls} style={{ colorScheme: 'dark' }}>
-                    <option value="">Select…</option>
-                    {INDUSTRY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls}>Monthly Volume ($)</label>
-                  <input type="number" value={form.monthlyCardSales} onChange={e => setField('monthlyCardSales', e.target.value)}
-                    placeholder="e.g. 8000" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Avg Sale ($)</label>
-                  <input type="number" value={form.avgSaleAmount} onChange={e => setField('avgSaleAmount', e.target.value)}
-                    placeholder="e.g. 45" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Highest Ticket ($)</label>
-                  <input type="number" value={form.highestTicketAmount} onChange={e => setField('highestTicketAmount', e.target.value)}
-                    placeholder="e.g. 200" className={inputCls} />
+                  {form.mccHelpRequested && !form.mccCode && (
+                    <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1.5">
+                      No problem — finish the rest of this form and continue. A Cliqbux specialist will confirm the right category with you before anything is signed.
+                    </p>
+                  )}
                 </div>
               </div>
+
+              {/* Chunk 2 — sales volume */}
               <div>
-                <label className={labelCls}>Card Split (must total 100%)</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[['cardPresentPct', 'In-Person'], ['internetPct', 'Online'], ['motoPct', 'MOTO']].map(([k, lbl]) => (
+                <label className={labelCls}>Card Sales Estimates</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mb-1 block">Monthly card sales ($) *</span>
+                    <input type="number" value={form.monthlyCardSales} onChange={e => setField('monthlyCardSales', e.target.value)}
+                      placeholder="e.g. 8000" className={inputCls} />
+                  </div>
+                  <div>
+                    <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mb-1 block">Typical sale ($) *</span>
+                    <input type="number" value={form.avgSaleAmount} onChange={e => setField('avgSaleAmount', e.target.value)}
+                      placeholder="e.g. 45" className={inputCls} />
+                  </div>
+                  <div>
+                    <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mb-1 block">Largest expected sale ($) *</span>
+                    <input type="number" value={form.highestTicketAmount} onChange={e => setField('highestTicketAmount', e.target.value)}
+                      placeholder="e.g. 200" className={inputCls} />
+                  </div>
+                </div>
+                {salesIssue && (
+                  <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">{salesIssue}</p>
+                )}
+              </div>
+
+              {/* Chunk 3 — how you take cards */}
+              <div>
+                <label className={labelCls}>How You Take Cards (must total 100%)</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {[['cardPresentPct', 'In-person'], ['internetPct', 'Online'], ['motoPct', 'Phone / mail']].map(([k, lbl]) => (
                     <div key={k}>
                       <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mb-1 block">{lbl}</span>
                       <input type="number" min="0" max="100" value={form[k]}
@@ -293,6 +394,27 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                   ))}
                 </div>
                 {pctSum !== 100 && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">Total: {pctSum}% (must be 100%)</p>}
+              </div>
+
+              {/* Advanced — industry override, auto-derived from the category */}
+              <div>
+                <button type="button" onClick={() => setShowAdvanced(a => !a)}
+                  className="flex items-center gap-1 text-cb-caption normal-case tracking-normal text-gray-500 hover:text-white transition-colors">
+                  {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />} Advanced
+                </button>
+                {showAdvanced && (
+                  <div className="mt-2">
+                    <label className={labelCls}>Industry Type</label>
+                    <select value={form.industryType} onChange={e => setField('industryType', e.target.value)}
+                      className={inputCls} style={{ colorScheme: 'dark' }}>
+                      <option value="">Select…</option>
+                      {INDUSTRY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                    <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1.5">
+                      Set automatically from your business category — change only if Cliqbux asked you to.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {onlinePct > 0 && (
@@ -306,7 +428,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                     className={inputCls}
                   />
                   <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1.5">
-                    Required when Online volume is greater than 0% — sent to MSPWare for underwriting.
+                    Required when any sales happen online — the underwriting team reviews your website.
                   </p>
                   {!websiteOk && (
                     <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1">
@@ -317,12 +439,11 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
               )}
 
               {needsLiquorCompliance && (
-                <div className="space-y-3 rounded-cb border border-cb-border bg-cb-bg py-3 pr-3 pl-3 relative overflow-hidden">
-                  <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-cb-accent" aria-hidden />
-                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-300 leading-relaxed pl-2">
+                <div className="space-y-3 rounded-cb border border-cb-border border-l-cb-accent bg-cb-bg p-3">
+                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-300 leading-relaxed">
                     {liquorComplianceBannerText(businessState)}
                   </p>
-                  <div className="pl-2">
+                  <div>
                     <label className={labelCls}>Alcohol Sales Percentage (0–100%) *</label>
                     <input
                       type="number"
@@ -339,17 +460,20 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                       </p>
                     )}
                   </div>
-                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 pl-2">
-                    After you sign, you&apos;ll upload your state-issued liquor license in post-signing setup. Cliqbux will attach it to this MID in MSPWare — it does not block submitting your application now.
+                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
+                    After you sign, you&apos;ll upload your state-issued liquor license in post-signing setup. Cliqbux will attach it to your application — it does not block submitting now.
                   </p>
                 </div>
               )}
 
               {/* Save button + collapse */}
+              {saveError && (
+                <p className="text-cb-body text-cb-danger" role="alert">{saveError}</p>
+              )}
               <div className="flex items-center justify-between pt-2">
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={async () => { await doSave(); setEditing(false); }}
+                    onClick={async () => { const ok = await doSave(); if (ok) setEditing(false); }}
                     disabled={saving || !canSave}
                     className="flex items-center gap-1.5 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface-raised disabled:text-gray-600 disabled:cursor-not-allowed disabled:opacity-100 text-cb-bg text-cb-body font-semibold px-4 py-2 rounded-cb transition-all"
                   >
@@ -358,9 +482,17 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                   </button>
                   {!canSave && (
                     <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">
-                      {needsLiquorCompliance && !alcoholOk
-                        ? 'Fill MCC, card split, and alcohol sales % to save'
-                        : 'Fill MCC & card split to save'}
+                      {salesIssue
+                        ? 'Fix the sales amounts above to save'
+                        : `Still need: ${[
+                            !categoryOk && 'business category',
+                            !(monthlyNum > 0) && 'monthly card sales',
+                            !(typicalNum > 0) && 'typical sale',
+                            !(largestNum > 0) && 'largest expected sale',
+                            pctSum !== 100 && 'card split totaling 100%',
+                            !alcoholOk && 'alcohol sales %',
+                            !websiteOk && 'business website',
+                          ].filter(Boolean).join(', ')}`}
                     </span>
                   )}
                 </div>
@@ -378,9 +510,14 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
 
 // ─── Location Card (nested inside Entity, draggable) ──────────────────────────
 
-function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, index, showValidation }) {
+function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, index, showValidation, allLocations = [], entityMoveTargets = [], onMoveLocation, onMoveMid }) {
   const { formsLocked } = usePortalLock();
   const locMids = merchantIDs.filter(c => c.locationId === location.id);
+  // Mobile alternative to drag-and-drop (grips are hidden below sm).
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
+  const midMoveTargets = allLocations
+    .filter(l => l.id !== location.id)
+    .map(l => ({ id: l.id, label: l.dbaName || l.businessAddress || 'Location' }));
   // Quick inline edit for the (often prefilled) name + address — 2026-07-10
   const [editingLoc, setEditingLoc] = useState(false);
   const [locForm, setLocForm] = useState({ dbaName: '', street: '', city: '', state: '', zip: '' });
@@ -432,17 +569,12 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
     } catch (err) { setLocEditError(err.message || 'Save failed'); }
     finally { setLocSaving(false); }
   };
-  const [expanded, setExpanded] = useState(locMids.length === 0 || locMids.some(m => !m.mccCode));
+  const [expanded, setExpanded] = useState(locMids.length === 0 || locMids.some(m => !m.mccCode && !m.mccHelpRequested));
   const [addingMid, setAddingMid] = useState(false);
   const [addMidName, setAddMidName] = useState('');
   const [addMidSaving, setAddMidSaving] = useState(false);
-  const allMidsComplete = locMids.length > 0 && locMids.every(m => {
-    if (!(m.mccCode && m.monthlyCardSales)) return false;
-    if (requiresLiquorCompliance(location.businessState, m.mccCode) && !isAlcoholSalesPercentageSet(m.alcoholSalesPercentage)) {
-      return false;
-    }
-    return true;
-  });
+  const [addMidError, setAddMidError] = useState('');
+  const allMidsComplete = locMids.length > 0 && locMids.every(m => isMidComplete(m, location.businessState));
   const locationError = showValidation && !allMidsComplete;
   const locNeedsLiquorDocs = locMids.some(m => requiresLiquorCompliance(location.businessState, m.mccCode));
 
@@ -453,15 +585,19 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
 
   const handleAddMid = async () => {
     setAddMidSaving(true);
+    setAddMidError('');
     try {
       const res = await invokePortalFunction('manageMerchantID', {
         action: 'add', locationId: location.id, corporateId,
         data: { merchantName: addMidName || location.dbaName, mccCode: '' },
       });
+      if (res.data?.error) throw new Error(res.data.error);
       const saved = res.data?.merchantID;
-      if (saved) { onMerchantIDAdded(saved); setAddingMid(false); setAddMidName(''); }
+      if (saved) { onMerchantIDAdded(saved); setAddingMid(false); setAddMidName(''); return; }
+      throw new Error('Could not add the account — please try again.');
     } catch (err) {
       console.error('[LocationCard.handleAddMid]', err);
+      setAddMidError(err?.message || 'Could not add the account — please try again.');
     }
     finally { setAddMidSaving(false); }
   };
@@ -478,7 +614,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
         >
           {/* Location header */}
           <div className="flex items-center gap-3 px-4 py-3">
-            <span {...provided.dragHandleProps} className="text-gray-600 hover:text-gray-300 cursor-grab active:cursor-grabbing flex-shrink-0">
+            <span {...provided.dragHandleProps} className="hidden sm:block text-gray-600 hover:text-gray-300 cursor-grab active:cursor-grabbing flex-shrink-0">
               <GripVertical className="w-4 h-4" />
             </span>
             <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(e => !e)}>
@@ -494,29 +630,52 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
             </div>
             <div className="flex items-center gap-2.5 flex-shrink-0">
               {allMidsComplete && <Check className="w-3.5 h-3.5 text-cb-success" />}
-              <span className="text-cb-caption text-gray-500">
-                {locMids.length} MID{locMids.length !== 1 ? 's' : ''}
+              <span className="hidden sm:inline text-cb-caption text-gray-500">
+                {locMids.length} account{locMids.length !== 1 ? 's' : ''}
               </span>
+              {!formsLocked && entityMoveTargets.length > 0 && (
+                <button
+                  onClick={e => { e.stopPropagation(); setShowMoveMenu(m => !m); }}
+                  className="sm:hidden p-3 -m-1 text-cb-caption normal-case tracking-normal text-gray-500 hover:text-white transition-colors"
+                >
+                  Move
+                </button>
+              )}
               <button
                 onClick={e => { e.stopPropagation(); if (!formsLocked) startLocEdit(); }}
                 title={formsLocked ? FORMS_LOCKED_MESSAGE : 'Edit location name / address'}
                 disabled={formsLocked}
-                className="p-1.5 text-gray-600 hover:text-white rounded-cb transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="p-3 -m-1 sm:p-2 sm:m-0 text-gray-600 hover:text-white rounded-cb transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
               <button
                 onClick={e => { e.stopPropagation(); if (!formsLocked) onDelete(location); }}
                 disabled={formsLocked}
-                className="p-1.5 text-gray-600 hover:text-cb-danger rounded-cb transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                aria-label="Remove location"
+                className="p-3 -m-1 sm:p-2 sm:m-0 text-gray-600 hover:text-cb-danger rounded-cb transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => setExpanded(e => !e)} className="p-1.5 text-gray-500 hover:text-white transition-colors">
+              <button onClick={() => setExpanded(e => !e)} aria-expanded={expanded} aria-label="Toggle location details"
+                className="p-3 -m-1 sm:p-2 sm:m-0 text-gray-500 hover:text-white transition-colors">
                 {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
               </button>
             </div>
           </div>
+
+          {/* Mobile "Move to…" — drag handles are hidden below sm */}
+          {showMoveMenu && !formsLocked && entityMoveTargets.length > 0 && (
+            <div className="sm:hidden border-t border-cb-border px-4 py-2.5 space-y-1.5">
+              <p className="text-cb-caption uppercase text-gray-500">Move to legal entity</p>
+              {entityMoveTargets.map(t => (
+                <button key={t.id} onClick={() => { setShowMoveMenu(false); onMoveLocation?.(location.id, t.id); }}
+                  className="w-full text-left text-cb-body text-gray-300 hover:text-white py-2.5 px-3 rounded-cb border border-cb-border transition-colors">
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Inline location edit — quick correction of prefilled data (2026-07-10) */}
           {editingLoc && (
@@ -557,10 +716,14 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
               className="overflow-hidden"
             >
             <div className="border-t border-cb-border px-4 pb-4 pt-3">
-              <p className="text-cb-caption uppercase text-gray-500 mb-2">
-                Merchant Applications (MIDs)
-              </p>
-              <div className="ml-1.5 pl-4 border-l border-cb-border">
+              {/* The org-chart chrome (caption + rail) only appears once there is
+                  actually a hierarchy to show — single-account locations stay flat. */}
+              {locMids.length > 1 && (
+                <p className="text-cb-caption uppercase text-gray-500 mb-2">
+                  Processing Accounts
+                </p>
+              )}
+              <div className={locMids.length > 1 ? 'ml-1.5 pl-4 border-l border-cb-border' : ''}>
                 <Droppable droppableId={`mids-${location.id}`} type="MID">
                   {(drop, dropSnap) => (
                     <div
@@ -570,7 +733,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
                     >
                       {locNeedsLiquorDocs && (
                         <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 px-1">
-                          Bar/Tavern (5813) in {location.businessState}: alcohol sales % is required now. Liquor license upload comes after signing.
+                          Bar/Tavern in {location.businessState}: alcohol sales % is required now. Liquor license upload comes after signing.
                         </p>
                       )}
                       {locMids.map((mid, idx) => (
@@ -583,7 +746,9 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
                           dbaName={location.dbaName}
                           businessState={location.businessState || ''}
                           onUpdated={onMerchantIDUpdated}
-                          onDelete={getMidLocked(mid) ? () => {} : onMerchantIDDeleted}
+                          onDelete={onMerchantIDDeleted}
+                          moveTargets={midMoveTargets}
+                          onMove={onMoveMid}
                         />
                       ))}
                       {drop.placeholder}
@@ -592,21 +757,24 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
                 </Droppable>
 
                 {addingMid ? (
-                  <div className="mt-2 flex gap-3 items-center">
-                    <input value={addMidName} onChange={e => setAddMidName(e.target.value)}
-                      placeholder={`e.g. ${location.dbaName} – Bar`}
-                      className={`${inputCls} py-2`} autoFocus
-                      onKeyDown={e => { if (e.key === 'Enter') handleAddMid(); if (e.key === 'Escape') setAddingMid(false); }} />
-                    <button onClick={handleAddMid} disabled={addMidSaving}
-                      className="flex-shrink-0 flex items-center gap-1 bg-cb-accent hover:opacity-90 text-cb-bg text-cb-body font-semibold px-3 py-2 rounded-cb disabled:opacity-50 transition-colors">
-                      {addMidSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Add
-                    </button>
-                    <button onClick={() => setAddingMid(false)} className="p-2 text-gray-500 hover:text-white flex-shrink-0"><X className="w-3 h-3" /></button>
+                  <div className="mt-2 space-y-2">
+                    <div className="flex gap-3 items-center">
+                      <input value={addMidName} onChange={e => setAddMidName(e.target.value)}
+                        placeholder={`e.g. ${location.dbaName} – Bar`}
+                        className={`${inputCls} py-2`} autoFocus
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddMid(); if (e.key === 'Escape') setAddingMid(false); }} />
+                      <button onClick={handleAddMid} disabled={addMidSaving}
+                        className="flex-shrink-0 flex items-center gap-1 bg-cb-accent hover:opacity-90 text-cb-bg text-cb-body font-semibold px-3 py-2 rounded-cb disabled:opacity-50 transition-colors">
+                        {addMidSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Add
+                      </button>
+                      <button onClick={() => setAddingMid(false)} className="p-2 text-gray-500 hover:text-white flex-shrink-0"><X className="w-3 h-3" /></button>
+                    </div>
+                    {addMidError && <p className="text-cb-body text-cb-danger" role="alert">{addMidError}</p>}
                   </div>
                 ) : (
                   <button onClick={() => setAddingMid(true)}
                     className="mt-1 w-full flex items-center gap-1.5 py-2 text-cb-caption text-gray-500 hover:text-white transition-colors text-left">
-                    <Plus className="w-3 h-3" /> Add MID (same address, different Merchant ID)
+                    <Plus className="w-3 h-3" /> Add another processing account (e.g. a bar inside this location)
                   </button>
                 )}
               </div>
@@ -881,6 +1049,7 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
   } : null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
+  const [saveError, setSaveError] = useState('');
   const pendingSaveRef = useRef(false);
 
   const addrRef = usePlacesCallbackRef((parsed) => {
@@ -896,15 +1065,18 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
 
   const handleSave = useCallback(async (addr) => {
     setSaving(true);
+    setSaveError('');
     try {
-      await invokePortalFunction('manageLegalEntity', {
+      const res = await invokePortalFunction('manageLegalEntity', {
         action: 'edit', corporateId, entityId: entityIdRef.current,
         mailingStreet: addr.street, mailingCity: addr.city,
         mailingState: addr.state, mailingZip: addr.zip,
       });
+      if (res.data?.error) throw new Error(res.data.error);
       setSavedAt(Date.now());
     } catch (err) {
       console.error('[EntityMailingAddress.handleSave]', err);
+      setSaveError('The mailing address didn\u2019t save — check your connection and try again.');
     }
     finally { setSaving(false); }
   }, [corporateId]);
@@ -918,15 +1090,20 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
   }, [parsedAddress, handleSave]);
 
   const handleClear = async () => {
-    setAddressDisplay(''); setParsedAddress(null); setSavedAt(null);
+    const prev = { display: addressDisplay, parsed: parsedAddress };
+    setAddressDisplay(''); setParsedAddress(null); setSavedAt(null); setSaveError('');
     try {
-      await invokePortalFunction('manageLegalEntity', {
+      const res = await invokePortalFunction('manageLegalEntity', {
         action: 'edit', corporateId, entityId: entity.entityId,
         mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '',
       });
+      if (res.data?.error) throw new Error(res.data.error);
       onUpdated({ ...entity, mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '' });
     } catch (err) {
       console.error('[EntityMailingAddress.handleClear]', err);
+      // Server still has the address — put it back so the UI doesn't lie.
+      setAddressDisplay(prev.display); setParsedAddress(prev.parsed);
+      setSaveError('Couldn\u2019t remove the mailing address — please try again.');
     }
   };
 
@@ -949,7 +1126,7 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
       {expanded && (
         <motion.div key="entity-mailing" {...accordionProps} className="overflow-hidden">
         <div className="mt-3 mb-2 space-y-3">
-          <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Applies to all MIDs under <span className="text-gray-400">{entity.legalBusinessName}</span>. If set, overrides the location address for the legal/mailing address on MSPWare applications.</p>
+          <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Applies to everything under <span className="text-gray-400">{entity.legalBusinessName}</span>. If set, this is used as the legal/mailing address on your application instead of the location address.</p>
           {parsedAddress ? (
             <div className="flex items-center gap-2.5 bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5">
               <Mail className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
@@ -958,7 +1135,7 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
                 {saving && <Loader2 className="w-3 h-3 text-gray-400 animate-spin" />}
                 {!saving && savedAt && <Cloud className="w-3 h-3 text-cb-success" title="Saved" />}
               </div>
-              <button type="button" onClick={handleClear} className="text-gray-500 hover:text-white ml-1">
+              <button type="button" onClick={handleClear} className="p-2 -m-1 text-gray-500 hover:text-white ml-1">
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -974,6 +1151,14 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
               className={inputCls}
             />
           )}
+          {saveError && (
+            <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger" role="alert">
+              {saveError}
+              {parsedAddress && (
+                <button type="button" onClick={() => handleSave(parsedAddress)} className="ml-2 underline hover:text-white">Retry</button>
+              )}
+            </p>
+          )}
         </div>
         </motion.div>
       )}
@@ -984,45 +1169,40 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
 
 // ─── Entity Section (top-level group) ────────────────────────────────────────
 
-function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, onAddLocation, isOnly, onEntityUpdated, onDeleteEntity, showValidation, onEntityDraftStatus }) {
+function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, onAddLocation, isOnly, onEntityUpdated, onDeleteEntity, showValidation, onEntityDraftStatus, allEntities = [], onMoveLocation, onMoveMid, simpleMode = false }) {
   const entityLocs = locations.filter(l => l.entityId === entity.entityId);
   const entityMids = merchantIDs.filter(m => entityLocs.some(l => l.id === m.locationId));
+  const entityMoveTargets = allEntities
+    .filter(e => e.entityId !== entity.entityId)
+    .map(e => ({ id: e.entityId, label: e.legalBusinessName || 'Legal Entity' }));
   const allComplete = entityLocs.length > 0 && entityLocs.every(l =>
-    merchantIDs.some(m => {
-      if (m.locationId !== l.id || !(m.mccCode && m.monthlyCardSales)) return false;
-      if (requiresLiquorCompliance(l.businessState, m.mccCode) && !isAlcoholSalesPercentageSet(m.alcoholSalesPercentage)) {
-        return false;
-      }
-      return true;
-    })
+    merchantIDs.some(m => m.locationId === l.id && isMidComplete(m, l.businessState))
   );
   const entityDetailsComplete = entityMissingFields(entity).length === 0;
   const highlightError = showValidation && (!allComplete || !entityDetailsComplete);
 
-  // Quick inline edit for the (often prefilled) legal name + EIN — 2026-07-10
+  // Quick inline edit for the (often prefilled) legal name — 2026-07-10.
+  // EIN editing lives in one place only: the Business details panel below
+  // (dual EIN surfaces confused merchants — critique 2026-07-15).
   const [editingHeader, setEditingHeader] = useState(false);
   const [hdrName, setHdrName]     = useState(entity.legalBusinessName || '');
-  const [hdrEIN, setHdrEIN]       = useState(entity.federalEIN || '');
   const [hdrSaving, setHdrSaving] = useState(false);
   const [hdrError, setHdrError]   = useState('');
   const startHeaderEdit = () => {
     setHdrName(entity.legalBusinessName || '');
-    setHdrEIN(entity.federalEIN || '');
     setHdrError('');
     setEditingHeader(true);
   };
   const saveHeaderEdit = async () => {
-    const einDigits = hdrEIN.replace(/\D/g, '');
     if (!hdrName.trim()) { setHdrError('Legal name is required'); return; }
-    if (einDigits && einDigits.length !== 9) { setHdrError('EIN must be 9 digits'); return; }
     setHdrSaving(true); setHdrError('');
     try {
       const res = await invokePortalFunction('manageLegalEntity', {
         action: 'edit', corporateId, entityId: entity.entityId,
-        legalBusinessName: hdrName.trim(), federalEIN: einDigits,
+        legalBusinessName: hdrName.trim(),
       });
       if (res.data?.error) throw new Error(res.data.error);
-      onEntityUpdated({ ...entity, legalBusinessName: hdrName.trim(), federalEIN: einDigits });
+      onEntityUpdated({ ...entity, legalBusinessName: hdrName.trim() });
       setEditingHeader(false);
     } catch (err) { setHdrError(err.message || 'Save failed'); }
     finally { setHdrSaving(false); }
@@ -1040,8 +1220,6 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
           <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-3 py-0.5">
             <input value={hdrName} onChange={e => setHdrName(e.target.value)} placeholder="Legal business name" autoFocus
               className="flex-1 min-w-0 bg-cb-bg border border-cb-border rounded-cb px-3 py-1.5 text-cb-body text-white focus:outline-none focus:ring-2 focus:ring-cb-accent" />
-            <input value={hdrEIN} onChange={e => setHdrEIN(e.target.value)} placeholder="EIN (9 digits)"
-              className="w-full sm:w-36 bg-cb-bg border border-cb-border rounded-cb px-3 py-1.5 text-cb-body text-white font-mono focus:outline-none focus:ring-2 focus:ring-cb-accent" />
             <div className="flex items-center gap-2 flex-shrink-0">
               <button onClick={saveHeaderEdit} disabled={hdrSaving}
                 className="text-cb-body font-semibold bg-cb-accent hover:opacity-90 disabled:opacity-50 text-cb-bg px-3 py-1.5 rounded-cb transition-colors">
@@ -1060,17 +1238,19 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
           </div>
         )}
         <div className="flex items-center gap-2.5 flex-shrink-0">
-          <span className="text-cb-caption text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''} · {entityMids.length} MID{entityMids.length !== 1 ? 's' : ''}</span>
+          {!simpleMode && (
+            <span className="hidden sm:inline text-cb-caption text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''} · {entityMids.length} account{entityMids.length !== 1 ? 's' : ''}</span>
+          )}
           {allComplete && entityLocs.length > 0 && <Check className="w-3.5 h-3.5 text-cb-success" />}
           {!editingHeader && (
-            <button onClick={startHeaderEdit} title="Edit legal entity name / EIN"
-              className="p-1.5 text-gray-600 hover:text-white rounded-cb transition-colors">
+            <button onClick={startHeaderEdit} title="Edit legal entity name"
+              className="p-2 text-gray-600 hover:text-white rounded-cb transition-colors">
               <Pencil className="w-3.5 h-3.5" />
             </button>
           )}
           {!isOnly && (
             <button onClick={() => onDeleteEntity(entity)} title="Delete legal entity"
-              className="p-1.5 text-gray-600 hover:text-cb-danger rounded-cb transition-colors">
+              className="p-2 text-gray-600 hover:text-cb-danger rounded-cb transition-colors">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           )}
@@ -1095,7 +1275,7 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
           <div
             ref={drop.innerRef}
             {...drop.droppableProps}
-            className={`py-4 pr-4 pl-4 ml-6 border-l border-cb-border space-y-2 min-h-[48px] transition-colors ${dropSnap.isDraggingOver ? 'bg-cb-accent-muted' : ''}`}
+            className={`py-4 pr-3 sm:pr-4 space-y-2 min-h-[48px] transition-colors ${simpleMode ? 'pl-3 sm:pl-4' : 'pl-3 sm:pl-4 ml-3 sm:ml-6 border-l border-cb-border'} ${dropSnap.isDraggingOver ? 'bg-cb-accent-muted' : ''}`}
           >
             {entityLocs.map((loc, idx) => (
               <LocationCard
@@ -1110,6 +1290,10 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
                 onMerchantIDDeleted={onMerchantIDDeleted}
                 onLocationUpdated={onLocationUpdated}
                 showValidation={showValidation}
+                allLocations={locations}
+                entityMoveTargets={entityMoveTargets}
+                onMoveLocation={onMoveLocation}
+                onMoveMid={onMoveMid}
               />
             ))}
             {drop.placeholder}
@@ -1121,7 +1305,7 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
       </Droppable>
 
       {/* Add location to this entity */}
-      <div className="ml-6 pl-4 pr-4 pb-4 border-l border-cb-border">
+      <div className={`pl-3 sm:pl-4 pr-3 sm:pr-4 pb-4 ${simpleMode ? '' : 'ml-3 sm:ml-6 border-l border-cb-border'}`}>
         <button onClick={() => onAddLocation(entity.entityId)}
           className="w-full flex items-center gap-1.5 py-2 text-cb-caption text-gray-500 hover:text-white transition-colors text-left">
           <Plus className="w-3 h-3" /> Add Location{isOnly ? '' : ` to ${entity.legalBusinessName}`}
@@ -1131,73 +1315,11 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
   );
 }
 
-// ─── Add Entity Modal ─────────────────────────────────────────────────────────
-
-function AddEntityModal({ corporateId, onSaved, onClose }) {
-  const [name, setName] = useState('');
-  const [ein, setEin] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  const einDigits = ein.replace(/\D/g, '');
-  const canSave = name.trim() && einDigits.length === 9;
-
-  const handleSave = async () => {
-    if (!canSave) return;
-    setSaving(true); setError('');
-    try {
-      const res = await invokePortalFunction('manageLegalEntity', {
-        action: 'add', corporateId,
-        legalBusinessName: name.trim(), federalEIN: einDigits,
-      });
-      if (res.data?.error) throw new Error(res.data.error);
-      // Function returns updated entities array — extract the last one (newly created)
-      const newEntities = res.data?.entities || [];
-      onSaved(newEntities[newEntities.length - 1]);
-    } catch (err) { setError(err.message || 'Failed to create entity.'); }
-    finally { setSaving(false); }
-  };
-
-  return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm px-4 animate-in fade-in-0 duration-200" onClick={onClose}>
-      <div className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-md p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
-        <div className="flex items-start justify-between mb-5">
-          <div>
-            <h3 className="font-display text-cb-title text-white">Add Legal Entity</h3>
-            <p className="text-cb-body text-gray-500 mt-0.5">New EIN / separate legal business</p>
-          </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white p-1.5 rounded-cb"><X className="w-4 h-4" /></button>
-        </div>
-        <div className="space-y-4">
-          <div>
-            <label className={labelCls}>Legal Business Name *</label>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Northside LLC" className={inputCls} autoFocus />
-          </div>
-          <div>
-            <label className={labelCls}>Federal EIN *</label>
-            <input value={ein} onChange={e => setEin(e.target.value.replace(/\D/g, '').slice(0, 9))}
-              placeholder="9 digits" className={`${inputCls} font-mono`} />
-            {ein.length > 0 && einDigits.length !== 9 && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">{einDigits.length}/9 digits</p>}
-            {einDigits.length === 9 && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-success mt-1.5 flex items-center gap-1"><Check className="w-3 h-3" /> Valid EIN</p>}
-          </div>
-          {error && <div className="bg-cb-surface border border-cb-border border-l-2 border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-cb-danger">{error}</div>}
-          <div className="flex gap-3 pt-1">
-            <button onClick={handleSave} disabled={saving || !canSave}
-              className="flex-1 flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 text-cb-bg font-semibold text-cb-body py-2.5 rounded-cb transition-all">
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              {saving ? 'Creating…' : 'Create Entity'}
-            </button>
-            <button onClick={onClose} className="px-4 border border-cb-border text-gray-300 font-medium text-cb-body py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong transition-colors">Cancel</button>
-          </div>
-        </div>
-      </div>
-    </div>, document.body
-  );
-}
-
 // ─── Add Location Form ────────────────────────────────────────────────────────
+// (The old AddEntityModal component was deleted 2026-07-15 — it was never
+// rendered. New entities are created inline in this form via addSelfServeLocation.)
 
-function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFirstLocation, onSaved, onCancel, onEntityAdded }) {
+function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFirstLocation, onSaved, onCancel }) {
   // Prefill the very first location's DBA name from the Company Name entered at
   // signup — most self-serve merchants are a single storefront, so re-typing the
   // same name here was pure friction. Only applies to the first location; later
@@ -1282,7 +1404,7 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
                   onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
                   placeholder="Start typing to search…" autoComplete="off" className={inputCls} />
                 {unverifiedWarning && (
-                  <div className="mt-2 bg-cb-surface border border-cb-border border-l-2 border-l-cb-accent rounded-cb p-3">
+                  <div className="mt-2 bg-cb-surface border border-cb-border border-l border-l-cb-accent rounded-cb p-3">
                     <p className="text-cb-body font-medium text-white mb-2">Address not verified — delays may occur.</p>
                     <div className="flex gap-3">
                       <button type="button" onClick={() => doSave(null)} disabled={saving}
@@ -1333,7 +1455,7 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
           )}
         </div>
 
-        {error && <div className="bg-cb-surface border border-cb-border border-l-2 border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-cb-danger">{error}</div>}
+        {error && <div className="bg-cb-surface border border-cb-border border-l border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-cb-danger">{error}</div>}
         <div className="flex gap-3 pt-1">
           <button type="submit" disabled={saving}
             className="flex items-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 text-cb-bg font-semibold text-cb-body px-5 py-3 rounded-cb transition-all">
@@ -1350,11 +1472,13 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function OnboardingLocations({ profile, onContinue, onBack }) {
-  const [currentProfile, setCurrentProfile] = useState(profile);
   const [entities, setEntities] = useState([]);
   const [locations, setLocations] = useState([]);
   const [merchantIDs, setMerchantIDs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  // Inline surface for delete/move failures — replaces browser alert() (critique 2026-07-15)
+  const [actionError, setActionError] = useState('');
   // addFormEntityId: null = hidden, string = show form pre-targeted to that entity
   const [addFormEntityId, setAddFormEntityId] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
@@ -1366,6 +1490,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
   const loadAll = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const [entRes, locRes, conRes] = await Promise.all([
         invokePortalFunction('manageLegalEntity', { action: 'list', corporateId: profile.corporateId }),
@@ -1425,17 +1550,14 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       if (normalizedLocs.length === 0) setAddFormEntityId(firstEntityId);
     } catch (err) {
       console.error('[loadAll]', err);
+      setLoadError(err?.message || 'We could not load your locations. Check your connection and try again.');
     }
     finally { setLoading(false); }
   };
 
-  const handleLocationSaved = async ({ entityId }) => {
+  const handleLocationSaved = async () => {
     setAddFormEntityId(null);
     await loadAll();
-  };
-
-  const handleEntityAdded = (entity) => {
-    if (entity) setEntities(prev => [...prev, entity]);
   };
 
   const handleEntityUpdated = (updated) => {
@@ -1448,8 +1570,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
   const handleDeleteLocation = async (loc) => {
     setDeleteConfirm(null);
+    setActionError('');
     const idToDelete = loc.id || loc.locationId;
-    if (!idToDelete) { alert('Cannot delete: location has no ID.'); return; }
+    if (!idToDelete) { setActionError('Cannot delete: this location has no ID. Refresh and try again.'); return; }
     try {
       const res = await invokePortalFunction('removeSelfServeLocation', { locationId: idToDelete });
       if (res.data?.error) throw new Error(res.data.error);
@@ -1457,24 +1580,26 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       setMerchantIDs(prev => prev.filter(c => c.locationId !== idToDelete));
     } catch (err) {
       console.error('[handleDeleteLocation]', err);
-      alert('Failed to delete location: ' + (err.message || 'Unknown error'));
+      setActionError(`Could not remove "${loc.dbaName}": ${err.message || 'unknown error'}`);
     }
   };
 
   const handleDeleteMid = async (mid) => {
     setDeleteMidConfirm(null);
+    setActionError('');
     try {
       const res = await invokePortalFunction('manageMerchantID', { action: 'delete', corporateId: profile.corporateId, merchantIDId: mid.id });
       if (res.data?.error) throw new Error(res.data.error);
       setMerchantIDs(prev => prev.filter(c => c.id !== mid.id));
     } catch (err) {
       console.error('[handleDeleteMid]', err);
-      alert('Failed to delete MID: ' + (err.message || 'Unknown error'));
+      setActionError(`Could not remove the processing account: ${err.message || 'unknown error'}`);
     }
   };
 
   const handleDeleteEntity = async (entity) => {
     setDeleteEntityConfirm(null);
+    setActionError('');
     try {
       const res = await invokePortalFunction('manageLegalEntity', { action: 'delete', corporateId: profile.corporateId, entityId: entity.entityId });
       if (res.data?.error) throw new Error(res.data.error);
@@ -1483,7 +1608,37 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       setLocations(prev => prev.map(l => l.entityId === entity.entityId ? { ...l, entityId: entities.find(e => e.entityId !== entity.entityId)?.entityId || '' } : l));
     } catch (err) {
       console.error('[handleDeleteEntity]', err);
-      alert('Failed to delete entity: ' + (err.message || 'Unknown error'));
+      setActionError(`Could not remove "${entity.legalBusinessName}": ${err.message || 'unknown error'}`);
+    }
+  };
+
+  // Shared by drag-and-drop AND the mobile "Move to…" menus. Failures are
+  // surfaced in the actionError banner — a silent snap-back reads as a glitch.
+  const moveLocationToEntity = async (locId, targetEntityId) => {
+    const loc = locations.find(l => l.id === locId);
+    setActionError('');
+    setLocations(prev => prev.map(l => l.id === locId ? { ...l, entityId: targetEntityId } : l));
+    try {
+      const res = await invokePortalFunction('batchUpdateStatus', { corporateId: profile.corporateId, action: 'moveToEntity', locationIds: [locId], targetEntityId });
+      if (res.data?.error) throw new Error(res.data.error);
+    } catch (err) {
+      console.error('[moveLocationToEntity]', err);
+      setActionError(`Could not move "${loc?.dbaName || 'the location'}" — your layout was restored. ${err.message || 'Please try again.'}`);
+      await loadAll();
+    }
+  };
+
+  const moveMidToLocation = async (midId, targetLocId) => {
+    const mid = merchantIDs.find(c => c.id === midId);
+    setActionError('');
+    setMerchantIDs(prev => prev.map(c => c.id === midId ? { ...c, locationId: targetLocId } : c));
+    try {
+      const res = await invokePortalFunction('manageMerchantID', { action: 'update', corporateId: profile.corporateId, merchantIDId: midId, locationId: targetLocId, data: { locationId: targetLocId } });
+      if (res.data?.error) throw new Error(res.data.error);
+    } catch (err) {
+      console.error('[moveMidToLocation]', err);
+      setActionError(`Could not move "${mid?.merchantName || mid?.dbaName || 'the processing account'}" — your layout was restored. ${err.message || 'Please try again.'}`);
+      await loadAll();
     }
   };
 
@@ -1492,25 +1647,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
     if (type === 'LOCATION') {
-      const locId = draggableId.replace('loc-', '');
-      const targetEntityId = destination.droppableId;
-      setLocations(prev => prev.map(l => l.id === locId ? { ...l, entityId: targetEntityId } : l));
-      try {
-        await invokePortalFunction('batchUpdateStatus', { corporateId: profile.corporateId, action: 'moveToEntity', locationIds: [locId], targetEntityId });
-      } catch (err) {
-        console.error('[onDragEnd] moveToEntity failed', err);
-        await loadAll();
-      }
+      await moveLocationToEntity(draggableId.replace('loc-', ''), destination.droppableId);
     } else if (type === 'MID') {
-      const midId = draggableId.replace('mid-', '');
-      const targetLocId = destination.droppableId.replace('mids-', '');
-      setMerchantIDs(prev => prev.map(c => c.id === midId ? { ...c, locationId: targetLocId } : c));
-      try {
-        await invokePortalFunction('manageMerchantID', { action: 'update', corporateId: profile.corporateId, merchantIDId: midId, locationId: targetLocId, data: { locationId: targetLocId } });
-      } catch (err) {
-        console.error('[onDragEnd] MID move failed', err);
-        await loadAll();
-      }
+      await moveMidToLocation(draggableId.replace('mid-', ''), destination.droppableId.replace('mids-', ''));
     }
   };
 
@@ -1537,25 +1676,19 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     if (draft) return draft.missing.length === 0 && !draft.needsSave;
     return entityMissingFields(e).length === 0;
   });
+  // Fields are typed but Save Details hasn't been clicked — surface this near
+  // Continue so a blocked Continue doesn't read as a broken page.
+  const hasUnsavedEntityDetails = Object.values(entityDrafts).some(
+    (d) => d.needsSave && d.missing.length === 0
+  );
 
   const totalMids = merchantIDs.length;
-  const completeMids = merchantIDs.filter(c => {
-    if (!(c.mccCode && c.monthlyCardSales)) return false;
-    const loc = locations.find(l => l.id === c.locationId);
-    if (requiresLiquorCompliance(loc?.businessState, c.mccCode) && !isAlcoholSalesPercentageSet(c.alcoholSalesPercentage)) {
-      return false;
-    }
-    return true;
-  }).length;
+  const completeMids = merchantIDs.filter(c =>
+    isMidComplete(c, locations.find(l => l.id === c.locationId)?.businessState)
+  ).length;
 
   const allMidsComplete = businessComplete && locations.length > 0 && locations.every(l =>
-    merchantIDs.some(c => {
-      if (c.locationId !== l.id || !(c.mccCode && c.monthlyCardSales)) return false;
-      if (requiresLiquorCompliance(l.businessState, c.mccCode) && !isAlcoholSalesPercentageSet(c.alcoholSalesPercentage)) {
-        return false;
-      }
-      return true;
-    })
+    merchantIDs.some(c => c.locationId === l.id && isMidComplete(c, l.businessState))
   );
 
   // Build a list of specific validation issues for user feedback
@@ -1578,26 +1711,22 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     validationIssues.push('At least one location is required');
   } else {
     locations.forEach(l => {
-      const mid = merchantIDs.find(c => {
-        if (c.locationId !== l.id || !(c.mccCode && c.monthlyCardSales)) return false;
-        if (requiresLiquorCompliance(l.businessState, c.mccCode) && !isAlcoholSalesPercentageSet(c.alcoholSalesPercentage)) {
-          return false;
-        }
-        return true;
-      });
+      const mid = merchantIDs.find(c => c.locationId === l.id && isMidComplete(c, l.businessState));
       if (!mid) {
         const barMid = merchantIDs.find(c => c.locationId === l.id && requiresLiquorCompliance(l.businessState, c.mccCode));
         if (barMid && !isAlcoholSalesPercentageSet(barMid.alcoholSalesPercentage)) {
-          validationIssues.push(`${l.dbaName}: alcohol sales % required for Bar/Tavern (5813) in ${l.businessState}`);
+          validationIssues.push(`${l.dbaName}: alcohol sales % is required for bars/taverns in ${l.businessState}`);
         } else {
           const locMids = merchantIDs.filter(c => c.locationId === l.id);
           if (locMids.length === 0) {
-            validationIssues.push(`${l.dbaName}: add a Merchant ID (MCC + monthly volume)`);
+            validationIssues.push(`${l.dbaName}: add a processing account (business category + monthly card sales)`);
           } else {
             locMids.forEach((c) => {
               const gaps = [];
-              if (!c.mccCode) gaps.push('MCC code');
-              if (!c.monthlyCardSales) gaps.push('monthly volume');
+              if (!c.mccCode && !c.mccHelpRequested) gaps.push('business category');
+              if (!(Number(c.monthlyCardSales) > 0)) gaps.push('monthly card sales');
+              if (!(Number(c.avgSaleAmount) > 0)) gaps.push('typical sale');
+              if (!(Number(c.highestTicketAmount) > 0)) gaps.push('largest expected sale');
               if (requiresLiquorCompliance(l.businessState, c.mccCode) && !isAlcoholSalesPercentageSet(c.alcoholSalesPercentage)) {
                 gaps.push('alcohol sales %');
               }
@@ -1612,7 +1741,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   }
 
   if (loading) return (
-    <div className="px-8 py-8 space-y-4" aria-busy="true" aria-label="Loading locations">
+    <div className="px-4 sm:px-8 py-8 space-y-4" aria-busy="true" aria-label="Loading locations">
       <div className="skeleton h-6 w-40 !rounded-cb" />
       <div className="skeleton h-9 w-2/3 !rounded-cb" />
       <div className="skeleton h-4 w-1/2 !rounded-cb" />
@@ -1622,15 +1751,31 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
     </div>
   );
 
+  if (loadError) return (
+    <div className="px-4 sm:px-8 py-12 flex flex-col items-center text-center gap-4">
+      <div className="w-10 h-10 rounded-full bg-cb-surface border border-cb-border flex items-center justify-center">
+        <AlertTriangle className="w-5 h-5 text-cb-danger" />
+      </div>
+      <div>
+        <p className="text-cb-body-lg font-semibold text-white mb-1">Couldn&apos;t load your locations</p>
+        <p className="text-cb-body text-gray-400 max-w-md">{loadError}</p>
+      </div>
+      <button onClick={loadAll}
+        className="bg-cb-accent hover:opacity-90 text-cb-bg font-semibold text-cb-body px-5 py-2.5 rounded-cb transition-opacity">
+        Try Again
+      </button>
+    </div>
+  );
+
   return (
     <div className="flex flex-col">
       {/* Header */}
-      <div className="px-8 pt-10 pb-8 border-b border-cb-border">
-        <p className="text-cb-caption uppercase text-gray-500 mb-2">Step 2 of 4 — Locations &amp; MIDs</p>
+      <div className="px-4 sm:px-8 pt-10 pb-8 border-b border-cb-border">
+        <p className="text-cb-caption uppercase text-gray-500 mb-2">Step 2 of 4 — Locations</p>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-display text-cb-display text-white mb-2">Locations &amp; Processing Setup</h2>
-            <p className="text-cb-body-lg text-gray-400 max-w-xl">Add locations under each legal entity, then fill in each MID's processing details.</p>
+            <h2 className="font-display text-cb-display text-white mb-2">Your Business &amp; Locations</h2>
+            <p className="text-cb-body-lg text-gray-400 max-w-xl">Confirm your legal business details, add each location, and tell us how it takes cards.</p>
           </div>
           <button onClick={() => setShowBackConfirm(true)}
             className="flex-shrink-0 flex items-center gap-2 text-cb-body text-gray-300 border border-cb-border hover:border-cb-border-strong hover:text-white px-4 py-2 rounded-cb transition-colors">
@@ -1641,11 +1786,11 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
       {/* Summary — one quiet line, no chrome */}
       {locations.length > 0 && (
-        <div className="px-8 py-4 border-b border-cb-border">
+        <div className="px-4 sm:px-8 py-4 border-b border-cb-border">
           <p className="text-cb-body text-gray-500">
             <span className="text-white font-semibold">{locations.length}</span> location{locations.length !== 1 ? 's' : ''}
             <span className="mx-2 text-gray-700">·</span>
-            <span className="text-white font-semibold">{totalMids}</span> MID{totalMids !== 1 ? 's' : ''}
+            <span className="text-white font-semibold">{totalMids}</span> processing account{totalMids !== 1 ? 's' : ''}
             <span className="mx-2 text-gray-700">·</span>
             <span className={`font-semibold ${completeMids === totalMids && totalMids > 0 ? 'text-cb-success' : 'text-white'}`}>{completeMids} of {totalMids}</span> complete
             {entities.length > 1 && (
@@ -1659,10 +1804,10 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       )}
 
       {/* Hierarchy: Entity → Locations → MIDs */}
-      <div className="px-8 py-8 space-y-6">
+      <div className="px-4 sm:px-8 py-8 space-y-6">
         {/* Prefill verification notice (2026-07-10, Teddy: applicants must be
             prompted to verify prefilled data and be able to correct it here) */}
-        <div className="flex items-start gap-3 bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-accent rounded-cb px-5 py-4">
+        <div className="flex items-start gap-3 bg-cb-surface-raised border border-cb-border border-l border-l-cb-accent rounded-cb px-5 py-4">
           <Info className="w-4 h-4 text-cb-accent flex-shrink-0 mt-0.5" />
           <p className="text-cb-body text-gray-400 leading-relaxed">
             <span className="font-medium text-white">Please verify everything below before continuing.</span>{' '}
@@ -1672,12 +1817,22 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           </p>
         </div>
 
-        {/* Toolbar */}
-        <div className="flex items-center justify-between">
-          <p className="text-cb-caption uppercase text-gray-500">
-            {entities.length > 1 ? `${entities.length} Legal Entities` : 'Org Structure'}
-          </p>
-        </div>
+        {/* Action error — inline, replaces browser alert() */}
+        {actionError && (
+          <div className="flex items-start justify-between gap-3 bg-cb-surface-raised border border-cb-border border-l-cb-danger rounded-cb px-5 py-4" role="alert">
+            <p className="text-cb-body text-cb-danger">{actionError}</p>
+            <button onClick={() => setActionError('')} className="p-1 text-gray-500 hover:text-white flex-shrink-0">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Toolbar — only meaningful with multiple entities */}
+        {entities.length > 1 && (
+          <div className="flex items-center justify-between">
+            <p className="text-cb-caption uppercase text-gray-500">{entities.length} Legal Entities</p>
+          </div>
+        )}
 
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="space-y-6">
@@ -1699,6 +1854,10 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                 onDeleteEntity={e => setDeleteEntityConfirm(e)}
                 showValidation={showValidation}
                 onEntityDraftStatus={handleEntityDraftStatus}
+                allEntities={entities}
+                onMoveLocation={moveLocationToEntity}
+                onMoveMid={moveMidToLocation}
+                simpleMode={entities.length === 1 && locations.length <= 1}
               />
             ))}
           </div>
@@ -1714,16 +1873,15 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             isFirstLocation={locations.length === 0}
             onSaved={handleLocationSaved}
             onCancel={() => setAddFormEntityId(null)}
-            onEntityAdded={handleEntityAdded}
           />
         )}
       </div>
 
       {/* Footer */}
-      <div className="px-8 pt-6 pb-10 border-t border-cb-border space-y-4">
+      <div className="px-4 sm:px-8 pt-6 pb-10 border-t border-cb-border space-y-4">
         {/* Validation error banner — shown only after user attempts to continue */}
         {showValidation && !allMidsComplete && (
-          <div className="bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-danger rounded-cb px-5 py-4">
+          <div className="bg-cb-surface-raised border border-cb-border border-l border-l-cb-danger rounded-cb px-5 py-4">
             <p className="text-cb-body font-medium text-cb-danger mb-2">Please fix the following before continuing:</p>
             <ul className="space-y-1.5">
               {validationIssues.map((issue, i) => (
@@ -1738,7 +1896,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         <button
           onClick={() => {
             if (!allMidsComplete) { setShowValidation(true); return; }
-            onContinue({ locations, legalEntities: entities, profile: currentProfile });
+            onContinue({ locations, legalEntities: entities, profile });
           }}
           className={`w-full flex items-center justify-center gap-3 font-semibold py-4 px-6 rounded-cb text-cb-body-lg transition-colors ${
             allMidsComplete
@@ -1752,11 +1910,13 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         </button>
         {!showValidation && !allMidsComplete && (
           <p className="text-center text-cb-body text-gray-500">
-            {!businessComplete
+            {hasUnsavedEntityDetails
+              ? 'You have unsaved business details — click Save Details above to store them.'
+              : !businessComplete
               ? 'Complete business details for each entity to continue.'
               : locations.length === 0
               ? 'Add at least one location to continue.'
-              : `${totalMids - completeMids} MID${totalMids - completeMids !== 1 ? 's' : ''} still need MCC code and volume info.`}
+              : `${totalMids - completeMids} processing account${totalMids - completeMids !== 1 ? 's' : ''} still need a business category and sales info.`}
           </p>
         )}
       </div>
@@ -1769,7 +1929,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
               <div className="w-10 h-10 rounded-full bg-cb-surface border border-cb-border flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-cb-danger" /></div>
               <div>
                 <h3 className="text-cb-body-lg font-semibold text-white">Remove Location?</h3>
-                <p className="text-cb-body text-gray-400 mt-0.5">"{deleteConfirm.dbaName}" and all its MIDs will be deleted.</p>
+                <p className="text-cb-body text-gray-400 mt-0.5">"{deleteConfirm.dbaName}" and all its processing accounts will be deleted.</p>
               </div>
             </div>
             <div className="flex gap-3">
@@ -1787,7 +1947,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-full bg-cb-surface border border-cb-border flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-cb-danger" /></div>
               <div>
-                <h3 className="text-cb-body-lg font-semibold text-white">Remove MID?</h3>
+                <h3 className="text-cb-body-lg font-semibold text-white">Remove Processing Account?</h3>
                 <p className="text-cb-body text-gray-400 mt-0.5">"{deleteMidConfirm.merchantName || deleteMidConfirm.dbaName}" will be permanently deleted.</p>
               </div>
             </div>
@@ -1807,7 +1967,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
               <div className="w-10 h-10 rounded-full bg-cb-surface border border-cb-border flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-cb-danger" /></div>
               <div>
                 <h3 className="text-cb-body-lg font-semibold text-white">Remove Legal Entity?</h3>
-                <p className="text-cb-body text-gray-400 mt-0.5">"{deleteEntityConfirm.legalBusinessName}" will be removed. Its locations will become unassigned.</p>
+                <p className="text-cb-body text-gray-400 mt-0.5">"{deleteEntityConfirm.legalBusinessName}" will be removed. Its locations will move to your remaining legal entity.</p>
               </div>
             </div>
             <div className="flex gap-3">
@@ -1823,7 +1983,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 animate-in fade-in-0 duration-200" onClick={() => setShowBackConfirm(false)}>
           <div className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-sm p-6 animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-2 duration-200" onClick={e => e.stopPropagation()}>
             <h3 className="font-display text-cb-title text-white mb-1">Go Back?</h3>
-            <p className="text-cb-body text-gray-400 mb-5">Your locations and MIDs are saved.</p>
+            <p className="text-cb-body text-gray-400 mb-5">Everything you saved here is kept.</p>
             <div className="flex gap-3">
               <button onClick={() => { setShowBackConfirm(false); onBack(); }} className="flex-1 bg-cb-surface border border-cb-border-strong hover:text-white text-gray-200 font-medium text-cb-body py-2.5 rounded-cb transition-colors">Go Back</button>
               <button onClick={() => setShowBackConfirm(false)} className="flex-1 border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong font-medium text-cb-body py-2.5 rounded-cb transition-colors">Stay</button>

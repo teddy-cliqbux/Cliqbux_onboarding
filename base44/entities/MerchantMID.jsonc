@@ -22,6 +22,11 @@
       "type": "string",
       "description": "Elavon MCC code e.g. 5812, 5411A. Do not use 5999 (restricted category rejected in CA/CO/NY)."
     },
+    "mccHelpRequested": {
+      "type": "boolean",
+      "default": false,
+      "description": "true = merchant picked 'My business isn't listed' in the portal Business Category dropdown. mccCode stays empty (never invent an MCC \u2014 Critical Lesson #15); a Cliqbux agent must set the real MCC before signing. Cleared when a real mccCode is chosen. Added 2026-07-15 \u2014 republish this schema in Base44 or the flag strips on save (Critical Lesson #4)."
+    },
     "industryType": {
       "type": "string",
       "description": "Elavon IndustryCode: RE=Retail, RS=Restaurant, SP=Supermarket, HT=Hotel, MS=MOTO, ARU=ARU"

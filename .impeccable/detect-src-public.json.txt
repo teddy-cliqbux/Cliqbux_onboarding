@@ -1,0 +1,1544 @@
+[
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 6,
+    "snippet": "Undocumented color #6B7280 is outside DESIGN.md colors",
+    "ignoreValue": "#6B7280"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 6,
+    "snippet": "fontSize: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 7,
+    "snippet": "borderRadius: 8px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "8px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 7,
+    "snippet": "fontSize: 13px is off the DESIGN.md type ramp",
+    "ignoreValue": "13px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 69,
+    "snippet": "Undocumented color rgba(0,0,0,0.45) is outside DESIGN.md colors",
+    "ignoreValue": "rgba(0,0,0,0.45)"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 72,
+    "snippet": "Undocumented color rgba(0,0,0,0.3) is outside DESIGN.md colors",
+    "ignoreValue": "rgba(0,0,0,0.3)"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 72,
+    "snippet": "borderRadius: 16px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "16px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 75,
+    "snippet": "Undocumented color #EFF6FF is outside DESIGN.md colors",
+    "ignoreValue": "#EFF6FF"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 79,
+    "snippet": "fontSize: 15px is off the DESIGN.md type ramp",
+    "ignoreValue": "15px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 80,
+    "snippet": "Undocumented color #9CA3AF is outside DESIGN.md colors",
+    "ignoreValue": "#9CA3AF"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 83,
+    "snippet": "Undocumented color #9CA3AF is outside DESIGN.md colors",
+    "ignoreValue": "#9CA3AF"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 124,
+    "snippet": "Undocumented color #2563EB is outside DESIGN.md colors",
+    "ignoreValue": "#2563EB"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 124,
+    "snippet": "Undocumented color #EFF6FF is outside DESIGN.md colors",
+    "ignoreValue": "#EFF6FF"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 124,
+    "snippet": "Undocumented color #93C5FD is outside DESIGN.md colors",
+    "ignoreValue": "#93C5FD"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 124,
+    "snippet": "borderRadius: 7px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "7px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 135,
+    "snippet": "Undocumented color #6B7280 is outside DESIGN.md colors",
+    "ignoreValue": "#6B7280"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 135,
+    "snippet": "fontSize: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 137,
+    "snippet": "Undocumented color #F0FDF4 is outside DESIGN.md colors",
+    "ignoreValue": "#F0FDF4"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 137,
+    "snippet": "borderRadius: 8px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "8px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 138,
+    "snippet": "Undocumented color #16A34A is outside DESIGN.md colors",
+    "ignoreValue": "#16A34A"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 141,
+    "snippet": "Undocumented color #4B5563 is outside DESIGN.md colors",
+    "ignoreValue": "#4B5563"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 141,
+    "snippet": "fontSize: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 145,
+    "snippet": "Undocumented color #FEF2F2 is outside DESIGN.md colors",
+    "ignoreValue": "#FEF2F2"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 145,
+    "snippet": "borderRadius: 8px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "8px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 146,
+    "snippet": "Undocumented color #DC2626 is outside DESIGN.md colors",
+    "ignoreValue": "#DC2626"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 149,
+    "snippet": "fontSize: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 155,
+    "snippet": "Undocumented color #DC2626 is outside DESIGN.md colors",
+    "ignoreValue": "#DC2626"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 155,
+    "snippet": "Undocumented color #FEF2F2 is outside DESIGN.md colors",
+    "ignoreValue": "#FEF2F2"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 155,
+    "snippet": "borderRadius: 8px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "8px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 167,
+    "snippet": "Undocumented color #D1D5DB is outside DESIGN.md colors",
+    "ignoreValue": "#D1D5DB"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 168,
+    "snippet": "borderRadius: 9px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "9px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 168,
+    "snippet": "fontSize: 13px is off the DESIGN.md type ramp",
+    "ignoreValue": "13px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 175,
+    "snippet": "Undocumented color #6B7280 is outside DESIGN.md colors",
+    "ignoreValue": "#6B7280"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 175,
+    "snippet": "borderRadius: 9px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "9px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddEntityModal.jsx",
+    "line": 175,
+    "snippet": "fontSize: 13px is off the DESIGN.md type ramp",
+    "ignoreValue": "13px"
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddLocationModal.jsx",
+    "line": 265,
+    "snippet": "text-gray-400 on bg-blue-50",
+    "importedBy": [
+      "LocationsGrid.jsx",
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddLocationModal.jsx",
+    "line": 209,
+    "snippet": "text-[…] class: 9px is off the DESIGN.md type ramp",
+    "ignoreValue": "9px",
+    "importedBy": [
+      "LocationsGrid.jsx",
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddLocationModal.jsx",
+    "line": 226,
+    "snippet": "text-[…] class: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px",
+    "importedBy": [
+      "LocationsGrid.jsx",
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddLocationModal.jsx",
+    "line": 236,
+    "snippet": "text-[…] class: 9px is off the DESIGN.md type ramp",
+    "ignoreValue": "9px",
+    "importedBy": [
+      "LocationsGrid.jsx",
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddLocationModal.jsx",
+    "line": 249,
+    "snippet": "text-[…] class: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px",
+    "importedBy": [
+      "LocationsGrid.jsx",
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddLocationModal.jsx",
+    "line": 265,
+    "snippet": "text-[…] class: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px",
+    "importedBy": [
+      "LocationsGrid.jsx",
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddLocationModal.jsx",
+    "line": 313,
+    "snippet": "text-[…] class: 9px is off the DESIGN.md type ramp",
+    "ignoreValue": "9px",
+    "importedBy": [
+      "LocationsGrid.jsx",
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddLocationModal.jsx",
+    "line": 328,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px",
+    "importedBy": [
+      "LocationsGrid.jsx",
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddLocationModal.jsx",
+    "line": 338,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px",
+    "importedBy": [
+      "LocationsGrid.jsx",
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\AddLocationModal.jsx",
+    "line": 344,
+    "snippet": "text-[…] class: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px",
+    "importedBy": [
+      "LocationsGrid.jsx",
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\BusinessDetailsPanel.jsx",
+    "line": 6,
+    "snippet": "text-[…] class: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\BusinessDetailsPanel.jsx",
+    "line": 147,
+    "snippet": "text-[…] class: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\BusinessDetailsPanel.jsx",
+    "line": 156,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\BusinessDetailsPanel.jsx",
+    "line": 179,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\BusinessDetailsPanel.jsx",
+    "line": 182,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\BusinessDetailsPanel.jsx",
+    "line": 215,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\BusinessDetailsPanel.jsx",
+    "line": 225,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\BusinessDetailsPanel.jsx",
+    "line": 231,
+    "snippet": "text-[…] class: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\BusinessDetailsPanel.jsx",
+    "line": 234,
+    "snippet": "text-[…] class: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px"
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\DragOrgMenu.jsx",
+    "line": 49,
+    "snippet": "text-gray-300 on bg-amber-500",
+    "importedBy": [
+      "LocationStatusTable.jsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\DragOrgMenu.jsx",
+    "line": 58,
+    "snippet": "text-gray-300 on bg-amber-500",
+    "importedBy": [
+      "LocationStatusTable.jsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\DragOrgMenu.jsx",
+    "line": 87,
+    "snippet": "text-gray-400 on bg-amber-500",
+    "importedBy": [
+      "LocationStatusTable.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\DragOrgMenu.jsx",
+    "line": 48,
+    "snippet": "text-[…] class: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px",
+    "importedBy": [
+      "LocationStatusTable.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\DragOrgMenu.jsx",
+    "line": 57,
+    "snippet": "text-[…] class: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px",
+    "importedBy": [
+      "LocationStatusTable.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\DragOrgMenu.jsx",
+    "line": 93,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px",
+    "importedBy": [
+      "LocationStatusTable.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\EquipmentOrderPanel.jsx",
+    "line": 164,
+    "snippet": "border-l-2"
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\EquipmentOrderPanel.jsx",
+    "line": 238,
+    "snippet": "border-l-2"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\EquipmentShippingModal.jsx",
+    "line": 13,
+    "snippet": "Undocumented color #D1D5DB is outside DESIGN.md colors",
+    "ignoreValue": "#D1D5DB"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\EquipmentShippingModal.jsx",
+    "line": 13,
+    "snippet": "borderRadius: 8px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "8px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\EquipmentShippingModal.jsx",
+    "line": 14,
+    "snippet": "fontSize: 13px is off the DESIGN.md type ramp",
+    "ignoreValue": "13px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\EquipmentShippingModal.jsx",
+    "line": 73,
+    "snippet": "Undocumented color rgba(0,0,0,0.45) is outside DESIGN.md colors",
+    "ignoreValue": "rgba(0,0,0,0.45)"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\EquipmentShippingModal.jsx",
+    "line": 76,
+    "snippet": "Undocumented color rgba(0,0,0,0.3) is outside DESIGN.md colors",
+    "ignoreValue": "rgba(0,0,0,0.3)"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\EquipmentShippingModal.jsx",
+    "line": 76,
+    "snippet": "borderRadius: 16px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "16px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\EquipmentShippingModal.jsx",
+    "line": 128,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\legacyPos\\PosAccessAccountGuide.jsx",
+    "line": 60,
+    "snippet": "border-l-2"
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\legacyPos\\PosCredentialVault.jsx",
+    "line": 72,
+    "snippet": "border-l-2"
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\legacyPos\\PosCredentialVault.jsx",
+    "line": 89,
+    "snippet": "border-l-2"
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\legacyPos\\PosOAuthGrid.jsx",
+    "line": 42,
+    "snippet": "border-l-2"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\LocationsGrid.jsx",
+    "line": 200,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px",
+    "importedBy": [
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\LocationsGrid.jsx",
+    "line": 204,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px",
+    "importedBy": [
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\LocationsGrid.jsx",
+    "line": 229,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px",
+    "importedBy": [
+      "Step2BankDetails.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\MobilePricing.jsx",
+    "line": 91,
+    "snippet": "border-l-2"
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\PerRowPlaidLink.jsx",
+    "line": 84,
+    "snippet": "text-gray-600 on bg-blue-50",
+    "importedBy": [
+      "LocationsGrid.jsx"
+    ]
+  },
+  {
+    "antipattern": "gray-on-color",
+    "name": "Gray text on colored background",
+    "description": "Gray text looks washed out on colored backgrounds. Use a darker shade of the background color instead, or white/near-white for contrast.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\PlaidLinkButton.jsx",
+    "line": 133,
+    "snippet": "text-gray-600 on bg-blue-50"
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\QuoteSignModal.jsx",
+    "line": 132,
+    "snippet": "border-l-2"
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\SelfServePricing.jsx",
+    "line": 168,
+    "snippet": "border-l-2"
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\SignerDetailsModal.jsx",
+    "line": 248,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "SignerRoster.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\SignerDetailsModal.jsx",
+    "line": 373,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "SignerRoster.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\SignerModal.jsx",
+    "line": 217,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "SignerRoster.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\SignerModal.jsx",
+    "line": 226,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "SignerRoster.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\SigningErrorGuide.jsx",
+    "line": 183,
+    "snippet": "border-l-2"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\StorefrontBankingCell.jsx",
+    "line": 98,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\StorefrontBankingCell.jsx",
+    "line": 102,
+    "snippet": "text-[…] class: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\StorefrontBankingCell.jsx",
+    "line": 106,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\StorefrontBankingCell.jsx",
+    "line": 110,
+    "snippet": "text-[…] class: 11px is off the DESIGN.md type ramp",
+    "ignoreValue": "11px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\StorefrontBankingCell.jsx",
+    "line": 115,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\StorefrontBankingCell.jsx",
+    "line": 134,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\onboarding\\StorefrontBankingCell.jsx",
+    "line": 143,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\ui\\calendar.jsx",
+    "line": 33,
+    "snippet": "text-[…] class: 0.8rem is off the DESIGN.md type ramp",
+    "ignoreValue": "0.8rem"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\ui\\form.jsx",
+    "line": 99,
+    "snippet": "text-[…] class: 0.8rem is off the DESIGN.md type ramp",
+    "ignoreValue": "0.8rem"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\components\\ui\\form.jsx",
+    "line": 117,
+    "snippet": "text-[…] class: 0.8rem is off the DESIGN.md type ramp",
+    "ignoreValue": "0.8rem"
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\index.css",
+    "line": 61,
+    "snippet": "font-family: 'Inter"
+  },
+  {
+    "antipattern": "overused-font",
+    "name": "Overused font",
+    "description": "Inter, Roboto, Fraunces, Geist, Plus Jakarta Sans, and Space Grotesk are used on so many sites they no longer feel distinctive. Each new wave of AI-generated UIs converges on the same handful of faces. Choose a face that gives your interface personality.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\index.css",
+    "line": 1,
+    "snippet": "Google Fonts: inter"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\index.css",
+    "line": 69,
+    "snippet": "Undocumented color rgba(240, 173, 78, 0.07) is outside DESIGN.md colors",
+    "ignoreValue": "rgba(240, 173, 78, 0.07)"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\index.css",
+    "line": 77,
+    "snippet": "border-radius: 18px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "18px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\index.css",
+    "line": 84,
+    "snippet": "Undocumented color #2f281e is outside DESIGN.md colors",
+    "ignoreValue": "#2f281e"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\index.css",
+    "line": 85,
+    "snippet": "border-radius: 16px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "16px"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\index.css",
+    "line": 89,
+    "snippet": "Undocumented color #F59E0B is outside DESIGN.md colors",
+    "ignoreValue": "#F59E0B"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\index.css",
+    "line": 94,
+    "snippet": "Undocumented color #3B82F6 is outside DESIGN.md colors",
+    "ignoreValue": "#3B82F6"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\index.css",
+    "line": 104,
+    "snippet": "Undocumented color #D1D5DB is outside DESIGN.md colors",
+    "ignoreValue": "#D1D5DB"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\index.css",
+    "line": 110,
+    "snippet": "Undocumented color #3B82F6 is outside DESIGN.md colors",
+    "ignoreValue": "#3B82F6"
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\index.css",
+    "line": 111,
+    "snippet": "Undocumented color #EFF6FF is outside DESIGN.md colors",
+    "ignoreValue": "#EFF6FF"
+  },
+  {
+    "antipattern": "design-system-radius",
+    "name": "Radius outside DESIGN.md",
+    "description": "A border-radius value is outside the DESIGN.md rounded scale. Use a documented radius token or update the design system if the new shape is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\index.css",
+    "line": 152,
+    "snippet": "border-radius: 10px is outside the DESIGN.md rounded scale",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\ApplicationManager.jsx",
+    "line": 994,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "App.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\ApplicationManager.jsx",
+    "line": 1056,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "App.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\ApplicationManager.jsx",
+    "line": 1079,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "App.jsx"
+    ]
+  },
+  {
+    "antipattern": "border-accent-on-rounded",
+    "name": "Border accent on rounded element",
+    "description": "Thick accent border on a rounded card — the border clashes with the rounded corners. Remove the border or the border-radius.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\ApplicationManager.jsx",
+    "line": 797,
+    "snippet": "border-b-2",
+    "importedBy": [
+      "App.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\ApplicationManager.jsx",
+    "line": 237,
+    "snippet": "text-[…] class: 8px is off the DESIGN.md type ramp",
+    "ignoreValue": "8px",
+    "importedBy": [
+      "App.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\ApplicationManager.jsx",
+    "line": 244,
+    "snippet": "text-[…] class: 8px is off the DESIGN.md type ramp",
+    "ignoreValue": "8px",
+    "importedBy": [
+      "App.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\ApplicationManager.jsx",
+    "line": 856,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px",
+    "importedBy": [
+      "App.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\ApplicationManager.jsx",
+    "line": 1485,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px",
+    "importedBy": [
+      "App.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\ApplicationManager.jsx",
+    "line": 1518,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px",
+    "importedBy": [
+      "App.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingLocations.jsx",
+    "line": 1183,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "DevPortalPreview.jsx",
+      "OnboardingPortal.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingLocations.jsx",
+    "line": 1285,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "DevPortalPreview.jsx",
+      "OnboardingPortal.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingLocations.jsx",
+    "line": 1336,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "DevPortalPreview.jsx",
+      "OnboardingPortal.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingLocations.jsx",
+    "line": 1665,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "DevPortalPreview.jsx",
+      "OnboardingPortal.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingLocations.jsx",
+    "line": 1726,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "DevPortalPreview.jsx",
+      "OnboardingPortal.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingSummary.jsx",
+    "line": 129,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingSummary.jsx",
+    "line": 134,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingSummary.jsx",
+    "line": 196,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingSummary.jsx",
+    "line": 200,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingSummary.jsx",
+    "line": 204,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingSummary.jsx",
+    "line": 210,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingSummary.jsx",
+    "line": 262,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingSummary.jsx",
+    "line": 289,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingSummary.jsx",
+    "line": 301,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingSummary.jsx",
+    "line": 307,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingSummary.jsx",
+    "line": 315,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingSummary.jsx",
+    "line": 321,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px"
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingVerification.jsx",
+    "line": 462,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "DevPortalPreview.jsx",
+      "OnboardingPortal.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingVerification.jsx",
+    "line": 516,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "DevPortalPreview.jsx",
+      "OnboardingPortal.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingVerification.jsx",
+    "line": 570,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "DevPortalPreview.jsx",
+      "OnboardingPortal.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingVerification.jsx",
+    "line": 617,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "DevPortalPreview.jsx",
+      "OnboardingPortal.jsx"
+    ]
+  },
+  {
+    "antipattern": "side-tab",
+    "name": "Side-tab accent border",
+    "description": "Thick colored border on one side of a card — the most recognizable tell of AI-generated UIs. Use a subtler accent or remove it entirely.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingVerification.jsx",
+    "line": 643,
+    "snippet": "border-l-2",
+    "importedBy": [
+      "DevPortalPreview.jsx",
+      "OnboardingPortal.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-font-size",
+    "name": "Font size outside DESIGN.md",
+    "description": "A literal font-size is off the type ramp documented in DESIGN.md typography. Use a documented size step or update the design system if the new step is intentional.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\OnboardingVerification.jsx",
+    "line": 554,
+    "snippet": "text-[…] class: 10px is off the DESIGN.md type ramp",
+    "ignoreValue": "10px",
+    "importedBy": [
+      "DevPortalPreview.jsx",
+      "OnboardingPortal.jsx"
+    ]
+  },
+  {
+    "antipattern": "layout-transition",
+    "name": "Layout property animation",
+    "description": "Animating width, height, padding, or margin causes layout thrash and janky performance. Use transform and opacity instead, or grid-template-rows for height animations.",
+    "severity": "warning",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\VerifyIdentity.jsx",
+    "line": 257,
+    "snippet": "transition: max-width",
+    "importedBy": [
+      "App.jsx"
+    ]
+  },
+  {
+    "antipattern": "design-system-color",
+    "name": "Color outside DESIGN.md",
+    "description": "A literal color is outside the DESIGN.md palette and sidecar tonal ramps. This may be legitimate, but it should be an intentional design-system addition rather than drift.",
+    "severity": "advisory",
+    "file": "C:\\Users\\teddy\\Documents\\Github\\Cliqbux_onboarding\\src\\pages\\VerifyIdentity.jsx",
+    "line": 257,
+    "snippet": "Undocumented color rgba(0,0,0,0.4) is outside DESIGN.md colors",
+    "ignoreValue": "rgba(0,0,0,0.4)",
+    "importedBy": [
+      "App.jsx"
+    ]
+  }
+]

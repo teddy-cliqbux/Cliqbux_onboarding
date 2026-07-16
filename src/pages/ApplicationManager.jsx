@@ -315,7 +315,8 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
   ].map(humanizeMspError).filter(Boolean);
 
   const localIssues = [];
-  if (!mid.mccCode) localIssues.push('Missing MCC code');
+  if (!mid.mccCode && mid.mccHelpRequested) localIssues.push('MERCHANT NEEDS MCC HELP — they picked "my business isn\u2019t listed"; set the real MCC before signing');
+  else if (!mid.mccCode) localIssues.push('Missing MCC code');
   if (!mid.monthlyCardSales) localIssues.push('Missing monthly volume');
   if (!mid.avgSaleAmount) localIssues.push('Missing avg sale amount');
   if (!mid.highestTicketAmount) localIssues.push('Missing highest ticket');

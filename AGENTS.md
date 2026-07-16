@@ -385,6 +385,7 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 - `isExistingAccount` — true for pre-imported MIDs (skip boarding flow)
 - `existingAccountSource` — `mspware_import | manual_claim | migration`
 - `mccCode`, `industryType`, `pricingCategory`, `pricingMethod`, `monthlyCardSales`, `avgSaleAmount`, `highestTicketAmount`, `cardPresentPct`, `deliveryDelayDays`
+- `mccHelpRequested` (added 2026-07-15) — merchant picked "My business isn't listed" in the portal Business Category dropdown. `mccCode` stays empty (never invent an MCC — Lesson #15); an agent must set the real code before signing (admin Applications MID row flags "MERCHANT NEEDS MCC HELP"). Counts as merchant-complete in portal readiness. Auto-cleared when a real `mccCode` is saved. Schema must be republished in Base44 for the flag to persist (Lesson #4).
 - `bankDetails` — per-MID bank override (null = inherit from parent location)
 
 ### Fields DEPRECATED on MerchantLocations (do not use)
