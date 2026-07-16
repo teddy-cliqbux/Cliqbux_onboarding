@@ -1070,6 +1070,8 @@ A formal token layer now lives in `src/styles/tokens.css` (imported first in `in
 
 All merchant-facing onboarding surfaces (steps + ProgressTracker + post-submit dashboard chrome + entry/pricing) are now on the token system.
 
+**Locations 1×1 combined panel (2026-07-16):** when 1 entity · 1 location · 1 MID, `OnboardingLocations` shows one store card (name/address + processing fields) instead of nested Location?MID boxes with a repeated DBA. Multi-location / multi-MID still uses the org tree. No schema or save-path changes.
+
 **ApplicationManager.jsx (`/admin/applications`) migrated to `cb-*` tokens (2026-07-13, same restraint pass):** quiet surfaces, dot+caption status (MID/identity/stuck/bottleneck/agent-vs-merchant), solid gold CTAs, ghost secondary actions, blue/purple/amber pill chrome retired. Chart stage colors use token hexes (gray / `#FEAC27` / `#4ADE80`). No fetch/auth/field/validation changes.
 
 ### Post-signing Equipment Order (2026-07-13; Signedâ‰ Paid same day)

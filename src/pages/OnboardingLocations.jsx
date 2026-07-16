@@ -155,8 +155,10 @@ function StatusBadge({ status }) {
 }
 
 // ─── MID Card (draggable) ─────────────────────────────────────────────────────
+// combined=true: flat fields for the 1-location × 1-account case — no nested
+// card chrome, no duplicate DBA title, no drag/move/delete. Same save path.
 
-function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, onUpdated, onDelete, moveTargets = [], onMove }) {
+function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, onUpdated, onDelete, moveTargets = [], onMove, combined = false }) {
   const { formsLocked } = usePortalLock();
   const locked = getMidLocked(mid) || formsLocked;
   const imported = getMidImported(mid);
@@ -222,7 +224,8 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
     try {
       const payload = {
         ...form,
-        merchantName: form.merchantName || dbaName,
+        // Combined 1×1 panel: store name is the account name — avoid a second label.
+        merchantName: combined ? (dbaName || form.merchantName) : (form.merchantName || dbaName),
       };
       if (needsLiquorCompliance) {
         payload.alcoholSalesPercentage = Number(form.alcoholSalesPercentage);
@@ -245,102 +248,29 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
 
   const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
-  return (
-    <Draggable draggableId={`mid-${mid.id}`} index={index}>
-      {(provided, snapshot) => (
-        <motion.div
-          layout
-          transition={SPRING}
-          ref={provided.innerRef}
-          {...provided.draggableProps}
-          className={`rounded-cb border transition-all ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locked ? 'border-cb-border bg-transparent opacity-60' : 'border-cb-border bg-transparent hover:border-cb-border-strong'}`}
-        >
-          <div className="flex items-center gap-2.5 px-3 py-2.5">
-            <span {...provided.dragHandleProps} className={`hidden sm:block text-gray-600 flex-shrink-0 ${locked ? 'cursor-not-allowed' : 'hover:text-gray-400 cursor-grab active:cursor-grabbing'}`}>
-              <GripVertical className="w-3.5 h-3.5" />
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-cb-body font-medium text-white truncate">{form.merchantName || dbaName}</p>
-              {isComplete
-                ? <p className="text-cb-caption normal-case tracking-normal text-gray-500 font-mono">{mid.mccCode || 'Category: Cliqbux will confirm'} · ${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo</p>
-                : <p className="text-cb-caption normal-case tracking-normal text-cb-accent font-normal">Needs category &amp; sales info</p>
-              }
-            </div>
-            <div className="flex items-center gap-2.5 flex-shrink-0">
-              {imported && <span className="text-cb-caption text-gray-500">Imported</span>}
-              <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
-              {locked && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span className="p-1 text-gray-500 cursor-default"><Lock className="w-3 h-3" /></span>
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="text-xs max-w-[200px] text-center">
-                      Application in progress — changes require support assistance.
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-            </div>
-            {!locked && (
-              <>
-                {moveTargets.length > 0 && (
-                  <button onClick={() => setShowMoveMenu(m => !m)}
-                    className="sm:hidden p-3 -m-1 text-cb-caption normal-case tracking-normal text-gray-500 hover:text-white transition-colors">
-                    Move
-                  </button>
-                )}
-                <button onClick={() => setEditing(e => !e)} aria-label="Edit processing account"
-                  className="p-3 -m-1 sm:p-2 sm:m-0 text-gray-500 hover:text-white transition-colors">
-                  <Pencil className="w-3 h-3" />
-                </button>
-                <button onClick={() => onDelete(mid)} aria-label="Remove processing account"
-                  className="p-3 -m-1 sm:p-2 sm:m-0 text-gray-600 hover:text-cb-danger transition-colors">
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              </>
-            )}
-          </div>
+  const salesSummary = isComplete
+    ? `${mid.mccCode || 'Category: Cliqbux will confirm'} · $${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo`
+    : null;
 
-          {/* Mobile "Move to…" — drag handles are hidden below sm */}
-          {showMoveMenu && !locked && moveTargets.length > 0 && (
-            <div className="sm:hidden border-t border-cb-border px-3 py-2.5 space-y-1.5">
-              <p className="text-cb-caption uppercase text-gray-500">Move to</p>
-              {moveTargets.map(t => (
-                <button key={t.id} onClick={() => { setShowMoveMenu(false); onMove?.(mid.id, t.id); }}
-                  className="w-full text-left text-cb-body text-gray-300 hover:text-white py-2.5 px-3 rounded-cb border border-cb-border transition-colors">
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <AnimatePresence initial={false}>
-          {editing && !locked && (
-            <motion.div
-              key="mid-edit"
-              {...accordionProps}
-              className="overflow-hidden"
-            >
-            <div className="border-t border-cb-border px-4 pb-4 pt-3 space-y-4">
-              {/* Chunk 1 — what this account is */}
+  const editFormInner = (
+            <div className={`${combined ? 'px-4 pb-4 pt-1' : 'border-t border-cb-border px-4 pb-4 pt-3'} space-y-4`}>
               <div className="space-y-3">
+                {!combined && (
                 <div>
                   <label className={labelCls}>Account Name</label>
                   <input value={form.merchantName} onChange={e => setField('merchantName', e.target.value)}
                     placeholder={`e.g. ${dbaName} – Bar`} className={inputCls} />
                 </div>
+                )}
                 <div>
                   <label className={labelCls}>Business Category *</label>
                   <select value={form.mccHelpRequested && !form.mccCode ? MCC_HELP_VALUE : form.mccCode}
                     onChange={e => {
                       const v = e.target.value;
                       if (v === MCC_HELP_VALUE) {
-                        // Escape hatch — never force a wrong code; an agent sets the real MCC.
                         setForm(f => ({ ...f, mccCode: '', mccHelpRequested: true }));
                         return;
                       }
-                      // Auto-derive industry from the MCC (manual override under Advanced)
                       setForm(f => ({ ...f, mccCode: v, mccHelpRequested: false, industryType: v ? mccToIndustry(v) : f.industryType }));
                     }}
                     className={inputCls} style={{ colorScheme: 'dark' }}>
@@ -356,7 +286,6 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                 </div>
               </div>
 
-              {/* Chunk 2 — sales volume */}
               <div>
                 <label className={labelCls}>Card Sales Estimates</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -381,7 +310,6 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                 )}
               </div>
 
-              {/* Chunk 3 — how you take cards */}
               <div>
                 <label className={labelCls}>How You Take Cards (must total 100%)</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -396,7 +324,6 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                 {pctSum !== 100 && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">Total: {pctSum}% (must be 100%)</p>}
               </div>
 
-              {/* Advanced — industry override, auto-derived from the category */}
               <div>
                 <button type="button" onClick={() => setShowAdvanced(a => !a)}
                   className="flex items-center gap-1 text-cb-caption normal-case tracking-normal text-gray-500 hover:text-white transition-colors">
@@ -466,7 +393,6 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                 </div>
               )}
 
-              {/* Save button + collapse */}
               {saveError && (
                 <p className="text-cb-body text-cb-danger" role="alert">{saveError}</p>
               )}
@@ -496,9 +422,133 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                     </span>
                   )}
                 </div>
-                <button onClick={() => setEditing(false)} className="text-cb-body text-gray-500 hover:text-white transition-colors">Cancel</button>
+                {!combined || isComplete ? (
+                  <button onClick={() => setEditing(false)} className="text-cb-body text-gray-500 hover:text-white transition-colors">Cancel</button>
+                ) : null}
               </div>
             </div>
+  );
+
+  // ── Combined 1×1: flat fields under the store header (no nested card) ──
+  if (combined) {
+    return (
+      <div className={locked ? 'opacity-60' : ''}>
+        {isComplete && !editing ? (
+          <div className="flex items-center gap-3 px-4 py-3 border-t border-cb-border">
+            <div className="flex-1 min-w-0">
+              <p className="text-cb-caption uppercase text-gray-500 mb-0.5">Card processing</p>
+              <p className="text-cb-body text-gray-300 font-mono">{salesSummary}</p>
+            </div>
+            {imported && <span className="text-cb-caption text-gray-500">Imported</span>}
+            {locked && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="p-1 text-gray-500 cursor-default"><Lock className="w-3 h-3" /></span>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs max-w-[200px] text-center">
+                    Application in progress — changes require support assistance.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {!locked && (
+              <button onClick={() => setEditing(true)} aria-label="Edit processing details"
+                className="p-2 text-gray-500 hover:text-white transition-colors">
+                <Pencil className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="border-t border-cb-border pt-3">
+            <p className="text-cb-caption uppercase text-gray-500 px-4 mb-2">Card processing</p>
+            {!locked ? editFormInner : (
+              <p className="text-cb-caption text-gray-500 px-4 pb-4">Processing details are locked while the application is in progress.</p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Nested (multi-account / multi-location) card ──
+  return (
+    <Draggable draggableId={`mid-${mid.id}`} index={index}>
+      {(provided, snapshot) => (
+        <motion.div
+          layout
+          transition={SPRING}
+          ref={provided.innerRef}
+          {...provided.draggableProps}
+          className={`rounded-cb border transition-all ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locked ? 'border-cb-border bg-transparent opacity-60' : 'border-cb-border bg-transparent hover:border-cb-border-strong'}`}
+        >
+          <div className="flex items-center gap-2.5 px-3 py-2.5">
+            <span {...provided.dragHandleProps} className={`hidden sm:block text-gray-600 flex-shrink-0 ${locked ? 'cursor-not-allowed' : 'hover:text-gray-400 cursor-grab active:cursor-grabbing'}`}>
+              <GripVertical className="w-3.5 h-3.5" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-cb-body font-medium text-white truncate">{form.merchantName || dbaName}</p>
+              {isComplete
+                ? <p className="text-cb-caption normal-case tracking-normal text-gray-500 font-mono">{salesSummary}</p>
+                : <p className="text-cb-caption normal-case tracking-normal text-cb-accent font-normal">Needs category &amp; sales info</p>
+              }
+            </div>
+            <div className="flex items-center gap-2.5 flex-shrink-0">
+              {imported && <span className="text-cb-caption text-gray-500">Imported</span>}
+              <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
+              {locked && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="p-1 text-gray-500 cursor-default"><Lock className="w-3 h-3" /></span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs max-w-[200px] text-center">
+                      Application in progress — changes require support assistance.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
+            {!locked && (
+              <>
+                {moveTargets.length > 0 && (
+                  <button onClick={() => setShowMoveMenu(m => !m)}
+                    className="sm:hidden p-3 -m-1 text-cb-caption normal-case tracking-normal text-gray-500 hover:text-white transition-colors">
+                    Move
+                  </button>
+                )}
+                <button onClick={() => setEditing(e => !e)} aria-label="Edit processing account"
+                  className="p-3 -m-1 sm:p-2 sm:m-0 text-gray-500 hover:text-white transition-colors">
+                  <Pencil className="w-3 h-3" />
+                </button>
+                <button onClick={() => onDelete(mid)} aria-label="Remove processing account"
+                  className="p-3 -m-1 sm:p-2 sm:m-0 text-gray-600 hover:text-cb-danger transition-colors">
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </>
+            )}
+          </div>
+
+          {showMoveMenu && !locked && moveTargets.length > 0 && (
+            <div className="sm:hidden border-t border-cb-border px-3 py-2.5 space-y-1.5">
+              <p className="text-cb-caption uppercase text-gray-500">Move to</p>
+              {moveTargets.map(t => (
+                <button key={t.id} onClick={() => { setShowMoveMenu(false); onMove?.(mid.id, t.id); }}
+                  className="w-full text-left text-cb-body text-gray-300 hover:text-white py-2.5 px-3 rounded-cb border border-cb-border transition-colors">
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <AnimatePresence initial={false}>
+          {editing && !locked && (
+            <motion.div
+              key="mid-edit"
+              {...accordionProps}
+              className="overflow-hidden"
+            >
+              {editFormInner}
             </motion.div>
           )}
           </AnimatePresence>
@@ -510,7 +560,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
 
 // ─── Location Card (nested inside Entity, draggable) ──────────────────────────
 
-function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, index, showValidation, allLocations = [], entityMoveTargets = [], onMoveLocation, onMoveMid }) {
+function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, index, showValidation, allLocations = [], entityMoveTargets = [], onMoveLocation, onMoveMid, simpleMode = false }) {
   const { formsLocked } = usePortalLock();
   const locMids = merchantIDs.filter(c => c.locationId === location.id);
   // Mobile alternative to drag-and-drop (grips are hidden below sm).
@@ -602,6 +652,134 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
     finally { setAddMidSaving(false); }
   };
 
+  const locEditPanel = editingLoc ? (
+            <div className="mx-4 mb-4 bg-cb-bg border border-cb-border rounded-cb p-4 space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input value={locForm.dbaName} onChange={e => setLocForm(f => ({ ...f, dbaName: e.target.value }))} placeholder="Location name" autoFocus className={inputCls} />
+                <input ref={editPlacesRef} value={locForm.street}
+                  onChange={e => { setLocForm(f => ({ ...f, street: e.target.value })); setLocVerified(false); }}
+                  placeholder="Start typing your address…" className={inputCls} />
+                <input value={locForm.city} onChange={e => setLocForm(f => ({ ...f, city: e.target.value }))} placeholder="City" className={inputCls} />
+                <div className="grid grid-cols-2 gap-3">
+                  <input value={locForm.state} onChange={e => setLocForm(f => ({ ...f, state: e.target.value }))} placeholder="State" maxLength={2} className={inputCls} />
+                  <input value={locForm.zip} onChange={e => setLocForm(f => ({ ...f, zip: e.target.value }))} placeholder="ZIP" className={inputCls} />
+                </div>
+              </div>
+              {locVerified ? (
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-success flex items-center gap-1"><Check className="w-3 h-3" /> Address verified via Google Maps</p>
+              ) : (
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Tip: pick your address from the suggestions to verify it via Google Maps.</p>
+              )}
+              {locEditError && <p className="text-cb-body text-cb-danger">{locEditError}</p>}
+              <div className="flex items-center gap-3">
+                <button onClick={saveLocEdit} disabled={locSaving}
+                  className="text-cb-body font-semibold bg-cb-accent hover:opacity-90 disabled:opacity-50 text-cb-bg px-4 py-2 rounded-cb transition-colors">
+                  {locSaving ? 'Saving…' : 'Save Changes'}
+                </button>
+                <button onClick={() => setEditingLoc(false)} className="text-cb-body text-gray-400 hover:text-white px-2 py-2">Cancel</button>
+              </div>
+            </div>
+  ) : null;
+
+  const addMidControls = addingMid ? (
+                  <div className="mt-2 space-y-2 px-4 pb-3">
+                    <div className="flex gap-3 items-center">
+                      <input value={addMidName} onChange={e => setAddMidName(e.target.value)}
+                        placeholder={`e.g. ${location.dbaName} – Bar`}
+                        className={`${inputCls} py-2`} autoFocus
+                        onKeyDown={e => { if (e.key === 'Enter') handleAddMid(); if (e.key === 'Escape') setAddingMid(false); }} />
+                      <button onClick={handleAddMid} disabled={addMidSaving}
+                        className="flex-shrink-0 flex items-center gap-1 bg-cb-accent hover:opacity-90 text-cb-bg text-cb-body font-semibold px-3 py-2 rounded-cb disabled:opacity-50 transition-colors">
+                        {addMidSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />} Add
+                      </button>
+                      <button onClick={() => setAddingMid(false)} className="p-2 text-gray-500 hover:text-white flex-shrink-0"><X className="w-3 h-3" /></button>
+                    </div>
+                    {addMidError && <p className="text-cb-body text-cb-danger" role="alert">{addMidError}</p>}
+                  </div>
+                ) : (
+                  <button onClick={() => setAddingMid(true)}
+                    className="w-full flex items-center gap-1.5 px-4 py-3 text-cb-caption text-gray-500 hover:text-white transition-colors text-left border-t border-cb-border">
+                    <Plus className="w-3 h-3" /> Add another processing account (e.g. a bar inside this location)
+                  </button>
+                );
+
+  // ── Combined panel: 1 location × 1 processing account ──
+  // One store card — name, address, and processing fields. No nested "same name" MID box.
+  if (simpleMode && locMids.length === 1) {
+    const mid = locMids[0];
+    return (
+      <Draggable draggableId={`loc-${location.id}`} index={index}>
+        {(provided, snapshot) => (
+          <motion.div
+            layout
+            transition={SPRING}
+            ref={provided.innerRef}
+            {...provided.draggableProps}
+            className={`rounded-cb border transition-all ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locationError ? 'border-cb-danger bg-cb-surface-raised' : 'border-cb-border bg-cb-surface-raised hover:border-cb-border-strong'}`}
+          >
+            <div className="flex items-center gap-3 px-4 py-3">
+              {/* DnD requires a handle; hide it in 1×1 — nothing to reorder */}
+              <span {...provided.dragHandleProps} className="sr-only">Reorder</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className="text-cb-body font-semibold text-white truncate">{location.dbaName}</p>
+                  {locationError && (
+                    <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cb-danger flex-shrink-0" />Needs info
+                    </span>
+                  )}
+                </div>
+                <p className="text-cb-body text-gray-500 truncate">{location.businessAddress}</p>
+              </div>
+              <div className="flex items-center gap-2.5 flex-shrink-0">
+                {allMidsComplete && <Check className="w-3.5 h-3.5 text-cb-success" />}
+                <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
+                <button
+                  onClick={() => { if (!formsLocked) startLocEdit(); }}
+                  title={formsLocked ? FORMS_LOCKED_MESSAGE : 'Edit store name / address'}
+                  disabled={formsLocked}
+                  className="p-2 text-gray-600 hover:text-white rounded-cb transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => { if (!formsLocked) onDelete(location); }}
+                  disabled={formsLocked}
+                  aria-label="Remove location"
+                  className="p-2 text-gray-600 hover:text-cb-danger rounded-cb transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {locEditPanel}
+
+            {locNeedsLiquorDocs && (
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 px-4 pb-2">
+                Bar/Tavern in {location.businessState}: alcohol sales % is required now. Liquor license upload comes after signing.
+              </p>
+            )}
+
+            <MidCard
+              combined
+              mid={mid}
+              index={0}
+              locationId={location.id}
+              corporateId={corporateId}
+              dbaName={location.dbaName}
+              businessState={location.businessState || ''}
+              onUpdated={onMerchantIDUpdated}
+              onDelete={onMerchantIDDeleted}
+            />
+
+            {!formsLocked && addMidControls}
+          </motion.div>
+        )}
+      </Draggable>
+    );
+  }
+
   return (
     <Draggable draggableId={`loc-${location.id}`} index={index}>
       {(provided, snapshot) => (
@@ -630,9 +808,11 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
             </div>
             <div className="flex items-center gap-2.5 flex-shrink-0">
               {allMidsComplete && <Check className="w-3.5 h-3.5 text-cb-success" />}
+              {!simpleMode && (
               <span className="hidden sm:inline text-cb-caption text-gray-500">
                 {locMids.length} account{locMids.length !== 1 ? 's' : ''}
               </span>
+              )}
               {!formsLocked && entityMoveTargets.length > 0 && (
                 <button
                   onClick={e => { e.stopPropagation(); setShowMoveMenu(m => !m); }}
@@ -677,35 +857,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
             </div>
           )}
 
-          {/* Inline location edit — quick correction of prefilled data (2026-07-10) */}
-          {editingLoc && (
-            <div className="mx-4 mb-4 bg-cb-bg border border-cb-border rounded-cb p-4 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input value={locForm.dbaName} onChange={e => setLocForm(f => ({ ...f, dbaName: e.target.value }))} placeholder="Location name" autoFocus className={inputCls} />
-                <input ref={editPlacesRef} value={locForm.street}
-                  onChange={e => { setLocForm(f => ({ ...f, street: e.target.value })); setLocVerified(false); }}
-                  placeholder="Start typing your address…" className={inputCls} />
-                <input value={locForm.city} onChange={e => setLocForm(f => ({ ...f, city: e.target.value }))} placeholder="City" className={inputCls} />
-                <div className="grid grid-cols-2 gap-3">
-                  <input value={locForm.state} onChange={e => setLocForm(f => ({ ...f, state: e.target.value }))} placeholder="State" maxLength={2} className={inputCls} />
-                  <input value={locForm.zip} onChange={e => setLocForm(f => ({ ...f, zip: e.target.value }))} placeholder="ZIP" className={inputCls} />
-                </div>
-              </div>
-              {locVerified ? (
-                <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-success flex items-center gap-1"><Check className="w-3 h-3" /> Address verified via Google Maps</p>
-              ) : (
-                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Tip: pick your address from the suggestions to verify it via Google Maps.</p>
-              )}
-              {locEditError && <p className="text-cb-body text-cb-danger">{locEditError}</p>}
-              <div className="flex items-center gap-3">
-                <button onClick={saveLocEdit} disabled={locSaving}
-                  className="text-cb-body font-semibold bg-cb-accent hover:opacity-90 disabled:opacity-50 text-cb-bg px-4 py-2 rounded-cb transition-colors">
-                  {locSaving ? 'Saving…' : 'Save Changes'}
-                </button>
-                <button onClick={() => setEditingLoc(false)} className="text-cb-body text-gray-400 hover:text-white px-2 py-2">Cancel</button>
-              </div>
-            </div>
-          )}
+          {locEditPanel}
 
           {/* MIDs — nested droppable, indented off a hairline rail */}
           <AnimatePresence initial={false}>
@@ -1294,6 +1446,7 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
                 entityMoveTargets={entityMoveTargets}
                 onMoveLocation={onMoveLocation}
                 onMoveMid={onMoveMid}
+                simpleMode={simpleMode}
               />
             ))}
             {drop.placeholder}
