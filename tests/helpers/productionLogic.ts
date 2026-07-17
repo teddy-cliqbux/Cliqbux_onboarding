@@ -7,10 +7,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// 5999 removed from portal options 2026-07-13 (restricted category).
+// Representative portal MCC sample for stress matrix (full list: src/lib/mccCatalog.js).
+// Includes Coffee (5499), Bakery (5462), Hardware variant (5251B) after 2026-07-17 catalog expand.
 export const MCC_OPTIONS = [
-  '5812', '5814', '5813', '5411', '7230', '5651',
-  '5734', '5311', '7221', '5932', '4900', '5211',
+  '5812', '5814', '5813', '5499', '5462A', '5411', '7230', '5651',
+  '5734', '5311G', '7221', '5932', '4900', '5211', '5251B',
 ] as const;
 
 export const RESTRICTED_MCCS = new Set(['5999']);
@@ -93,9 +94,10 @@ export function desiredStateMccViolation(state: string, mcc: string): string | n
   return null;
 }
 
-/** Production: CA/NY + 5813 triggers liquor compliance (alcohol % required; license post-sign). */
+/** Production: CA/NY + 5813 family triggers liquor compliance (alcohol % required; license post-sign). */
 export function productionStateMccViolation(state: string, mcc: string): string | null {
-  if ((state === 'CA' || state === 'NY') && mcc === '5813') {
+  const base = String(mcc || '').trim().toUpperCase().replace(/[A-Z]+$/, '');
+  if ((state === 'CA' || state === 'NY') && base === '5813') {
     return `MCC 5813 requires liquor compliance for state ${state} (alcohol % on MID; liquor license post-sign)`;
   }
   return null;

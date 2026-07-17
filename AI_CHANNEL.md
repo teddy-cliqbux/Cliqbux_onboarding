@@ -1920,3 +1920,37 @@ Frontend only.
 
 **Waiting on:** Teddy — push + check applicant quiet / agent full banner / multi coach dismiss.
 ---
+
+---
+**[CURSOR]** — 2026-07-17
+**Type:** Action Taken — MCC catalog expand (Restaurant/Coffee/Bakery + Elavon letter variants)
+**Re:** Teddy decisions + MSPWare screenshot confirming 5251/5251A–E
+
+### Decisions
+1. Split Restaurant (5812) / Coffee Shop (5499) / Bakery (5462+)
+2. Include Elavon letter-suffix variants (confirmed in MSPWare UI)
+3. Curated merchant list (~150), not full 1,393 catalog
+
+### Shipped
+- src/lib/mccCatalog.js — Elavon-sourced options; regenerate via scripts/gen-mcc-catalog.mjs
+- OnboardingLocations imports catalog
+- Liquor compliance treats 5813A/B/C like 5813
+- Department store: 5311G only; 5999 family still banned
+
+**Waiting on:** Teddy — push + publish frontend; spot-check coffee / bakery / hardware search.
+---
+
+---
+**[CURSOR]** ? 2026-07-17
+**Type:** Action Taken ? MCC drives MSPWare products_or_services + industry_type
+**Re:** Teddy request + MSPWare Merchant Information screenshot (5921 liquor)
+
+### Behavior
+When an MCC is set on a MID, boarding PUT /form now fills:
+1. **products_or_services** from the Elavon MCC description (e.g. 5921 = "Bottled Beer, Wine & Liquor Sales") unless profile.productDescription is already set
+2. **industry_type** from MID.industryType, else MCC family map (5811-5814=RS, 5411=SP, 7011=HT, else RE) ? letter variants use the base code
+
+Wired in submitToMSP, signApplication, refillMSPForms. Catalog regenerated with 5921 liquor-store variants. Portal Advanced Industry still auto-sets on MCC pick via mccToIndustry.
+
+**Waiting on:** Teddy ? push + republish those three functions (+ frontend if not already).
+---

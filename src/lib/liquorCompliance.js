@@ -1,17 +1,26 @@
 /**
- * CA/NY Bar & Tavern (MCC 5813) underwriting rules.
+ * CA/NY Bar & Tavern (MCC 5813 family) underwriting rules.
  * Single source of truth for portal UI + readiness checks.
  * Deno functions that gate writes should mirror these constants inline
  * (Base44 cannot import this file).
+ *
+ * Letter-suffix variants (5813A Comedy Clubs, 5813B Night Clubs, 5813C
+ * Restaurants - Servicing Alcohol) use the same CA/NY liquor rules as 5813.
  */
 
 export const LIQUOR_COMPLIANCE_STATES = new Set(['CA', 'NY']);
 export const LIQUOR_COMPLIANCE_MCC = '5813';
 export const HIGH_RISK_ALCOHOL_PCT = 50;
 
+/** True when MCC is 5813 or an Elavon letter variant (5813A/B/C). */
+export function isLiquorComplianceMcc(mcc) {
+  const base = String(mcc || '').trim().toUpperCase().replace(/[A-Z]+$/, '');
+  return base === LIQUOR_COMPLIANCE_MCC;
+}
+
 export function requiresLiquorCompliance(state, mcc) {
   return LIQUOR_COMPLIANCE_STATES.has(String(state || '').trim().toUpperCase())
-    && String(mcc || '').trim() === LIQUOR_COMPLIANCE_MCC;
+    && isLiquorComplianceMcc(mcc);
 }
 
 export function stateDisplayName(state) {

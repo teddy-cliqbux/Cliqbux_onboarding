@@ -195,7 +195,7 @@ Deno.serve(async (req) => {
       if (c.cardPresentPct == null || c.cardPresentPct === '') missing.push('card split');
       const parentLoc = (locations || []).find((l) => l.id === c.locationId);
       const locState = String(parentLoc?.businessState || '').trim().toUpperCase();
-      if ((locState === 'CA' || locState === 'NY') && String(c.mccCode || '').trim() === '5813') {
+      if ((locState === 'CA' || locState === 'NY') && String(c.mccCode || '').trim().toUpperCase().replace(/[A-Z]+$/, '') === '5813') {
         const alcoholNum = Number(c.alcoholSalesPercentage);
         if (c.alcoholSalesPercentage == null || c.alcoholSalesPercentage === '' || !Number.isFinite(alcoholNum) || alcoholNum < 0 || alcoholNum > 100) {
           missing.push('alcohol sales percentage (CA/NY Bar & Tavern)');
@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
     const liquorLicenseFollowUps = (locations || []).map((l) => {
       const needs = (merchantMIDs || []).some((c) => {
         const st = String(l.businessState || '').trim().toUpperCase();
-        return c.locationId === l.id && (st === 'CA' || st === 'NY') && String(c.mccCode || '').trim() === '5813';
+        return c.locationId === l.id && (st === 'CA' || st === 'NY') && String(c.mccCode || '').trim().toUpperCase().replace(/[A-Z]+$/, '') === '5813';
       });
       if (!needs || l.liquorLicenseDocUrl) return null;
       return { id: l.id, dbaName: l.dbaName || 'Location', missing: ['state liquor license (upload after signing)'] };

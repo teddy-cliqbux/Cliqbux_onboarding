@@ -13,6 +13,12 @@ import { FORMS_LOCKED_MESSAGE } from '@/lib/portalLock';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { invokePortalFunction, merchantTokenHasImp } from '@/lib/merchantAuthFetch';
 import {
+  MCC_OPTIONS,
+  mccOptionLabel,
+  mccDisplayLabel,
+  mccToIndustry,
+} from '@/lib/mccCatalog';
+import {
   requiresLiquorCompliance,
   isAlcoholSalesPercentageSet,
   isHighRiskTavern,
@@ -44,44 +50,9 @@ function multiCoachStorageKey(corporateId) {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+// MCC list: src/lib/mccCatalog.js (Elavon eBoarding + letter variants; 5999 omitted).
 
-// 5999 intentionally omitted (2026-07-13): Elavon/MSPWare treats it as a
-// restricted category (e.g. ammunition) and rejects it for CA/CO/NY. Never
-// offer it in the portal — merchants must pick a specific retail MCC instead.
-// Labels are plain-language first; MCC stays in parentheses for agent/support
-// specificity (critique 2026-07-16 / Teddy: Fast Food ≠ Restaurant, Cafe ≠ Bakery).
-// Bakery is not a separate listed MCC yet — merchants use help escape hatch until
-// a confirmed wire code is added (do not invent MCCs — Critical Lesson #15).
-const MCC_OPTIONS = [
-  { value: '5812', label: 'Restaurant / Cafe / Coffee Shop', group: 'Food & drink', keywords: 'restaurant cafe coffee shop eating place dining' },
-  { value: '5814', label: 'Fast Food', group: 'Food & drink', keywords: 'fast food quick service qsr burger' },
-  { value: '5813', label: 'Bar / Tavern', group: 'Food & drink', keywords: 'bar tavern drinking liquor nightlife' },
-  { value: '5411', label: 'Grocery / Supermarket', group: 'Food & drink', keywords: 'grocery supermarket market' },
-  { value: '7230', label: 'Beauty / Barber Shop', group: 'Retail & services', keywords: 'beauty barber salon hair nails' },
-  { value: '5651', label: 'Clothing Store', group: 'Retail & services', keywords: 'clothing apparel fashion' },
-  { value: '5734', label: 'Computer / Software', group: 'Retail & services', keywords: 'computer software electronics' },
-  { value: '5311', label: 'Department Store', group: 'Retail & services', keywords: 'department store retail' },
-  { value: '7221', label: 'Photography Studio', group: 'Retail & services', keywords: 'photo photography studio' },
-  { value: '5932', label: 'Used Merchandise', group: 'Retail & services', keywords: 'used thrift consignment secondhand' },
-  { value: '4900', label: 'Utilities', group: 'Other', keywords: 'utilities electric gas water' },
-  { value: '5211', label: 'Building Materials', group: 'Other', keywords: 'building materials lumber hardware' },
-];
-
-function mccOptionLabel(opt) {
-  return `${opt.label} (${opt.value})`;
-}
-
-function mccDisplayLabel(mccCode) {
-  const opt = MCC_OPTIONS.find(o => o.value === mccCode);
-  return opt ? mccOptionLabel(opt) : mccCode || '';
-}
-
-// 2026-07-10: MOTO (MS) removed — MSPWare's PUT /form rejected industry_type
-// 'MS' on a live application (#210, template #209) even though it was listed as
-// valid in June testing; do not re-add without live confirmation. ARU removed —
-// not a Cliqbux merchant category. Industry is now auto-derived from the MCC
-// (see mccToIndustry); the dropdown stays visible for manual override among
-// known-good values.
+// 2026-07-10: MOTO (MS) removed — MSPWare PUT /form rejected industry_type MS live.
 const INDUSTRY_OPTIONS = [
   { value: 'RE', label: 'Retail (RE)' },
   { value: 'RS', label: 'Restaurant (RS)' },
@@ -89,21 +60,10 @@ const INDUSTRY_OPTIONS = [
   { value: 'HT', label: 'Lodging / Hotel (HT)' },
 ];
 
-// MCC → MSPWare industry_type. Food-service MCCs → Restaurant, grocery →
-// Supermarket, lodging → Hotel, everything else → Retail.
-function mccToIndustry(mcc) {
-  if (['5812', '5813', '5814'].includes(mcc)) return 'RS';
-  if (mcc === '5411') return 'SP';
-  if (mcc === '7011') return 'HT';
-  return 'RE';
-}
-
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 
-// Sentinel select value for "My business isn't listed". Never persisted as an
-// MCC — it maps to { mccCode: '', mccHelpRequested: true } so an agent sets the
-// real code later (never invent an MCC — Critical Lesson #15).
+// Sentinel: never persist as MCC — { mccCode: '', mccHelpRequested: true }.
 const MCC_HELP_VALUE = '__HELP__';
 const MCC_HELP_LABEL = 'My business isn\'t listed — Cliqbux will help';
 
@@ -217,8 +177,7 @@ function BusinessCategorySelect({ mccCode, mccHelpRequested, onPick }) {
             ))}
             {filtered.length === 0 && (
               <p className="px-3 py-2 text-cb-caption normal-case tracking-normal font-normal text-gray-500">
-                No listed category matches that search
-                {/baker|pastr/i.test(q) ? ' — bakeries usually need a specialist confirm. Use Cliqbux will help below.' : ' — try another word, or Cliqbux will help.'}
+                No listed category matches that search — try another word, or Cliqbux will help.
               </p>
             )}
             <button

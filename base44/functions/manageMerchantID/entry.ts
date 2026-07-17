@@ -224,7 +224,8 @@ Deno.serve(async (req) => {
         ? await base44.asServiceRole.entities.MerchantLocations.get(existing.locationId).catch(() => null)
         : null;
       const locState = String(locForCompliance?.businessState || '').trim().toUpperCase();
-      const needsLiquorCompliance = (locState === 'CA' || locState === 'NY') && effectiveMccForCompliance === '5813';
+      const mccBaseForCompliance = effectiveMccForCompliance.toUpperCase().replace(/[A-Z]+$/, '');
+      const needsLiquorCompliance = (locState === 'CA' || locState === 'NY') && mccBaseForCompliance === '5813';
       if (needsLiquorCompliance) {
         const alcoholVal = updateFields.alcoholSalesPercentage !== undefined
           ? updateFields.alcoholSalesPercentage

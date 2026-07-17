@@ -1065,6 +1065,194 @@ function formatDob(year: string, month: string, day: string): string {
 //   statement_delivery_method, chargebacks_retrievals_format/email,
 //   state_of_formation, currently_processing, seasonal_business, refund_policy
 
+// ─── MCC → industry_type + products_or_services (inlined from mccCatalog) ───
+// Regenerate via: node scripts/gen-mcc-catalog.mjs
+const MCC_PRODUCTS_OR_SERVICES: Record<string, string> = {
+  "4900": "Electricity Providers",
+  "5211": "Building Materials",
+  "5231": "Glass & Glass Supplies",
+  "5251": "Electrical Supplies",
+  "5261": "Gardening Supplies",
+  "5411": "Grocery Stores",
+  "5422": "Butcher Shops",
+  "5441": "Candy, Nut & Confectionery Stores",
+  "5451": "Cheese Shops",
+  "5462": "Bagel Shops",
+  "5499": "Coffee Shops",
+  "5611": "Men's & Boy's Clothing & Accessories",
+  "5621": "Bridal Shops",
+  "5631": "Costume Jewelry",
+  "5641": "Children & Infant Clothes",
+  "5651": "Family Clothing Stores",
+  "5655": "Athletic Apparel Stores",
+  "5661": "Athletic Shoe Stores",
+  "5681": "Furriers & Fur Shops",
+  "5691": "Men's & Women's Clothing Stores",
+  "5697": "Custom Made Clothing",
+  "5698": "Wig & Toupee Stores",
+  "5699": "Clothing - Formal Wear",
+  "5712": "Furniture, Home Furnishing & Equipment Stores (Except Appliances)",
+  "5732": "Electronic Sales",
+  "5734": "Computer Software Sales Transformation",
+  "5811": "Caterers",
+  "5812": "Eating Places & Restaurants (Non Fast Food)",
+  "5813": "Bars, Saloons, Pubs, Taverns, Lounges, Breweries",
+  "5814": "Restaurants - Fast Food",
+  "5921": "Bottled Beer, Wine & Liquor Sales",
+  "5932": "Antique Shops",
+  "7011": "Bed & Breakfast Establishments",
+  "7221": "Photographic Studios",
+  "7230": "Barber & Beauty Shops",
+  "7941": "Athletic Fields",
+  "8099": "Blood Banks",
+  "5621A": "Dress Shops",
+  "5697A": "Dressmakers",
+  "5655A": "Equestrian Apparel",
+  "5661A": "Footwear Stores",
+  "7230A": "Hair & Beauty Salons",
+  "7230B": "Hair Cutting",
+  "5698A": "Hair Pieces & Extensions",
+  "5631A": "Handbag Stores",
+  "5631B": "Lingerie Stores",
+  "5697B": "Made-To-Order Clothing",
+  "7230C": "Makeup Studios",
+  "5621B": "Maternity Stores",
+  "5611A": "Men's Hat Shops",
+  "5611B": "Men's Tie Shops",
+  "5699A": "Miscellaneous Apparel & Accessory Shops - Not Elsewhere Classified",
+  "7230D": "Nail Salon",
+  "5697C": "Sewing Shops",
+  "5661B": "Shoe Stores",
+  "5655B": "Sports & Riding Apparel Stores",
+  "5699B": "Swim Wear Shop",
+  "5699C": "T-Shirt Shop",
+  "5697D": "Tailors, Seamstresses, Mending & Alterations",
+  "5661C": "Western Boot Shops",
+  "5631C": "Women's Clothing Accessories",
+  "5621C": "Women's Coat Stores",
+  "5631D": "Women's Hat Shops",
+  "5621D": "Women's Ready-To-Wear Stores",
+  "5732A": "Electronic Repair Shops",
+  "5732B": "Electronic Sales",
+  "5732E": "Radios, Camcorders & VCRs",
+  "5732C": "Stereo Equipment & Accessories",
+  "5732D": "Television Stores",
+  "5921C": "Alcohol Via Internet",
+  "5462A": "Bakeries",
+  "5462G": "Cake Shops",
+  "5441A": "Chocolate Shops",
+  "5813A": "Comedy Clubs",
+  "5441B": "Confectionery Shops",
+  "5499A": "Convenience Stores",
+  "5462B": "Cookie Stores",
+  "5451A": "Dairy Product Stores",
+  "5499B": "Delicatessens",
+  "5462C": "Doughnut Shops",
+  "5441C": "Dried Fruit Shops",
+  "5422A": "Freezer & Locker Meat Providers",
+  "5499C": "Fruit Markets",
+  "5499D": "Gourmet Food Stores",
+  "5499E": "Health Food Stores",
+  "5499F": "Ice Cream Shops",
+  "5921F": "Internet Bottled Beer, Wine, and Liquor Sales",
+  "5921E": "Internet Liquor Stores",
+  "5921D": "Internet Package Alcohol Sales",
+  "5921A": "Liquor Stores",
+  "5422C": "Meat Locker",
+  "5422D": "Meat Market",
+  "5499O": "Mini Markets",
+  "5499G": "Miscellaneous Food Stores",
+  "5813B": "Night Clubs",
+  "5441D": "Nut Shops",
+  "5921B": "Package Alcohol Sales",
+  "5462D": "Pastry Shops",
+  "5462E": "Pie Shops",
+  "5441E": "Popcorn Stands",
+  "5499P": "Poultry Shops",
+  "5499H": "Pretzel Stands",
+  "5499I": "Produce Markets",
+  "5813C": "Restaurants - Servicing Alcohol",
+  "5422B": "Seafood & Frozen Meat",
+  "5422E": "Seafood Market",
+  "5499J": "Specialty Food Markets",
+  "5411A": "Supermarkets",
+  "5499K": "Tea Stores",
+  "5499L": "Vegetable Markets",
+  "5499M": "Vitamin Stores",
+  "5462F": "Wedding Cakes",
+  "5499N": "Yogurt Shops",
+  "5211A": "Construction Materials",
+  "5261A": "Greenhouses",
+  "5251A": "Hand Tools",
+  "5251B": "Hardware Stores",
+  "5261B": "Lawn Supplies",
+  "5251C": "Lighting Fixtures Supplies",
+  "5211B": "Lumber",
+  "5261C": "Nurseries",
+  "5231A": "Painting & Painting Supplies",
+  "5261D": "Plant Shops",
+  "5251D": "Plumbing Supplies",
+  "5251E": "Power Tools",
+  "5211C": "Roofing Materials",
+  "5231B": "Wallcovering Supplies",
+  "5231C": "Wallpaper Supplies",
+  "5712A": "Made-To-Order Furniture",
+  "5712B": "Mattress Stores",
+  "5712C": "Outdoor Furnishing",
+  "7011A": "Central Reservations Service",
+  "8099A": "Chemical Dependency Treatment Centers",
+  "8099B": "Fertility Clinics",
+  "8099C": "Hair Replacement Centers",
+  "8099D": "Hearing Testing Services",
+  "7011B": "Lodging - Not Elsewhere Classified",
+  "8099K": "Medical Massage Therapists",
+  "8099E": "Medical Services & Health Practitioners - Not Elsewhere Classified",
+  "8099F": "Mental Health Practitioners",
+  "8099G": "Physical Therapists",
+  "7941A": "Professional Sports Clubs",
+  "8099H": "Psychiatrists",
+  "8099I": "Psychologists",
+  "7941B": "Sports Arenas",
+  "8099J": "Sports Medicine Clinics",
+  "7941C": "Stadiums",
+  "5311G": "Department Stores",
+  "5932A": "Furniture Repair & Restoration",
+  "7221A": "Portrait Studios",
+  "7221B": "Wedding Photographers",
+  "4900A": "Garbage Collections",
+  "4900B": "Gas Utility Providers",
+  "4900F": "Home Heating Oil",
+  "4900C": "Public Utility Providers",
+  "4900D": "Sanitary Utility Providers",
+  "4900E": "Water Utility Providers"
+};
+function mccBaseCode(mcc: string): string {
+  return String(mcc || '').trim().replace(/[A-Z]+$/i, '');
+}
+function mccToIndustryCode(mcc: string): string {
+  const b = mccBaseCode(mcc);
+  if (['5811', '5812', '5813', '5814'].includes(b)) return 'RS';
+  if (b === '5411') return 'SP';
+  if (b === '7011') return 'HT';
+  return 'RE';
+}
+function mccToProductsOrServices(mcc: string): string {
+  const raw = String(mcc || '').trim().toUpperCase();
+  if (!raw) return 'Retail goods and services';
+  if (MCC_PRODUCTS_OR_SERVICES[raw]) return MCC_PRODUCTS_OR_SERVICES[raw];
+  const b = mccBaseCode(raw);
+  if (MCC_PRODUCTS_OR_SERVICES[b]) return MCC_PRODUCTS_OR_SERVICES[b];
+  return 'Retail goods and services';
+}
+function resolveIndustryType(merchantMID: any, mcc: string, pricingCategory: any, mapIndustryTypeFn: (c: any) => string): string {
+  return merchantMID.industryType || mccToIndustryCode(mcc) || mapIndustryTypeFn(pricingCategory) || 'RE';
+}
+function resolveProductsOrServices(profile: any, mcc: string): string {
+  const manual = String(profile?.productDescription || '').trim();
+  if (manual) return manual;
+  return mccToProductsOrServices(mcc);
+}
+
 function buildFormPayload(
   profile: Record<string, any>,
   location: Record<string, any>,
@@ -1123,7 +1311,6 @@ function buildFormPayload(
   });
   // Prefer compiled method for the PUT
 
-  const industryType = merchantMID.industryType || mapIndustryType(pricingCategory);
   // 2026-07-13: NEVER default to 5999. That code is a restricted category
   // (MSPWare/Elavon reject it for CA/CO/NY) and was silently poisoning drafts
   // created before the merchant picked a real MCC. Fail loudly instead.
@@ -1140,6 +1327,7 @@ function buildFormPayload(
       `Choose a specific retail MCC on the MID in Locations & MIDs.`
     );
   }
+  const industryType = resolveIndustryType(merchantMID, mcc, pricingCategory, mapIndustryType);
   const dbaName = merchantMID.dbaName || location.dbaName || profile.legalName || '';
   const monthlyCardSales = Math.max(1, parseFloat(String(merchantMID.monthlyCardSales || profile.monthlyCardSales || '6000')) || 6000);
   const rawAvg = parseFloat(String(merchantMID.avgSaleAmount || profile.avgSaleAmount || '100')) || 100;
@@ -1223,7 +1411,7 @@ function buildFormPayload(
     // ── Merchant Information ──────────────────────────────────────────────────
     full_dba_name: sanitizeFullDbaName(dbaName),
     legal_dba_name: sanitizeLegalDbaName(profile.legalName || dbaName || ''),
-    products_or_services: profile.productDescription || 'Retail goods and services',
+    products_or_services: resolveProductsOrServices(profile, mcc),
     year_business_established: String(profile.establishmentYear || new Date().getFullYear() - 3),
     ownership_years: String(profile.currentOwnershipYears || '1'),
     ownership_months: String(profile.currentOwnershipMonths || '0'),
