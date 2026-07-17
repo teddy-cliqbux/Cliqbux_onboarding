@@ -25,13 +25,16 @@ import {
   liquorComplianceBannerText,
 } from '@/lib/liquorCompliance';
 
-// Motion communicates expand/collapse state — never decoration.
-const SPRING = { type: 'spring', stiffness: 150, damping: 20 };
+// Motion communicates expand/collapse — keep it transform/opacity-friendly.
+// Height uses a short ease (not a spring): springs on height:"auto" look like
+// the card is being squeezed. Do not put `layout` on these same cards — it
+// fights the accordion and makes collapse look like a weird size morph.
+const ACCORDION_EASE = { duration: 0.2, ease: [0.32, 0.72, 0, 1] };
 const accordionProps = {
   initial: { height: 0, opacity: 0 },
   animate: { height: 'auto', opacity: 1 },
   exit: { height: 0, opacity: 0 },
-  transition: SPRING,
+  transition: ACCORDION_EASE,
 };
 
 /** Agent impersonation (Applications View) — full verify chrome stays on. */
@@ -557,40 +560,55 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
   if (combined) {
     return (
       <div className={locked ? 'opacity-60' : ''}>
-        {isComplete && !editing ? (
-          <div className="flex items-center gap-3 px-4 py-3 border-t border-cb-border">
-            <div className="flex-1 min-w-0">
-              <p className="text-cb-caption uppercase text-gray-500 mb-0.5">Card processing</p>
-              <p className="text-cb-body text-gray-300">{salesSummary}</p>
-            </div>
-            {imported && <span className="text-cb-caption text-gray-500">Imported</span>}
-            {locked && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="p-1 text-gray-500 cursor-default"><Lock className="w-3 h-3" /></span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs max-w-[200px] text-center">
-                    Application in progress — changes require support assistance.
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-            {!locked && (
-              <button onClick={() => setEditing(true)} aria-label="Edit processing details"
-                className="p-2 text-gray-500 hover:text-white transition-colors">
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="border-t border-cb-border pt-3">
-            <p className="text-cb-caption uppercase text-gray-500 px-4 mb-2">Card processing</p>
-            {!locked ? editFormInner : (
-              <p className="text-cb-caption text-gray-500 px-4 pb-4">Processing details are locked while the application is in progress.</p>
-            )}
-          </div>
-        )}
+        <AnimatePresence initial={false} mode="wait">
+          {isComplete && !editing ? (
+            <motion.div
+              key="mid-summary"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="flex items-center gap-3 px-4 py-3 border-t border-cb-border"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-cb-caption uppercase text-gray-500 mb-0.5">Card processing</p>
+                <p className="text-cb-body text-gray-300">{salesSummary}</p>
+              </div>
+              {imported && <span className="text-cb-caption text-gray-500">Imported</span>}
+              {locked && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="p-1 text-gray-500 cursor-default"><Lock className="w-3 h-3" /></span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs max-w-[200px] text-center">
+                      Application in progress — changes require support assistance.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {!locked && (
+                <button onClick={() => setEditing(true)} aria-label="Edit processing details"
+                  className="p-2 text-gray-500 hover:text-white transition-colors">
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="mid-edit"
+              {...accordionProps}
+              className="overflow-hidden border-t border-cb-border"
+            >
+              <div className="pt-3">
+                <p className="text-cb-caption uppercase text-gray-500 px-4 mb-2">Card processing</p>
+                {!locked ? editFormInner : (
+                  <p className="text-cb-caption text-gray-500 px-4 pb-4">Processing details are locked while the application is in progress.</p>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -600,11 +618,9 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
     <Draggable draggableId={`mid-${mid.id}`} index={index}>
       {(provided, snapshot) => (
         <motion.div
-          layout
-          transition={SPRING}
           ref={provided.innerRef}
           {...provided.draggableProps}
-          className={`rounded-cb border transition-all ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locked ? 'border-cb-border bg-transparent opacity-60' : 'border-cb-border bg-transparent hover:border-cb-border-strong'}`}
+          className={`rounded-cb border transition-colors ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locked ? 'border-cb-border bg-transparent opacity-60' : 'border-cb-border bg-transparent hover:border-cb-border-strong'}`}
         >
           <div className="flex items-center gap-2.5 px-3 py-2.5">
             <span {...provided.dragHandleProps} className={`hidden sm:block text-gray-600 flex-shrink-0 ${locked ? 'cursor-not-allowed' : 'hover:text-gray-400 cursor-grab active:cursor-grabbing'}`}>
@@ -836,11 +852,9 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
       <Draggable draggableId={`loc-${location.id}`} index={index}>
         {(provided, snapshot) => (
           <motion.div
-            layout
-            transition={SPRING}
             ref={provided.innerRef}
             {...provided.draggableProps}
-            className={`rounded-cb border transition-all ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locationError ? 'border-cb-danger bg-cb-surface-raised' : 'border-cb-border bg-cb-surface-raised hover:border-cb-border-strong'}`}
+            className={`rounded-cb border transition-colors ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locationError ? 'border-cb-danger bg-cb-surface-raised' : 'border-cb-border bg-cb-surface-raised hover:border-cb-border-strong'}`}
           >
             <div className="flex items-center gap-3 px-4 py-3">
               {/* DnD requires a handle; hide it in 1×1 — nothing to reorder */}
@@ -910,11 +924,9 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
     <Draggable draggableId={`loc-${location.id}`} index={index}>
       {(provided, snapshot) => (
         <motion.div
-          layout
-          transition={SPRING}
           ref={provided.innerRef}
           {...provided.draggableProps}
-          className={`rounded-cb border transition-all ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locationError ? 'border-cb-danger bg-cb-surface-raised' : 'border-cb-border bg-cb-surface-raised hover:border-cb-border-strong'}`}
+          className={`rounded-cb border transition-colors ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locationError ? 'border-cb-danger bg-cb-surface-raised' : 'border-cb-border bg-cb-surface-raised hover:border-cb-border-strong'}`}
         >
           {/* Location header */}
           <div className="flex items-center gap-3 px-4 py-3">
@@ -1602,8 +1614,6 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
   if (simpleMode) {
     return (
       <motion.div
-        layout
-        transition={SPRING}
         className={`rounded-cb border overflow-hidden ${highlightError ? 'border-cb-danger' : 'border-cb-border'}`}
       >
         <div className="px-5 pt-4 pb-0">
@@ -1658,8 +1668,6 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
 
   return (
     <motion.div
-      layout
-      transition={SPRING}
       className={`rounded-cb border overflow-hidden ${highlightError ? 'border-cb-danger' : 'border-cb-border'}`}
     >
       <div className="flex items-center gap-3 px-5 py-4 border-b border-cb-border">

@@ -1954,3 +1954,20 @@ Wired in submitToMSP, signApplication, refillMSPForms. Catalog regenerated with 
 
 **Waiting on:** Teddy ? push + republish those three functions (+ frontend if not already).
 ---
+
+---
+**[CURSOR]** ? 2026-07-17
+**Type:** Action Taken ? Accordion collapse animation fix (Locations)
+**Re:** Teddy: card processing / location collapse ?reduces size in a strange way?
+
+### Cause
+`layout` + spring on LocationCard / MidCard / EntitySection fought `height: auto` accordion springs ? elastic squeeze on collapse.
+
+### Fix (frontend only, OnboardingLocations.jsx)
+1. Accordion uses short ease (`ACCORDION_EASE` 0.2s), not spring
+2. Removed `layout` from store / MID / entity card wrappers
+3. 1×1 Card processing expand/collapse now uses AnimatePresence + same accordion ease
+
+No field/validation/save/fetch changes.
+**Waiting on:** Teddy ? push + eyeball collapse on Locations (card processing Cancel/Save + location expand).
+---
