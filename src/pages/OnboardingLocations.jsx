@@ -11,7 +11,7 @@ import { isLocked as getMidLocked, isImported as getMidImported } from '@/utils/
 import { usePortalLock } from '@/lib/PortalLockContext';
 import { FORMS_LOCKED_MESSAGE } from '@/lib/portalLock';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+import { invokePortalFunction, merchantTokenHasImp } from '@/lib/merchantAuthFetch';
 import {
   requiresLiquorCompliance,
   isAlcoholSalesPercentageSet,
@@ -28,25 +28,53 @@ const accordionProps = {
   transition: SPRING,
 };
 
+/** Agent impersonation (Applications View) — full verify chrome stays on. */
+function isAgentSession(corporateId) {
+  if (merchantTokenHasImp()) return true;
+  if (corporateId && sessionStorage.getItem('portal_impersonating') === String(corporateId)) return true;
+  return false;
+}
+
+function verifyQuietStorageKey(corporateId) {
+  return `cb_locations_verify_quiet_${corporateId}`;
+}
+
+function multiCoachStorageKey(corporateId) {
+  return `cb_locations_multi_coach_dismissed_${corporateId}`;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 // 5999 intentionally omitted (2026-07-13): Elavon/MSPWare treats it as a
 // restricted category (e.g. ammunition) and rejects it for CA/CO/NY. Never
 // offer it in the portal — merchants must pick a specific retail MCC instead.
+// Labels are plain-language first; MCC stays in parentheses for agent/support
+// specificity (critique 2026-07-16 / Teddy: Fast Food ≠ Restaurant, Cafe ≠ Bakery).
+// Bakery is not a separate listed MCC yet — merchants use help escape hatch until
+// a confirmed wire code is added (do not invent MCCs — Critical Lesson #15).
 const MCC_OPTIONS = [
-  { value: '5812', label: '5812 — Restaurant / Eating Place' },
-  { value: '5814', label: '5814 — Fast Food' },
-  { value: '5813', label: '5813 — Bar / Drinking Place' },
-  { value: '5411', label: '5411 — Grocery / Supermarket' },
-  { value: '7230', label: '7230 — Beauty / Barber Shop' },
-  { value: '5651', label: '5651 — Clothing Store' },
-  { value: '5734', label: '5734 — Computer / Software' },
-  { value: '5311', label: '5311 — Department Store' },
-  { value: '7221', label: '7221 — Photography Studio' },
-  { value: '5932', label: '5932 — Used Merchandise' },
-  { value: '4900', label: '4900 — Utilities' },
-  { value: '5211', label: '5211 — Building Materials' },
+  { value: '5812', label: 'Restaurant / Cafe / Coffee Shop', group: 'Food & drink', keywords: 'restaurant cafe coffee shop eating place dining' },
+  { value: '5814', label: 'Fast Food', group: 'Food & drink', keywords: 'fast food quick service qsr burger' },
+  { value: '5813', label: 'Bar / Tavern', group: 'Food & drink', keywords: 'bar tavern drinking liquor nightlife' },
+  { value: '5411', label: 'Grocery / Supermarket', group: 'Food & drink', keywords: 'grocery supermarket market' },
+  { value: '7230', label: 'Beauty / Barber Shop', group: 'Retail & services', keywords: 'beauty barber salon hair nails' },
+  { value: '5651', label: 'Clothing Store', group: 'Retail & services', keywords: 'clothing apparel fashion' },
+  { value: '5734', label: 'Computer / Software', group: 'Retail & services', keywords: 'computer software electronics' },
+  { value: '5311', label: 'Department Store', group: 'Retail & services', keywords: 'department store retail' },
+  { value: '7221', label: 'Photography Studio', group: 'Retail & services', keywords: 'photo photography studio' },
+  { value: '5932', label: 'Used Merchandise', group: 'Retail & services', keywords: 'used thrift consignment secondhand' },
+  { value: '4900', label: 'Utilities', group: 'Other', keywords: 'utilities electric gas water' },
+  { value: '5211', label: 'Building Materials', group: 'Other', keywords: 'building materials lumber hardware' },
 ];
+
+function mccOptionLabel(opt) {
+  return `${opt.label} (${opt.value})`;
+}
+
+function mccDisplayLabel(mccCode) {
+  const opt = MCC_OPTIONS.find(o => o.value === mccCode);
+  return opt ? mccOptionLabel(opt) : mccCode || '';
+}
 
 // 2026-07-10: MOTO (MS) removed — MSPWare's PUT /form rejected industry_type
 // 'MS' on a live application (#210, template #209) even though it was listed as
@@ -77,6 +105,141 @@ const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 // MCC — it maps to { mccCode: '', mccHelpRequested: true } so an agent sets the
 // real code later (never invent an MCC — Critical Lesson #15).
 const MCC_HELP_VALUE = '__HELP__';
+const MCC_HELP_LABEL = 'My business isn\'t listed — Cliqbux will help';
+
+/** Searchable Business Category picker — plain labels, MCC in parentheses. */
+function BusinessCategorySelect({ mccCode, mccHelpRequested, onPick }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const selectedText = mccHelpRequested && !mccCode
+    ? MCC_HELP_LABEL
+    : (mccCode ? mccDisplayLabel(mccCode) : '');
+
+  const q = query.trim().toLowerCase();
+  const filtered = !q
+    ? MCC_OPTIONS
+    : MCC_OPTIONS.filter(o =>
+        o.label.toLowerCase().includes(q)
+        || o.value.includes(q)
+        || (o.keywords || '').includes(q)
+        || mccOptionLabel(o).toLowerCase().includes(q)
+      );
+
+  const groups = [];
+  for (const opt of filtered) {
+    const g = groups.find(x => x.name === opt.group);
+    if (g) g.items.push(opt);
+    else groups.push({ name: opt.group, items: [opt] });
+  }
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDoc = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      setQuery('');
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
+
+  const pick = (value) => {
+    onPick(value);
+    setOpen(false);
+    setQuery('');
+  };
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className={`${inputCls} flex items-center justify-between gap-2 text-left`}
+      >
+        <span className={selectedText ? 'text-white truncate' : 'text-gray-500 truncate'}>
+          {selectedText || 'Search or select…'}
+        </span>
+        {open ? <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-500 flex-shrink-0" />}
+      </button>
+
+      {open && (
+        <div
+          className="absolute z-30 mt-1.5 w-full rounded-cb border border-cb-border bg-cb-surface-raised shadow-cb-overlay overflow-hidden"
+          role="listbox"
+        >
+          <div className="p-2 border-b border-cb-border">
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Escape') setOpen(false);
+                if (e.key === 'Enter' && filtered.length === 1) {
+                  e.preventDefault();
+                  pick(filtered[0].value);
+                }
+              }}
+              placeholder="Type to search (e.g. coffee, fast food)…"
+              className={`${inputCls} py-2`}
+            />
+          </div>
+          <div className="max-h-64 overflow-y-auto py-1">
+            {groups.map(g => (
+              <div key={g.name}>
+                <p className="px-3 pt-2 pb-1 text-cb-caption uppercase text-gray-600">{g.name}</p>
+                {g.items.map(o => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    role="option"
+                    aria-selected={mccCode === o.value}
+                    onClick={() => pick(o.value)}
+                    className={`w-full text-left px-3 py-2.5 text-cb-body transition-colors ${
+                      mccCode === o.value && !mccHelpRequested
+                        ? 'bg-cb-accent-muted text-white'
+                        : 'text-gray-300 hover:bg-cb-bg hover:text-white'
+                    }`}
+                  >
+                    {mccOptionLabel(o)}
+                  </button>
+                ))}
+              </div>
+            ))}
+            {filtered.length === 0 && (
+              <p className="px-3 py-2 text-cb-caption normal-case tracking-normal font-normal text-gray-500">
+                No listed category matches that search
+                {/baker|pastr/i.test(q) ? ' — bakeries usually need a specialist confirm. Use Cliqbux will help below.' : ' — try another word, or Cliqbux will help.'}
+              </p>
+            )}
+            <button
+              type="button"
+              role="option"
+              aria-selected={!!(mccHelpRequested && !mccCode)}
+              onClick={() => pick(MCC_HELP_VALUE)}
+              className={`w-full text-left px-3 py-2.5 text-cb-body border-t border-cb-border transition-colors ${
+                mccHelpRequested && !mccCode
+                  ? 'bg-cb-accent-muted text-white'
+                  : 'text-gray-400 hover:bg-cb-bg hover:text-white'
+              }`}
+            >
+              {MCC_HELP_LABEL}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Single source of truth for "is this processing account complete?" —
  *  used by the card header, location/entity rollups, the page counters, and
@@ -158,7 +321,7 @@ function StatusBadge({ status }) {
 // combined=true: flat fields for the 1-location × 1-account case — no nested
 // card chrome, no duplicate DBA title, no drag/move/delete. Same save path.
 
-function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, onUpdated, onDelete, moveTargets = [], onMove, combined = false }) {
+function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, onUpdated, onDelete, moveTargets = [], onMove, combined = false, onApplicantSave }) {
   const { formsLocked } = usePortalLock();
   const locked = getMidLocked(mid) || formsLocked;
   const imported = getMidImported(mid);
@@ -236,7 +399,12 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
       });
       if (res.data?.error) throw new Error(res.data.error);
       const saved = res.data?.updatedMerchantID || res.data?.merchantID;
-      if (saved) { onUpdated(saved); setSavedAt(Date.now()); return true; }
+      if (saved) {
+        onUpdated(saved);
+        setSavedAt(Date.now());
+        onApplicantSave?.();
+        return true;
+      }
       throw new Error('Save did not complete — please try again.');
     } catch (err) {
       console.error('[MidCard.doSave]', err);
@@ -249,7 +417,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
   const setField = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
   const salesSummary = isComplete
-    ? `${mid.mccCode || 'Category: Cliqbux will confirm'} · $${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo`
+    ? `${mid.mccHelpRequested && !mid.mccCode ? 'Category: Cliqbux will confirm' : (mccDisplayLabel(mid.mccCode) || mid.mccCode)} · $${Number(mid.monthlyCardSales || 0).toLocaleString()}/mo`
     : null;
 
   const editFormInner = (
@@ -264,20 +432,17 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                 )}
                 <div>
                   <label className={labelCls}>Business Category *</label>
-                  <select value={form.mccHelpRequested && !form.mccCode ? MCC_HELP_VALUE : form.mccCode}
-                    onChange={e => {
-                      const v = e.target.value;
+                  <BusinessCategorySelect
+                    mccCode={form.mccCode}
+                    mccHelpRequested={form.mccHelpRequested}
+                    onPick={(v) => {
                       if (v === MCC_HELP_VALUE) {
                         setForm(f => ({ ...f, mccCode: '', mccHelpRequested: true }));
                         return;
                       }
                       setForm(f => ({ ...f, mccCode: v, mccHelpRequested: false, industryType: v ? mccToIndustry(v) : f.industryType }));
                     }}
-                    className={inputCls} style={{ colorScheme: 'dark' }}>
-                    <option value="">Select…</option>
-                    {MCC_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    <option value={MCC_HELP_VALUE}>My business isn&apos;t listed — Cliqbux will help</option>
-                  </select>
+                  />
                   {form.mccHelpRequested && !form.mccCode && (
                     <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1.5">
                       No problem — finish the rest of this form and continue. A Cliqbux specialist will confirm the right category with you before anything is signed.
@@ -437,7 +602,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
           <div className="flex items-center gap-3 px-4 py-3 border-t border-cb-border">
             <div className="flex-1 min-w-0">
               <p className="text-cb-caption uppercase text-gray-500 mb-0.5">Card processing</p>
-              <p className="text-cb-body text-gray-300 font-mono">{salesSummary}</p>
+              <p className="text-cb-body text-gray-300">{salesSummary}</p>
             </div>
             {imported && <span className="text-cb-caption text-gray-500">Imported</span>}
             {locked && (
@@ -489,7 +654,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
             <div className="flex-1 min-w-0">
               <p className="text-cb-body font-medium text-white truncate">{form.merchantName || dbaName}</p>
               {isComplete
-                ? <p className="text-cb-caption normal-case tracking-normal text-gray-500 font-mono">{salesSummary}</p>
+                ? <p className="text-cb-caption normal-case tracking-normal text-gray-500">{salesSummary}</p>
                 : <p className="text-cb-caption normal-case tracking-normal text-cb-accent font-normal">Needs category &amp; sales info</p>
               }
             </div>
@@ -560,7 +725,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
 
 // ─── Location Card (nested inside Entity, draggable) ──────────────────────────
 
-function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, index, showValidation, allLocations = [], entityMoveTargets = [], onMoveLocation, onMoveMid, simpleMode = false }) {
+function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, index, showValidation, allLocations = [], entityMoveTargets = [], onMoveLocation, onMoveMid, simpleMode = false, onApplicantSave }) {
   const { formsLocked } = usePortalLock();
   const locMids = merchantIDs.filter(c => c.locationId === location.id);
   // Mobile alternative to drag-and-drop (grips are hidden below sm).
@@ -616,6 +781,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
       if (res.data?.error) throw new Error(res.data.error);
       onLocationUpdated?.({ id: location.id, ...res.data.location });
       setEditingLoc(false);
+      onApplicantSave?.();
     } catch (err) { setLocEditError(err.message || 'Save failed'); }
     finally { setLocSaving(false); }
   };
@@ -643,7 +809,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
       });
       if (res.data?.error) throw new Error(res.data.error);
       const saved = res.data?.merchantID;
-      if (saved) { onMerchantIDAdded(saved); setAddingMid(false); setAddMidName(''); return; }
+      if (saved) { onMerchantIDAdded(saved); setAddingMid(false); setAddMidName(''); onApplicantSave?.(); return; }
       throw new Error('Could not add the account — please try again.');
     } catch (err) {
       console.error('[LocationCard.handleAddMid]', err);
@@ -771,6 +937,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
               businessState={location.businessState || ''}
               onUpdated={onMerchantIDUpdated}
               onDelete={onMerchantIDDeleted}
+              onApplicantSave={onApplicantSave}
             />
 
             {!formsLocked && addMidControls}
@@ -901,6 +1068,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
                           onDelete={onMerchantIDDeleted}
                           moveTargets={midMoveTargets}
                           onMove={onMoveMid}
+                          onApplicantSave={onApplicantSave}
                         />
                       ))}
                       {drop.placeholder}
@@ -1001,7 +1169,7 @@ function entityMissingFields({ ownershipType, taxClassType, establishmentYear, f
   return missing;
 }
 
-function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, forceExpand }) {
+function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, forceExpand, onApplicantSave }) {
   const { formsLocked } = usePortalLock();
   const [ownershipType, setOwnershipType] = useState(entity.ownershipType || '');
   const [taxClassType, setTaxClassType]   = useState(entity.taxClassType  || '');
@@ -1084,6 +1252,7 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, for
       setSaved(true);
       // Only notify parent once on explicit save — no feedback loop
       onUpdated({ ...entity, ownershipType, taxClassType, establishmentYear: estYear, federalEIN: einDigits });
+      onApplicantSave?.();
     } catch (err) {
       setSaveError(err?.message || 'Save failed');
     } finally {
@@ -1321,7 +1490,7 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
 
 // ─── Entity Section (top-level group) ────────────────────────────────────────
 
-function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, onAddLocation, isOnly, onEntityUpdated, onDeleteEntity, showValidation, onEntityDraftStatus, allEntities = [], onMoveLocation, onMoveMid, simpleMode = false }) {
+function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, onAddLocation, isOnly, onEntityUpdated, onDeleteEntity, showValidation, onEntityDraftStatus, allEntities = [], onMoveLocation, onMoveMid, simpleMode = false, onApplicantSave }) {
   const entityLocs = locations.filter(l => l.entityId === entity.entityId);
   const entityMids = merchantIDs.filter(m => entityLocs.some(l => l.id === m.locationId));
   const entityMoveTargets = allEntities
@@ -1356,72 +1525,62 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
       if (res.data?.error) throw new Error(res.data.error);
       onEntityUpdated({ ...entity, legalBusinessName: hdrName.trim() });
       setEditingHeader(false);
+      onApplicantSave?.();
     } catch (err) { setHdrError(err.message || 'Save failed'); }
     finally { setHdrSaving(false); }
   };
 
-  return (
-    <motion.div
-      layout
-      transition={SPRING}
-      className={`rounded-cb border overflow-hidden ${highlightError ? 'border-cb-danger' : 'border-cb-border'}`}
-    >
-      {/* Entity header — hierarchy carried by type weight, not color */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-cb-border">
-        {editingHeader ? (
-          <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-3 py-0.5">
-            <input value={hdrName} onChange={e => setHdrName(e.target.value)} placeholder="Legal business name" autoFocus
-              className="flex-1 min-w-0 bg-cb-bg border border-cb-border rounded-cb px-3 py-1.5 text-cb-body text-white focus:outline-none focus:ring-2 focus:ring-cb-accent" />
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button onClick={saveHeaderEdit} disabled={hdrSaving}
-                className="text-cb-body font-semibold bg-cb-accent hover:opacity-90 disabled:opacity-50 text-cb-bg px-3 py-1.5 rounded-cb transition-colors">
-                {hdrSaving ? 'Saving…' : 'Save'}
-              </button>
-              <button onClick={() => setEditingHeader(false)} className="text-cb-body text-gray-400 hover:text-white px-2 py-1.5">Cancel</button>
-            </div>
-            {hdrError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">{hdrError}</p>}
-          </div>
-        ) : (
-          <div className="flex-1 min-w-0 flex items-baseline gap-2.5 flex-wrap">
-            <p className="font-display text-cb-title text-white truncate">{entity.legalBusinessName}</p>
-            {entity.federalEIN && (
-              <p className="text-cb-caption text-gray-500 font-mono normal-case tracking-normal">EIN {formatEIN(entity.federalEIN)}</p>
-            )}
-          </div>
-        )}
-        <div className="flex items-center gap-2.5 flex-shrink-0">
-          {!simpleMode && (
-            <span className="hidden sm:inline text-cb-caption text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''} · {entityMids.length} account{entityMids.length !== 1 ? 's' : ''}</span>
-          )}
-          {allComplete && entityLocs.length > 0 && <Check className="w-3.5 h-3.5 text-cb-success" />}
-          {!editingHeader && (
-            <button onClick={startHeaderEdit} title="Edit legal entity name"
-              className="p-2 text-gray-600 hover:text-white rounded-cb transition-colors">
-              <Pencil className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {!isOnly && (
-            <button onClick={() => onDeleteEntity(entity)} title="Delete legal entity"
-              className="p-2 text-gray-600 hover:text-cb-danger rounded-cb transition-colors">
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
+  // 1×1 store-first: legal entity collapses under the store (critique 2026-07-16).
+  const [legalOpen, setLegalOpen] = useState(!entityDetailsComplete);
+  useEffect(() => {
+    if (showValidation && !entityDetailsComplete) setLegalOpen(true);
+  }, [showValidation, entityDetailsComplete]);
+
+  const entityHeaderInner = editingHeader ? (
+    <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-3 py-0.5">
+      <input value={hdrName} onChange={e => setHdrName(e.target.value)} placeholder="Legal business name" autoFocus
+        className="flex-1 min-w-0 bg-cb-bg border border-cb-border rounded-cb px-3 py-1.5 text-cb-body text-white focus:outline-none focus:ring-2 focus:ring-cb-accent" />
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <button onClick={saveHeaderEdit} disabled={hdrSaving}
+          className="text-cb-body font-semibold bg-cb-accent hover:opacity-90 disabled:opacity-50 text-cb-bg px-3 py-1.5 rounded-cb transition-colors">
+          {hdrSaving ? 'Saving…' : 'Save'}
+        </button>
+        <button onClick={() => setEditingHeader(false)} className="text-cb-body text-gray-400 hover:text-white px-2 py-1.5">Cancel</button>
       </div>
+      {hdrError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">{hdrError}</p>}
+    </div>
+  ) : (
+    <div className="flex-1 min-w-0 flex items-baseline gap-2.5 flex-wrap">
+      <p className="font-display text-cb-title text-white truncate">{entity.legalBusinessName}</p>
+      {entity.federalEIN && (
+        <p className="text-cb-caption text-gray-500 font-mono normal-case tracking-normal">EIN {formatEIN(entity.federalEIN)}</p>
+      )}
+    </div>
+  );
 
-      {/* Business details panel */}
-      <EntityDetailsPanel
-        entity={entity}
-        corporateId={corporateId}
-        onUpdated={onEntityUpdated}
-        onDraftStatus={onEntityDraftStatus}
-        forceExpand={showValidation && !entityDetailsComplete}
-      />
+  const entityHeaderActions = (
+    <div className="flex items-center gap-2.5 flex-shrink-0">
+      {!simpleMode && (
+        <span className="hidden sm:inline text-cb-caption text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''} · {entityMids.length} account{entityMids.length !== 1 ? 's' : ''}</span>
+      )}
+      {allComplete && entityLocs.length > 0 && <Check className="w-3.5 h-3.5 text-cb-success" />}
+      {!editingHeader && (
+        <button onClick={startHeaderEdit} title="Edit legal entity name"
+          className="p-2 text-gray-600 hover:text-white rounded-cb transition-colors">
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
+      )}
+      {!isOnly && (
+        <button onClick={() => onDeleteEntity(entity)} title="Delete legal entity"
+          className="p-2 text-gray-600 hover:text-cb-danger rounded-cb transition-colors">
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
+      )}
+    </div>
+  );
 
-      {/* Mailing address panel */}
-      <EntityMailingAddress entity={entity} corporateId={corporateId} onUpdated={onEntityUpdated} />
-
-      {/* Locations droppable — indented off a hairline rail under the entity */}
+  const locationsBlock = (
+    <>
       <Droppable droppableId={entity.entityId} type="LOCATION">
         {(drop, dropSnap) => (
           <div
@@ -1447,6 +1606,7 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
                 onMoveLocation={onMoveLocation}
                 onMoveMid={onMoveMid}
                 simpleMode={simpleMode}
+                onApplicantSave={onApplicantSave}
               />
             ))}
             {drop.placeholder}
@@ -1456,14 +1616,99 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
           </div>
         )}
       </Droppable>
-
-      {/* Add location to this entity */}
       <div className={`pl-3 sm:pl-4 pr-3 sm:pr-4 pb-4 ${simpleMode ? '' : 'ml-3 sm:ml-6 border-l border-cb-border'}`}>
         <button onClick={() => onAddLocation(entity.entityId)}
           className="w-full flex items-center gap-1.5 py-2 text-cb-caption text-gray-500 hover:text-white transition-colors text-left">
           <Plus className="w-3 h-3" /> Add Location{isOnly ? '' : ` to ${entity.legalBusinessName}`}
         </button>
       </div>
+    </>
+  );
+
+  const legalPanels = (
+    <>
+      <EntityDetailsPanel
+        entity={entity}
+        corporateId={corporateId}
+        onUpdated={onEntityUpdated}
+        onDraftStatus={onEntityDraftStatus}
+        forceExpand={showValidation && !entityDetailsComplete}
+        onApplicantSave={onApplicantSave}
+      />
+      <EntityMailingAddress entity={entity} corporateId={corporateId} onUpdated={onEntityUpdated} />
+    </>
+  );
+
+  // ── 1×1: store + card processing first; legal entity as required accordion ──
+  if (simpleMode) {
+    return (
+      <motion.div
+        layout
+        transition={SPRING}
+        className={`rounded-cb border overflow-hidden ${highlightError ? 'border-cb-danger' : 'border-cb-border'}`}
+      >
+        <div className="px-5 pt-4 pb-0">
+          <p className="text-cb-caption uppercase text-gray-500">Your store</p>
+        </div>
+        {locationsBlock}
+
+        <div className="border-t border-cb-border">
+          <button
+            type="button"
+            onClick={() => setLegalOpen(o => !o)}
+            className="flex items-center gap-2.5 w-full text-left px-5 py-3.5 transition-colors hover:bg-cb-bg/40"
+            aria-expanded={legalOpen}
+          >
+            {entityDetailsComplete
+              ? <Check className="w-3.5 h-3.5 flex-shrink-0 text-cb-success" />
+              : <span className="w-1.5 h-1.5 rounded-full bg-cb-accent flex-shrink-0" />}
+            <span className="flex-1 min-w-0">
+              <span className="text-white font-medium">Legal entity</span>
+              {entity.legalBusinessName && (
+                <span className="text-gray-500 ml-1.5 truncate">{entity.legalBusinessName}</span>
+              )}
+              {entityDetailsComplete && entity.ownershipType && (
+                <span className="text-gray-600 ml-1.5 hidden sm:inline">
+                  · {OWNERSHIP_TYPES.find(o => o.value === entity.ownershipType)?.label || entity.ownershipType}
+                </span>
+              )}
+            </span>
+            {!entityDetailsComplete && (
+              <span className="text-cb-caption uppercase text-cb-accent flex-shrink-0">Required</span>
+            )}
+            {legalOpen
+              ? <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+              : <ChevronRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />}
+          </button>
+
+          <AnimatePresence initial={false}>
+            {legalOpen && (
+              <motion.div key="simple-legal" {...accordionProps} className="overflow-hidden">
+                <div className="flex items-center gap-3 px-5 py-3 border-t border-cb-border">
+                  {entityHeaderInner}
+                  {entityHeaderActions}
+                </div>
+                {legalPanels}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      layout
+      transition={SPRING}
+      className={`rounded-cb border overflow-hidden ${highlightError ? 'border-cb-danger' : 'border-cb-border'}`}
+    >
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-cb-border">
+        {entityHeaderInner}
+        {entityHeaderActions}
+      </div>
+      {legalPanels}
+      {locationsBlock}
     </motion.div>
   );
 }
@@ -1625,6 +1870,9 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function OnboardingLocations({ profile, onContinue, onBack }) {
+  const corporateId = profile.corporateId;
+  const agentSession = isAgentSession(corporateId);
+
   const [entities, setEntities] = useState([]);
   const [locations, setLocations] = useState([]);
   const [merchantIDs, setMerchantIDs] = useState([]);
@@ -1638,6 +1886,37 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const [deleteMidConfirm, setDeleteMidConfirm] = useState(null);
   const [deleteEntityConfirm, setDeleteEntityConfirm] = useState(null);
   const [showBackConfirm, setShowBackConfirm] = useState(false);
+
+  // Verify banner: quiet after applicant's first successful save. Agents always
+  // see the full gold left-rule (impersonation saves never set the quiet flag).
+  const [verifyQuiet, setVerifyQuiet] = useState(() => {
+    if (!corporateId || agentSession) return false;
+    try { return localStorage.getItem(verifyQuietStorageKey(corporateId)) === '1'; }
+    catch { return false; }
+  });
+  const [multiCoachDismissed, setMultiCoachDismissed] = useState(() => {
+    if (!corporateId) return false;
+    try { return localStorage.getItem(multiCoachStorageKey(corporateId)) === '1'; }
+    catch { return false; }
+  });
+
+  const markApplicantSave = useCallback(() => {
+    if (!corporateId || isAgentSession(corporateId)) return;
+    try { localStorage.setItem(verifyQuietStorageKey(corporateId), '1'); } catch { /* ignore */ }
+    setVerifyQuiet(true);
+  }, [corporateId]);
+
+  const dismissMultiCoach = useCallback(() => {
+    if (corporateId) {
+      try { localStorage.setItem(multiCoachStorageKey(corporateId), '1'); } catch { /* ignore */ }
+    }
+    setMultiCoachDismissed(true);
+  }, [corporateId]);
+
+  // Agents always get the full verify callout, even if the merchant already quieted it.
+  const showFullVerify = agentSession || !verifyQuiet;
+  const isMultiHierarchy = entities.length > 1 || locations.length > 1 || merchantIDs.length > 1;
+  const showMultiCoach = isMultiHierarchy && !multiCoachDismissed;
 
   useEffect(() => { loadAll(); }, []);
 
@@ -1710,6 +1989,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
   const handleLocationSaved = async () => {
     setAddFormEntityId(null);
+    markApplicantSave();
     await loadAll();
   };
 
@@ -1928,7 +2208,11 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="font-display text-cb-display text-white mb-2">Your Business &amp; Locations</h2>
-            <p className="text-cb-body-lg text-gray-400 max-w-xl">Confirm your legal business details, add each location, and tell us how it takes cards.</p>
+            <p className="text-cb-body-lg text-gray-400 max-w-xl">
+              {entities.length === 1 && locations.length <= 1
+                ? 'Confirm your store, how it takes cards, and your legal business details.'
+                : 'Confirm your legal business details, add each location, and tell us how it takes cards.'}
+            </p>
           </div>
           <button onClick={() => setShowBackConfirm(true)}
             className="flex-shrink-0 flex items-center gap-2 text-cb-body text-gray-300 border border-cb-border hover:border-cb-border-strong hover:text-white px-4 py-2 rounded-cb transition-colors">
@@ -1958,17 +2242,46 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
       {/* Hierarchy: Entity → Locations → MIDs */}
       <div className="px-4 sm:px-8 py-8 space-y-6">
-        {/* Prefill verification notice (2026-07-10, Teddy: applicants must be
-            prompted to verify prefilled data and be able to correct it here) */}
-        <div className="flex items-start gap-3 bg-cb-surface-raised border border-cb-border border-l border-l-cb-accent rounded-cb px-5 py-4">
-          <Info className="w-4 h-4 text-cb-accent flex-shrink-0 mt-0.5" />
-          <p className="text-cb-body text-gray-400 leading-relaxed">
-            <span className="font-medium text-white">Please verify everything below before continuing.</span>{' '}
-            Some details were prefilled by your Cliqbux representative and may be incomplete or out of date.
-            Use the <Pencil className="w-3 h-3 inline -mt-0.5" /> edit icons to correct your legal entity name,
-            EIN, or a location&apos;s name and address.
+        {/* Prefill verification notice — full gold callout for agents + first
+            applicant visit; quiet tip after applicant's first successful save. */}
+        {showFullVerify ? (
+          <div className="flex items-start gap-3 bg-cb-surface-raised border border-cb-border border-l border-l-cb-accent rounded-cb px-5 py-4">
+            <Info className="w-4 h-4 text-cb-accent flex-shrink-0 mt-0.5" />
+            <p className="text-cb-body text-gray-400 leading-relaxed">
+              <span className="font-medium text-white">Please verify everything below before continuing.</span>{' '}
+              Some details were prefilled by your Cliqbux representative and may be incomplete or out of date.
+              Use the <Pencil className="w-3 h-3 inline -mt-0.5" /> edit icons to correct your legal entity name,
+              EIN, or a location&apos;s name and address.
+            </p>
+          </div>
+        ) : (
+          <p className="text-cb-body text-gray-500">
+            Tip: use the <Pencil className="w-3 h-3 inline -mt-0.5" /> edit icons if anything looks off.
           </p>
-        </div>
+        )}
+
+        {/* One-time multi-store coach when hierarchy expands beyond 1×1 */}
+        {showMultiCoach && (
+          <div className="flex items-start gap-3 bg-cb-surface-raised border border-cb-border rounded-cb px-5 py-4">
+            <Info className="w-4 h-4 text-gray-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-cb-body text-white font-medium mb-1">You&apos;re now managing more than one store or account</p>
+              <p className="text-cb-body text-gray-400 leading-relaxed">
+                Each card sits under a <span className="text-gray-300">legal entity</span> (EIN), then a{' '}
+                <span className="text-gray-300">location</span> (storefront), then a{' '}
+                <span className="text-gray-300">processing account</span> (how that spot takes cards).
+                Drag or use Move to reorganize — your hierarchy can grow with you.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={dismissMultiCoach}
+              className="flex-shrink-0 text-cb-body text-gray-500 hover:text-white px-2 py-1 transition-colors"
+            >
+              Got it
+            </button>
+          </div>
+        )}
 
         {/* Action error — inline, replaces browser alert() */}
         {actionError && (
@@ -2011,6 +2324,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                 onMoveLocation={moveLocationToEntity}
                 onMoveMid={moveMidToLocation}
                 simpleMode={entities.length === 1 && locations.length <= 1}
+                onApplicantSave={markApplicantSave}
               />
             ))}
           </div>

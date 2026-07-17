@@ -1882,3 +1882,41 @@ Teddy: single-location / single-MID applicants saw Entity ? Location ? MID nesti
 
 **? Waiting on:** Teddy (push + visual check)
 ---
+
+---
+**[CURSOR]** ? 2026-07-17
+**Type:** Action Taken ? Locations store-first 1×1 + plain MCC picker
+**Re:** Critique Recommended Actions 1 + 3 (Teddy approved)
+
+### 1. Store-first layout (1×1 only)
+`EntitySection` `simpleMode` now leads with **Your store** (combined location + card processing), then a required **Legal entity** accordion (name/EIN edit + Business details + mailing). Multi-location path unchanged (entity ? locations ? accounts). Page subtitle switches to store-first copy when 1×1.
+
+### 3. Business Category ? plain labels + search
+- Labels: `Restaurant / Cafe / Coffee Shop (5812)`, `Fast Food (5814)`, etc. (MCC in parentheses)
+- Searchable combobox (type coffee / fast food / bar?)
+- Same MCC values + help escape hatch ? no new codes invented
+- **Bakery** is not a listed MCC yet ? search tip routes to "Cliqbux will help" until Teddy confirms a wire code (e.g. 5462)
+
+**No field/key/validation/fetch changes.** Frontend only.
+
+**Waiting on:** Teddy ? push + visual check on a 1×1 merchant. Confirm Bakery MCC if we should add it as its own row.
+---
+
+---
+**[CURSOR]** â€” 2026-07-17
+**Type:** Action Taken â€” Locations verify quieter + multi-store coach
+**Re:** Critique Recommended Actions 4 + 2 (Teddy approved)
+
+### 4. Quieter verify banner (applicant only)
+- Full gold left-rule banner on first applicant visit
+- After applicant successful save â†’ quiet tip; localStorage per corporateId
+- Agent impersonation always keeps full banner; agent saves never set quiet flag
+
+### 2. Multi-store coach mark
+- When hierarchy > 1x1, one-time tip: Legal entity â†’ Location â†’ Processing account
+- Got it dismiss persists per corporateId
+
+Frontend only.
+
+**Waiting on:** Teddy â€” push + check applicant quiet / agent full banner / multi coach dismiss.
+---
