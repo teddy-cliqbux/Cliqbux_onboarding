@@ -1266,7 +1266,8 @@ function buildFormPayload(
   merchantMID: Record<string, any>,
   primarySigner: Record<string, any>,
   additionalSigners: Record<string, any>[],
-  entityMailing?: { street: string; city: string; state: string; zip: string } | null
+  entityMailing?: { street: string; city: string; state: string; zip: string } | null,
+  entityCorrespondence?: { street: string; city: string; state: string; zip: string } | null
 ): { payload: Record<string, unknown>; pricingSnapshot: string } {
 
   const signer = primarySigner || {};
@@ -1459,6 +1460,15 @@ function buildFormPayload(
     } : {
       has_legal_address: 'business',
     }),
+    // Optional correspondence / mail-only address (MSPWare Mailing Address).
+    // Distinct from legal_* — only sent when the merchant entered one.
+    ...(entityCorrespondence?.street && entityCorrespondence?.city && entityCorrespondence?.state ? {
+      mailing_address_type: 'BSA',
+      mailing_address: entityCorrespondence.street,
+      mailing_city: entityCorrespondence.city,
+      mailing_state_usa: sanitizeState(entityCorrespondence.state),
+      mailing_zipcode: entityCorrespondence.zip || '',
+    } : {}),
 
     // ── Principals ───────────────────────────────────────────────────────────
     owners: [
@@ -1734,8 +1744,9 @@ Deno.serve(async (req) => {
       if (loc?.locationId != null) locationMap[String(loc.locationId)] = loc;
     }
 
-    // Build a entityId → mailing address lookup from profile's legalEntities
+    // Build entityId → legal address + optional correspondence mailing lookups
     const entityMailingMap: Record<string, any> = {};
+    const entityCorrespondenceMap: Record<string, any> = {};
     let legalEntitiesRaw = profile.legalEntities ?? [];
     if (typeof legalEntitiesRaw === 'string') {
       try { legalEntitiesRaw = JSON.parse(legalEntitiesRaw); } catch { legalEntitiesRaw = []; }
@@ -1743,6 +1754,14 @@ Deno.serve(async (req) => {
     for (const ent of (Array.isArray(legalEntitiesRaw) ? legalEntitiesRaw : [])) {
       if (ent.entityId && ent.mailingStreet && ent.mailingCity && ent.mailingState) {
         entityMailingMap[ent.entityId] = { street: ent.mailingStreet, city: ent.mailingCity, state: ent.mailingState, zip: ent.mailingZip || '' };
+      }
+      if (ent.entityId && ent.correspondenceStreet && ent.correspondenceCity && ent.correspondenceState) {
+        entityCorrespondenceMap[ent.entityId] = {
+          street: ent.correspondenceStreet,
+          city: ent.correspondenceCity,
+          state: ent.correspondenceState,
+          zip: ent.correspondenceZip || '',
+        };
       }
     }
 
@@ -1875,7 +1894,8 @@ Deno.serve(async (req) => {
 
         // ── Step 2: Fill form ─────────────────────────────────────────────────
         const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
-        const { payload: formPayload, pricingSnapshot } = buildFormPayload(profile, location, merchantMID, primarySigner, additionalSigners, entityMailing);
+        const entityCorrespondence = location.entityId ? (entityCorrespondenceMap[location.entityId] || null) : null;
+        const { payload: formPayload, pricingSnapshot } = buildFormPayload(profile, location, merchantMID, primarySigner, additionalSigners, entityMailing, entityCorrespondence);
         console.log(`[submitToMSP] Filling form for application ${mspApplicationNo}:`, JSON.stringify(redactSensitive(formPayload), null, 2));
 
         const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {

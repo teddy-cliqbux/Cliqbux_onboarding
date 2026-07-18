@@ -1992,3 +1992,23 @@ Siblings (Cookie 5462B, Convenience 5499A, etc.) stay **RE**. 5811?5814 family s
 No UI / no prompt ? Advanced override still works.
 **Waiting on:** Teddy ? push + republish submitToMSP, signApplication, refillMSPForms, syncFromHubspot (+ frontend).
 ---
+
+---
+**[CURSOR]** — 2026-07-17
+**Type:** Feature — Legal vs correspondence mailing address split
+
+### Problem
+Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare distinguishes:
+1. **Legal Address** (required when ≠ store/DBA) → `has_legal_address: new` + `legal_*`
+2. **Mailing Address** (optional correspondence) → `mailing_*`
+
+### Shipped
+1. UI: Yes/No "Legal address same as store?" — No requires legal address; optional "Mailing address for correspondence"
+2. Schema on legalEntities: `legalAddressSameAsStore`, `correspondenceStreet/City/State/Zip` (keep `mailing*` as legal override storage)
+3. Continue + getMerchantData readiness gate legal address when different
+4. `submitToMSP` / `signApplication` / `refillMSPForms`: legal_* for override; mailing_* only for correspondence. Fixed refillMSPForms old `has_legal_address:'mailing'` bug.
+
+**ACTION:** Push → republish MerchantCorporateProfile schema → redeploy manageLegalEntity, getMerchantData, submitToMSP, signApplication, refillMSPForms + frontend.
+
+**? Waiting on:** Teddy (push + schema publish)
+---

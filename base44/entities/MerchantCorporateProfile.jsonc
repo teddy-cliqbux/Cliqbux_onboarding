@@ -264,7 +264,8 @@
             "type": "string"
           },
           "mailingStreet": {
-            "type": "string"
+            "type": "string",
+            "description": "Legal entity street when different from the store/DBA address. Maps to MSPWare legal_* when set. Despite the name, this is the LEGAL address override — not the optional correspondence mailing address."
           },
           "mailingCity": {
             "type": "string"
@@ -274,6 +275,24 @@
             "description": "2-letter state code e.g. TN"
           },
           "mailingZip": {
+            "type": "string"
+          },
+          "legalAddressSameAsStore": {
+            "type": "boolean",
+            "description": "true (default) = legal address matches each location's business/DBA address (MSPWare has_legal_address: business). false = merchant entered a distinct legal address in mailingStreet/City/State/Zip (MSPWare has_legal_address: new + legal_*)."
+          },
+          "correspondenceStreet": {
+            "type": "string",
+            "description": "Optional mail-only / correspondence address (MSPWare mailing_*). Lesser-used; distinct from legal address."
+          },
+          "correspondenceCity": {
+            "type": "string"
+          },
+          "correspondenceState": {
+            "type": "string",
+            "description": "2-letter state code"
+          },
+          "correspondenceZip": {
             "type": "string"
           },
           "corporateMailingAddress": {

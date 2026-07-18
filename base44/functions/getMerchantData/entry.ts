@@ -94,7 +94,14 @@ Deno.serve(async (req) => {
         mailingStreet: e.mailingStreet || '',
         mailingCity: e.mailingCity || '',
         mailingState: e.mailingState || '',
-        mailingZip: e.mailingZip || ''
+        mailingZip: e.mailingZip || '',
+        legalAddressSameAsStore: e.legalAddressSameAsStore !== undefined
+          ? Boolean(e.legalAddressSameAsStore)
+          : !(e.mailingStreet && e.mailingCity && e.mailingState),
+        correspondenceStreet: e.correspondenceStreet || '',
+        correspondenceCity: e.correspondenceCity || '',
+        correspondenceState: e.correspondenceState || '',
+        correspondenceZip: e.correspondenceZip || '',
       }))
     };
 
@@ -168,6 +175,14 @@ Deno.serve(async (req) => {
       if (!e.ownershipType) missing.push('business entity type');
       if (e.ownershipType === 'LIMITED_COMPANY' && !e.taxClassType) missing.push('IRS tax classification');
       if (!e.establishmentYear) missing.push('year established');
+      const sameAsStore = e.legalAddressSameAsStore !== undefined
+        ? Boolean(e.legalAddressSameAsStore)
+        : !(e.mailingStreet && e.mailingCity && e.mailingState);
+      if (!sameAsStore) {
+        if (!e.mailingStreet || !e.mailingCity || !e.mailingState || !e.mailingZip) {
+          missing.push('legal address (required when different from store)');
+        }
+      }
       return { entityId: e.entityId, name: e.legalBusinessName || 'Legal entity', missing };
     }).filter((e) => e.missing.length > 0);
     if (ents.length === 0) {

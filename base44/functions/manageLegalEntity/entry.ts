@@ -52,7 +52,13 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
 
     const body = await req.json();
-    const { corporateId, action, entityId, legalBusinessName, tradeNameDBA, federalEIN, corporateMailingAddress, mailingStreet, mailingCity, mailingState, mailingZip, ownershipType, taxClassType, establishmentYear } = body;
+    const {
+      corporateId, action, entityId, legalBusinessName, tradeNameDBA, federalEIN,
+      corporateMailingAddress, mailingStreet, mailingCity, mailingState, mailingZip,
+      ownershipType, taxClassType, establishmentYear,
+      legalAddressSameAsStore,
+      correspondenceStreet, correspondenceCity, correspondenceState, correspondenceZip,
+    } = body;
 
     if (!corporateId || !action) {
       return Response.json({ error: 'corporateId and action are required' }, { status: 400 });
@@ -99,16 +105,48 @@ Deno.serve(async (req) => {
       }
       // Build a clean replacement object with all known fields to avoid partial-update data loss
       const existing = entities[idx];
+      const nextSameAsStore = legalAddressSameAsStore !== undefined
+        ? Boolean(legalAddressSameAsStore)
+        : (existing.legalAddressSameAsStore !== undefined ? Boolean(existing.legalAddressSameAsStore) : !(existing.mailingStreet && existing.mailingCity && existing.mailingState));
+
+      let nextMailingStreet = mailingStreet !== undefined ? (mailingStreet || '').trim() : (existing.mailingStreet || '');
+      let nextMailingCity = mailingCity !== undefined ? (mailingCity || '').trim() : (existing.mailingCity || '');
+      let nextMailingState = mailingState !== undefined ? (mailingState || '').trim() : (existing.mailingState || '');
+      let nextMailingZip = mailingZip !== undefined ? (mailingZip || '').trim() : (existing.mailingZip || '');
+
+      // Same-as-store clears the legal-address override so MSPWare gets has_legal_address: business.
+      if (nextSameAsStore) {
+        nextMailingStreet = '';
+        nextMailingCity = '';
+        nextMailingState = '';
+        nextMailingZip = '';
+      } else {
+        // Allow flipping to "different" before the address is typed. If any legal
+        // address field is present, require the full set (street/city/state/ZIP).
+        const anyLegal = !!(nextMailingStreet || nextMailingCity || nextMailingState || nextMailingZip);
+        const allLegal = !!(nextMailingStreet && nextMailingCity && nextMailingState && nextMailingZip);
+        if (anyLegal && !allLegal) {
+          return Response.json({
+            error: 'Legal address (street, city, state, and ZIP) is required when it differs from the store address.',
+          }, { status: 422 });
+        }
+      }
+
       entities[idx] = {
         entityId: existing.entityId,
         legalBusinessName: legalBusinessName !== undefined ? legalBusinessName.trim() : (existing.legalBusinessName || ''),
         tradeNameDBA: tradeNameDBA !== undefined ? tradeNameDBA.trim() : (existing.tradeNameDBA || ''),
         federalEIN: federalEIN !== undefined ? federalEIN.trim() : (existing.federalEIN || ''),
         corporateMailingAddress: corporateMailingAddress !== undefined ? (corporateMailingAddress || '').trim() : (existing.corporateMailingAddress || ''),
-        mailingStreet: mailingStreet !== undefined ? (mailingStreet || '').trim() : (existing.mailingStreet || ''),
-        mailingCity: mailingCity !== undefined ? (mailingCity || '').trim() : (existing.mailingCity || ''),
-        mailingState: mailingState !== undefined ? (mailingState || '').trim() : (existing.mailingState || ''),
-        mailingZip: mailingZip !== undefined ? (mailingZip || '').trim() : (existing.mailingZip || ''),
+        mailingStreet: nextMailingStreet,
+        mailingCity: nextMailingCity,
+        mailingState: nextMailingState,
+        mailingZip: nextMailingZip,
+        legalAddressSameAsStore: nextSameAsStore,
+        correspondenceStreet: correspondenceStreet !== undefined ? (correspondenceStreet || '').trim() : (existing.correspondenceStreet || ''),
+        correspondenceCity: correspondenceCity !== undefined ? (correspondenceCity || '').trim() : (existing.correspondenceCity || ''),
+        correspondenceState: correspondenceState !== undefined ? (correspondenceState || '').trim() : (existing.correspondenceState || ''),
+        correspondenceZip: correspondenceZip !== undefined ? (correspondenceZip || '').trim() : (existing.correspondenceZip || ''),
         ownershipType: ownershipType !== undefined ? ownershipType : (existing.ownershipType || ''),
         taxClassType: taxClassType !== undefined ? taxClassType : (existing.taxClassType || ''),
         establishmentYear: establishmentYear !== undefined ? establishmentYear : (existing.establishmentYear || ''),
@@ -118,7 +156,28 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'list') {
-      return Response.json({ entities: entities.map(e => ({ entityId: e.entityId, legalBusinessName: e.legalBusinessName, federalEIN: e.federalEIN, corporateMailingAddress: e.corporateMailingAddress || '', mailingStreet: e.mailingStreet || '', mailingCity: e.mailingCity || '', mailingState: e.mailingState || '', mailingZip: e.mailingZip || '', ownershipType: e.ownershipType || '', taxClassType: e.taxClassType || '', establishmentYear: e.establishmentYear || '' })) });
+      return Response.json({
+        entities: entities.map(e => ({
+          entityId: e.entityId,
+          legalBusinessName: e.legalBusinessName,
+          federalEIN: e.federalEIN,
+          corporateMailingAddress: e.corporateMailingAddress || '',
+          mailingStreet: e.mailingStreet || '',
+          mailingCity: e.mailingCity || '',
+          mailingState: e.mailingState || '',
+          mailingZip: e.mailingZip || '',
+          legalAddressSameAsStore: e.legalAddressSameAsStore !== undefined
+            ? Boolean(e.legalAddressSameAsStore)
+            : !(e.mailingStreet && e.mailingCity && e.mailingState),
+          correspondenceStreet: e.correspondenceStreet || '',
+          correspondenceCity: e.correspondenceCity || '',
+          correspondenceState: e.correspondenceState || '',
+          correspondenceZip: e.correspondenceZip || '',
+          ownershipType: e.ownershipType || '',
+          taxClassType: e.taxClassType || '',
+          establishmentYear: e.establishmentYear || '',
+        })),
+      });
     }
 
     if (action === 'add') {

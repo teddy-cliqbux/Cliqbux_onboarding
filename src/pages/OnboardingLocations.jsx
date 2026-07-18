@@ -1327,27 +1327,88 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, for
   );
 }
 
-// ─── Entity Mailing Address Panel ────────────────────────────────────────────
+// ─── Entity Legal + Correspondence Addresses ─────────────────────────────────
+// MSPWare ADDRESSES tab has two different concepts we used to conflate:
+//   1) Legal Address (required when ≠ store/DBA) → mailingStreet* → legal_* on wire
+//   2) Mailing Address (optional, correspondence only) → correspondence* → mailing_*
 
-function EntityMailingAddress({ entity, corporateId, onUpdated }) {
-  const hasMailingAddress = !!(entity.mailingStreet && entity.mailingCity && entity.mailingState);
-  const [expanded, setExpanded] = useState(false);
-  const [addressDisplay, setAddressDisplay] = useState(
-    hasMailingAddress ? `${entity.mailingStreet}, ${entity.mailingCity}, ${entity.mailingState} ${entity.mailingZip || ''}`.trim() : ''
+function entityLegalAddressComplete(entity) {
+  const same = entity.legalAddressSameAsStore !== undefined
+    ? Boolean(entity.legalAddressSameAsStore)
+    : !(entity.mailingStreet && entity.mailingCity && entity.mailingState);
+  if (same) return true;
+  return !!(entity.mailingStreet && entity.mailingCity && entity.mailingState && entity.mailingZip);
+}
+
+function normalizeEntityRecord(e) {
+  const mailingStreet = e.mailingStreet || '';
+  const mailingCity = e.mailingCity || '';
+  const mailingState = e.mailingState || '';
+  const mailingZip = e.mailingZip || '';
+  return {
+    ...e,
+    mailingStreet,
+    mailingCity,
+    mailingState,
+    mailingZip,
+    legalAddressSameAsStore: e.legalAddressSameAsStore !== undefined
+      ? Boolean(e.legalAddressSameAsStore)
+      : !(mailingStreet && mailingCity && mailingState),
+    correspondenceStreet: e.correspondenceStreet || '',
+    correspondenceCity: e.correspondenceCity || '',
+    correspondenceState: e.correspondenceState || '',
+    correspondenceZip: e.correspondenceZip || '',
+    ownershipType: e.ownershipType || '',
+    taxClassType: e.taxClassType || '',
+    establishmentYear: e.establishmentYear || '',
+  };
+}
+
+function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locationCount = 1, showValidation = false }) {
+  const hasLegalOverride = !!(entity.mailingStreet && entity.mailingCity && entity.mailingState);
+  const [sameAsStore, setSameAsStore] = useState(
+    entity.legalAddressSameAsStore !== undefined
+      ? Boolean(entity.legalAddressSameAsStore)
+      : !hasLegalOverride
   );
-  const [parsedAddress, setParsedAddress] = useState(hasMailingAddress ? {
+  const [legalDisplay, setLegalDisplay] = useState(
+    hasLegalOverride
+      ? `${entity.mailingStreet}, ${entity.mailingCity}, ${entity.mailingState} ${entity.mailingZip || ''}`.trim()
+      : ''
+  );
+  const [legalParsed, setLegalParsed] = useState(hasLegalOverride ? {
     street: entity.mailingStreet, city: entity.mailingCity,
     state: entity.mailingState, zip: entity.mailingZip || '',
   } : null);
+  const [mailExpanded, setMailExpanded] = useState(
+    !!(entity.correspondenceStreet && entity.correspondenceCity && entity.correspondenceState)
+  );
+  const hasCorrespondence = !!(entity.correspondenceStreet && entity.correspondenceCity && entity.correspondenceState);
+  const [mailDisplay, setMailDisplay] = useState(
+    hasCorrespondence
+      ? `${entity.correspondenceStreet}, ${entity.correspondenceCity}, ${entity.correspondenceState} ${entity.correspondenceZip || ''}`.trim()
+      : ''
+  );
+  const [mailParsed, setMailParsed] = useState(hasCorrespondence ? {
+    street: entity.correspondenceStreet, city: entity.correspondenceCity,
+    state: entity.correspondenceState, zip: entity.correspondenceZip || '',
+  } : null);
+
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
   const [saveError, setSaveError] = useState('');
-  const pendingSaveRef = useRef(false);
+  const pendingLegalRef = useRef(false);
+  const pendingMailRef = useRef(false);
 
-  const addrRef = usePlacesCallbackRef((parsed) => {
-    setAddressDisplay(parsed.display);
-    setParsedAddress(parsed);
-    pendingSaveRef.current = true;
+  const legalRef = usePlacesCallbackRef((parsed) => {
+    setLegalDisplay(parsed.display);
+    setLegalParsed(parsed);
+    pendingLegalRef.current = true;
+  });
+  const mailRef = usePlacesCallbackRef((parsed) => {
+    setMailDisplay(parsed.display);
+    setMailParsed(parsed);
+    pendingMailRef.current = true;
   });
 
   const entityIdRef = useRef(entity.entityId);
@@ -1355,106 +1416,257 @@ function EntityMailingAddress({ entity, corporateId, onUpdated }) {
   entityIdRef.current = entity.entityId;
   onUpdatedRef.current = onUpdated;
 
-  const handleSave = useCallback(async (addr) => {
+  useEffect(() => {
+    const has = !!(entity.mailingStreet && entity.mailingCity && entity.mailingState);
+    setSameAsStore(
+      entity.legalAddressSameAsStore !== undefined
+        ? Boolean(entity.legalAddressSameAsStore)
+        : !has
+    );
+    if (has) {
+      setLegalDisplay(`${entity.mailingStreet}, ${entity.mailingCity}, ${entity.mailingState} ${entity.mailingZip || ''}`.trim());
+      setLegalParsed({
+        street: entity.mailingStreet, city: entity.mailingCity,
+        state: entity.mailingState, zip: entity.mailingZip || '',
+      });
+    }
+  }, [entity.entityId, entity.mailingStreet, entity.mailingCity, entity.mailingState, entity.mailingZip, entity.legalAddressSameAsStore]);
+
+  const persist = useCallback(async (patch, nextEntity) => {
     setSaving(true);
     setSaveError('');
     try {
       const res = await invokePortalFunction('manageLegalEntity', {
         action: 'edit', corporateId, entityId: entityIdRef.current,
-        mailingStreet: addr.street, mailingCity: addr.city,
-        mailingState: addr.state, mailingZip: addr.zip,
+        ...patch,
       });
       if (res.data?.error) throw new Error(res.data.error);
       setSavedAt(Date.now());
+      if (nextEntity) onUpdatedRef.current?.(nextEntity);
+      else if (res.data?.entities) {
+        const updated = res.data.entities.find(e => e.entityId === entityIdRef.current);
+        if (updated) onUpdatedRef.current?.(updated);
+      }
+      return true;
     } catch (err) {
-      console.error('[EntityMailingAddress.handleSave]', err);
-      setSaveError('The mailing address didn\u2019t save — check your connection and try again.');
+      console.error('[EntityLegalAndMailingAddresses.persist]', err);
+      setSaveError(err?.message || 'Address didn\u2019t save — check your connection and try again.');
+      return false;
+    } finally {
+      setSaving(false);
     }
-    finally { setSaving(false); }
   }, [corporateId]);
 
-  // Auto-save when address is selected from autocomplete — only fires once per selection
-  useEffect(() => {
-    if (parsedAddress && pendingSaveRef.current) {
-      pendingSaveRef.current = false;
-      handleSave(parsedAddress);
-    }
-  }, [parsedAddress, handleSave]);
-
-  const handleClear = async () => {
-    const prev = { display: addressDisplay, parsed: parsedAddress };
-    setAddressDisplay(''); setParsedAddress(null); setSavedAt(null); setSaveError('');
-    try {
-      const res = await invokePortalFunction('manageLegalEntity', {
-        action: 'edit', corporateId, entityId: entity.entityId,
-        mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '',
-      });
-      if (res.data?.error) throw new Error(res.data.error);
-      onUpdated({ ...entity, mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '' });
-    } catch (err) {
-      console.error('[EntityMailingAddress.handleClear]', err);
-      // Server still has the address — put it back so the UI doesn't lie.
-      setAddressDisplay(prev.display); setParsedAddress(prev.parsed);
-      setSaveError('Couldn\u2019t remove the mailing address — please try again.');
+  const chooseSameAsStore = async (yes) => {
+    setSameAsStore(yes);
+    setSaveError('');
+    if (yes) {
+      setLegalDisplay('');
+      setLegalParsed(null);
+      await persist(
+        { legalAddressSameAsStore: true, mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '' },
+        { ...entity, legalAddressSameAsStore: true, mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '' }
+      );
+    } else {
+      // Switching to "No" without an address yet — mark preference; Continue will require the fields.
+      await persist(
+        { legalAddressSameAsStore: false },
+        { ...entity, legalAddressSameAsStore: false }
+      );
     }
   };
 
-  return (
-    <div className="border-t border-cb-border px-5 py-2.5">
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className="flex items-center gap-2.5 text-cb-body text-gray-500 hover:text-gray-300 transition-colors w-full text-left py-1"
-      >
-        <Mail className="w-3.5 h-3.5 flex-shrink-0" />
-        <span className="flex-1">
-          {hasMailingAddress ? (
-            <><span className="text-gray-300 font-medium">Mailing Address</span><span className="text-gray-600 ml-1.5">{entity.mailingStreet}, {entity.mailingCity}, {entity.mailingState}</span></>
-          ) : 'Add Mailing Address (optional)'}
-        </span>
-        {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-      </button>
+  useEffect(() => {
+    if (legalParsed && pendingLegalRef.current) {
+      pendingLegalRef.current = false;
+      persist(
+        {
+          legalAddressSameAsStore: false,
+          mailingStreet: legalParsed.street,
+          mailingCity: legalParsed.city,
+          mailingState: legalParsed.state,
+          mailingZip: legalParsed.zip,
+        },
+        {
+          ...entity,
+          legalAddressSameAsStore: false,
+          mailingStreet: legalParsed.street,
+          mailingCity: legalParsed.city,
+          mailingState: legalParsed.state,
+          mailingZip: legalParsed.zip,
+        }
+      );
+    }
+  }, [legalParsed, persist, entity]);
 
-      <AnimatePresence initial={false}>
-      {expanded && (
-        <motion.div key="entity-mailing" {...accordionProps} className="overflow-hidden">
-        <div className="mt-3 mb-2 space-y-3">
-          <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Applies to everything under <span className="text-gray-400">{entity.legalBusinessName}</span>. If set, this is used as the legal/mailing address on your application instead of the location address.</p>
-          {parsedAddress ? (
-            <div className="flex items-center gap-2.5 bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5">
-              <Mail className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-              <span className="text-cb-body text-gray-300 flex-1 truncate">{addressDisplay}</span>
-              <div className="flex items-center gap-1.5 flex-shrink-0">
-                {saving && <Loader2 className="w-3 h-3 text-gray-400 animate-spin" />}
-                {!saving && savedAt && <Cloud className="w-3 h-3 text-cb-success" title="Saved" />}
-              </div>
-              <button type="button" onClick={handleClear} className="p-2 -m-1 text-gray-500 hover:text-white ml-1">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          ) : (
-            <input
-              ref={addrRef}
-              type="text"
-              value={addressDisplay}
-              onChange={e => { setAddressDisplay(e.target.value); setParsedAddress(null); }}
-              onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
-              placeholder="Start typing mailing address…"
-              autoComplete="off"
-              className={inputCls}
-            />
-          )}
-          {saveError && (
-            <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger" role="alert">
-              {saveError}
-              {parsedAddress && (
-                <button type="button" onClick={() => handleSave(parsedAddress)} className="ml-2 underline hover:text-white">Retry</button>
-              )}
+  useEffect(() => {
+    if (mailParsed && pendingMailRef.current) {
+      pendingMailRef.current = false;
+      persist(
+        {
+          correspondenceStreet: mailParsed.street,
+          correspondenceCity: mailParsed.city,
+          correspondenceState: mailParsed.state,
+          correspondenceZip: mailParsed.zip,
+        },
+        {
+          ...entity,
+          correspondenceStreet: mailParsed.street,
+          correspondenceCity: mailParsed.city,
+          correspondenceState: mailParsed.state,
+          correspondenceZip: mailParsed.zip,
+        }
+      );
+    }
+  }, [mailParsed, persist, entity]);
+
+  const clearCorrespondence = async () => {
+    const prev = { display: mailDisplay, parsed: mailParsed };
+    setMailDisplay(''); setMailParsed(null); setSavedAt(null); setSaveError('');
+    const ok = await persist(
+      { correspondenceStreet: '', correspondenceCity: '', correspondenceState: '', correspondenceZip: '' },
+      { ...entity, correspondenceStreet: '', correspondenceCity: '', correspondenceState: '', correspondenceZip: '' }
+    );
+    if (!ok) {
+      setMailDisplay(prev.display); setMailParsed(prev.parsed);
+    }
+  };
+
+  const clearLegal = async () => {
+    setLegalDisplay(''); setLegalParsed(null);
+    await chooseSameAsStore(true);
+  };
+
+  const storeLabel = locationCount > 1 ? 'each store\u2019s address' : 'your store address';
+  const legalMissing = !sameAsStore && !(legalParsed?.street && legalParsed?.city && legalParsed?.state && legalParsed?.zip);
+  const showLegalError = showValidation && legalMissing;
+
+  return (
+    <div className="border-t border-cb-border px-5 py-3 space-y-4">
+      {/* Legal address */}
+      <div className="space-y-2.5">
+        <div className="flex items-start gap-2">
+          <Mail className="w-3.5 h-3.5 text-gray-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-cb-body text-gray-300 font-medium">
+              Legal address
+              {!sameAsStore && <span className="text-cb-accent ml-1">*</span>}
             </p>
-          )}
+            <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-0.5">
+              Does the legal entity address match {storeLabel}? If not, we need the registered legal address for underwriting (MSPWare Legal Address).
+            </p>
+          </div>
+          {saving && <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin flex-shrink-0" />}
+          {!saving && savedAt && <Cloud className="w-3.5 h-3.5 text-cb-success flex-shrink-0" title="Saved" />}
         </div>
-        </motion.div>
+
+        <div className="flex gap-1 bg-cb-bg border border-cb-border rounded-cb p-1 max-w-sm">
+          {[
+            { val: true, label: 'Yes — same as store' },
+            { val: false, label: 'No — different' },
+          ].map(opt => (
+            <button
+              key={String(opt.val)}
+              type="button"
+              onClick={() => chooseSameAsStore(opt.val)}
+              className={`flex-1 text-cb-caption font-medium px-2.5 py-1.5 rounded-cb transition-colors ${
+                sameAsStore === opt.val ? 'bg-cb-accent-muted text-cb-accent' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        {!sameAsStore && (
+          <div className="space-y-2">
+            {legalParsed ? (
+              <div className={`flex items-center gap-2.5 bg-cb-bg border rounded-cb px-3 py-2.5 ${showLegalError ? 'border-cb-danger' : 'border-cb-border'}`}>
+                <Mail className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                <span className="text-cb-body text-gray-300 flex-1 truncate">{legalDisplay}</span>
+                <button type="button" onClick={clearLegal} className="p-2 -m-1 text-gray-500 hover:text-white">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <input
+                ref={legalRef}
+                type="text"
+                value={legalDisplay}
+                onChange={e => { setLegalDisplay(e.target.value); setLegalParsed(null); }}
+                onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
+                placeholder="Start typing legal entity address…"
+                autoComplete="off"
+                className={`${inputCls} ${showLegalError ? 'border-cb-danger' : ''}`}
+              />
+            )}
+            {showLegalError && (
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger" role="alert">
+                Legal address is required when it differs from the store.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Optional correspondence mailing */}
+      <div className="border-t border-cb-border pt-3">
+        <button
+          type="button"
+          onClick={() => setMailExpanded(e => !e)}
+          className="flex items-center gap-2.5 text-cb-body text-gray-500 hover:text-gray-300 transition-colors w-full text-left py-1"
+        >
+          <Mail className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="flex-1">
+            {hasCorrespondence || mailParsed ? (
+              <><span className="text-gray-300 font-medium">Mailing address (correspondence)</span>
+                {(mailDisplay || entity.correspondenceStreet) && (
+                  <span className="text-gray-600 ml-1.5">{mailDisplay || `${entity.correspondenceStreet}, ${entity.correspondenceCity}`}</span>
+                )}
+              </>
+            ) : 'Add mailing address for correspondence (optional)'}
+          </span>
+          {mailExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+        </button>
+
+        <AnimatePresence initial={false}>
+          {mailExpanded && (
+            <motion.div key="entity-correspondence" {...accordionProps} className="overflow-hidden">
+              <div className="mt-2 mb-1 space-y-2">
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
+                  Optional. Use only if mail should go somewhere other than the store or legal address (MSPWare Mailing Address). Most merchants leave this blank.
+                </p>
+                {mailParsed ? (
+                  <div className="flex items-center gap-2.5 bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5">
+                    <Mail className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+                    <span className="text-cb-body text-gray-300 flex-1 truncate">{mailDisplay}</span>
+                    <button type="button" onClick={clearCorrespondence} className="p-2 -m-1 text-gray-500 hover:text-white">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    ref={mailRef}
+                    type="text"
+                    value={mailDisplay}
+                    onChange={e => { setMailDisplay(e.target.value); setMailParsed(null); }}
+                    onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
+                    placeholder="Start typing correspondence mailing address…"
+                    autoComplete="off"
+                    className={inputCls}
+                  />
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {saveError && (
+        <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger" role="alert">
+          {saveError}
+        </p>
       )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -1470,7 +1682,7 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
   const allComplete = entityLocs.length > 0 && entityLocs.every(l =>
     merchantIDs.some(m => m.locationId === l.id && isMidComplete(m, l.businessState))
   );
-  const entityDetailsComplete = entityMissingFields(entity).length === 0;
+  const entityDetailsComplete = entityMissingFields(entity).length === 0 && entityLegalAddressComplete(entity);
   const highlightError = showValidation && (!allComplete || !entityDetailsComplete);
 
   // Quick inline edit for the (often prefilled) legal name — 2026-07-10.
@@ -1606,7 +1818,13 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
         forceExpand={showValidation && !entityDetailsComplete}
         onApplicantSave={onApplicantSave}
       />
-      <EntityMailingAddress entity={entity} corporateId={corporateId} onUpdated={onEntityUpdated} />
+      <EntityLegalAndMailingAddresses
+        entity={entity}
+        corporateId={corporateId}
+        onUpdated={onEntityUpdated}
+        locationCount={entityLocs.length}
+        showValidation={showValidation}
+      />
     </>
   );
 
@@ -1896,16 +2114,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         invokePortalFunction('listLocations', { corporateId: profile.corporateId }),
         invokePortalFunction('manageMerchantID', { action: 'list', corporateId: profile.corporateId }),
       ]);
-      const loadedEntities = (entRes.data?.entities || []).map(e => ({
-        ...e,
-        mailingStreet: e.mailingStreet || '',
-        mailingCity: e.mailingCity || '',
-        mailingState: e.mailingState || '',
-        mailingZip: e.mailingZip || '',
-        ownershipType: e.ownershipType || '',
-        taxClassType: e.taxClassType || '',
-        establishmentYear: e.establishmentYear || '',
-      }));
+      const loadedEntities = (entRes.data?.entities || []).map(normalizeEntityRecord);
       // Keep the structured address fields — the inline location editor reads
       // them, and dropping them here made every post-refresh edit open with
       // blank City/State/ZIP (then save those blanks over the real values).
@@ -1930,7 +2139,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
             legalBusinessName: profile.legalName || 'Primary Entity',
             federalEIN: (profile.taxId || '').replace(/\D/g, ''),
           });
-          if (seedRes.data?.entities?.length) finalEntities = seedRes.data.entities.map(e => ({ ...e, mailingStreet: e.mailingStreet || '', mailingCity: e.mailingCity || '', mailingState: e.mailingState || '', mailingZip: e.mailingZip || '', ownershipType: e.ownershipType || '', taxClassType: e.taxClassType || '', establishmentYear: e.establishmentYear || '' }));
+          if (seedRes.data?.entities?.length) finalEntities = seedRes.data.entities.map(normalizeEntityRecord);
         } catch (err) {
           console.error('[loadAll] failed to seed primary entity', err);
         }
@@ -2073,8 +2282,8 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
   const businessComplete = entities.length > 0 && entities.every((e) => {
     const draft = entityDrafts[e.entityId];
-    if (draft) return draft.missing.length === 0 && !draft.needsSave;
-    return entityMissingFields(e).length === 0;
+    if (draft) return draft.missing.length === 0 && !draft.needsSave && entityLegalAddressComplete(e);
+    return entityMissingFields(e).length === 0 && entityLegalAddressComplete(e);
   });
   // Fields are typed but Save Details hasn't been clicked — surface this near
   // Continue so a blocked Continue doesn't read as a broken page.
@@ -2102,11 +2311,22 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         validationIssues.push(`${name}: still need ${missing.join(', ')}`);
       } else if (draft?.needsSave) {
         validationIssues.push(`${name}: click Save Details to store your business details`);
+      } else if (!entityLegalAddressComplete(e)) {
+        validationIssues.push(`${name}: legal address is required when it differs from the store`);
       } else {
         validationIssues.push(`${name}: still need ${entityMissingFields(e).join(', ') || 'business details'}`);
       }
     });
   }
+  // Legal address can fail even when business details are complete
+  entities.forEach((e) => {
+    if (entityMissingFields(e).length === 0 && !entityLegalAddressComplete(e)) {
+      const already = validationIssues.some(v => v.includes(e.legalBusinessName || 'Legal Entity') && v.includes('legal address'));
+      if (!already) {
+        validationIssues.push(`${e.legalBusinessName || 'Legal Entity'}: legal address is required when it differs from the store`);
+      }
+    }
+  });
   if (locations.length === 0) {
     validationIssues.push('At least one location is required');
   } else {

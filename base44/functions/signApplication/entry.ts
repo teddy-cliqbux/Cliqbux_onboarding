@@ -1258,7 +1258,8 @@ function buildFormPayload(
   merchantMID: Record<string, any>,
   primarySigner: Record<string, any>,
   additionalSigners: Record<string, any>[],
-  entityMailing?: { street: string; city: string; state: string; zip: string } | null
+  entityMailing?: { street: string; city: string; state: string; zip: string } | null,
+  entityCorrespondence?: { street: string; city: string; state: string; zip: string } | null
 ): { payload: Record<string, unknown>; pricingSnapshot: string } {
   const signer = primarySigner || {};
   const bank = merchantMID.bankDetails || location.bankDetails || {};
@@ -1459,6 +1460,14 @@ function buildFormPayload(
     } : {
       has_legal_address: 'business',
     }),
+    // Optional correspondence / mail-only address (MSPWare Mailing Address).
+    ...(entityCorrespondence?.street && entityCorrespondence?.city && entityCorrespondence?.state ? {
+      mailing_address_type: 'BSA',
+      mailing_address: entityCorrespondence.street,
+      mailing_city: entityCorrespondence.city,
+      mailing_state_usa: sanitizeState(entityCorrespondence.state),
+      mailing_zipcode: entityCorrespondence.zip || '',
+    } : {}),
     owners: [
       {
         owner_responsible_party: true,
@@ -1706,8 +1715,9 @@ Deno.serve(async (req) => {
       if (loc?.locationId != null) locationMap[String(loc.locationId)] = loc;
     }
 
-    // Build entityId → mailing address lookup from profile's legalEntities
+    // Build entityId → legal address + optional correspondence mailing lookups
     const entityMailingMap: Record<string, any> = {};
+    const entityCorrespondenceMap: Record<string, any> = {};
     let legalEntitiesRaw = profile.legalEntities ?? [];
     if (typeof legalEntitiesRaw === 'string') {
       try { legalEntitiesRaw = JSON.parse(legalEntitiesRaw); } catch { legalEntitiesRaw = []; }
@@ -1715,6 +1725,14 @@ Deno.serve(async (req) => {
     for (const ent of (Array.isArray(legalEntitiesRaw) ? legalEntitiesRaw : [])) {
       if (ent.entityId && ent.mailingStreet && ent.mailingCity && ent.mailingState) {
         entityMailingMap[ent.entityId] = { street: ent.mailingStreet, city: ent.mailingCity, state: ent.mailingState, zip: ent.mailingZip || '' };
+      }
+      if (ent.entityId && ent.correspondenceStreet && ent.correspondenceCity && ent.correspondenceState) {
+        entityCorrespondenceMap[ent.entityId] = {
+          street: ent.correspondenceStreet,
+          city: ent.correspondenceCity,
+          state: ent.correspondenceState,
+          zip: ent.correspondenceZip || '',
+        };
       }
     }
 
@@ -1839,7 +1857,8 @@ Deno.serve(async (req) => {
           // Fill form — non-fatal if this throws; draft number is already saved
           try {
             const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
-            const { payload: formPayload, pricingSnapshot } = buildFormPayload(profile, resolveLocationAddress(location), merchantMID, primarySigner, additionalSigners, entityMailing);
+            const entityCorrespondence = location.entityId ? (entityCorrespondenceMap[location.entityId] || null) : null;
+            const { payload: formPayload, pricingSnapshot } = buildFormPayload(profile, resolveLocationAddress(location), merchantMID, primarySigner, additionalSigners, entityMailing, entityCorrespondence);
             if (pricingSnapshot) lastPricingSnapshot = pricingSnapshot;
             const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
               method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
@@ -1997,7 +2016,8 @@ Deno.serve(async (req) => {
           const location = locationMap[merchantMID.locationId];
           if (location) {
             const refillEntityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
-          const { payload: formPayload, pricingSnapshot: refillSnap } = buildFormPayload(profile, resolveLocationAddress(location), merchantMID, primarySigner, additionalSigners, refillEntityMailing);
+            const refillEntityCorrespondence = location.entityId ? (entityCorrespondenceMap[location.entityId] || null) : null;
+          const { payload: formPayload, pricingSnapshot: refillSnap } = buildFormPayload(profile, resolveLocationAddress(location), merchantMID, primarySigner, additionalSigners, refillEntityMailing, refillEntityCorrespondence);
           if (refillSnap) lastPricingSnapshot = refillSnap;
             // Overlay homepage onto discovered empty form keys only (never shotgun —
             // multiple guessed keys can roll back the entire PUT).

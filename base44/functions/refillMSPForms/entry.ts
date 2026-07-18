@@ -246,7 +246,7 @@ function resolveProductsOrServices(profile: any, mcc: string): string {
   return mccToProductsOrServices(mcc);
 }
 
-function buildFormPayload(profile: any, location: any, merchantMID: any, signer: any, additionalSigners: any[], entityMailing?: any): Record<string, unknown> {
+function buildFormPayload(profile: any, location: any, merchantMID: any, signer: any, additionalSigners: any[], entityMailing?: any, entityCorrespondence?: any): Record<string, unknown> {
   const bank = merchantMID.bankDetails || location.bankDetails || {};
   const routing = bank.routingNumber || location.routingNumber || '';
   const account = bank.accountNumber || location.accountNumber || '';
@@ -342,13 +342,21 @@ function buildFormPayload(profile: any, location: any, merchantMID: any, signer:
     business_state_usa: location.businessState || '',
     business_zipcode: location.businessZip || '',
     ...(entityMailing?.street ? {
-      has_legal_address: 'mailing',
-      mailing_address_type: 'LGA',
-      mailing_address: entityMailing.street,
-      mailing_city: entityMailing.city,
-      mailing_state_usa: sanitizeState(entityMailing.state),
-      mailing_zipcode: entityMailing.zip,
+      has_legal_address: 'new',
+      legal_country: 'USA',
+      legal_address_type: 'BSA',
+      legal_address: entityMailing.street,
+      legal_city: entityMailing.city,
+      legal_state_usa: sanitizeState(entityMailing.state),
+      legal_zipcode: entityMailing.zip,
     } : { has_legal_address: 'business' }),
+    ...(entityCorrespondence?.street && entityCorrespondence?.city && entityCorrespondence?.state ? {
+      mailing_address_type: 'BSA',
+      mailing_address: entityCorrespondence.street,
+      mailing_city: entityCorrespondence.city,
+      mailing_state_usa: sanitizeState(entityCorrespondence.state),
+      mailing_zipcode: entityCorrespondence.zip || '',
+    } : {}),
     owners: [
       {
         owner_responsible_party: true,
@@ -487,8 +495,15 @@ Deno.serve(async (req) => {
     const locationMap: Record<string, any> = {};
     for (const loc of (allLocs || [])) locationMap[loc.id] = loc;
     const entityMailingMap: Record<string, any> = {};
+    const entityCorrespondenceMap: Record<string, any> = {};
     for (const ent of (profile.legalEntities || [])) {
       if (ent.entityId && ent.mailingStreet) entityMailingMap[ent.entityId] = { street: ent.mailingStreet, city: ent.mailingCity, state: ent.mailingState, zip: ent.mailingZip || '' };
+      if (ent.entityId && ent.correspondenceStreet && ent.correspondenceCity && ent.correspondenceState) {
+        entityCorrespondenceMap[ent.entityId] = {
+          street: ent.correspondenceStreet, city: ent.correspondenceCity,
+          state: ent.correspondenceState, zip: ent.correspondenceZip || '',
+        };
+      }
     }
 
     const results: any[] = [];
@@ -497,7 +512,8 @@ Deno.serve(async (req) => {
       if (!merchantMID) { results.push({ appNo, error: 'MerchantMID not found' }); continue; }
       const location = resolveLocationAddress(locationMap[merchantMID.locationId] || {});
       const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
-      const payload = buildFormPayload(profile, location, merchantMID, primarySigner, additionalSigners, entityMailing);
+      const entityCorrespondence = location.entityId ? (entityCorrespondenceMap[location.entityId] || null) : null;
+      const payload = buildFormPayload(profile, location, merchantMID, primarySigner, additionalSigners, entityMailing, entityCorrespondence);
 
       console.log(`[refillMSPForms] PUT form for app ${appNo}:`, JSON.stringify(payload, null, 2));
 
