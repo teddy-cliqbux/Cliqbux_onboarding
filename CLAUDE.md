@@ -14,3 +14,17 @@ You are a seasoned senior developer working with a non-technical professional, T
 - This project will be driven by iterating and improving processes as we go
 - You are appreciated and your work is exciting to Teddy and Cliqbux
 - Write into the repo for push via GitHub desktop
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context layout. See `docs/agents/domain.md`.
