@@ -2,11 +2,13 @@
 
 Cliqbux's merchant onboarding and management center: one boarding engagement at a time, tying together sales, legal, locations, and payment processing into a single experience for merchants and Cliqbux staff.
 
-HubSpot company north-star (see ADR-0001): Parent Company → Legal Entity → Location.
+HubSpot company north-star (see ADR-0001): Parent Company → Legal Entity → Location. Cash Discount fee→tiered math (see ADR-0002).
 
 The boarding experience is optimized for the **sales agent** and the **Signer** — org structure choices should reduce redundant entry and confusion for those two roles.
 
 ## Language
+
+### Org structure
 
 **Parent Company**:
 The durable operator identity in HubSpot — ownership (and brand as a label/naming on this record, not a separate company tier). Child records hang under it. During sales, Location companies may sit directly under Parent until Legal Entity is known.
@@ -64,6 +66,36 @@ _Avoid_: Application (alone — ambiguous), Envelope (BoldSign implementation de
 The settlement account used for deposits. Usually belongs to the **Legal Entity** — many Locations and MIDs under that entity can share one account. Inheritance: Legal Entity default → Location override → MID override (most specific wins). Sharing is common but not required.
 _Avoid_: Plaid connection (that's how we collect it), Routing number (a field, not the concept)
 
+### Pricing
+
 **Pricing**:
-The processing fee structure for boarding (e.g. Cash Discount vs custom Flat / Interchange Plus). Usually **Deal-scoped** on the Corporate Profile — one Pricing for the MIDs in that engagement. Rarely, a single MID may override with MID-specific Pricing; that exception is **staff-only** (merchants always work from Deal Pricing).
+The processing fee structure for boarding. Usually **Deal-scoped** on the Corporate Profile — one Pricing for the MIDs in that engagement. Rarely, a single MID may override with MID-specific Pricing; that exception is **staff-only** (merchants always work from Deal Pricing). Distinct from Quote.
 _Avoid_: Quote (equipment/HubSpot quote), Template (MSPWare template is how Pricing is applied downstream)
+
+**Quote**:
+The HubSpot equipment/hardware offer the merchant signs and pays (usually after application signing). Not processing Pricing — a Deal may have one, both, or (edge cases) either alone.
+_Avoid_: Pricing, Invoice (informal for the pay step of a signed Quote)
+
+**Cash Discount**:
+Cliqbux's fixed cash-discount program — the only published self-serve CD offer. **Cardholder Card Fee 3.5%** → tiered pricing **3.3816%** (via fee/(100+fee)). Merchants may choose it self-serve.
+_Avoid_: Clear and Simple (MSPWare method Cliqbux never uses), Surcharge program (related idea, not our product name), Custom Cash Discount
+
+**Custom Cash Discount**:
+Sales-assisted cash-discount pricing where the merchant picks a **Cardholder Card Fee** between 3% and 3.99%. Staff configures that fee; not self-serve. Same product family as Cash Discount (not Flat or Interchange Plus).
+_Avoid_: Cash Discount (the fixed public offer), Clear and Simple
+
+**Custom Flat Rate**:
+Sales-assisted flat processing rate negotiated per Deal. Always requires three values: **markup %**, **per-transaction fee**, and **auth per card**. Staff only. An agent preset (e.g. 2.5% + $0.10 + $0.10) is a shortcut into this product — not a separate product name.
+_Avoid_: Swipe/Keyed Flat Rate (planned published menu — not available)
+
+**Custom Interchange Plus**:
+Sales-assisted interchange-plus pricing negotiated per Deal. Always requires the same three values: **markup %**, **per-transaction fee**, and **auth per card**. Staff only. No off-the-shelf self-serve version.
+_Avoid_: Traditional, Standard, Premium (legacy labels for the same idea)
+
+**Swipe/Keyed Flat Rate**:
+A published Cliqbux flat-rate menu with separate prices for card-present (swipe) vs keyed entry. Distinct from Custom Flat Rate. **Not available** to self-serve or staff until Elavon support lands — planned product only.
+_Avoid_: Custom Flat Rate, Self_Swiped / Self_Keyed (legacy enum labels)
+
+**Cardholder Card Fee**:
+The percent fee the merchant passes to customers who pay by card under a Cash Discount program. Fixed Cash Discount uses **3.5%** only. Custom Cash Discount allows **3%–3.99%**. The MSPWare tiered pricing rate is derived, not independently negotiated: **tiered % = fee / (100 + fee)** (e.g. 3.5% → 3.3816%, 3.99% → 3.8369%).
+_Avoid_: Markup (that's Flat/IC+ language), Surcharge (informal — prefer this term when precise)
