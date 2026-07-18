@@ -3,8 +3,8 @@ import { ArrowLeft, Lock, Loader2, CheckCircle2, AlertCircle, ShieldCheck, PenLi
 import SignerRoster from '@/components/onboarding/SignerRoster';
 import SigningErrorGuide from '@/components/onboarding/SigningErrorGuide';
 import SignerDetailsModal from '@/components/onboarding/SignerDetailsModal';
-import { invokePortalFunction } from '@/lib/merchantAuthFetch';
-import { isRequiredSigner } from '@/lib/signerRules';
+import { invokePortalFunction, merchantTokenHasImp } from '@/lib/merchantAuthFetch';
+import { isEffectivelyRequiredSigner } from '@/lib/signerRules';
 import {
   isVerifiedOrHigher,
   isApplicationSigned,
@@ -75,12 +75,16 @@ export default function OnboardingVerification({ profile, locations, initialSign
   const [submitting, setSubmitting]   = useState(false);
   const [submitError, setSubmitError] = useState('');
 
-  const requiredSigners = rosterSigners.filter(isRequiredSigner);
+  const requiredSigners = rosterSigners.filter((s) => isEffectivelyRequiredSigner(s, rosterSigners));
   // Anyone verified+ can use the on-device iframe; invited/opened = remote parallel lane
   const localSigners = requiredSigners.filter(s => isVerifiedOrHigher(s.identityStatus));
   const remotesOutstanding = requiredSigners.filter(s => isInviteOutstanding(s.identityStatus));
   const allRequiredSigned = requiredSigners.length > 0 &&
     requiredSigners.every(s => isApplicationSigned(s.identityStatus));
+
+  const isAgentPreview = merchantTokenHasImp()
+    || (profile?.corporateId && typeof sessionStorage !== 'undefined'
+      && sessionStorage.getItem('portal_impersonating') === String(profile.corporateId));
 
   // Prefer primary as default selection
   const selectedSigner =
@@ -447,14 +451,19 @@ export default function OnboardingVerification({ profile, locations, initialSign
           </div>
 
           {!allVerified && (
-            <div className="border border-cb-border rounded-cb flex flex-col items-center justify-center py-14 gap-3 bg-cb-surface-raised">
+            <div className="border border-cb-border rounded-cb flex flex-col items-center justify-center py-14 gap-3 bg-cb-surface-raised px-5">
               <div className="w-12 h-12 rounded-full bg-cb-bg border border-cb-border flex items-center justify-center">
                 <Lock className="w-6 h-6 text-gray-500" />
               </div>
               <p className="text-cb-body font-semibold text-gray-300">Signing Locked</p>
               <p className="text-cb-body text-gray-500 text-center max-w-sm">
-                Owners with ≥25% ownership (and the primary signer) must verify in person or receive a Verify &amp; Sign invite before proceeding. Under-25% owners are listed but skipped.
+                The Control Person (Authorized Signer) must complete identity verification — or receive a Verify &amp; Sign invite — before the merchant agreement can load. Beneficial Owners (≥25%) need KYC for AML but only the Control Person signs.
               </p>
+              {isAgentPreview && (
+                <p className="text-cb-caption normal-case tracking-normal text-cb-accent text-center max-w-md mt-1">
+                  Agent tip: if this owner is Verified but missing the Control Person badge, refresh the page — we auto-heal sole owners. Then use Prepare Signing Documents to preview the same BoldSign links the merchant gets.
+                </p>
+              )}
             </div>
           )}
 
@@ -468,8 +477,15 @@ export default function OnboardingVerification({ profile, locations, initialSign
 
           {allVerified && !loadingSigning && applications.length === 0 && !signingError && (
             <div className="border border-cb-border rounded-cb bg-cb-surface-raised px-5 py-6 flex flex-col items-center gap-3 text-center">
+              {isAgentPreview && (
+                <p className="text-cb-caption normal-case tracking-normal text-cb-accent max-w-md">
+                  Agent preview — these are the same signing links the merchant uses. Open them to confirm they&apos;re live; do not complete the signature unless the merchant asked you to.
+                </p>
+              )}
               <p className="text-cb-body text-gray-300 max-w-md">
-                Owners are ready. When you&apos;ve finished reviewing signer details, prepare the merchant agreement for signing.
+                {isAgentPreview
+                  ? 'Control Person is verified. Load the merchant agreement to confirm BoldSign URLs are working.'
+                  : 'Owners are ready. When you\'ve finished reviewing signer details, prepare the merchant agreement for signing.'}
               </p>
               <button
                 type="button"
@@ -477,7 +493,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
                 className="flex items-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 px-5 py-2.5 rounded-cb transition-opacity"
               >
                 <PenLine className="w-4 h-4" />
-                Prepare Signing Documents
+                {isAgentPreview ? 'Preview Signing Documents' : 'Prepare Signing Documents'}
               </button>
             </div>
           )}
@@ -604,6 +620,13 @@ export default function OnboardingVerification({ profile, locations, initialSign
 
           {showSigningChrome && !isComplete && activeApp && !activeApp.error && iframeUrl && selectedSigner && (
             <div className="border border-cb-border rounded-cb overflow-hidden">
+              {isAgentPreview && (
+                <div className="bg-cb-accent-muted border-b border-cb-border px-5 py-2.5">
+                  <p className="text-cb-caption normal-case tracking-normal text-cb-accent">
+                    Agent preview of the merchant&apos;s BoldSign link — same URL the merchant sees. Confirm it loads; avoid finishing the signature for them.
+                  </p>
+                </div>
+              )}
               <div className="bg-cb-surface-raised border-b border-cb-border px-5 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-cb-accent" />

@@ -2097,3 +2097,37 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **→ Waiting on:** Teddy
 ---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Bugfix — Agent impersonation "Signing Locked" despite Verified sole owner (Porky's)
+
+**Root cause:** Michael John Torres was **Beneficial Owner only** (`isAuthorizedSigner` not set). Signing unlock + BoldSign packages require exactly one **Control Person**. Merchant and agent both saw Signing Locked — links were **not** available to the merchant either.
+
+**Fix:**
+1. `manageSigner` list (lock-safe) auto-heals sole non-admin → Control Person + Beneficial Owner
+2. `healControlPerson` action; roster soft-gates via `effectiveControlPersons`
+3. `signApplication` falls back to sole non-admin email when no Control Person flagged
+4. Agent preview copy + banner when impersonating (same BoldSign URLs as merchant)
+
+**Teddy:** Push → redeploy `manageSigner` + `signApplication` → publish frontend → hard-refresh impersonation. Expect Control Person badge, then **Preview / Prepare Signing Documents**.
+
+**→ Waiting on:** Teddy
+---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Action Taken — `$impeccable clarify` /admin/applications
+
+**Audience:** Sales agents mid-call (product register). Terminology locked to grilled deal-desk: Open to prep / Open to fix / Remind / Open dashboard.
+
+**Copy pass (ApplicationManager + applicationRowMode):**
+- Chrome: Sales workspace; search/jump by merchant name or ID; empty states teach Start application
+- CTAs/modals: Email link, Create merchant, Delete merchant / Keep merchant, Sync HubSpot, Save changes
+- Owners (not Signers) in agent-facing labels; Reminder sent via text+email; plainer MSP error humanization
+- Local start: Merchant ID + Go back; no Quick Stage / Corp ID / Magic Link jargon in UI
+
+**Next:** `$impeccable polish admin/applications` if visual polish needed after push.
+
+**? Waiting on:** Teddy (push when ready)
+---

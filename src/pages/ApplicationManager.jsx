@@ -88,17 +88,17 @@ function formatActivityAt(iso) {
 }
 
 const ACTIVITY_EVENT_LABELS = {
-  invite_sent: 'Portal invite sent',
-  signer_invite_sent: 'Signer link sent',
-  signer_link_opened: 'Signer link opened',
-  portal_open: 'Portal opened',
-  session_tick: 'Session time',
-  nudge_sent: 'Merchant nudged',
+  invite_sent: 'Invite emailed',
+  signer_invite_sent: 'Owner invite sent',
+  signer_link_opened: 'Owner opened invite',
+  portal_open: 'Opened portal',
+  session_tick: 'Active in portal',
+  nudge_sent: 'Reminder sent',
 };
 
 function activityActorLabel(actor) {
   if (actor === 'agent') return 'Agent';
-  if (actor === 'signer') return 'Signer';
+  if (actor === 'signer') return 'Owner';
   return 'Merchant';
 }
 
@@ -153,7 +153,7 @@ function PortalActivityPanel({ activity }) {
         </div>
       )}
       {!hasAny && (
-        <p className="text-cb-caption text-gray-600">No portal activity recorded yet. Sends, opens, and time-in-app will appear here.</p>
+        <p className="text-cb-caption text-gray-600">No opens or sends yet. Reminders and portal visits show up here.</p>
       )}
     </div>
   );
@@ -162,11 +162,11 @@ function PortalActivityPanel({ activity }) {
 function humanizeMspError(err) {
   const raw = typeof err === 'string' ? err : (err?.message || err?.description || JSON.stringify(err));
   const s = String(raw).toLowerCase();
-  if (s.includes('deposit') || s.includes('routing') || s.includes('bank') || s.includes('account_no')) return 'Missing Bank Details';
-  if (s.includes('highest_ticket') || s.includes('highest ticket')) return 'Highest Ticket Validation Failure';
-  if (s.includes('average_sales') || s.includes('average transaction') || s.includes('avg sale')) return 'Average Sale Validation Failure';
-  if (s.includes('monthly_sales') || s.includes('monthly volume')) return 'Monthly Volume Validation Failure';
-  if (s.includes('firearm')) return 'Firearm verification (template) — omit from PUT';
+  if (s.includes('deposit') || s.includes('routing') || s.includes('bank') || s.includes('account_no')) return 'Missing bank details';
+  if (s.includes('highest_ticket') || s.includes('highest ticket')) return 'Highest ticket amount needs adjusting';
+  if (s.includes('average_sales') || s.includes('average transaction') || s.includes('avg sale')) return 'Average sale amount needs adjusting';
+  if (s.includes('monthly_sales') || s.includes('monthly volume')) return 'Monthly volume needs adjusting';
+  if (s.includes('firearm')) return 'Firearm field conflict — leave template default (do not send this field)';
   return raw;
 }
 
@@ -322,12 +322,12 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
   ].map(humanizeMspError).filter(Boolean);
 
   const localIssues = [];
-  if (!mid.mccCode && mid.mccHelpRequested) localIssues.push('MERCHANT NEEDS MCC HELP — they picked "my business isn\u2019t listed"; set the real MCC before signing');
-  else if (!mid.mccCode) localIssues.push('Missing MCC code');
+  if (!mid.mccCode && mid.mccHelpRequested) localIssues.push('Merchant asked for MCC help — set the real MCC before signing');
+  else if (!mid.mccCode) localIssues.push('Missing MCC');
   if (!mid.monthlyCardSales) localIssues.push('Missing monthly volume');
-  if (!mid.avgSaleAmount) localIssues.push('Missing avg sale amount');
+  if (!mid.avgSaleAmount) localIssues.push('Missing average sale');
   if (!mid.highestTicketAmount) localIssues.push('Missing highest ticket');
-  if (mid.cardPresentPct == null || mid.cardPresentPct === '') localIssues.push('Missing card split');
+  if (mid.cardPresentPct == null || mid.cardPresentPct === '') localIssues.push('Missing card-present split');
   const allErrors = [...new Set([...localIssues, ...errors])];
   const isDone = ['Active', 'Active (Existing)', 'Pending MID'].includes(mid.applicationStepStatus);
   const hasIssues = allErrors.length > 0 || (pct !== null && pct < 100 && !isDone);
@@ -432,7 +432,7 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
       if (res.data?.error) throw new Error(res.data.error);
       onCreated?.(res.data);
     } catch (err) {
-      setError(err?.response?.data?.error || err.message || 'Failed to create local stage');
+      setError(err?.response?.data?.error || err.message || 'Couldn’t create merchant. Check the name and email, then try again.');
     } finally {
       setSaving(false);
     }
@@ -444,9 +444,9 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
         className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-md p-6"
         onClick={e => e.stopPropagation()}
       >
-        <h3 className="font-display text-cb-title text-white mb-1">Quick Stage — No HubSpot</h3>
+        <h3 className="font-display text-cb-title text-white mb-1">Start without HubSpot</h3>
         <p className="text-cb-caption text-gray-500 mb-4">
-          Creates a local merchant (slug corporate ID). HubSpot sync and quotes are skipped.
+          Creates a merchant in Cliqbux only. No HubSpot deal or equipment quote until you link one later.
         </p>
 
         <label className={labelCls}>Business name</label>
@@ -458,14 +458,18 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
           autoFocus
         />
 
-        <label className={labelCls}>Corporate ID slug</label>
+        <label className={labelCls}>Merchant ID</label>
         <input
           value={slug}
           readOnly
           className={`${inputCls} mb-3 opacity-80 font-mono text-cb-caption`}
+          aria-describedby="local-merchant-id-hint"
         />
+        <p id="local-merchant-id-hint" className="text-cb-caption text-gray-600 -mt-2 mb-3">
+          Auto-generated from the business name.
+        </p>
 
-        <label className={labelCls}>Primary signer name</label>
+        <label className={labelCls}>Primary owner name</label>
         <input
           value={signerName}
           onChange={e => setSignerName(e.target.value)}
@@ -473,7 +477,7 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
           placeholder="Jane Owner"
         />
 
-        <label className={labelCls}>Primary signer email</label>
+        <label className={labelCls}>Primary owner email</label>
         <input
           type="email"
           value={signerEmail}
@@ -492,14 +496,14 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
             className="flex-1 flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-body py-2.5 rounded-cb transition-opacity"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            Create local stage
+            Create merchant
           </button>
           <button
             onClick={onClose}
             disabled={saving}
             className="flex-1 border border-cb-border text-gray-400 font-medium text-cb-body py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong disabled:opacity-40"
           >
-            Cancel
+            Go back
           </button>
         </div>
       </div>
@@ -551,7 +555,7 @@ function PipelineOverview({ profiles, stages, loading, onRefresh, onQuickCreate 
           </div>
         )}
         <div>
-          <p className="text-cb-caption uppercase text-gray-500 mb-1">Applications</p>
+          <p className="text-cb-caption uppercase text-gray-500 mb-1">Merchant applications</p>
           <div className="flex items-center gap-3">
             <span className="text-cb-title font-display text-white">{profiles.length}</span>
             {loading && <Loader2 className="w-3 h-3 text-gray-600 animate-spin" />}
@@ -568,14 +572,19 @@ function PipelineOverview({ profiles, stages, loading, onRefresh, onQuickCreate 
 
       {/* Quick create */}
       <div className="flex-shrink-0">
-        <p className="text-cb-caption uppercase text-gray-500 mb-1.5">Quick Stage — Corp ID</p>
+        <p className="text-cb-caption uppercase text-gray-500 mb-1.5">Start application</p>
         <div className="flex gap-2 items-center">
-          <input value={quickId} onChange={e => setQuickId(e.target.value)} placeholder="Deal ID or business name…"
+          <input
+            value={quickId}
+            onChange={e => setQuickId(e.target.value)}
+            placeholder="HubSpot deal ID or business name…"
+            aria-label="HubSpot deal ID or business name"
             onKeyDown={e => e.key === 'Enter' && handleQuickCreate()}
-            className="bg-cb-bg border border-cb-border rounded-cb px-3 py-2 text-cb-body text-white placeholder:text-gray-600 hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent w-56" />
+            className="bg-cb-bg border border-cb-border rounded-cb px-3 py-2 text-cb-body text-white placeholder:text-gray-600 hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent w-56"
+          />
           <button onClick={handleQuickCreate} disabled={!quickId.trim()}
             className="flex items-center gap-1.5 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-caption px-3 py-2 rounded-cb transition-opacity flex-shrink-0">
-            <Zap className="w-3 h-3" /> Create
+            <Zap className="w-3 h-3" /> Start
           </button>
         </div>
       </div>
@@ -666,7 +675,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
       setQuotes(unique);
       setSelectedQuoteId(res.data?.selectedQuoteId || null);
     } catch (err) {
-      setError(err.message || 'Failed to load HubSpot quotes');
+      setError(err.message || 'Couldn’t load HubSpot quotes. Try Refresh, or check the deal in HubSpot.');
     } finally {
       setLoadingQuotes(false);
     }
@@ -691,7 +700,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
       if (!stage) selectAll(lists);
       await fetchQuotes();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'Failed to load merchant data');
+      setError(err.response?.data?.error || err.message || 'Couldn’t load merchant data. Try again in a moment.');
     } finally {
       setSyncMsg('');
       setLoading(false);
@@ -709,7 +718,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
       if (!stage) selectAll(lists);
       await fetchQuotes();
     } catch (err) {
-      setError(err.response?.data?.error || err.message || 'HubSpot sync failed');
+      setError(err.response?.data?.error || err.message || 'Couldn’t sync from HubSpot. Check the deal ID and try again.');
     } finally {
       setSyncMsg('');
       setLoading(false);
@@ -733,7 +742,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
       if (res.data?.error) throw new Error(res.data.error);
       setSelectedQuoteId(quoteId);
     } catch (err) {
-      setError(err.message || 'Failed to select quote');
+      setError(err.message || 'Couldn’t select that quote. Try again.');
     } finally {
       setSelectingQuote(false);
     }
@@ -760,7 +769,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
 
   const tabs = [
     { key: 'locations', label: 'Locations', count: selLocs.size, total: locations.length, icon: Store },
-    { key: 'signers',   label: 'Signers',   count: selSigners.size, total: signers.length, icon: Users },
+    { key: 'signers',   label: 'Owners',    count: selSigners.size, total: signers.length, icon: Users },
     { key: 'quotes',    label: 'Quotes',    count: selectedQuoteId ? 1 : 0, total: quotes.length, icon: FileText },
     { key: 'pricing',   label: 'Pricing',   count: isPricingComplete(pricing) ? 1 : 0, total: 1, icon: Percent },
   ];
@@ -775,26 +784,26 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-cb-caption uppercase text-gray-500">{merchantName}</p>
-          <p className="text-cb-body font-semibold text-white">{stage?.id ? 'Edit Application' : 'Configure Application'}</p>
+          <p className="text-cb-body font-semibold text-white">{stage?.id ? 'Edit application' : 'Set up application'}</p>
         </div>
         {onRequestSend && (
           <button
             type="button"
             onClick={() => onRequestSend(stage)}
-            title="Email a staged invite or resume link"
+            title="Email the merchant their application link"
             className="flex items-center gap-1.5 text-cb-caption font-medium border px-2.5 py-2 rounded-cb transition-all text-gray-400 hover:text-white border-cb-border hover:border-cb-border-strong"
           >
-            <Send className="w-3 h-3" /> Send invite
+            <Send className="w-3 h-3" /> Email link
           </button>
         )}
         <button onClick={handleHubspotSync} disabled={loading || saving || !hubspotDeal} title={hubspotDeal ? 'Pull the latest deal, contact, and company data from HubSpot' : 'Local merchant — no HubSpot deal'}
           className={`flex items-center gap-1.5 text-cb-caption font-medium border px-2.5 py-2 rounded-cb transition-all disabled:opacity-40 ${hubspotDeal ? 'text-gray-400 hover:text-white border-cb-border hover:border-cb-border-strong' : 'text-gray-600 border-cb-border cursor-not-allowed'}`}>
-          <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> {hubspotDeal ? 'HubSpot Sync' : 'Local only'}
+          <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> {hubspotDeal ? 'Sync HubSpot' : 'Local only'}
         </button>
         <button onClick={handleSave} disabled={saving}
           className="flex items-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-body px-4 py-2 rounded-cb transition-opacity">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-          {saving ? 'Saving…' : 'Save'}
+          {saving ? 'Saving…' : 'Save changes'}
         </button>
       </div>
 
@@ -826,7 +835,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
               <>
                 <p className="text-cb-caption text-gray-500">Only selected locations will appear in the merchant's portal.</p>
                 {locations.length === 0
-                  ? <p className="text-cb-body text-gray-600 italic py-4 text-center">No locations found.</p>
+                  ? <p className="text-cb-body text-gray-600 italic py-4 text-center">No locations yet. Add them in the merchant portal.</p>
                   : locations.map(loc => {
                     const id = loc.id || loc.locationId;
                     const locMids = mids.filter(c => c.locationId === id);
@@ -860,9 +869,9 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
             )}
             {activeTab === 'signers' && (
               <>
-                <p className="text-cb-caption text-gray-500">Selected signers are included in this application's invite scope.</p>
+                <p className="text-cb-caption text-gray-500">Only selected owners get the application invite.</p>
                 {signers.length === 0
-                  ? <p className="text-cb-body text-gray-600 italic py-4 text-center">No signers found.</p>
+                  ? <p className="text-cb-body text-gray-600 italic py-4 text-center">No owners yet. Add them in the merchant portal.</p>
                   : signers.map(s => (
                     <CheckRow key={s.id} checked={selSigners.has(s.id)} onChange={() => toggle(s.id, setSelSigners)}>
                       <Users className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
@@ -902,8 +911,8 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
                 ) : quotes.length === 0 ? (
                   <p className="text-cb-body text-gray-600 italic py-4 text-center">
                     {hubspotDeal
-                      ? 'No quotes associated with this HubSpot deal yet. Create/publish a quote in HubSpot, then Refresh.'
-                      : 'Local Quick Stage merchant — HubSpot quotes are not available. Equipment quote can be added later if a deal is linked.'}
+                      ? 'No quotes on this HubSpot deal yet. Create and publish a quote in HubSpot, then Refresh.'
+                      : 'This merchant isn’t linked to HubSpot, so quotes aren’t available. Link a deal later to add equipment quotes.'}
                   </p>
                 ) : (
                   <div className="space-y-2">
@@ -968,11 +977,11 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
             {activeTab === 'pricing' && (
               <div className="max-w-lg">
                 <p className="text-cb-caption text-gray-500 mb-3">
-                  Sets live rates on the merchant profile. Existing MSPWare drafts re-fill in the background. Monthly/service fees stay on the MSPWare template.
+                  Saves rates on this merchant. Open applications refresh in the background. Monthly fees stay on the MSPWare template.
                 </p>
                 <PricingEditorPanel
                   initialPricing={pricing}
-                  saveLabel="Save Pricing"
+                  saveLabel="Save pricing"
                   onSave={async (payload) => {
                     try {
                       const res = await base44.functions.invoke('updatePricing', { corporateId, ...payload });
@@ -1050,7 +1059,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
         onSent(null);
       }
       setSent(true);
-    } catch (err) { setError(err.message || 'Failed to send'); }
+    } catch (err) { setError(err.message || 'Couldn’t send email. Check the address and try again.'); }
     finally { setSending(false); }
   };
 
@@ -1063,26 +1072,26 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-cb bg-cb-accent-muted flex items-center justify-center"><Send className="w-4 h-4 text-cb-accent" /></div>
             <div>
-              <h3 className="font-semibold text-white text-cb-body">Send to Merchant</h3>
-              <p className="text-cb-caption text-gray-500 truncate max-w-[200px]">{stage?.label || 'Direct link'}</p>
+              <h3 className="font-semibold text-white text-cb-body">Email application link</h3>
+              <p className="text-cb-caption text-gray-500 truncate max-w-[200px]">{stage?.label || 'Merchant portal link'}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-cb"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-cb" aria-label="Close"><X className="w-4 h-4" /></button>
         </div>
         {sent ? (
           <div className="space-y-4">
             <div className="flex items-center gap-2 bg-cb-surface border border-cb-border border-l-2 border-l-cb-success rounded-cb px-4 py-3">
               <CheckCircle2 className="w-4 h-4 text-cb-success flex-shrink-0" />
-              <p className="text-cb-body text-white font-semibold">Sent to {email}</p>
+              <p className="text-cb-body text-white font-semibold">Email sent to {email}</p>
             </div>
             <div>
-              <label className={labelCls}>Magic Link</label>
+              <label className={labelCls}>Application link</label>
               <div className="flex items-center gap-2 bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5">
                 <p className="text-cb-caption text-gray-400 flex-1 truncate font-mono">{link}</p>
-                <button onClick={copyLink} className="flex-shrink-0 text-cb-accent hover:opacity-80">
+                <button onClick={copyLink} className="flex-shrink-0 text-cb-accent hover:opacity-80" aria-label={copied ? 'Copied' : 'Copy link'}>
                   {copied ? <Check className="w-3.5 h-3.5 text-cb-success" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
-                <a href={link} target="_blank" rel="noreferrer" className="flex-shrink-0 text-gray-500 hover:text-white"><ExternalLink className="w-3.5 h-3.5" /></a>
+                <a href={link} target="_blank" rel="noreferrer" className="flex-shrink-0 text-gray-500 hover:text-white" aria-label="Open link"><ExternalLink className="w-3.5 h-3.5" /></a>
               </div>
             </div>
             <button onClick={onClose} className="w-full border border-cb-border text-gray-400 font-medium text-cb-body py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong">Done</button>
@@ -1090,7 +1099,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
         ) : (
           <div className="space-y-4">
             <div>
-              <label className={labelCls}>Recipient Email</label>
+              <label className={labelCls}>Recipient email</label>
               <input value={email} onChange={e => setEmail(e.target.value)} placeholder="merchant@example.com"
                 className={inputCls} autoFocus onKeyDown={e => e.key === 'Enter' && handleSend()} />
             </div>
@@ -1099,9 +1108,9 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
               <button onClick={handleSend} disabled={sending}
                 className="flex-1 flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-body py-2.5 rounded-cb transition-opacity">
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                {sending ? 'Sending…' : 'Send Link'}
+                {sending ? 'Sending…' : 'Send email'}
               </button>
-              <button onClick={onClose} className="px-4 border border-cb-border text-gray-400 font-medium text-cb-body py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong">Cancel</button>
+              <button onClick={onClose} className="px-4 border border-cb-border text-gray-400 font-medium text-cb-body py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong">Don’t send</button>
             </div>
           </div>
         )}
@@ -1264,7 +1273,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       const hint = /Unknown action/i.test(String(apiErr || ''))
         ? '\n\nFix: force-redeploy manageSigner in Base44 (getSigningInviteLink is missing on the live function).'
         : '';
-      alert((apiErr || 'Could not copy signer link') + hint);
+      alert((apiErr || 'Could not copy owner link') + hint);
     } finally {
       setSignerLinkBusy(prev => {
         const next = { ...prev };
@@ -1302,7 +1311,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const revertSignerToVerified = async (e, signer) => {
     e?.stopPropagation?.();
     if (!signer?.id) return;
-    if (!window.confirm(`Mark ${signer.firstName} ${signer.lastName} as Verified only?\n\nUse this when they completed identity but have not signed BoldSign yet.`)) return;
+    if (!window.confirm(`Mark ${signer.firstName} ${signer.lastName} as Verified only?\n\nUse when identity is done but they haven’t signed the merchant agreement yet.`)) return;
     setSignerLinkBusy(prev => ({ ...prev, [signer.id]: 'revert' }));
     try {
       const res = await base44.functions.invoke('manageSigner', {
@@ -1315,7 +1324,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       setSigners(prev => prev.map(s => (s.id === signer.id ? { ...s, ...res.data.signer } : s)));
     } catch (err) {
       console.error('[setLifecycleStatus]', err);
-      alert(err.message || 'Could not update signer status');
+      alert(err.message || 'Could not update owner status');
     } finally {
       setSignerLinkBusy(prev => {
         const next = { ...prev };
@@ -1379,15 +1388,15 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       }
       const parts = [];
       if (res.data?.results?.email === 'sent') parts.push('email');
-      if (res.data?.results?.sms === 'sent') parts.push('SMS');
-      setNudgeMsg(parts.length ? `Sent via ${parts.join(' + ')}` : 'Nudge sent');
+      if (res.data?.results?.sms === 'sent') parts.push('text');
+      setNudgeMsg(parts.length ? `Reminder sent via ${parts.join(' + ')}` : 'Reminder sent');
       if (res.data?.warnings?.length) {
         setNudgeMsg((m) => `${m} (${res.data.warnings.join('; ')})`);
       }
       setTimeout(() => setNudgeMsg(''), 4000);
     } catch (err) {
       console.error('[nudgeMerchant]', err);
-      alert(err?.response?.data?.error || err.message || 'Nudge failed');
+      alert(err?.response?.data?.error || err.message || 'Could not send reminder. Try email only, or check Quo settings.');
     } finally {
       setNudging(false);
     }
@@ -1418,7 +1427,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             {rowMode.mode === 'prep' && (
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
                 <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
-                Needs prep
+                Needs setup
               </span>
             )}
             {rowMode.mode === 'underwriting' && (
@@ -1435,7 +1444,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             {!isSubmitted && currentStep === 'banking' && rowMode.mode === 'nudge' && (
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
                 <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
-                Waiting: Banking
+                Waiting on bank
               </span>
             )}
           </div>
@@ -1476,7 +1485,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
             >
               {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
-              Prep in portal
+              Open to prep
             </button>
           )}
 
@@ -1489,7 +1498,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
             >
               {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wrench className="w-3 h-3" />}
-              Fix in portal
+              Open to fix
             </button>
           )}
 
@@ -1503,14 +1512,15 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                 className="flex items-center gap-1 text-cb-caption font-semibold pl-2.5 pr-2 py-1 rounded-l-cb border border-r-0 transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
               >
                 {nudging ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                Nudge
+                Remind
               </button>
               <button
                 type="button"
                 onClick={() => setNudgeOpen((o) => !o)}
                 disabled={nudging}
-                title="Choose channel"
+                title="Choose text, email, or both"
                 aria-expanded={nudgeOpen}
+                aria-label="Reminder channel options"
                 className="flex items-center px-1.5 rounded-r-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40 border-l border-l-black/20"
               >
                 <ChevronDown className="w-3 h-3" />
@@ -1522,7 +1532,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                   style={{ top: nudgeMenuPos.top, right: nudgeMenuPos.right }}
                 >
                   {[
-                    { id: 'both', label: 'Text + Email' },
+                    { id: 'both', label: 'Text and email' },
                     { id: 'sms', label: 'Text only' },
                     { id: 'email', label: 'Email only' },
                   ].map((opt) => (
@@ -1548,21 +1558,21 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               type="button"
               onClick={openPostSignDashboard}
               disabled={impersonating || openingDashboard}
-              title="Post-sign dashboard — equipment, payments, underwriting docs"
+              title={rowMode.reason}
               className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
             >
               {openingDashboard ? <Loader2 className="w-3 h-3 animate-spin" /> : <LayoutDashboard className="w-3 h-3" />}
-              Dashboard
+              Open dashboard
             </button>
           )}
 
-          {/* Quiet utilities — Edit / Delete always; Dashboard also available pre-submit for agents */}
+          {/* Quiet utilities */}
           {rowMode.mode !== 'underwriting' && (
             <button
               type="button"
               onClick={openPostSignDashboard}
               disabled={impersonating || openingDashboard}
-              title="Preview post-signing dashboard"
+              title="Preview the merchant’s post-signing dashboard"
               className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong disabled:opacity-40"
             >
               {openingDashboard ? <Loader2 className="w-3 h-3 animate-spin" /> : <LayoutDashboard className="w-3 h-3" />}
@@ -1572,7 +1582,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           <button
             type="button"
             onClick={() => onEdit(corporateId, merchantName, linkStage)}
-            title="Edit locations, signers & Quotes"
+            title="Edit locations, owners, pricing, and quotes"
             className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong"
           >
             <Pencil className="w-3 h-3" />
@@ -1581,7 +1591,8 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           <button
             type="button"
             onClick={() => onDeleteMerchant({ corporateId, merchantName })}
-            title="Delete merchant permanently (all data)"
+            title="Permanently delete this merchant from Cliqbux"
+            aria-label={`Delete ${merchantName || corporateId}`}
             className="p-1.5 text-gray-600 hover:text-cb-danger rounded-cb transition-colors"
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -1610,7 +1621,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                     </p>
                     {avgMspPct !== null && (
                       <div className="flex items-center gap-2">
-                        <span className="text-cb-caption text-gray-500">Avg form:</span>
+                        <span className="text-cb-caption text-gray-500">Form complete:</span>
                         <HealthBadge score={avgMspPct} />
                       </div>
                     )}
@@ -1631,7 +1642,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               {/* Signers */}
               {signers.length > 0 && (
                 <div>
-                  <p className="text-cb-caption uppercase text-gray-500 mb-2">Signers</p>
+                  <p className="text-cb-caption uppercase text-gray-500 mb-2">Owners</p>
                   <div className="space-y-1.5">
                     {signers.map(s => {
                       const miss = signerMissingFields(s);
@@ -1670,7 +1681,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                                 type="button"
                                 onClick={(e) => copySignerDirectLink(e, s)}
                                 disabled={!!busy}
-                                title="Copy direct Verify & Sign link"
+                                title="Copy verify & sign link"
                                 className="p-1.5 text-gray-500 hover:text-white rounded-cb transition-colors disabled:opacity-40"
                               >
                                 {busy === 'copy' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : copied === s.id ? <Check className="w-3.5 h-3.5 text-cb-success" /> : <Copy className="w-3.5 h-3.5" />}
@@ -1679,7 +1690,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                                 type="button"
                                 onClick={(e) => sendSignerInvite(e, s)}
                                 disabled={!!busy}
-                                title="Email Verify & Sign invite"
+                                title="Email verify & sign invite"
                                 className="p-1.5 text-gray-500 hover:text-cb-accent rounded-cb transition-colors disabled:opacity-40"
                               >
                                 {busy === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
@@ -1715,7 +1726,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               )}
 
               {mids.length === 0 && signers.length === 0 && (
-                <p className="text-cb-body text-gray-600 text-center py-4">No MIDs or signers found for this merchant.</p>
+                <p className="text-cb-body text-gray-600 text-center py-4">No MIDs or owners yet for this merchant.</p>
               )}
             </div>
           )}
@@ -1864,7 +1875,7 @@ export default function ApplicationManager() {
       setDeleteMerchantConfirm(null);
       setDeleteMerchantTyped('');
     } catch (err) {
-      setDeleteMerchantError(err.message || 'Failed to delete merchant.');
+      setDeleteMerchantError(err.message || 'Couldn’t delete merchant. Try again, or refresh the page.');
     } finally {
       setDeletingMerchant(false);
     }
@@ -1927,7 +1938,7 @@ export default function ApplicationManager() {
         {/* Full-width list — editor is an overlay so it never crushes this column */}
         <div className="flex flex-col flex-1 min-w-0 border-r border-cb-border">
           <div className="px-6 py-4 border-b border-cb-border flex-shrink-0">
-            <p className="text-cb-caption uppercase text-cb-accent mb-1">Admin Tool</p>
+            <p className="text-cb-caption uppercase text-cb-accent mb-1">Sales workspace</p>
             <h1 className="font-display text-cb-display text-white">Applications</h1>
           </div>
 
@@ -1936,16 +1947,18 @@ export default function ApplicationManager() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
               <input value={searchText} onChange={e => setSearchText(e.target.value)}
-                placeholder="Search by name or Corp ID…"
+                placeholder="Search by merchant name or ID…"
+                aria-label="Search merchants"
                 className={`${inputCls} pl-9 py-2`} />
             </div>
             <input value={jumpId} onChange={e => setJumpId(e.target.value)}
-              placeholder="Corp ID…"
+              placeholder="Jump to ID…"
+              aria-label="Jump to merchant ID"
               className="bg-cb-bg border border-cb-border rounded-cb px-2.5 py-1.5 text-cb-caption text-white placeholder:text-gray-600 hover:border-cb-border-strong focus:outline-none focus:ring-1 focus:ring-cb-accent w-28"
               onKeyDown={e => e.key === 'Enter' && handleJump()} />
             <button onClick={handleJump} disabled={searching || !jumpId.trim()}
               className="flex items-center gap-1 bg-cb-accent hover:opacity-90 disabled:opacity-40 text-cb-bg font-semibold text-cb-caption px-2.5 py-1.5 rounded-cb transition-opacity flex-shrink-0">
-              {searching ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Go'}
+              {searching ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Jump'}
             </button>
           </div>
 
@@ -1958,7 +1971,11 @@ export default function ApplicationManager() {
             ) : sorted.length === 0 ? (
               <div className="text-center py-16 px-8">
                 <FileText className="w-7 h-7 text-gray-600 mx-auto mb-3" />
-                <p className="text-gray-500 text-cb-body">{profiles.length === 0 ? 'No applications yet.' : 'No results match your search.'}</p>
+                <p className="text-gray-500 text-cb-body">
+                  {profiles.length === 0
+                    ? 'No merchants yet. Start one above with a HubSpot deal ID or business name.'
+                    : 'No merchants match that search.'}
+                </p>
               </div>
             ) : (
               <div className="px-4 py-4 space-y-2">
@@ -2033,13 +2050,12 @@ export default function ApplicationManager() {
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4"
           onClick={() => { if (!deletingMerchant) { setDeleteMerchantConfirm(null); setDeleteMerchantTyped(''); } }}>
           <div className="bg-cb-surface-raised border border-cb-danger/30 rounded-cb shadow-cb-overlay w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="font-semibold text-white mb-2">Permanently delete this merchant?</h3>
+            <h3 className="font-semibold text-white mb-2">Delete {deleteMerchantConfirm.merchantName}?</h3>
             <p className="text-cb-body text-gray-400 mb-1">
-              <span className="text-white font-semibold">{deleteMerchantConfirm.merchantName}</span> ({deleteMerchantConfirm.corporateId})
+              ID: <span className="font-mono text-gray-300">{deleteMerchantConfirm.corporateId}</span>
             </p>
             <p className="text-cb-caption text-gray-500 mb-4">
-              This permanently deletes the corporate profile, all locations, all MIDs, and all signers from our database.
-              This does not touch any application already drafted in MSPWare. This cannot be undone.
+              Removes this merchant from Cliqbux (profile, locations, MIDs, and owners). Drafts already in MSPWare are not deleted. This cannot be undone.
             </p>
             <label className={labelCls}>
               Type DELETE to confirm
@@ -2058,13 +2074,13 @@ export default function ApplicationManager() {
                 onClick={handleDeleteMerchant}
                 disabled={deleteMerchantTyped !== 'DELETE' || deletingMerchant}
                 className="flex-1 flex items-center justify-center gap-2 bg-cb-danger hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-white font-semibold text-cb-body py-2.5 rounded-cb transition-opacity">
-                {deletingMerchant ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete Permanently'}
+                {deletingMerchant ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Delete merchant'}
               </button>
               <button
                 onClick={() => { setDeleteMerchantConfirm(null); setDeleteMerchantTyped(''); }}
                 disabled={deletingMerchant}
                 className="flex-1 border border-cb-border text-gray-400 font-medium text-cb-body py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong disabled:opacity-40">
-                Cancel
+                Keep merchant
               </button>
             </div>
           </div>

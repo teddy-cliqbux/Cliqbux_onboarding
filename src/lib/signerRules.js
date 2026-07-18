@@ -105,6 +105,33 @@ export function countControlPersons(signers = []) {
   return (signers || []).filter(isControlPerson).length;
 }
 
+/**
+ * When zero Control Persons are flagged, the sole non-admin person on the deal
+ * is the Control Person (common after role-flag migrations that left only BO).
+ * Returns that person or null if ambiguous / already has a control.
+ */
+export function resolveSoleControlCandidate(signers = []) {
+  if (countControlPersons(signers) > 0) return null;
+  const nonAdmin = (signers || []).filter((s) => s && !isPortalAdmin(s));
+  if (nonAdmin.length !== 1) return null;
+  return nonAdmin[0];
+}
+
+/** Real Control Persons, or the sole-owner candidate when none are flagged. */
+export function effectiveControlPersons(signers = []) {
+  const real = (signers || []).filter(isControlPerson);
+  if (real.length > 0) return real;
+  const sole = resolveSoleControlCandidate(signers);
+  return sole ? [sole] : [];
+}
+
+/** BoldSign required — Control Person, including sole-owner heal candidate. */
+export function isEffectivelyRequiredSigner(s, allSigners = []) {
+  if (isControlPerson(s)) return true;
+  const sole = resolveSoleControlCandidate(allSigners);
+  return !!(sole && s && sole.id === s.id);
+}
+
 export function assertSignerRosterRules(signers = []) {
   const list = signers || [];
   const controls = list.filter(isControlPerson);
@@ -121,7 +148,6 @@ export function assertSignerRosterRules(signers = []) {
 
 /** Cleared enough for Control Person signing prep (invite out, verified, or signed). */
 export function isClearedForSigning(s) {
-  if (!isControlPerson(s)) return true;
   const n = normalizeSignerLifecycle(s?.identityStatus);
   return n === 'verified'
     || n === 'application signed'

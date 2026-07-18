@@ -3,7 +3,7 @@ import { UserPlus, Trash2, Send, Loader2, Pencil, ShieldCheck, UserCheck } from 
 import SignerModal from './SignerModal';
 import SignerDetailsModal from './SignerDetailsModal';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
-import { isRequiredSigner, isClearedForSigning, isControlPerson, isBeneficialOwner, isPortalAdmin, isKycComplete, countControlPersons } from '@/lib/signerRules';
+import { isClearedForSigning, isControlPerson, isBeneficialOwner, isPortalAdmin, isKycComplete, effectiveControlPersons, resolveSoleControlCandidate, isEffectivelyRequiredSigner } from '@/lib/signerRules';
 import {
   lifecycleLabel,
   normalizeSignerLifecycle,
@@ -82,6 +82,24 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
           list = [signerRes.data.signer];
         }
       }
+      // Sole owner missing Control Person flag (shows BO only) — heal so signing unlocks
+      // for merchant + agent preview. list action also heals server-side when possible.
+      const sole = resolveSoleControlCandidate(list);
+      if (sole?.id && res.data?.healedControlPersonId !== sole.id) {
+        try {
+          const healRes = await invokePortalFunction('manageSigner', {
+            action: 'healControlPerson',
+            corporateId: profile.corporateId,
+            signerId: sole.id,
+          });
+          if (healRes.data?.signers) list = healRes.data.signers;
+          else if (healRes.data?.signer) {
+            list = list.map((s) => (s.id === sole.id ? { ...s, ...healRes.data.signer } : s));
+          }
+        } catch (healErr) {
+          console.warn('[SignerRoster] control-person heal skipped:', healErr?.message || healErr);
+        }
+      }
       publish(list);
     } catch (err) {
       console.error('[SignerRoster.loadSigners]', err?.message || 'Unknown error');
@@ -95,10 +113,9 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
   // Beneficial Owner / Control Person has KYC verified (or invite in flight for remote).
   useEffect(() => {
     const totalPct = signers.reduce((sum, s) => sum + (Number(s.ownershipPercentage) || 0), 0);
-    const requiredSigners = signers.filter(isRequiredSigner);
-    const controlOk = countControlPersons(signers) === 1
-      && requiredSigners.every(isClearedForSigning);
-    const amlPeople = signers.filter((s) => isControlPerson(s) || isBeneficialOwner(s));
+    const controls = effectiveControlPersons(signers);
+    const controlOk = controls.length === 1 && controls.every(isClearedForSigning);
+    const amlPeople = signers.filter((s) => isControlPerson(s) || isBeneficialOwner(s) || resolveSoleControlCandidate(signers)?.id === s.id);
     const kycOk = amlPeople.every((s) =>
       isKycComplete(s)
       || isInviteOutstanding(s.identityStatus)
@@ -143,10 +160,10 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
   };
 
   const totalPct = signers.reduce((sum, s) => sum + (Number(s.ownershipPercentage) || 0), 0);
-  const requiredSigners = signers.filter(isRequiredSigner);
-  const allRequiredCleared = requiredSigners.length > 0 && requiredSigners.every(isClearedForSigning);
+  const controls = effectiveControlPersons(signers);
+  const allRequiredCleared = controls.length > 0 && controls.every(isClearedForSigning);
 
-  const isSoleSigner = signers.length === 1 && isControlPerson(signers[0]);
+  const isSoleSigner = signers.length === 1 && !isPortalAdmin(signers[0]);
   const soleSignerVerified = isSoleSigner && isVerifiedOrHigher(signers[0]?.identityStatus);
 
   return (
@@ -174,7 +191,7 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
             <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full bg-cb-success flex-shrink-0" /> Ready to sign
             </span>
-          ) : requiredSigners.length > 0 ? (
+          ) : controls.length > 0 ? (
             <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-accent whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full bg-cb-accent flex-shrink-0" /> Verification needed
             </span>
@@ -193,8 +210,8 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
           </div>
         ) : (
           signers.map(signer => {
-            const isPrimary = isControlPerson(signer);
-            const required = isRequiredSigner(signer);
+            const isPrimary = isControlPerson(signer) || resolveSoleControlCandidate(signers)?.id === signer.id;
+            const required = isEffectivelyRequiredSigner(signer, signers);
             const bo = isBeneficialOwner(signer);
             const adminOnly = isPortalAdmin(signer);
             const catalogOnly = !required && !bo && !adminOnly;

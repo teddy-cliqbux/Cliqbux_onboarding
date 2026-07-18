@@ -293,7 +293,7 @@ Deno.serve(async (req) => {
     // Portal form lock — allow list / markSigned / invites / lookup; block data mutations
     const LOCK_SAFE = new Set([
       'list', 'markSigned', 'sendInvite', 'sendSigningInvite', 'getSigningInviteLink',
-      'lookupByEmail', 'setLifecycleStatus', 'markSigningFailed',
+      'lookupByEmail', 'setLifecycleStatus', 'markSigningFailed', 'healControlPerson',
     ]);
     if (!LOCK_SAFE.has(String(action))) {
       const lockProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
@@ -595,8 +595,64 @@ Deno.serve(async (req) => {
 
     // --- LIST ---
     if (action === 'list') {
-      const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
-      return Response.json({ success: true, signers });
+      let signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }) || [];
+      // Heal sole non-admin owner missing Control Person flags (list is lock-safe).
+      // Without this, verified BOs show "Signing Locked" and get no BoldSign package.
+      let healedControlPersonId: string | null = null;
+      const controls = signers.filter((s: any) => isControlPerson(s));
+      if (controls.length === 0) {
+        const nonAdmin = signers.filter((s: any) => s && !isPortalAdminRole(s));
+        if (nonAdmin.length === 1 && nonAdmin[0]?.id) {
+          const sole = nonAdmin[0];
+          const pct = ownershipPct(sole);
+          try {
+            const updated = await base44.asServiceRole.entities.MerchantSigners.update(String(sole.id), {
+              isAuthorizedSigner: true,
+              isPrimarySigner: true,
+              isBeneficialOwner: sole.isBeneficialOwner === true || pct >= 25,
+              isPortalAdmin: false,
+            });
+            healedControlPersonId = String(sole.id);
+            signers = signers.map((s: any) => (String(s.id) === String(sole.id) ? { ...s, ...updated } : s));
+            console.log(`[manageSigner.list] Healed sole Control Person ${sole.id} for corporateId=${corporateId}`);
+          } catch (healErr: any) {
+            console.warn('[manageSigner.list] Control Person heal failed:', healErr?.message);
+          }
+        }
+      }
+      return Response.json({ success: true, signers, healedControlPersonId });
+    }
+
+    // Explicit heal (also lock-safe) — used by portal roster after list
+    if (action === 'healControlPerson') {
+      if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
+      const all = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }) || [];
+      const controls = all.filter((s: any) => isControlPerson(s));
+      if (controls.length > 1) {
+        return Response.json({ error: 'Multiple Control Persons already exist', code: 'MULTI_CONTROL' }, { status: 409 });
+      }
+      if (controls.length === 1 && String(controls[0].id) !== String(signerId)) {
+        return Response.json({ error: 'Another Control Person is already designated', code: 'CONTROL_EXISTS' }, { status: 409 });
+      }
+      const target = all.find((s: any) => String(s.id) === String(signerId));
+      if (!target) return Response.json({ error: 'Signer not found' }, { status: 404 });
+      if (isPortalAdminRole(target)) {
+        return Response.json({ error: 'Portal Admin cannot be Control Person' }, { status: 400 });
+      }
+      const pct = ownershipPct(target);
+      const updated = await base44.asServiceRole.entities.MerchantSigners.update(String(signerId), {
+        isAuthorizedSigner: true,
+        isPrimarySigner: true,
+        isBeneficialOwner: target.isBeneficialOwner === true || pct >= 25,
+        isPortalAdmin: false,
+      });
+      try {
+        await ensureUniqueControlPerson(base44, String(corporateId), String(signerId));
+      } catch (e: any) {
+        console.warn('[manageSigner.healControlPerson] ensureUnique failed:', e?.message);
+      }
+      const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }) || [];
+      return Response.json({ success: true, signer: updated, signers, healedControlPersonId: String(signerId) });
     }
 
     // --- INLINE VERIFY ---

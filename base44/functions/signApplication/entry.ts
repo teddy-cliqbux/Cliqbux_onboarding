@@ -1964,9 +1964,9 @@ Deno.serve(async (req) => {
 
     console.log(`[signApplication] corporateId=${corporateId} signable merchantMIDs: ${signable.length}`);
 
-    // Required owners (≥25% or primary) — used to detect stale BoldSign packages
-    // created before a co-owner was added (concurrent signing needs every email present).
-    const requiredSignerEmails = (signers || [])
+    // Control Person emails for BoldSign — include sole non-admin owner when
+    // Control Person flags were never set (BO-only records).
+    let requiredSignerEmails = (signers || [])
       .filter((s: any) => {
         if (s?.isPortalAdmin === true) return false;
         if (s?.isAuthorizedSigner === true) return true;
@@ -1975,6 +1975,13 @@ Deno.serve(async (req) => {
       })
       .map((s: any) => String(s.signerEmail || '').toLowerCase().trim())
       .filter(Boolean);
+    if (requiredSignerEmails.length === 0) {
+      const nonAdmin = (signers || []).filter((s: any) => s && s.isPortalAdmin !== true);
+      if (nonAdmin.length === 1) {
+        const email = String(nonAdmin[0].signerEmail || '').toLowerCase().trim();
+        if (email) requiredSignerEmails = [email];
+      }
+    }
 
     const isSigSigned = (s: any) =>
       ['signed', 'complete', 'completed'].includes(String(s?.localstatus || s?.status || '').toLowerCase());

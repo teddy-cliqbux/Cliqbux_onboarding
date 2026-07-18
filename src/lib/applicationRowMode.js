@@ -2,7 +2,7 @@
  * Agent Applications row mode — deal-desk brain for /admin/applications.
  *
  * Modes (priority): underwriting > stuck > prep > nudge
- * Permanent Open portal / Copy / Send chrome is gone; only the mode's primary shows.
+ * Copy targets sales agents mid-call: verb + outcome, no MSPWare jargon.
  */
 
 const STUCK_IDLE_MS = 3 * 24 * 60 * 60 * 1000;
@@ -36,7 +36,7 @@ export function resolveApplicationRowMode({
   if (appStatus === 'Submitted' || step === 'submitted') {
     return {
       mode: 'underwriting',
-      reason: 'Submitted — underwriting, docs, and equipment',
+      reason: 'Submitted — open dashboard for equipment, payment, and documents',
       blocker: null,
     };
   }
@@ -50,42 +50,43 @@ export function resolveApplicationRowMode({
   const hasMspErrors = (Number(mspErrorCount) || 0) > 0;
   const lockWithoutSubmit = ['signing', 'pending_signature'].includes(lock);
 
-  // Stuck: real friction after merchant engagement, or idle after they started
   if (
     (merchantTouched && (hasMspErrors || (lockWithoutSubmit && step === 'verification')))
     || (idleStuck && merchantTouched)
     || (hasMspErrors && detailLoaded)
   ) {
     let blocker = null;
-    if (hasMspErrors) blocker = `${mspErrorCount} form validation issue${mspErrorCount === 1 ? '' : 's'}`;
-    else if (lockWithoutSubmit) blocker = 'Signing package blocked — review form errors';
-    else if (idleStuck) blocker = 'No progress in 3+ days';
+    if (hasMspErrors) {
+      blocker = `${mspErrorCount} application error${mspErrorCount === 1 ? '' : 's'} — open to fix`;
+    } else if (lockWithoutSubmit) {
+      blocker = 'Signing link failed — open to fix form errors';
+    } else if (idleStuck) {
+      blocker = 'No progress in 3+ days';
+    }
     return {
       mode: 'stuck',
-      reason: blocker || 'Merchant needs agent help',
+      reason: blocker || 'Merchant needs help — open their application',
       blocker,
     };
   }
 
-  // Prep: agent should open portal to prefill locations / MIDs
   const missingLocStep = !!(p.missingByStep?.locations || p.missingCounts?.locations);
   const locationsDone = !!completed.locations;
   if (!locationsDone || step === 'locations' || missingLocStep) {
     return {
       mode: 'prep',
       reason: missingLocStep
-        ? 'Locations / MIDs need agent prefill'
-        : 'Open portal to prep locations & MIDs',
+        ? 'Add locations and merchant IDs before the merchant continues'
+        : 'Open their application to add locations and merchant IDs',
       blocker: null,
     };
   }
 
-  // Nudge: banking or signing — waiting on merchant
   return {
     mode: 'nudge',
     reason: step === 'banking'
-      ? 'Waiting on merchant banking'
-      : 'Waiting on merchant to sign',
+      ? 'Waiting on the merchant to connect a bank account'
+      : 'Waiting on the merchant to verify and sign',
     blocker: null,
   };
 }
