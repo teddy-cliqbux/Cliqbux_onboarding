@@ -2060,3 +2060,21 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **? Waiting on:** Teddy (push + publish)
 ---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Action Taken — Agent Applications deal-desk UX (grilled plan)
+
+**Shipped in repo:**
+1. Row modes (`applicationRowMode.js`): **prep** / **nudge** / **stuck** / **underwriting** — priority underwriting > stuck > prep > nudge.
+2. Removed always-on Open portal / Copy Link / Send Link. Mode primary only: Prep in portal, Fix in portal, Nudge ▾, Dashboard (submitted).
+3. Quiet utilities: Dashboard (preview), Edit, Delete. Staged invite Send moved into Edit drawer.
+4. `nudgeMerchant` function — Resend email + Quo SMS (`channels`: sms|email|both). Needs `QUO_API_KEY` + `QUO_FROM_NUMBER`. Phone from signer `corporatePhone`.
+5. Submitted rows: Underwriting badge + Dashboard as primary (equipment/payments/docs path).
+
+**Defaults locked in grilling:** Stuck = merchant activity + MSP errors / lock at Sign / 3-day idle. Nudge default = Text+Email (localStorage per agent).
+
+**ACTION:** Push → publish frontend → deploy `nudgeMerchant` → set Quo env vars in Base44.
+
+**? Waiting on:** Teddy (push + Quo credentials)
+---

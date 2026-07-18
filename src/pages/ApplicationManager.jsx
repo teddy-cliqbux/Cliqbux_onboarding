@@ -5,7 +5,7 @@ import {
   Pencil, Loader2, Send, Trash2, Check, X, Copy, ExternalLink,
   Clock, Store, Users, FileText, Search, Building2, CreditCard,
   CheckCircle2, AlertCircle, Eye, BarChart2, Zap, LayoutDashboard,
-  ChevronDown, ChevronRight, XCircle, RefreshCw, Percent
+  ChevronDown, ChevronRight, XCircle, RefreshCw, Percent, Wrench
 } from 'lucide-react';
 import {
   lifecycleLabel,
@@ -15,6 +15,11 @@ import {
 } from '@/lib/signerLifecycle';
 import PricingEditorPanel from '@/components/pricing/PricingEditorPanel';
 import { isPricingComplete, TIER_LABELS } from '@/lib/pricingPresets';
+import {
+  resolveApplicationRowMode,
+  readNudgeChannelPref,
+  writeNudgeChannelPref,
+} from '@/lib/applicationRowMode';
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 
@@ -87,6 +92,7 @@ const ACTIVITY_EVENT_LABELS = {
   signer_link_opened: 'Signer link opened',
   portal_open: 'Portal opened',
   session_tick: 'Session time',
+  nudge_sent: 'Merchant nudged',
 };
 
 function activityActorLabel(actor) {
@@ -597,7 +603,7 @@ function CheckRow({ checked, onChange, children }) {
 }
 
 // ── Stage Editor ──────────────────────────────────────────────────────────────
-function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved, onClose }) {
+function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved, onClose, onRequestSend }) {
   const hubspotDeal = isHubSpotDealId(corporateId);
   const [label, setLabel]             = useState(stage?.label || '');
   const [locations, setLocations]     = useState([]);
@@ -770,6 +776,16 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
           <p className="text-cb-caption uppercase text-gray-500">{merchantName}</p>
           <p className="text-cb-body font-semibold text-white">{stage?.id ? 'Edit Application' : 'Configure Application'}</p>
         </div>
+        {onRequestSend && (
+          <button
+            type="button"
+            onClick={() => onRequestSend(stage)}
+            title="Email a staged invite or resume link"
+            className="flex items-center gap-1.5 text-cb-caption font-medium border px-2.5 py-2 rounded-cb transition-all text-gray-400 hover:text-white border-cb-border hover:border-cb-border-strong"
+          >
+            <Send className="w-3 h-3" /> Send invite
+          </button>
+        )}
         <button onClick={handleHubspotSync} disabled={loading || saving || !hubspotDeal} title={hubspotDeal ? 'Pull the latest deal, contact, and company data from HubSpot' : 'Local merchant — no HubSpot deal'}
           className={`flex items-center gap-1.5 text-cb-caption font-medium border px-2.5 py-2 rounded-cb transition-all disabled:opacity-40 ${hubspotDeal ? 'text-gray-400 hover:text-white border-cb-border hover:border-cb-border-strong' : 'text-gray-600 border-cb-border cursor-not-allowed'}`}>
           <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} /> {hubspotDeal ? 'HubSpot Sync' : 'Local only'}
@@ -1094,7 +1110,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
 }
 
 // ── Application Row ───────────────────────────────────────────────────────────
-function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onSend, onDeleteMerchant }) {
+function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onDeleteMerchant }) {
   const [expanded, setExpanded]         = useState(false);
   const [mids, setMids]                 = useState([]);
   const [locations, setLocations]       = useState([]);
@@ -1106,6 +1122,9 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const [impersonating, setImpersonating] = useState(false);
   const [openingDashboard, setOpeningDashboard] = useState(false);
   const [signerLinkBusy, setSignerLinkBusy] = useState({}); // { [signerId]: 'copy' | 'send' }
+  const [nudgeOpen, setNudgeOpen]       = useState(false);
+  const [nudging, setNudging]           = useState(false);
+  const [nudgeMsg, setNudgeMsg]         = useState('');
 
   const p = trackStage?.prefilledData || {};
   const missingByStep = p.missingByStep || p.missingCounts || {};
@@ -1127,7 +1146,6 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const { currentStep, completedSteps, appStatus } = pipeline;
 
   const isSubmitted = appStatus === 'Submitted' || currentStep === 'submitted';
-  const isStuck = !isSubmitted && p.lastSeenAt && (Date.now() - new Date(p.lastSeenAt).getTime()) > 3 * 24 * 60 * 60 * 1000;
 
   // Aggregate MSP health
   const mspValues = Object.values(mspStatuses);
@@ -1135,6 +1153,15 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     ? Math.round(mspValues.reduce((s, v) => s + (v?.percent_complete != null ? parseFloat(String(v.percent_complete)) : 0), 0) / mspValues.length)
     : null;
   const totalErrors = mspValues.reduce((s, v) => s + ([...(v?.completion_errors||[]), ...(v?.data_errors||[]), ...(v?.rule_violations||[]), ...(v?.errors||[])]).length, 0);
+
+  const rowMode = resolveApplicationRowMode({
+    profile,
+    track: trackStage,
+    pipeline,
+    mspErrorCount: totalErrors,
+    detailLoaded: locations.length > 0 || signers.length > 0 || mids.length > 0,
+  });
+  const isStuck = rowMode.mode === 'stuck';
 
   const handleExpand = async () => {
     const next = !expanded;
@@ -1307,25 +1334,29 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     }
   };
 
-  const copyInviteLink = async (e, stage) => {
-    e.stopPropagation();
+  const runNudge = async (channels) => {
+    setNudging(true);
+    setNudgeMsg('');
+    setNudgeOpen(false);
+    writeNudgeChannelPref(channels);
     try {
-      if (stage?.id) {
-        const res = await base44.functions.invoke('manageStagedApplication', {
-          action: 'getInviteLink',
-          stageId: stage.id,
-        });
-        if (res.data?.error || !res.data?.link) throw new Error(res.data?.error || 'No invite link');
-        await navigator.clipboard.writeText(res.data.link);
-      } else {
-        // No staged invite — copy corporateId entry URL (admin must be logged in)
-        await navigator.clipboard.writeText(`${publicUrl}/?corporateId=${corporateId}`);
+      const res = await base44.functions.invoke('nudgeMerchant', { corporateId, channels });
+      if (res.data?.error && !res.data?.success) {
+        throw new Error(res.data.error);
       }
-      setCopied(stage?.id || 'link');
-      setTimeout(() => setCopied(null), 2000);
+      const parts = [];
+      if (res.data?.results?.email === 'sent') parts.push('email');
+      if (res.data?.results?.sms === 'sent') parts.push('SMS');
+      setNudgeMsg(parts.length ? `Sent via ${parts.join(' + ')}` : 'Nudge sent');
+      if (res.data?.warnings?.length) {
+        setNudgeMsg((m) => `${m} (${res.data.warnings.join('; ')})`);
+      }
+      setTimeout(() => setNudgeMsg(''), 4000);
     } catch (err) {
-      console.error('[getInviteLink]', err);
-      alert(err.message || 'Could not copy invite link');
+      console.error('[nudgeMerchant]', err);
+      alert(err?.response?.data?.error || err.message || 'Nudge failed');
+    } finally {
+      setNudging(false);
     }
   };
 
@@ -1345,16 +1376,33 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-cb-body font-semibold text-white truncate">{merchantName || corporateId}</p>
             <span className="text-cb-caption font-mono text-gray-600">{corporateId}</span>
-            {isStuck && (
-              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+            {rowMode.mode === 'stuck' && (
+              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap" title={rowMode.blocker || rowMode.reason}>
                 <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
                 Stuck
               </span>
             )}
-            {!isSubmitted && currentStep === 'banking' && (
+            {rowMode.mode === 'prep' && (
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
                 <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
-                Bottleneck: Banking
+                Needs prep
+              </span>
+            )}
+            {rowMode.mode === 'underwriting' && (
+              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-success" />
+                Underwriting
+              </span>
+            )}
+            {rowMode.blocker && rowMode.mode === 'stuck' && (
+              <span className="text-cb-caption text-cb-danger truncate max-w-[14rem]" title={rowMode.blocker}>
+                {rowMode.blocker}
+              </span>
+            )}
+            {!isSubmitted && currentStep === 'banking' && rowMode.mode === 'nudge' && (
+              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
+                Waiting: Banking
               </span>
             )}
           </div>
@@ -1372,7 +1420,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           <StepTracker currentStep={currentStep} completedSteps={completedSteps} missingByStep={missingByStep} />
         </div>
 
-        {/* Health + actions */}
+        {/* Health + mode-driven primary + quiet utilities */}
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
           {totalErrors > 0 && (
             <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
@@ -1381,35 +1429,122 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             </span>
           )}
           {avgMspPct !== null && <HealthBadge score={avgMspPct} />}
-          {isSubmitted && <CheckCircle2 className="w-4 h-4 text-cb-success" />}
-          <button onClick={openMerchantView} disabled={impersonating || openingDashboard} title="Open merchant portal as agent (30-min session — preview & edit live)"
-            className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40">
-            {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
-            Open portal
-          </button>
-          <button onClick={openPostSignDashboard} disabled={impersonating || openingDashboard}
-            title="Open post-signing dashboard (agents can preview before merchant signs)"
-            className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-300 hover:text-cb-accent hover:border-cb-accent/40 disabled:opacity-40">
-            {openingDashboard ? <Loader2 className="w-3 h-3 animate-spin" /> : <LayoutDashboard className="w-3 h-3" />}
-            Dashboard
-          </button>
-          <button onClick={(e) => copyInviteLink(e, linkStage)} title="Copy invite link"
-            className={`flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all ${copied === (linkStage?.id || 'link') ? 'border-cb-success/30 text-cb-success' : 'border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong'}`}>
-            {copied === (linkStage?.id || 'link') ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-            {copied === (linkStage?.id || 'link') ? 'Copied!' : 'Copy Link'}
-          </button>
-          <button onClick={() => onSend(linkStage, corporateId, p.signerEmail || profile?.signerEmail || '')}
-            className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong">
-            <Send className="w-3 h-3" /> Send Link
-          </button>
-          <button onClick={() => onEdit(corporateId, merchantName, linkStage)}
+          {nudgeMsg && (
+            <span className="text-cb-caption text-cb-success max-w-[10rem] truncate" title={nudgeMsg}>{nudgeMsg}</span>
+          )}
+
+          {/* Mode primary CTA */}
+          {rowMode.mode === 'prep' && (
+            <button
+              type="button"
+              onClick={openMerchantView}
+              disabled={impersonating || openingDashboard}
+              title={rowMode.reason}
+              className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
+            >
+              {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+              Prep in portal
+            </button>
+          )}
+
+          {rowMode.mode === 'stuck' && (
+            <button
+              type="button"
+              onClick={openMerchantView}
+              disabled={impersonating || openingDashboard}
+              title={rowMode.blocker || rowMode.reason}
+              className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
+            >
+              {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wrench className="w-3 h-3" />}
+              Fix in portal
+            </button>
+          )}
+
+          {rowMode.mode === 'nudge' && (
+            <div className="relative flex items-stretch">
+              <button
+                type="button"
+                onClick={() => runNudge(readNudgeChannelPref())}
+                disabled={nudging}
+                title={rowMode.reason}
+                className="flex items-center gap-1 text-cb-caption font-semibold pl-2.5 pr-2 py-1 rounded-l-cb border border-r-0 transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
+              >
+                {nudging ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                Nudge
+              </button>
+              <button
+                type="button"
+                onClick={() => setNudgeOpen((o) => !o)}
+                disabled={nudging}
+                title="Choose channel"
+                className="flex items-center px-1.5 rounded-r-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40 border-l border-l-black/20"
+              >
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              {nudgeOpen && (
+                <div className="absolute right-0 top-full mt-1 z-20 min-w-[11rem] rounded-cb border border-cb-border bg-cb-surface-raised shadow-cb-overlay py-1">
+                  {[
+                    { id: 'both', label: 'Text + Email' },
+                    { id: 'sms', label: 'Text only' },
+                    { id: 'email', label: 'Email only' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => runNudge(opt.id)}
+                      className={`w-full text-left px-3 py-1.5 text-cb-caption hover:bg-cb-bg ${
+                        readNudgeChannelPref() === opt.id ? 'text-cb-accent font-semibold' : 'text-gray-300'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {rowMode.mode === 'underwriting' && (
+            <button
+              type="button"
+              onClick={openPostSignDashboard}
+              disabled={impersonating || openingDashboard}
+              title="Post-sign dashboard — equipment, payments, underwriting docs"
+              className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
+            >
+              {openingDashboard ? <Loader2 className="w-3 h-3 animate-spin" /> : <LayoutDashboard className="w-3 h-3" />}
+              Dashboard
+            </button>
+          )}
+
+          {/* Quiet utilities — Edit / Delete always; Dashboard also available pre-submit for agents */}
+          {rowMode.mode !== 'underwriting' && (
+            <button
+              type="button"
+              onClick={openPostSignDashboard}
+              disabled={impersonating || openingDashboard}
+              title="Preview post-signing dashboard"
+              className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong disabled:opacity-40"
+            >
+              {openingDashboard ? <Loader2 className="w-3 h-3 animate-spin" /> : <LayoutDashboard className="w-3 h-3" />}
+              <span className="hidden lg:inline">Dashboard</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onEdit(corporateId, merchantName, linkStage)}
             title="Edit locations, signers & Quotes"
-            className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong">
+            className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong"
+          >
             <Pencil className="w-3 h-3" />
-            Edit
+            <span className="hidden lg:inline">Edit</span>
           </button>
-          <button onClick={() => onDeleteMerchant({ corporateId, merchantName })} title="Delete merchant permanently (all data)"
-            className="p-1.5 text-gray-600 hover:text-cb-danger rounded-cb transition-colors">
+          <button
+            type="button"
+            onClick={() => onDeleteMerchant({ corporateId, merchantName })}
+            title="Delete merchant permanently (all data)"
+            className="p-1.5 text-gray-600 hover:text-cb-danger rounded-cb transition-colors"
+          >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -1798,7 +1933,6 @@ export default function ApplicationManager() {
                     adminStages={adminMap[String(profile.corporateId)] || []}
                     publicUrl={publicUrl}
                     onEdit={(corpId, name, stage) => setEditing({ corporateId: corpId, merchantName: name, stage: stage || null })}
-                    onSend={(stage, corpId, email) => setSending({ stage, corporateId: corpId, prefillEmail: email })}
                     onDeleteMerchant={(info) => { setDeleteMerchantConfirm(info); setDeleteMerchantTyped(''); setDeleteMerchantError(''); }}
                   />
                 ))}
@@ -1830,6 +1964,11 @@ export default function ApplicationManager() {
               onSaved={handleStageSaved}
               onPricingSaved={handlePricingSaved}
               onClose={() => setEditing(null)}
+              onRequestSend={(stage) => setSending({
+                stage: stage || editing.stage || null,
+                corporateId: editing.corporateId,
+                prefillEmail: '',
+              })}
             />
           </div>
         </div>

@@ -413,7 +413,7 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 | `demoteApplication` | Unlock portal forms after signing packages exist: revoke MSPWare/BoldSign packages (`DELETE /signatures`), reset signed→verified, `portalLockStatus=unlocked`. Refuses if MID already Pending MID/Active. |
 
 ### Other active functions
-`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `updatePricing`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `submitLegacyPOSConnection`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`
+`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `updatePricing`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `nudgeMerchant`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `submitLegacyPOSConnection`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`
 
 ### Debug/admin-only functions (do not call from merchant portal)
 `checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`, `cleanupTestHubspot`
@@ -447,6 +447,8 @@ When a new `MerchantMID` is created via `manageMerchantID` (action="add") **and 
 | `MSP_SUBMIT_ENABLED` | `true` to actually submit to Elavon; omit for safe draft-only mode |
 | `ELAVON_USERNAME` / `ELAVON_PASSWORD` | Only used by `getDocuments`/`listDocuments` (direct Elavon doc API) |
 | `HUBSPOT_API_KEY` | HubSpot Private App token — used by `createHubspotDeal`, `pushStatusToHubspot`, `syncFromHubspot`, `getHubspotQuote`, `cleanupTestHubspot` |
+| `QUO_API_KEY` | Quo (OpenPhone) API key — agent **Nudge** SMS from `/admin/applications` (`nudgeMerchant`) |
+| `QUO_FROM_NUMBER` | Quo sending number in E.164 (e.g. `+15551234567`) for `nudgeMerchant` |
 
 **Production credentials live in Base44 env vars only — never in code or committed files.**
 
@@ -678,7 +680,7 @@ The `STEP_SUMMARY` (review step) was removed — it was redundant.
 Admin-created or auto-tracked application staging records. Supports:
 - Admin staging: pre-fill fields, select which locations/MIDs/signers appear
 - Auto-tracking: `trackProgress` action upserts a record when merchant opens the portal
-- Admin dashboard at `/admin/applications` (`ApplicationManager.jsx`). Tracks `__auto_track__` progress (currentStep / lastSeenAt), MSP form errors via `getMSPFormStatus`, and admin impersonation via `manageStagedApplication` action `impersonate`.
+- Admin dashboard at `/admin/applications` (`ApplicationManager.jsx`). Deal-desk row modes: **prep** (Prep in portal), **nudge** (Quo SMS + email via `nudgeMerchant`), **stuck** (Fix in portal + blocker), **underwriting** (Dashboard primary). Tracks `__auto_track__` progress, MSP form errors on expand, impersonate via `manageStagedApplication`. No permanent Open portal / Copy / Send on rows.
 - Labels: `__auto_track__` for auto-created tracking records; custom label for admin-created stages
 - **Quick Stage — local / no HubSpot (2026-07-13):** Numeric input = HubSpot deal ID (existing sync). Alphanumeric (e.g. `Danono's Donuts`) opens a modal → `manageStagedApplication` action `createLocalStage`. Backend `slugifyCorporateId` → `danonos-donuts` as `corporateId`; raw name → profile `legalName` + location `dbaName`; creates primary signer + draft stage. If `corporateId` is **not** `/^\d+$/`, `syncFromHubspot` / `getHubspotQuote` / `pushStatusToHubspot` return `hubspotBypass: true` with **no** HubSpot API calls. Portal links use the slug as `corporateId` (encodeURIComponent).
 - **Agent pricing editor (2026-07-13):** Dual surface — Applications StageEditor **Pricing** tab + floating `AgentPricingBubble` on `OnboardingPortal` (Welcome Hub + onboarding steps only; **not** post-signing dashboard). Canonical store: `MerchantCorporateProfile` (`pricingType`, `pricingTier`, `customMarkupPercentage` as **percent** e.g. `0.15` = 0.15% — not basis points, `customPerTxFee`, `customAuthPerCard`). Optional mirror on admin stage `prefilledData.pricing`. `updatePricing` is admin **or** impersonation JWT (`imp: true`) only — plain merchants get 401. Monthly/service fee UI **hidden** (MSP template-owned). After save, fire-and-forget `submitToMSP` refill for unlocked MIDs with drafts. High Volume Tavern Promo preset deferred.
