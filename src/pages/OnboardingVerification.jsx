@@ -11,7 +11,7 @@ import {
   isInviteOutstanding,
 } from '@/lib/signerLifecycle';
 import { usePortalLock } from '@/lib/PortalLockContext';
-import { applyPortalLockFromSigningResponse } from '@/lib/portalLock';
+import { applyPortalLockFromSigningResponse, isPortalFormsLocked } from '@/lib/portalLock';
 import {
   rememberSigningFixStep,
   clearSigningFixStep,
@@ -118,9 +118,22 @@ export default function OnboardingVerification({ profile, locations, initialSign
     (a.missingSignerEmails || []).length > 0
   );
 
-  // Do NOT auto-call signApplication when the roster becomes valid.
-  // Auto-staging left no time to fix signer/ownership issues after unlock —
-  // packages only prepare when the merchant clicks Prepare / Retry Signing.
+  // Do NOT auto-create packages when the roster first becomes valid (merchant
+  // still needs time to fix ownership after unlock). DO restore existing
+  // packages when the portal is already locked for signature — otherwise every
+  // refresh dumps them back on "Prepare Signing Documents" even though BoldSign
+  // links are live.
+  const restoreAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (restoreAttemptedRef.current) return;
+    if (!allVerified || loadingSigning || applications.length > 0 || signingError) return;
+    const lock = String(profile?.portalLockStatus || '').toLowerCase();
+    const shouldRestore = isPortalFormsLocked(profile)
+      || ['signing', 'pending_signature', 'all_signed'].includes(lock);
+    if (!shouldRestore) return;
+    restoreAttemptedRef.current = true;
+    fetchSigningState({ restoreOnly: true });
+  }, [allVerified, loadingSigning, applications.length, signingError, profile?.portalLockStatus, profile?.applicationStatus]);
 
   // When packages exist and are usable, enter signing phase
   useEffect(() => {
@@ -248,17 +261,22 @@ export default function OnboardingVerification({ profile, locations, initialSign
     }
   };
 
-  const fetchSigningState = async () => {
+  const fetchSigningState = async ({ restoreOnly = false } = {}) => {
     setLoadingSigning(true);
     setSigningError('');
-    stickySigningUrlsRef.current = {};
+    // Keep sticky URLs on restore so a remount after refresh doesn't thrash the iframe
+    if (!restoreOnly) stickySigningUrlsRef.current = {};
     try {
       const res  = await invokePortalFunction('signApplication', { corporateId: profile.corporateId });
       const data = res.data;
 
       if (!data?.success) {
         const parts = [data?.hint, data?.error].filter(Boolean);
-        setSigningError(parts[0] || 'Unable to prepare signing documents.');
+        // On restore, prefer leaving the Prepare button if packages are somehow
+        // unreadable — don't scare the agent with a hard error when lock says ready.
+        if (!restoreOnly) {
+          setSigningError(parts[0] || 'Unable to prepare signing documents.');
+        }
         applyPortalLockFromSigningResponse(data || {}, setPortalLockStatus);
         rememberSigningFixStep(
           profile.corporateId,
@@ -276,15 +294,21 @@ export default function OnboardingVerification({ profile, locations, initialSign
       applyPortalLockFromSigningResponse(data, setPortalLockStatus);
 
       const failed = apps.filter(a => a.error);
-      if (failed.length > 0) {
+      const usable = apps.some(a =>
+        !a.error && (a.signingUrl || (a.signers || []).some(s => s.signingUrl || s.signed))
+      );
+      if (failed.length > 0 && !usable) {
         rememberSigningFixStep(profile.corporateId, resolveSigningFixStep(failed));
-        setPhase('roster');
+        if (!restoreOnly) setPhase('roster');
       } else {
         clearSigningFixStep(profile.corporateId);
+        if (usable) setPhase('signing');
       }
       setActiveMidIndex(0);
     } catch (err) {
-      setSigningError(err.message || 'Failed to prepare signing documents.');
+      if (!restoreOnly) {
+        setSigningError(err.message || 'Failed to prepare signing documents.');
+      }
       applyPortalLockFromSigningResponse({}, setPortalLockStatus);
       rememberSigningFixStep(profile.corporateId, 'verify');
     } finally {
@@ -412,6 +436,8 @@ export default function OnboardingVerification({ profile, locations, initialSign
 
   const showSigningChrome = allVerified && !loadingSigning && applications.length > 0 && !applications.every(a => a.error);
   const isComplete = phase === 'complete' || allRequiredSigned || packagesAllSigned;
+  const packagesLikelyExist = isPortalFormsLocked(profile)
+    || ['signing', 'pending_signature', 'all_signed'].includes(String(profile?.portalLockStatus || '').toLowerCase());
 
   return (
     <div className="flex flex-col">
@@ -483,17 +509,23 @@ export default function OnboardingVerification({ profile, locations, initialSign
                 </p>
               )}
               <p className="text-cb-body text-gray-300 max-w-md">
-                {isAgentPreview
-                  ? 'Control Person is verified. Load the merchant agreement to confirm BoldSign URLs are working.'
-                  : 'Owners are ready. When you\'ve finished reviewing signer details, prepare the merchant agreement for signing.'}
+                {packagesLikelyExist
+                  ? (isAgentPreview
+                    ? 'Signing packages already exist for this merchant. Load them to preview the live BoldSign links.'
+                    : 'Your signing documents are ready. Click below to open them and continue where you left off.')
+                  : (isAgentPreview
+                    ? 'Control Person is verified. Load the merchant agreement to confirm BoldSign URLs are working.'
+                    : 'Owners are ready. When you\'ve finished reviewing signer details, prepare the merchant agreement for signing.')}
               </p>
               <button
                 type="button"
-                onClick={fetchSigningState}
+                onClick={() => fetchSigningState()}
                 className="flex items-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 px-5 py-2.5 rounded-cb transition-opacity"
               >
                 <PenLine className="w-4 h-4" />
-                {isAgentPreview ? 'Preview Signing Documents' : 'Prepare Signing Documents'}
+                {packagesLikelyExist
+                  ? (isAgentPreview ? 'Load Signing Documents' : 'Resume Signing')
+                  : (isAgentPreview ? 'Preview Signing Documents' : 'Prepare Signing Documents')}
               </button>
             </div>
           )}
@@ -504,7 +536,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
               <div>
                 <p className="text-cb-body font-semibold text-white">Unable to Load Signing Documents</p>
                 <p className="text-cb-body text-gray-400 mt-1">{signingError}</p>
-                <button onClick={fetchSigningState} className="mt-2 text-cb-body font-medium text-cb-accent hover:opacity-80 transition-opacity">
+                <button onClick={() => fetchSigningState()} className="mt-2 text-cb-body font-medium text-cb-accent hover:opacity-80 transition-opacity">
                   Try again
                 </button>
               </div>
@@ -560,7 +592,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
                 <p className="text-cb-body text-gray-400 mt-1">
                   A co-owner may have been added after documents were prepared. Refresh rebuilds unsigned packages so every owner gets their own link.
                 </p>
-                <button onClick={fetchSigningState} className="mt-2 text-cb-body font-medium text-cb-accent hover:opacity-80">
+                <button onClick={() => fetchSigningState()} className="mt-2 text-cb-body font-medium text-cb-accent hover:opacity-80">
                   Refresh signing documents
                 </button>
               </div>
@@ -664,7 +696,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
             <div className="border border-cb-border border-l-2 border-l-cb-accent bg-cb-surface-raised rounded-cb px-5 py-4">
               <p className="text-cb-body text-gray-300">
                 Signing link for {selectedSigner.firstName} isn&apos;t ready yet.
-                <button onClick={fetchSigningState} className="ml-2 text-cb-accent font-medium hover:opacity-80">Refresh documents</button>
+                <button onClick={() => fetchSigningState()} className="ml-2 text-cb-accent font-medium hover:opacity-80">Refresh documents</button>
               </p>
             </div>
           )}
@@ -680,7 +712,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
                   onNavigate(step);
                 }
               }}
-              onRetry={fetchSigningState}
+              onRetry={() => fetchSigningState()}
             />
           ))}
 

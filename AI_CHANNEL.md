@@ -2117,6 +2117,26 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 ---
 **[CURSOR]** — 2026-07-18
+**Type:** Bugfix — Signing docs not persisting across refresh; false "Signing link failed"
+
+**Symptoms (Porky's):** Forms locked (ready for signature) + Verified Control Person, but every visit shows Prepare Signing Documents. Admin row: Stuck / "Signing link failed" even though links are live.
+
+**Causes:**
+1. After removing auto-`signApplication` on roster-valid, revisit never restored existing packages into React state.
+2. `applicationRowMode` treated `portalLockStatus=signing` on verification as a failed link.
+
+**Fix:**
+1. Auto-restore signing packages once when forms are already locked for signature
+2. Admin: awaiting-signature lock → nudge ("waiting for them to sign"), not stuck
+3. Resume / Load copy when packages already exist
+
+**Teddy:** Push + publish frontend (no function redeploy required for this fix). Hard-refresh — signing iframe should reload automatically when locked for signature.
+
+**→ Waiting on:** Teddy
+---
+
+---
+**[CURSOR]** — 2026-07-18
 **Type:** Action Taken — `$impeccable clarify` /admin/applications
 
 **Audience:** Sales agents mid-call (product register). Terminology locked to grilled deal-desk: Open to prep / Open to fix / Remind / Open dashboard.
