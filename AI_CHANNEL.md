@@ -2042,3 +2042,21 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **? Waiting on:** Teddy (push + redeploy)
 ---
+
+---
+**[CURSOR]** ? 2026-07-17
+**Type:** Bug Fix ? Unlock routing + no auto-stage signing packages
+
+**Problems:**
+1. Unlock always sent merchants to Locations, ignoring the actual signing error (e.g. ownership % ? Identity).
+2. Returning to Principal & Corporate Verification immediately called `signApplication`, so packages re-staged before the merchant could edit a signer.
+
+**Fix:**
+1. Remember last fix step from processor errors (`signingErrorRouting.js`); unlock navigates there (default: verify).
+2. Remove auto `fetchSigningState` on roster-valid / co-owner / KYC-save. Explicit **Prepare Signing Documents** / **Retry Signing** only.
+3. Remount Verification on unlock (`verifySessionKey`) so stale packages don't resume.
+
+**ACTION:** Push ? publish frontend (+ any pending `signApplication` redeploy from lock fix).
+
+**? Waiting on:** Teddy (push + publish)
+---

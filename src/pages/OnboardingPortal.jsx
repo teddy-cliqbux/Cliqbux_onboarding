@@ -19,6 +19,7 @@ import AgentPricingBubble from '@/components/pricing/AgentPricingBubble';
 import FormsLockedBanner from '@/components/onboarding/FormsLockedBanner';
 import { PortalLockContext } from '@/lib/PortalLockContext';
 import { isPortalFormsLocked } from '@/lib/portalLock';
+import { readSigningFixStep } from '@/lib/signingErrorRouting';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
 // 2026-07-06: fixed a real bug here — this array checked for 'Self_CashDiscount'
@@ -179,6 +180,8 @@ export default function OnboardingPortal() {
   const [completedSteps, setCompletedSteps] = useState({});
   // Track whether verification step had all signers verified (survives back navigation)
   const [signersVerified, setSignersVerified] = useState(false);
+  // Bump on unlock so Verification remounts clean (no auto-restaging stale packages)
+  const [verifySessionKey, setVerifySessionKey] = useState(0);
   // true when a workspace admin opened the portal via impersonate (30-min JWT)
   // or via ?corporateId= with a workspace session. Saves are allowed — sales
   // guides merchants live. Banner warns that writes hit the live merchant record.
@@ -577,7 +580,18 @@ export default function OnboardingPortal() {
         portalLockStatus: 'unlocked',
       }));
       setSignersVerified(false);
-      goToStep(STEP_LOCATIONS);
+      setVerifySessionKey((k) => k + 1);
+
+      // Route to the step that matches the last signing failure (ownership → verify,
+      // bank → banking, MCC/entity → locations). Default to Identity & Signing so
+      // merchants can fix signers without being dumped on Locations.
+      const fixKey = readSigningFixStep(profile.corporateId) || 'verify';
+      const stepMap = {
+        locations: STEP_LOCATIONS,
+        banking: STEP_BANKING,
+        verify: STEP_VERIFICATION,
+      };
+      goToStep(stepMap[fixKey] || STEP_VERIFICATION);
     } catch (err) {
       console.error('[demoteApplication]', err);
       throw err instanceof Error
@@ -753,6 +767,7 @@ export default function OnboardingPortal() {
       if (step === STEP_VERIFICATION) {
         return (
           <OnboardingVerification
+            key={`verify-${verifySessionKey}`}
             profile={profile}
             locations={locations}
             initialSignersVerified={signersVerified}

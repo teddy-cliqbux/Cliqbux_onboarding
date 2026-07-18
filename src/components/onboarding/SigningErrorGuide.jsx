@@ -1,37 +1,14 @@
 import { useState, useEffect } from 'react';
 import { AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, ShieldAlert } from 'lucide-react';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+import {
+  SIGNING_FIX_STEP_ORDER,
+  categorizeSigningErrors,
+  primarySigningFixStep,
+  resolveSigningFixStep,
+} from '@/lib/signingErrorRouting';
 
-// Maps MSPWare field names → human-readable labels + which onboarding step fixes them
-const FIELD_MAP = {
-  deposit_account_no:        { label: 'Bank Account Number',           step: 'banking',   stepLabel: 'Banking Setup' },
-  deposit_account_rtg:       { label: 'Bank Routing Number',           step: 'banking',   stepLabel: 'Banking Setup' },
-  deposit_account_type:      { label: 'Account Type (checking/savings)',step: 'banking',   stepLabel: 'Banking Setup' },
-  mcc:                       { label: 'MCC Code',                      step: 'locations', stepLabel: 'Locations & MIDs' },
-  monthly_sales:             { label: 'Monthly Card Volume',           step: 'locations', stepLabel: 'Locations & MIDs' },
-  average_sales:             { label: 'Average Transaction',           step: 'locations', stepLabel: 'Locations & MIDs' },
-  highest_ticket:            { label: 'Highest Ticket Amount',         step: 'locations', stepLabel: 'Locations & MIDs' },
-  cp_percent:                { label: 'Card-Present %',                step: 'locations', stepLabel: 'Locations & MIDs' },
-  pricing_method:            { label: 'Pricing Method',                step: 'locations', stepLabel: 'Locations & MIDs' },
-  pricing_category:          { label: 'Pricing Category',              step: 'locations', stepLabel: 'Locations & MIDs' },
-  full_dba_name:             { label: 'DBA / Store Name',              step: 'locations', stepLabel: 'Locations & MIDs' },
-  industry_type:             { label: 'Industry Type',                 step: 'locations', stepLabel: 'Locations & MIDs' },
-  tin:                       { label: 'Federal EIN',                   step: 'locations', stepLabel: 'Business Info' },
-  ownership_type:            { label: 'Business Entity Type',          step: 'locations', stepLabel: 'Business Info' },
-  year_business_established: { label: 'Year Established',              step: 'locations', stepLabel: 'Business Info' },
-  ownership_years:           { label: 'Years in Business',             step: 'locations', stepLabel: 'Business Info' },
-  owner_dob:                 { label: 'Owner Date of Birth',           step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_id_number:           { label: 'Owner SSN',                     step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_address:             { label: 'Owner Home Address',            step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_firstname:           { label: 'Owner First Name',              step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_lastname:            { label: 'Owner Last Name',               step: 'verify',    stepLabel: 'Identity Verification' },
-  business_address:          { label: 'Business Street Address',       step: 'locations', stepLabel: 'Locations & MIDs' },
-  business_city:             { label: 'Business City',                 step: 'locations', stepLabel: 'Locations & MIDs' },
-  business_state_usa:        { label: 'Business State',                step: 'locations', stepLabel: 'Locations & MIDs' },
-  business_zipcode:          { label: 'Business ZIP Code',             step: 'locations', stepLabel: 'Locations & MIDs' },
-};
-
-const STEP_ORDER = ['verify', 'locations', 'banking'];
+const STEP_ORDER = SIGNING_FIX_STEP_ORDER;
 
 // Detect known bad data patterns from the raw form that MSPWare won't surface as field errors
 function detectRawFormIssues(rawForm) {
@@ -40,7 +17,6 @@ function detectRawFormIssues(rawForm) {
 
   const owners = rawForm.owners || [];
   for (const owner of owners) {
-    // Detect sequential SSN (e.g. 123456789, 987654321, 111111111)
     const ssn = String(owner.owner_id_number || '').replace(/\D/g, '');
     if (ssn.length === 9) {
       const isSequential = /^(012345678|123456789|234567890|987654321|876543210|111111111|222222222|333333333|444444444|555555555|666666666|777777777|888888888|999999999|000000000|123123123|000000001)$/.test(ssn);
@@ -55,17 +31,14 @@ function detectRawFormIssues(rawForm) {
         });
       }
     }
-    // Detect missing DOB
     if (!owner.owner_dob) {
       issues.push({ field: 'owner_dob', label: 'Owner Date of Birth is missing', step: 'verify', stepLabel: 'Identity Verification', severity: 'error' });
     }
-    // Detect missing SSN
     if (!ssn) {
       issues.push({ field: 'owner_id_number', label: 'Owner SSN is missing', step: 'verify', stepLabel: 'Identity Verification', severity: 'error' });
     }
   }
 
-  // Detect business address missing house number (just a street name)
   const addr = rawForm.business_address || '';
   if (addr && !/^\d/.test(addr.trim())) {
     issues.push({
@@ -78,7 +51,6 @@ function detectRawFormIssues(rawForm) {
     });
   }
 
-  // Detect missing bank account
   if (!rawForm.deposit_account_no || !rawForm.deposit_account_rtg) {
     issues.push({ field: 'deposit_account_no', label: 'Bank account not linked', step: 'banking', stepLabel: 'Banking Setup', severity: 'error' });
   }
@@ -87,37 +59,23 @@ function detectRawFormIssues(rawForm) {
 }
 
 function categorize(errors) {
-  const byStep = {};
-  const unknown = [];
-  for (const err of errors) {
-    const raw = typeof err === 'string' ? err : (err?.message || err?.description || JSON.stringify(err));
-    const matched = Object.entries(FIELD_MAP).find(([key]) => raw.toLowerCase().includes(key.toLowerCase()));
-    if (matched) {
-      const [, meta] = matched;
-      if (!byStep[meta.step]) byStep[meta.step] = { stepLabel: meta.stepLabel, fields: [] };
-      byStep[meta.step].fields.push({ label: meta.label, raw });
-    } else {
-      unknown.push(raw);
-    }
-  }
-  return { byStep, unknown };
+  return categorizeSigningErrors(errors);
 }
 
 function primaryStep(byStep, rawIssues) {
-  // Prioritize steps with raw issues first
-  for (const s of STEP_ORDER) {
-    if (rawIssues?.some(i => i.step === s)) return s;
-    if (byStep[s]) return s;
-  }
-  return 'locations';
+  return primarySigningFixStep(byStep, rawIssues) || 'locations';
 }
 
-// Step color-coding retired (token restraint pass): the container already frames
-// this as an error, so each affected step reads as one quiet neutral group.
 const STEP_COLORS = {
   locations: 'text-gray-300 bg-cb-bg border-cb-border',
   banking:   'text-gray-300 bg-cb-bg border-cb-border',
   verify:    'text-gray-300 bg-cb-bg border-cb-border',
+};
+
+const STEP_LABELS = {
+  verify: 'Identity Verification',
+  locations: 'Locations & MIDs',
+  banking: 'Banking Setup',
 };
 
 export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
@@ -155,33 +113,47 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
         });
       }
     } catch (err) {
-      // non-fatal — message only, never log raw form data (may contain SSN/bank values)
       console.error('[SigningErrorGuide.loadDetails]', err?.message || 'Unknown error');
     } finally {
       setChecking(false);
     }
   };
 
-  // Per-field rejections surfaced by signApplication from the PUT response —
-  // when MSPWare rolls the form back, these are the ACTUAL cause and the
-  // raw-form heuristics below misleadingly report everything as missing.
   const processorErrors = (app?.formErrors || []).filter(e => typeof e === 'string' && e.trim());
 
   const { byStep, unknown } = details ? categorize(details.allErrors) : { byStep: {}, unknown: [] };
-  const rawIssues = details?.rawIssues || [];
-  const targetStep = primaryStep(byStep, rawIssues);
-  const hasDetails = details && (Object.keys(byStep).length > 0 || unknown.length > 0 || rawIssues.length > 0);
+  const processorRouted = categorize(processorErrors);
+  const mergedByStep = { ...processorRouted.byStep };
+  for (const [step, group] of Object.entries(byStep)) {
+    if (!mergedByStep[step]) mergedByStep[step] = group;
+    else {
+      mergedByStep[step] = {
+        stepLabel: group.stepLabel,
+        fields: [...(mergedByStep[step].fields || []), ...(group.fields || [])],
+      };
+    }
+  }
 
-  // Group raw issues by step
+  const rawIssues = details?.rawIssues || [];
+  const targetStep = primaryStep(mergedByStep, rawIssues)
+    || resolveSigningFixStep([app])
+    || 'locations';
+  const hasDetails = details && (Object.keys(byStep).length > 0 || unknown.length > 0 || rawIssues.length > 0);
+  const hasProcessorRoute = Object.keys(processorRouted.byStep).length > 0;
+
   const rawByStep = {};
   for (const issue of rawIssues) {
     if (!rawByStep[issue.step]) rawByStep[issue.step] = { stepLabel: issue.stepLabel, issues: [] };
     rawByStep[issue.step].issues.push(issue);
   }
 
+  let stepsWithFixes = STEP_ORDER.filter(s => rawByStep[s] || mergedByStep[s]);
+  if (stepsWithFixes.length === 0 && (processorErrors.length > 0 || app?.error)) {
+    stepsWithFixes = [targetStep];
+  }
+
   return (
     <div className="border border-cb-border border-l-2 border-l-cb-danger bg-cb-surface-raised rounded-cb overflow-hidden">
-      {/* Header */}
       <div className="flex items-start gap-3 px-5 py-4">
         <AlertCircle className="w-5 h-5 text-cb-danger flex-shrink-0 mt-0.5" />
         <div className="flex-1 min-w-0">
@@ -199,8 +171,6 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
             </div>
           )}
 
-          {/* Actual processor rejections — shown first and always, since they are
-              the true cause; the heuristic lists below can be rollback noise */}
           {processorErrors.length > 0 && (
             <div className="mt-3 rounded-cb border px-3 py-2 text-cb-danger bg-cb-bg border-cb-border">
               <p className="text-cb-caption uppercase mb-1.5">Processor Validation Errors</p>
@@ -220,7 +190,6 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
 
           {!checking && hasDetails && (
             <div className="mt-3 space-y-2">
-              {/* Raw issues detected from form data — most actionable, shown first */}
               {Object.entries(rawByStep).map(([step, { stepLabel, issues }]) => (
                 <div key={`raw-${step}`} className={`rounded-cb border px-3 py-2 ${STEP_COLORS[step] || 'text-gray-300 bg-cb-bg border-cb-border'}`}>
                   <p className="text-cb-caption uppercase text-gray-500 mb-1.5">{stepLabel}</p>
@@ -240,7 +209,6 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
                 </div>
               ))}
 
-              {/* MSPWare field errors (when surfaced) */}
               {Object.entries(byStep).map(([step, { stepLabel, fields }]) => (
                 <div key={step} className={`rounded-cb border px-3 py-2 ${STEP_COLORS[step] || 'text-gray-300 bg-cb-bg border-cb-border'}`}>
                   <p className="text-cb-caption uppercase text-gray-500 mb-1">{stepLabel}</p>
@@ -255,7 +223,6 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
                 </div>
               ))}
 
-              {/* Unknown/raw errors toggle */}
               {unknown.length > 0 && (
                 <div>
                   <button onClick={() => setExpanded(e => !e)}
@@ -281,7 +248,6 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
             </div>
           )}
 
-          {/* No field errors but MSPWare still blocked signing */}
           {!checking && !hasDetails && details?.signaturesError && (
             <div className="mt-2 bg-cb-bg border border-cb-border rounded-cb px-3 py-2">
               <p className="text-cb-caption normal-case tracking-normal font-medium text-cb-danger">MSPWare validation error:</p>
@@ -292,18 +258,17 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
             </div>
           )}
 
-          {!checking && !hasDetails && !details?.signaturesError && (
+          {!checking && !hasDetails && !details?.signaturesError && !processorErrors.length && (
             <p className="text-cb-body text-gray-400 mt-1">
-              Some required fields are missing. Go back to Locations &amp; MIDs or Banking to complete them.
+              Some required fields are missing. Fix them below, then retry signing when you&apos;re ready.
             </p>
           )}
         </div>
       </div>
 
-      {/* Fix buttons — one per affected step */}
-      {!checking && (hasDetails || details?.signaturesError) && (
+      {!checking && (hasDetails || hasProcessorRoute || details?.signaturesError || processorErrors.length > 0) && (
         <div className="border-t border-cb-border px-5 py-3 flex flex-wrap items-center gap-2">
-          {onNavigate && STEP_ORDER.filter(s => rawByStep[s] || byStep[s]).map(step => (
+          {onNavigate && stepsWithFixes.map(step => (
             step === 'verify' ? (
               <button key={step}
                 onClick={() => onNavigate('verify')}
@@ -318,7 +283,7 @@ export default function SigningErrorGuide({ app, onNavigate, onRetry }) {
                 className="flex items-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 px-4 py-2 rounded-cb transition-opacity"
               >
                 <Wrench className="w-3.5 h-3.5" />
-                Fix in {rawByStep[step]?.stepLabel || byStep[step]?.stepLabel}
+                Fix in {rawByStep[step]?.stepLabel || mergedByStep[step]?.stepLabel || STEP_LABELS[step]}
               </button>
             )
           ))}

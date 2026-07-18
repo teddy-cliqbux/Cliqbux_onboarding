@@ -12,6 +12,11 @@ import {
 } from '@/lib/signerLifecycle';
 import { usePortalLock } from '@/lib/PortalLockContext';
 import { applyPortalLockFromSigningResponse } from '@/lib/portalLock';
+import {
+  rememberSigningFixStep,
+  clearSigningFixStep,
+  resolveSigningFixStep,
+} from '@/lib/signingErrorRouting';
 
 // How often to poll MSPWare for signing completion (ms) — ground truth / safety net
 const POLL_INTERVAL_MS = 5000;
@@ -109,24 +114,11 @@ export default function OnboardingVerification({ profile, locations, initialSign
     (a.missingSignerEmails || []).length > 0
   );
 
-  // ── Kick off package prep once roster unlocks ─────────────────────────────
-  useEffect(() => {
-    const hasOnlyErrors = applications.length > 0 && applications.every(a => a.error);
-    if (allVerified && (applications.length === 0 || hasOnlyErrors) && !loadingSigning) {
-      fetchSigningState();
-    }
-  }, [allVerified]);
+  // Do NOT auto-call signApplication when the roster becomes valid.
+  // Auto-staging left no time to fix signer/ownership issues after unlock —
+  // packages only prepare when the merchant clicks Prepare / Retry Signing.
 
-  // When a co-owner becomes Verified after packages loaded, rebuild so their links appear
-  const prevLocalCountRef = useRef(0);
-  useEffect(() => {
-    const count = localSigners.length;
-    if (allVerified && applications.length > 0 && count > prevLocalCountRef.current && prevLocalCountRef.current > 0) {
-      fetchSigningState();
-    }
-    prevLocalCountRef.current = count;
-  }, [localSigners.length, allVerified]);
-
+  // When packages exist and are usable, enter signing phase
   useEffect(() => {
     if (!allVerified || loadingSigning || applications.length === 0) return;
     if (applications.every(a => a.error)) return;
@@ -262,25 +254,35 @@ export default function OnboardingVerification({ profile, locations, initialSign
 
       if (!data?.success) {
         const parts = [data?.hint, data?.error].filter(Boolean);
-        // Prefer hint (detailed draft failure) over generic error
         setSigningError(parts[0] || 'Unable to prepare signing documents.');
-        // Failed prep must never leave forms locked (profile may already be
-        // signing from a prior buggy attempt — clear it so the merchant can edit).
         applyPortalLockFromSigningResponse(data || {}, setPortalLockStatus);
+        rememberSigningFixStep(
+          profile.corporateId,
+          resolveSigningFixStep([], [data?.hint, data?.error].filter(Boolean))
+        );
         return;
       }
 
-      setApplications((data.applications || []).map(a => ({
+      const apps = (data.applications || []).map(a => ({
         ...a,
         corporateId: profile.corporateId,
         merchantIDName: a.merchantIDName || a.merchantName,
-      })));
-      // Lock only when a usable signing link exists; otherwise force unlock.
+      }));
+      setApplications(apps);
       applyPortalLockFromSigningResponse(data, setPortalLockStatus);
+
+      const failed = apps.filter(a => a.error);
+      if (failed.length > 0) {
+        rememberSigningFixStep(profile.corporateId, resolveSigningFixStep(failed));
+        setPhase('roster');
+      } else {
+        clearSigningFixStep(profile.corporateId);
+      }
       setActiveMidIndex(0);
     } catch (err) {
       setSigningError(err.message || 'Failed to prepare signing documents.');
       applyPortalLockFromSigningResponse({}, setPortalLockStatus);
+      rememberSigningFixStep(profile.corporateId, 'verify');
     } finally {
       setLoadingSigning(false);
     }
@@ -461,6 +463,22 @@ export default function OnboardingVerification({ profile, locations, initialSign
               <div className="skeleton h-4 w-48 !rounded-cb" />
               <div className="skeleton h-3 w-64 !rounded-cb" />
               <div className="skeleton h-40 w-full !rounded-cb mt-2" />
+            </div>
+          )}
+
+          {allVerified && !loadingSigning && applications.length === 0 && !signingError && (
+            <div className="border border-cb-border rounded-cb bg-cb-surface-raised px-5 py-6 flex flex-col items-center gap-3 text-center">
+              <p className="text-cb-body text-gray-300 max-w-md">
+                Owners are ready. When you&apos;ve finished reviewing signer details, prepare the merchant agreement for signing.
+              </p>
+              <button
+                type="button"
+                onClick={fetchSigningState}
+                className="flex items-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 px-5 py-2.5 rounded-cb transition-opacity"
+              >
+                <PenLine className="w-4 h-4" />
+                Prepare Signing Documents
+              </button>
             </div>
           )}
 
@@ -680,7 +698,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
             patchRosterSigner(updated);
             setKycSigner(null);
             setSelectedSignerId(updated.id);
-            fetchSigningState();
+            // Do not auto-stage packages after KYC — merchant clicks Prepare / Retry when ready
           }}
           onClose={() => setKycSigner(null)}
         />
