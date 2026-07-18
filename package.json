@@ -10,6 +10,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview",
+    "test:mcc": "node --test src/lib/mccToIndustry.test.js",
     "test:stress": "playwright test --config=playwright.config.ts",
     "test:stress:report": "playwright test --config=playwright.config.ts && echo Report: stress-test-report.md"
   },

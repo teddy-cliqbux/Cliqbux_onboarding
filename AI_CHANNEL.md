@@ -1971,3 +1971,24 @@ Wired in submitToMSP, signApplication, refillMSPForms. Catalog regenerated with 
 No field/validation/save/fetch changes.
 **Waiting on:** Teddy ? push + eyeball collapse on Locations (card processing Cancel/Save + location expand).
 ---
+
+---
+**[CURSOR]** ? 2026-07-17
+**Type:** Action Taken ? Expand Restaurant (RS) prefill for cafe/bakery MCCs
+**Re:** Teddy task: tipping expected at counter-service food; Coffee/Bakery were RE
+
+### Change
+`mccToIndustry` / boarding `mccToIndustryCode` now exact-match these to **RS** (no family strip of 5462/5499):
+5462, 5462A, 5462C, 5499, 5499F, 5499H, 5499K, 5499N
+
+Siblings (Cookie 5462B, Convenience 5499A, etc.) stay **RE**. 5811?5814 family strip unchanged. 5411?SP, 7011?HT unchanged.
+
+### Files
+- src/lib/mccCatalog.js + scripts/gen-mcc-catalog.mjs
+- helpers/mccDerived.ts + submitToMSP / signApplication / refillMSPForms
+- syncFromHubspot MID create industryType (aligned, including 5411A/7011B family)
+- src/lib/mccToIndustry.test.js + npm run test:mcc
+
+No UI / no prompt ? Advanced override still works.
+**Waiting on:** Teddy ? push + republish submitToMSP, signApplication, refillMSPForms, syncFromHubspot (+ frontend).
+---

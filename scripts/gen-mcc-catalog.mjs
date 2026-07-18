@@ -111,8 +111,19 @@ export function mccBase(mcc) {
   return String(mcc || '').trim().replace(/[A-Z]+$/i, '');
 }
 
-/** MCC → MSPWare industry_type (RE / RS / SP / HT). Letter variants use the base family. */
+/**
+ * Cafe / bakery-style MCCs that tip like restaurants. Exact match only —
+ * do NOT family-strip 5462/5499 (Cookie, Convenience, etc. stay RE).
+ */
+const RS_EXACT = new Set([
+  '5462', '5462A', '5462C',
+  '5499', '5499F', '5499H', '5499K', '5499N',
+]);
+
+/** MCC → MSPWare industry_type (RE / RS / SP / HT). RS: exact cafe codes + 5811–5814 family. */
 export function mccToIndustry(mcc) {
+  const raw = String(mcc || '').trim().toUpperCase();
+  if (RS_EXACT.has(raw)) return 'RS';
   const b = mccBase(mcc);
   if (['5811', '5812', '5813', '5814'].includes(b)) return 'RS';
   if (b === '5411') return 'SP';
@@ -143,7 +154,14 @@ const MCC_PRODUCTS_OR_SERVICES: Record<string, string> = ${JSON.stringify(produc
 function mccBaseCode(mcc: string): string {
   return String(mcc || '').trim().replace(/[A-Z]+$/i, '');
 }
+/** Exact cafe/bakery RS codes — do NOT family-strip 5462/5499 siblings. */
+const RS_EXACT = new Set([
+  '5462', '5462A', '5462C',
+  '5499', '5499F', '5499H', '5499K', '5499N',
+]);
 function mccToIndustryCode(mcc: string): string {
+  const raw = String(mcc || '').trim().toUpperCase();
+  if (RS_EXACT.has(raw)) return 'RS';
   const b = mccBaseCode(mcc);
   if (['5811', '5812', '5813', '5814'].includes(b)) return 'RS';
   if (b === '5411') return 'SP';

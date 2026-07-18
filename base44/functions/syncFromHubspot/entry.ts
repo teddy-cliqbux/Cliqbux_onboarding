@@ -680,9 +680,17 @@ Deno.serve(async (req) => {
             // Derive industry_type from the MCC (same rule as the portal UI) so
             // prefilled MIDs don't sit with a blank required field. MS/ARU are
             // never derived — MS was rejected live by MSPWare 2026-07-10.
-            industryType:     ['5811', '5812', '5813', '5814'].includes(String(locMcc).replace(/[A-Z]+$/i, '')) ? 'RS'
-                              : String(locMcc) === '5411' ? 'SP'
-                              : String(locMcc) === '7011' ? 'HT' : 'RE',
+            // Same rule as portal mccToIndustry / boarding mccToIndustryCode.
+            industryType: (() => {
+              const raw = String(locMcc || '').trim().toUpperCase();
+              const RS_EXACT = new Set(['5462', '5462A', '5462C', '5499', '5499F', '5499H', '5499K', '5499N']);
+              if (RS_EXACT.has(raw)) return 'RS';
+              const b = raw.replace(/[A-Z]+$/i, '');
+              if (['5811', '5812', '5813', '5814'].includes(b)) return 'RS';
+              if (b === '5411') return 'SP';
+              if (b === '7011') return 'HT';
+              return 'RE';
+            })(),
             pricingMethod,
             monthlyCardSales: monthlyVol,
             avgSaleAmount:    avgTicket,
