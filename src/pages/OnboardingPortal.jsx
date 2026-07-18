@@ -901,7 +901,7 @@ export default function OnboardingPortal() {
         )}
 
         {formsLocked && (
-          <div className="w-full max-w-4xl mb-4">
+          <div className="w-full max-w-4xl mb-4 sticky top-16 z-30">
             <FormsLockedBanner
               profile={profile}
               onUnlock={handleRequestUnlock}

@@ -49,8 +49,28 @@ export function portalLockLabel(profile) {
 export const FORMS_LOCKED_MESSAGE =
   'Forms Locked — Application is ready for signature. Click Unlock & Modify Details to edit.';
 
+/** Backend 423 / manageLegalEntity (etc.) error copy — match for inline unlock CTAs. */
+export const FORMS_LOCKED_API_MESSAGE =
+  'Forms are locked while the merchant agreement is in signing. Use Unlock & Modify Details first.';
+
 export const DEMOTE_CONFIRM_MESSAGE =
   'Unlocking this application will instantly invalidate all current signature links. Outstanding signers will need to verify and sign a newly updated agreement. Are you sure you want to continue?';
+
+/**
+ * True when an API/UI error is the portal form lock (HTTP 423 FORMS_LOCKED).
+ * @param {unknown} errOrMessage
+ */
+export function isFormsLockedError(errOrMessage) {
+  if (!errOrMessage) return false;
+  const msg = typeof errOrMessage === 'string'
+    ? errOrMessage
+    : String(errOrMessage?.message || errOrMessage?.error || errOrMessage?.data?.error || '');
+  const code = typeof errOrMessage === 'object' && errOrMessage
+    ? String(errOrMessage?.code || errOrMessage?.data?.code || '')
+    : '';
+  return code === 'FORMS_LOCKED'
+    || /forms are locked|unlock & modify details/i.test(msg);
+}
 
 /**
  * True when at least one MID has a signing link or a completed signature.

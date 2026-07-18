@@ -9,7 +9,8 @@ import {
 } from 'lucide-react';
 import { isLocked as getMidLocked, isImported as getMidImported } from '@/utils/statusUtils';
 import { usePortalLock } from '@/lib/PortalLockContext';
-import { FORMS_LOCKED_MESSAGE } from '@/lib/portalLock';
+import { FORMS_LOCKED_MESSAGE, isFormsLockedError, PORTAL_LOCK_SIGNING } from '@/lib/portalLock';
+import { UnlockModifyControls } from '@/components/onboarding/FormsLockedBanner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { invokePortalFunction, merchantTokenHasImp } from '@/lib/merchantAuthFetch';
 import {
@@ -1141,7 +1142,7 @@ function entityMissingFields({ ownershipType, taxClassType, establishmentYear, f
 }
 
 function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, forceExpand, onApplicantSave }) {
-  const { formsLocked } = usePortalLock();
+  const { formsLocked, unlocking, onRequestUnlock } = usePortalLock();
   const [ownershipType, setOwnershipType] = useState(entity.ownershipType || '');
   const [taxClassType, setTaxClassType]   = useState(entity.taxClassType  || '');
   const [estYear, setEstYear]             = useState(entity.establishmentYear || '');
@@ -1311,7 +1312,16 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, for
               {formsLocked ? 'Forms Locked' : saving ? 'Saving…' : saved ? 'Saved' : 'Save Details'}
             </button>
             {formsLocked
-              ? <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">{FORMS_LOCKED_MESSAGE}</p>
+              ? (
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-0">
+                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">{FORMS_LOCKED_MESSAGE}</p>
+                  <UnlockModifyControls
+                    onUnlock={onRequestUnlock}
+                    unlocking={unlocking}
+                    buttonClassName="flex-shrink-0 min-h-10 px-3 py-1.5 rounded-cb bg-cb-accent text-cb-bg text-cb-body font-semibold hover:opacity-90 disabled:opacity-50"
+                  />
+                </div>
+              )
               : !canSave && (
                 <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">
                   Still need: {liveMissing.join(', ')}
@@ -1365,6 +1375,7 @@ function normalizeEntityRecord(e) {
 }
 
 function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locationCount = 1, showValidation = false }) {
+  const { formsLocked, unlocking, onRequestUnlock, setPortalLockStatus } = usePortalLock();
   const hasLegalOverride = !!(entity.mailingStreet && entity.mailingCity && entity.mailingState);
   const [sameAsStore, setSameAsStore] = useState(
     entity.legalAddressSameAsStore !== undefined
@@ -1433,6 +1444,10 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
   }, [entity.entityId, entity.mailingStreet, entity.mailingCity, entity.mailingState, entity.mailingZip, entity.legalAddressSameAsStore]);
 
   const persist = useCallback(async (patch, nextEntity) => {
+    if (formsLocked) {
+      setSaveError(FORMS_LOCKED_MESSAGE);
+      return false;
+    }
     setSaving(true);
     setSaveError('');
     try {
@@ -1440,7 +1455,14 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
         action: 'edit', corporateId, entityId: entityIdRef.current,
         ...patch,
       });
-      if (res.data?.error) throw new Error(res.data.error);
+      if (res.data?.error) {
+        if (isFormsLockedError(res.data) || isFormsLockedError(res.data.error)) {
+          setPortalLockStatus?.(PORTAL_LOCK_SIGNING);
+          setSaveError(res.data.error || FORMS_LOCKED_MESSAGE);
+          return false;
+        }
+        throw new Error(res.data.error);
+      }
       setSavedAt(Date.now());
       if (nextEntity) onUpdatedRef.current?.(nextEntity);
       else if (res.data?.entities) {
@@ -1450,14 +1472,23 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
       return true;
     } catch (err) {
       console.error('[EntityLegalAndMailingAddresses.persist]', err);
+      if (isFormsLockedError(err)) {
+        setPortalLockStatus?.(PORTAL_LOCK_SIGNING);
+        setSaveError(err?.message || FORMS_LOCKED_MESSAGE);
+        return false;
+      }
       setSaveError(err?.message || 'Address didn\u2019t save — check your connection and try again.');
       return false;
     } finally {
       setSaving(false);
     }
-  }, [corporateId]);
+  }, [corporateId, formsLocked, setPortalLockStatus]);
 
   const chooseSameAsStore = async (yes) => {
+    if (formsLocked) {
+      setSaveError(FORMS_LOCKED_MESSAGE);
+      return;
+    }
     setSameAsStore(yes);
     setSaveError('');
     if (yes) {
@@ -1568,8 +1599,9 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
             <button
               key={String(opt.val)}
               type="button"
+              disabled={formsLocked || saving}
               onClick={() => chooseSameAsStore(opt.val)}
-              className={`flex-1 text-cb-caption font-medium px-2.5 py-1.5 rounded-cb transition-colors ${
+              className={`flex-1 text-cb-caption font-medium px-2.5 py-1.5 rounded-cb transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 sameAsStore === opt.val ? 'bg-cb-accent-muted text-cb-accent' : 'text-gray-400 hover:text-white'
               }`}
             >
@@ -1577,6 +1609,24 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
             </button>
           ))}
         </div>
+
+        {(formsLocked || isFormsLockedError(saveError)) && (
+          <div className="rounded-cb border border-cb-border border-l-2 border-l-cb-accent bg-cb-bg px-3 py-3 flex flex-col gap-3">
+            <p className="text-cb-body text-gray-300">
+              {saveError && isFormsLockedError(saveError) ? saveError : FORMS_LOCKED_MESSAGE}
+            </p>
+            <UnlockModifyControls
+              onUnlock={onRequestUnlock}
+              unlocking={unlocking}
+            />
+          </div>
+        )}
+
+        {saveError && !isFormsLockedError(saveError) && !formsLocked && (
+          <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger" role="alert">
+            ⚠ {saveError}
+          </p>
+        )}
 
         {!sameAsStore && (
           <div className="space-y-2">

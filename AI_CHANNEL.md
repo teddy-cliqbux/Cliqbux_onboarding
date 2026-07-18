@@ -2078,3 +2078,22 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **? Waiting on:** Teddy (push + Quo credentials)
 ---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Bugfix — Porky's stuck on legal address with no Unlock button
+
+**Symptom:** Locations step shows legal-address / "Forms are locked… Use Unlock & Modify Details first" but no Unlock button. Merchant cannot save "Yes — same as store" (HTTP 423 FORMS_LOCKED).
+
+**Cause:** Unlock lived only in the top `FormsLockedBanner`. Deep in entity/legal-address UI the save error quoted Unlock but offered no CTA. Banner also scrolled away; legal-address toggles stayed clickable while locked.
+
+**Fix (frontend):**
+1. Sticky FormsLockedBanner under TopNav
+2. Inline Unlock & Modify Details (with confirm) next to legal address + entity Save Details when locked
+3. Sync local `portalLockStatus` when API returns FORMS_LOCKED
+4. Disable legal-address Yes/No while locked
+
+**Teddy:** Push / hard-refresh → Unlock & Modify Details (confirm) → set Legal address Yes — same as store → Save → Continue → Prepare Signing Documents.
+
+**→ Waiting on:** Teddy
+---
