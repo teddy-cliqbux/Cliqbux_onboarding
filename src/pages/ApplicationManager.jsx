@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { base44 } from '@/api/base44Client';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import {
@@ -1125,6 +1126,38 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const [nudgeOpen, setNudgeOpen]       = useState(false);
   const [nudging, setNudging]           = useState(false);
   const [nudgeMsg, setNudgeMsg]         = useState('');
+  const [nudgeMenuPos, setNudgeMenuPos] = useState(null);
+  const nudgeWrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!nudgeOpen) {
+      setNudgeMenuPos(null);
+      return undefined;
+    }
+    const place = () => {
+      const el = nudgeWrapRef.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      setNudgeMenuPos({
+        top: r.bottom + 4,
+        right: window.innerWidth - r.right,
+      });
+    };
+    place();
+    const onDoc = (e) => {
+      if (nudgeWrapRef.current?.contains(e.target)) return;
+      if (e.target?.closest?.('[data-nudge-menu]')) return;
+      setNudgeOpen(false);
+    };
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    document.addEventListener('mousedown', onDoc);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+      document.removeEventListener('mousedown', onDoc);
+    };
+  }, [nudgeOpen]);
 
   const p = trackStage?.prefilledData || {};
   const missingByStep = p.missingByStep || p.missingCounts || {};
@@ -1461,7 +1494,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           )}
 
           {rowMode.mode === 'nudge' && (
-            <div className="relative flex items-stretch">
+            <div className="relative flex items-stretch" ref={nudgeWrapRef}>
               <button
                 type="button"
                 onClick={() => runNudge(readNudgeChannelPref())}
@@ -1477,12 +1510,17 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                 onClick={() => setNudgeOpen((o) => !o)}
                 disabled={nudging}
                 title="Choose channel"
+                aria-expanded={nudgeOpen}
                 className="flex items-center px-1.5 rounded-r-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40 border-l border-l-black/20"
               >
                 <ChevronDown className="w-3 h-3" />
               </button>
-              {nudgeOpen && (
-                <div className="absolute right-0 top-full mt-1 z-20 min-w-[11rem] rounded-cb border border-cb-border bg-cb-surface-raised shadow-cb-overlay py-1">
+              {nudgeOpen && nudgeMenuPos && createPortal(
+                <div
+                  data-nudge-menu
+                  className="fixed z-[9999] min-w-[11rem] rounded-cb border border-cb-border bg-cb-surface-raised shadow-cb-overlay py-1"
+                  style={{ top: nudgeMenuPos.top, right: nudgeMenuPos.right }}
+                >
                   {[
                     { id: 'both', label: 'Text + Email' },
                     { id: 'sms', label: 'Text only' },
@@ -1499,7 +1537,8 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                       {opt.label}
                     </button>
                   ))}
-                </div>
+                </div>,
+                document.body
               )}
             </div>
           )}
