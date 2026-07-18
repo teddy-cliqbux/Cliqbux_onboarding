@@ -103,7 +103,7 @@
     },
     "isBeneficialOwner": {
       "type": "boolean",
-      "description": "Maps to Elavon principal.positions.BENEFICIAL_OWNER",
+      "description": "AML beneficial owner (≥25% equity). KYC required. BoldSign only if also isAuthorizedSigner.",
       "default": true
     },
     "isSoleProp": {
@@ -113,7 +113,17 @@
     },
     "isAuthorizedSigner": {
       "type": "boolean",
-      "description": "Maps to Elavon principal.positions.AUTHORIZED_SIGNER",
+      "description": "Control Person / Legal Signer — executes the agreement. Exactly one per Deal. Drives BoldSign.",
+      "default": false
+    },
+    "isPortalAdmin": {
+      "type": "boolean",
+      "description": "0% ownership portal/admin user — excluded from contract principals and BoldSign. Provision gateway login after boarding.",
+      "default": false
+    },
+    "needsGatewayUserProvisioning": {
+      "type": "boolean",
+      "description": "When true (Portal Admins), create Payments Insider/Converge user after MID is boarded. Not part of signing.",
       "default": false
     },
     "idType": {

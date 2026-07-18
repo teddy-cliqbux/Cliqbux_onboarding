@@ -3,7 +3,7 @@ import { UserPlus, Trash2, Send, Loader2, Pencil, ShieldCheck, UserCheck } from 
 import SignerModal from './SignerModal';
 import SignerDetailsModal from './SignerDetailsModal';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
-import { isRequiredSigner, isClearedForSigning } from '@/lib/signerRules';
+import { isRequiredSigner, isClearedForSigning, isControlPerson, isBeneficialOwner, isPortalAdmin, isKycComplete, countControlPersons } from '@/lib/signerRules';
 import {
   lifecycleLabel,
   normalizeSignerLifecycle,
@@ -63,6 +63,9 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
             signerEmail: profile.signerEmail,
             ownershipPercentage: 100,
             isPrimarySigner: true,
+            isAuthorizedSigner: true,
+            isBeneficialOwner: true,
+            isPortalAdmin: false,
             dobYear: profile.dobYear || '',
             dobMonth: profile.dobMonth || '',
             dobDay: profile.dobDay || '',
@@ -88,14 +91,21 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
     }
   };
 
-  // Unlock when every required owner (≥25% or primary) is Verified, Sent, or Signed.
-  // Under-25% non-primaries are cataloged only — not in the signing state machine.
+  // Unlock when exactly one Control Person is cleared for signing, and every
+  // Beneficial Owner / Control Person has KYC verified (or invite in flight for remote).
   useEffect(() => {
     const totalPct = signers.reduce((sum, s) => sum + (Number(s.ownershipPercentage) || 0), 0);
     const requiredSigners = signers.filter(isRequiredSigner);
-    const allRequiredCleared = requiredSigners.length > 0 &&
-      requiredSigners.every(isClearedForSigning);
-    const valid = signers.length > 0 && (requiredSigners.length === 0 || allRequiredCleared);
+    const controlOk = countControlPersons(signers) === 1
+      && requiredSigners.every(isClearedForSigning);
+    const amlPeople = signers.filter((s) => isControlPerson(s) || isBeneficialOwner(s));
+    const kycOk = amlPeople.every((s) =>
+      isKycComplete(s)
+      || isInviteOutstanding(s.identityStatus)
+      || normalizeSignerLifecycle(s.identityStatus) === 'opened'
+      || normalizeSignerLifecycle(s.identityStatus) === 'invited'
+    );
+    const valid = signers.length > 0 && controlOk && kycOk;
     onValidChange(valid, totalPct, signers.length);
     if (onSignersChange) onSignersChange(signers);
   }, [signers]);
@@ -136,7 +146,7 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
   const requiredSigners = signers.filter(isRequiredSigner);
   const allRequiredCleared = requiredSigners.length > 0 && requiredSigners.every(isClearedForSigning);
 
-  const isSoleSigner = signers.length === 1 && signers[0]?.isPrimarySigner === true;
+  const isSoleSigner = signers.length === 1 && isControlPerson(signers[0]);
   const soleSignerVerified = isSoleSigner && isVerifiedOrHigher(signers[0]?.identityStatus);
 
   return (
@@ -144,14 +154,14 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
       <div className="bg-cb-surface-raised border-b border-cb-border px-5 py-4 flex items-center justify-between gap-3">
         <div>
           <p className="text-cb-body font-semibold text-white">
-            {isSoleSigner ? (soleSignerVerified ? 'Your Identity' : 'Verify Your Identity') : 'Beneficial Owners & Signers'}
+            {isSoleSigner ? (soleSignerVerified ? 'Your Identity' : 'Verify Your Identity') : 'Owners, Signers & Admins'}
           </p>
           <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-0.5">
             {isSoleSigner
               ? (soleSignerVerified
-                  ? "You're verified as the sole owner and signer on this application."
-                  : "You're completing this application yourself as the sole owner — confirm a few details below to continue.")
-              : 'Owners with ≥25% stake (or the primary) must verify in person or get a Verify & Sign invite. Under 25% are listed only.'}
+                  ? "You're verified as the Control Person and Beneficial Owner on this application."
+                  : "You're completing this application as the Control Person — confirm a few details below to continue.")
+              : 'Control Person signs. Beneficial Owners (≥25%) need KYC for AML. Portal Admins (0%) skip the contract.'}
           </p>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -183,16 +193,20 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
           </div>
         ) : (
           signers.map(signer => {
-            const isPrimary = signer.isPrimarySigner === true;
+            const isPrimary = isControlPerson(signer);
             const required = isRequiredSigner(signer);
-            const catalogOnly = !required;
-            const needsRemoteInvite = required && !isPrimary && (
+            const bo = isBeneficialOwner(signer);
+            const adminOnly = isPortalAdmin(signer);
+            const catalogOnly = !required && !bo && !adminOnly;
+            const needsRemoteInvite = (required || bo) && !isPrimary && (
               normalizeSignerLifecycle(signer.identityStatus) === 'pending'
               || isInviteOutstanding(signer.identityStatus)
             );
-            // Any verified required owner can open their concurrent signing session on this device
+            // Any verified Control Person can open their concurrent signing session on this device
             const canSignHere = required && isVerifiedOrHigher(signer.identityStatus) && !isApplicationSigned(signer.identityStatus);
-            const inviteBtnLabel = isInviteOutstanding(signer.identityStatus) ? 'Resend Invite' : 'Send Verify & Sign Invite';
+            const inviteBtnLabel = isInviteOutstanding(signer.identityStatus)
+              ? 'Resend Invite'
+              : (required ? 'Send Verify & Sign Invite' : 'Send Verify Invite');
             const isSelected = selectedSignerId && signer.id === selectedSignerId;
 
             return (
@@ -205,10 +219,13 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-cb-body font-semibold text-white">{signer.firstName} {signer.lastName}</p>
                       {isPrimary && (
-                        <span className="text-cb-caption normal-case tracking-normal text-gray-500 border border-cb-border px-1.5 py-0.5 rounded">Primary</span>
+                        <span className="text-cb-caption normal-case tracking-normal text-gray-500 border border-cb-border px-1.5 py-0.5 rounded">Control Person</span>
                       )}
-                      {catalogOnly && (
-                        <span className="text-cb-caption normal-case tracking-normal text-gray-500 border border-cb-border px-1.5 py-0.5 rounded">&lt;25% — roster only</span>
+                      {bo && (
+                        <span className="text-cb-caption normal-case tracking-normal text-gray-500 border border-cb-border px-1.5 py-0.5 rounded">Beneficial Owner</span>
+                      )}
+                      {adminOnly && (
+                        <span className="text-cb-caption normal-case tracking-normal text-gray-500 border border-cb-border px-1.5 py-0.5 rounded">Portal Admin</span>
                       )}
                       {isSelected && (
                         <span className="text-cb-caption normal-case tracking-normal text-cb-accent border border-cb-accent/40 px-1.5 py-0.5 rounded">Signing here</span>

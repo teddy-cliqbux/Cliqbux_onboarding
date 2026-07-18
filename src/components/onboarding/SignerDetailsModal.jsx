@@ -5,6 +5,12 @@ import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 import { usePortalLock } from '@/lib/PortalLockContext';
 import { FORMS_LOCKED_MESSAGE } from '@/lib/portalLock';
 import { formatSSN, rawSSN, formatPhone, rawPhone } from '@/lib/textUtils';
+import {
+  isControlPerson,
+  needsKyc as personNeedsKyc,
+  isPortalAdmin as personIsPortalAdmin,
+  normalizePersonRoleFlags,
+} from '@/lib/signerRules';
 
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
@@ -62,15 +68,24 @@ function useAddressAutocomplete(onParsed) {
 // owners verify via their Verify & Sign email (/verify?intent=sign).
 export default function SignerDetailsModal({ signer, corporateId, profile, onSaved, onClose, allowInlineKyc = false }) {
   const { formsLocked } = usePortalLock();
-  const isPrimary = signer.isPrimarySigner === true;
-  const showKyc = isPrimary || allowInlineKyc === true;
+  const isPrimary = isControlPerson(signer);
+  const [roleControl, setRoleControl] = useState(isControlPerson(signer));
+  const [rolePortalAdmin, setRolePortalAdmin] = useState(personIsPortalAdmin(signer));
+  const draftPerson = {
+    ...signer,
+    isAuthorizedSigner: roleControl,
+    isPrimarySigner: roleControl,
+    isPortalAdmin: rolePortalAdmin,
+    ownershipPercentage: rolePortalAdmin ? 0 : signer.ownershipPercentage,
+  };
+  const showKyc = (personNeedsKyc(draftPerson) || allowInlineKyc === true) && !rolePortalAdmin;
   const inheritedTitle = signer.titleType || profile?.titleType || '';
 
   const [form, setForm] = useState({
     firstName: signer.firstName || '',
     lastName: signer.lastName || '',
     signerEmail: signer.signerEmail || '',
-    ownershipPercentage: signer.ownershipPercentage || '',
+    ownershipPercentage: personIsPortalAdmin(signer) ? '0' : (signer.ownershipPercentage ?? ''),
     dobMonth: signer.dobMonth || '',
     dobDay: signer.dobDay || '',
     dobYear: signer.dobYear || '',
@@ -150,8 +165,15 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
     if (!form.firstName.trim() || !form.lastName.trim() || !form.signerEmail.trim()) {
       setError('First name, last name, and email are required.'); return;
     }
-    if (!form.ownershipPercentage || Number(form.ownershipPercentage) < 1) {
-      setError('Ownership percentage is required.'); return;
+    if (rolePortalAdmin && roleControl) {
+      setError('Portal Admin cannot also be the Control Person.'); return;
+    }
+    const pct = rolePortalAdmin ? 0 : Number(form.ownershipPercentage);
+    if (!rolePortalAdmin && (form.ownershipPercentage === '' || Number.isNaN(pct) || pct < 0)) {
+      setError('Ownership percentage is required (use 0% for a Control Person with no equity).'); return;
+    }
+    if (!rolePortalAdmin && !roleControl && pct > 0 && pct < 25) {
+      setError('Under 25% owners are not Beneficial Owners. Set 0% + Portal Admin, or ≥25%, or mark Control Person.'); return;
     }
     if (showKyc) {
       if (!form.dobMonth || !form.dobDay || !form.dobYear) { setError('Date of birth is required.'); return; }
@@ -163,11 +185,18 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
     setSaving(true);
     setError('');
     try {
+      const roles = normalizePersonRoleFlags({
+        ownershipPercentage: pct,
+        isAuthorizedSigner: roleControl,
+        isPrimarySigner: roleControl,
+        isPortalAdmin: rolePortalAdmin,
+        isBeneficialOwner: !rolePortalAdmin && pct >= 25,
+      });
       const signerData = {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         signerEmail: form.signerEmail.trim(),
-        ownershipPercentage: Number(form.ownershipPercentage) || 0,
+        ...roles,
       };
       if (showKyc) {
         Object.assign(signerData, {
@@ -191,8 +220,8 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
         signerData,
       });
       if (res.data?.error) throw new Error(res.data.error);
-      // Keep the root session profile's name in sync for the primary signer
-      if (isPrimary && profile) {
+      // Keep the root session profile's name in sync for the Control Person
+      if (roleControl && profile) {
         await invokePortalFunction('updateMerchantProfile', {
           corporateId,
           firstName: signerData.firstName,
@@ -279,13 +308,68 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
             <label className={labelCls}>Email Address *</label>
             <input type="email" className={inputCls} value={form.signerEmail} onChange={e => set('signerEmail', e.target.value)} placeholder="jane@company.com" />
           </div>
-          <div>
-            <label className={labelCls}>Ownership Percentage (%) *</label>
-            <input type="number" min={1} max={100} className={inputCls} value={form.ownershipPercentage}
-              onChange={e => set('ownershipPercentage', e.target.value)} placeholder="e.g. 25" />
+
+          <div className="bg-cb-bg border border-cb-border rounded-cb px-3 py-3 flex flex-col gap-2">
+            <p className="text-cb-caption uppercase text-gray-500">Role</p>
+            <label className="flex items-start gap-2 text-cb-body text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={roleControl}
+                disabled={formsLocked}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setRoleControl(on);
+                  if (on) setRolePortalAdmin(false);
+                }}
+              />
+              <span>
+                <span className="text-white font-medium">Control Person (Authorized Signer)</span>
+                <span className="block text-cb-caption normal-case tracking-normal text-gray-500">Signs the merchant agreement — exactly one per application</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-cb-body text-gray-300 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={rolePortalAdmin}
+                disabled={formsLocked}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  setRolePortalAdmin(on);
+                  if (on) {
+                    setRoleControl(false);
+                    set('ownershipPercentage', '0');
+                  }
+                }}
+              />
+              <span>
+                <span className="text-white font-medium">Portal Admin only</span>
+                <span className="block text-cb-caption normal-case tracking-normal text-gray-500">0% ownership — no contract signing; gateway login after boarding</span>
+              </span>
+            </label>
+            {!rolePortalAdmin && Number(form.ownershipPercentage) >= 25 && (
+              <p className="text-cb-caption normal-case tracking-normal text-gray-500">
+                ≥25% ownership → Beneficial Owner (KYC required for AML; signs only if also Control Person)
+              </p>
+            )}
           </div>
 
-          {/* Identity verification — primary or colocated (allowInlineKyc) */}
+          <div>
+            <label className={labelCls}>Ownership Percentage (%) {rolePortalAdmin ? '' : '*'}</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              disabled={formsLocked || rolePortalAdmin}
+              className={inputCls}
+              value={form.ownershipPercentage}
+              onChange={e => set('ownershipPercentage', e.target.value)}
+              placeholder={roleControl ? '0–100 (0 OK if Control Person)' : 'e.g. 25'}
+            />
+          </div>
+
+          {/* Identity verification — Control Person / Beneficial Owner (not Portal Admin) */}
           {showKyc && (
             <>
               <div className="border-t border-cb-border pt-4">

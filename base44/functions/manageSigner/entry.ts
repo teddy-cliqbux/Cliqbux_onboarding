@@ -39,6 +39,59 @@ async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merc
   return null;
 }
 
+// --- BEGIN signerRoles (sync with helpers/signerRoles.ts + src/lib/signerRules.js) ---
+function ownershipPct(s: any): number {
+  const n = Number(s?.ownershipPercentage);
+  return Number.isFinite(n) ? n : 0;
+}
+function isPortalAdminRole(s: any): boolean {
+  return s?.isPortalAdmin === true;
+}
+function isControlPerson(s: any): boolean {
+  if (!s || isPortalAdminRole(s)) return false;
+  if (s.isAuthorizedSigner === true) return true;
+  if (s.isAuthorizedSigner == null && s.isPrimarySigner === true) return true;
+  return false;
+}
+function normalizePersonRoleFlags(input: Record<string, any> = {}) {
+  const pct = ownershipPct(input);
+  let isPortalAdminFlag = input.isPortalAdmin === true;
+  let isAuthorizedSigner = input.isAuthorizedSigner === true
+    || (input.isAuthorizedSigner == null && input.isPrimarySigner === true);
+  let isPrimarySigner = input.isPrimarySigner === true || isAuthorizedSigner;
+  if (isPortalAdminFlag) {
+    isAuthorizedSigner = false;
+    isPrimarySigner = false;
+  }
+  const ownershipPercentage = isPortalAdminFlag ? 0 : pct;
+  let isBeneficialOwnerFlag = !isPortalAdminFlag && (input.isBeneficialOwner === true || ownershipPercentage >= 25);
+  if (isPortalAdminFlag) isBeneficialOwnerFlag = false;
+  if (!isPortalAdminFlag && ownershipPercentage >= 25) isBeneficialOwnerFlag = true;
+  if (!isPortalAdminFlag && ownershipPercentage < 25 && input.isBeneficialOwner !== true) {
+    isBeneficialOwnerFlag = false;
+  }
+  if (isAuthorizedSigner) isPortalAdminFlag = false;
+  return {
+    ownershipPercentage,
+    isPortalAdmin: isPortalAdminFlag,
+    isAuthorizedSigner,
+    isPrimarySigner,
+    isBeneficialOwner: isBeneficialOwnerFlag,
+    needsGatewayUserProvisioning: isPortalAdminFlag === true,
+  };
+}
+async function ensureUniqueControlPerson(base44: any, corporateId: string, keepSignerId: string) {
+  const all = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId: String(corporateId) });
+  for (const s of all || []) {
+    if (String(s.id) === String(keepSignerId)) continue;
+    if (!isControlPerson(s)) continue;
+    await base44.asServiceRole.entities.MerchantSigners.update(s.id, {
+      isAuthorizedSigner: false,
+      isPrimarySigner: false,
+    });
+  }
+}
+// --- END signerRoles ---
 
 function generateToken() {
   const bytes = new Uint8Array(24);
@@ -259,6 +312,7 @@ Deno.serve(async (req) => {
     // --- CREATE ---
     if (action === 'create') {
       const token = generateToken();
+      const roles = normalizePersonRoleFlags(signerData || {});
       let record;
       try {
         record = await base44.asServiceRole.entities.MerchantSigners.create({
@@ -266,9 +320,13 @@ Deno.serve(async (req) => {
           firstName: signerData.firstName,
           lastName: signerData.lastName,
           signerEmail: signerData.signerEmail,
-          ownershipPercentage: Number(signerData.ownershipPercentage) || 0,
-          isPrimarySigner: signerData.isPrimarySigner || false,
-          identityStatus: 'Pending Invitation',
+          ownershipPercentage: roles.ownershipPercentage,
+          isPrimarySigner: roles.isPrimarySigner,
+          isAuthorizedSigner: roles.isAuthorizedSigner,
+          isBeneficialOwner: roles.isBeneficialOwner,
+          isPortalAdmin: roles.isPortalAdmin,
+          needsGatewayUserProvisioning: roles.needsGatewayUserProvisioning,
+          identityStatus: roles.isPortalAdmin ? 'verified' : 'Pending Invitation',
           verifyToken: token,
           dobYear: signerData.dobYear || '',
           dobMonth: signerData.dobMonth || '',
@@ -285,8 +343,16 @@ Deno.serve(async (req) => {
         return Response.json({ error: `Failed to create signer record: ${createErr.message}` }, { status: 500 });
       }
 
+      if (roles.isAuthorizedSigner && record?.id) {
+        try {
+          await ensureUniqueControlPerson(base44, String(corporateId), String(record.id));
+        } catch (e: any) {
+          console.warn('[manageSigner] ensureUniqueControlPerson failed:', e?.message);
+        }
+      }
+
       let emailError: string | null = null;
-      if (sendInvite) {
+      if (sendInvite && !roles.isPortalAdmin) {
         try {
           const verifyUrl = buildSigningInviteUrl(token);
           const invitedAt = new Date().toISOString();
@@ -320,13 +386,34 @@ Deno.serve(async (req) => {
     if (action === 'update') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
       const ALLOWED = ['firstName','lastName','signerEmail','ownershipPercentage','isPrimarySigner',
+        'isAuthorizedSigner','isBeneficialOwner','isPortalAdmin','needsGatewayUserProvisioning',
         'identityStatus','dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl','titleType',
         'invitedAt','openedAt','signedAt','verifyToken','verifyTokenSentAt'];
       const update: Record<string, any> = {};
       for (const key of ALLOWED) {
         if (signerData[key] !== undefined) update[key] = signerData[key];
       }
+      // Normalize role flags whenever ownership or role fields change
+      if (
+        update.ownershipPercentage !== undefined
+        || update.isPrimarySigner !== undefined
+        || update.isAuthorizedSigner !== undefined
+        || update.isBeneficialOwner !== undefined
+        || update.isPortalAdmin !== undefined
+      ) {
+        const existing = (await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId: String(corporateId) }))
+          .find((s: any) => String(s.id) === String(signerId));
+        const merged = { ...(existing || {}), ...update };
+        Object.assign(update, normalizePersonRoleFlags(merged));
+      }
       const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, update);
+      if (update.isAuthorizedSigner === true) {
+        try {
+          await ensureUniqueControlPerson(base44, String(corporateId), String(signerId));
+        } catch (e: any) {
+          console.warn('[manageSigner] ensureUniqueControlPerson failed:', e?.message);
+        }
+      }
       return Response.json({ success: true, signer: updated });
     }
 
@@ -441,9 +528,7 @@ Deno.serve(async (req) => {
       // Promote portal lock to all_signed when every required owner has signed
       try {
         const allSigners = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
-        const required = (allSigners || []).filter((s: any) =>
-          Number(s.ownershipPercentage) >= 25 || s.isPrimarySigner
-        );
+        const required = (allSigners || []).filter((s: any) => isControlPerson(s));
         const allDone = required.length > 0 && required.every((s: any) => {
           const st = String(s.id === signerId ? 'application signed' : (s.identityStatus || ''));
           return st === 'application signed' || st === 'Signed';

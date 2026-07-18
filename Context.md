@@ -51,8 +51,8 @@ The "doing business as" name on a MID — what appears for that processing appli
 _Avoid_: Legal Business Name, Concept
 
 **Signer**:
-A person who owns or is authorized to sign for boarding (beneficial owner and/or primary signer). One human is one Signer record — reusable across Legal Entities and Deals under the same Parent Company (no duplicate rows for the same person). A single MSPWare application package (one MID) may include multiple Signers; one Signer may appear on multiple packages. When personnel change (e.g. a CFO leaves), the former Signer must not be shown — with name or PII — to people on a later Deal.
-_Avoid_: User (portal login), Contact (HubSpot-only), Owner (ambiguous — prefer beneficial owner when meaning equity)
+Legacy umbrella term for people on the Deal roster. Prefer **Legal Signer**, **Beneficial Owner**, or **Portal Admin**. One human is one person record under the Parent Company.
+_Avoid_: using "Signer" alone when role matters
 
 **Former Signer**:
 A Signer who is no longer active for this Parent Company (left the business, replaced role, etc.). Retained for audit/history where required, but never presented in a later Deal's roster or UI with identifying PII to current participants. For now, only Cliqbux staff (admin/agent) may mark a Signer as Former.
@@ -65,6 +65,36 @@ _Avoid_: Application (alone — ambiguous), Envelope (BoldSign implementation de
 **Bank Account**:
 The settlement account used for deposits. Usually belongs to the **Legal Entity** — many Locations and MIDs under that entity can share one account. Inheritance: Legal Entity default → Location override → MID override (most specific wins). Sharing is common but not required.
 _Avoid_: Plaid connection (that's how we collect it), Routing number (a field, not the concept)
+
+### Signing & portal lock
+
+**Portal Lock**:
+The Deal-level freeze on merchant data-entry (Locations, MIDs, banking, Legal Entities, Signer KYC) while live signature packages exist. Starts when signing packages are **issued**. Purpose: stop merchants from editing fields while believing those changes apply to documents that are already packaged/un-editable — not to forbid corrections forever.
+_Avoid_: Submitted (that's applicationStatus — also freezes forms, but is a different milestone)
+
+**Unlock**:
+Explicit action that clears Portal Lock, revokes outstanding Signing Packages, and returns the Deal to editable forms. Available to merchants on the Deal and to Cliqbux staff. **Before anyone has signed**, Unlock is routine (packages re-issue later). **After any signature**, Unlock is costly — voids progress and requires re-signing; confirm strongly. Refused once any MID is Pending MID / Active with Elavon.
+_Avoid_: Demote (internal function name — OK in engineering, not merchant language)
+
+**Signing Package**:
+The MSPWare/BoldSign package for one MID. Issuing packages for a Deal triggers Portal Lock. While packages exist, packaged field values are what get signed — portal edits would not quietly update them. BoldSign links go only to Legal Signers (`authorizedSigner: true`); Beneficial Owners without that flag are in the principals payload for AML only.
+_Avoid_: Quote (equipment), Envelope (implementation detail unless debugging)
+
+**Legal Signer (Control Person / Authorized Signer)**:
+The authorized corporate officer who executes the merchant processing agreement. **Exactly one** per Deal. Must be included in BoldSign. Even at 0% ownership. On the boarding principals payload: authorized-signer / `principal_sign_agreement` true. May also be a Beneficial Owner. Legacy field `isPrimarySigner` maps to this role until records are migrated.
+_Avoid_: Portal Admin, Admin (when meaning control person)
+
+**Beneficial Owner**:
+A person with **25% or more** equity (or explicit flag). Must provide KYC for AML (name, DOB, SSN, residential address) in the boarding principals payload whether or not they sign. Receives a BoldSign link **only if** also the Control Person; otherwise signature workflow ignores them.
+_Avoid_: Signer (they may not be a Legal Signer), Owner (ambiguous)
+
+**Portal Admin**:
+A person with **0% ownership** who needs portal/admin access only — not a Legal Signer. Excluded from the signature workflow and initial application contract principals. After the account is boarded, flagged for payment-gateway user provisioning (Payments Insider / Converge).
+_Avoid_: Legal Signer, Control Person, Beneficial Owner
+
+**Principal**:
+A person on the boarding application roster (Legal Signer and/or Beneficial Owner) sent in the MSPWare owners payload. Portal Admins are not Principals for contract/AML.
+_Avoid_: Portal user (broader)
 
 ### Pricing
 

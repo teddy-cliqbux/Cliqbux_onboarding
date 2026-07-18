@@ -1398,7 +1398,11 @@ function buildFormPayload(
   const additionalOwners = additionalSigners.map(s => ({
     owner_responsible_party: false,
     owner_personal_guarantee: !!s.signsPersonalGuarantee,
-    principal_sign_agreement: !!s.isAuthorizedSigner,
+    // BoldSign / agreement: Control Person only (isAuthorizedSigner or legacy primary)
+    principal_sign_agreement: !!(
+      s.isAuthorizedSigner === true
+      || (s.isAuthorizedSigner == null && s.isPrimarySigner === true)
+    ),
     ownership_percent: String(s.ownershipPercentage || '0'),
     owner_title: mapOwnerTitle(s.titleType || ''),
     owner_firstname: s.firstName || '',
@@ -1700,8 +1704,24 @@ Deno.serve(async (req) => {
 
     let lastPricingSnapshot: string | null = profile.pricingContractSnapshot || null;
 
-    const primarySigner    = signers?.find((s: any) => s.isPrimarySigner) || signers?.[0];
-    const additionalSigners = signers?.filter((s: any) => !s.isPrimarySigner) || [];
+    // Control Person (Authorized Signer) first; other AML principals (Beneficial Owners) as additional.
+    // Portal Admins are excluded from owners[] entirely.
+    const isPortalAdminFn = (s: any) => s?.isPortalAdmin === true;
+    const isControlFn = (s: any) => {
+      if (!s || isPortalAdminFn(s)) return false;
+      if (s.isAuthorizedSigner === true) return true;
+      if (s.isAuthorizedSigner == null && s.isPrimarySigner === true) return true;
+      return false;
+    };
+    const isBoFn = (s: any) => {
+      if (!s || isPortalAdminFn(s)) return false;
+      if (s.isBeneficialOwner === true) return true;
+      return (Number(s.ownershipPercentage) || 0) >= 25;
+    };
+    const isAmlFn = (s: any) => !isPortalAdminFn(s) && (isControlFn(s) || isBoFn(s));
+    const amlPrincipals = (signers || []).filter(isAmlFn);
+    const primarySigner = amlPrincipals.find(isControlFn) || amlPrincipals[0] || signers?.find((s: any) => s.isPrimarySigner) || signers?.[0];
+    const additionalSigners = amlPrincipals.filter((s: any) => String(s?.id) !== String(primarySigner?.id));
     const primaryEmail     = primarySigner?.signerEmail || profile.signerEmail;
 
     if (!primaryEmail) {
@@ -1899,7 +1919,12 @@ Deno.serve(async (req) => {
     // Required owners (≥25% or primary) — used to detect stale BoldSign packages
     // created before a co-owner was added (concurrent signing needs every email present).
     const requiredSignerEmails = (signers || [])
-      .filter((s: any) => s?.isPrimarySigner === true || (Number(s?.ownershipPercentage) || 0) >= 25)
+      .filter((s: any) => {
+        if (s?.isPortalAdmin === true) return false;
+        if (s?.isAuthorizedSigner === true) return true;
+        if (s?.isAuthorizedSigner == null && s?.isPrimarySigner === true) return true;
+        return false;
+      })
       .map((s: any) => String(s.signerEmail || '').toLowerCase().trim())
       .filter(Boolean);
 
