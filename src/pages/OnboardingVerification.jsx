@@ -11,6 +11,7 @@ import {
   isInviteOutstanding,
 } from '@/lib/signerLifecycle';
 import { usePortalLock } from '@/lib/PortalLockContext';
+import { applyPortalLockFromSigningResponse } from '@/lib/portalLock';
 
 // How often to poll MSPWare for signing completion (ms) — ground truth / safety net
 const POLL_INTERVAL_MS = 5000;
@@ -263,6 +264,9 @@ export default function OnboardingVerification({ profile, locations, initialSign
         const parts = [data?.hint, data?.error].filter(Boolean);
         // Prefer hint (detailed draft failure) over generic error
         setSigningError(parts[0] || 'Unable to prepare signing documents.');
+        // Failed prep must never leave forms locked (profile may already be
+        // signing from a prior buggy attempt — clear it so the merchant can edit).
+        applyPortalLockFromSigningResponse(data || {}, setPortalLockStatus);
         return;
       }
 
@@ -271,12 +275,12 @@ export default function OnboardingVerification({ profile, locations, initialSign
         corporateId: profile.corporateId,
         merchantIDName: a.merchantIDName || a.merchantName,
       })));
-      if (data.portalLockStatus && setPortalLockStatus) {
-        setPortalLockStatus(data.portalLockStatus);
-      }
+      // Lock only when a usable signing link exists; otherwise force unlock.
+      applyPortalLockFromSigningResponse(data, setPortalLockStatus);
       setActiveMidIndex(0);
     } catch (err) {
       setSigningError(err.message || 'Failed to prepare signing documents.');
+      applyPortalLockFromSigningResponse({}, setPortalLockStatus);
     } finally {
       setLoadingSigning(false);
     }
@@ -362,6 +366,8 @@ export default function OnboardingVerification({ profile, locations, initialSign
       if (req.length > 0 && req.every(s => isApplicationSigned(s.identityStatus))) {
         setPhase('complete');
       }
+      // Keep lock in sync with package usability (failed retries unlock).
+      applyPortalLockFromSigningResponse(data, setPortalLockStatus);
       // Do NOT blanket-mark all signers when apps have errors or package prep failed.
     } catch (err) {
       console.error('[OnboardingVerification.pollSigningStatus]', err?.message || 'Unknown error');

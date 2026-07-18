@@ -1636,6 +1636,37 @@ function buildFormPayload(
   return { payload, pricingSnapshot: compiledPricing.snapshot };
 }
 
+/** Unlock when locked for signing but nobody has signed yet (failed package / early abort). */
+async function healPrematurePortalLock(
+  base44: any,
+  profile: any,
+  signers: any[] | null | undefined,
+  applications?: any[] | null,
+): Promise<string> {
+  let portalLockStatus = String(profile?.portalLockStatus || 'unlocked').toLowerCase();
+  if (!profile?.id || !['signing', 'pending_signature'].includes(portalLockStatus)) {
+    return portalLockStatus;
+  }
+  const anyoneSignedOnRoster = (signers || []).some((s: any) => {
+    const st = String(s?.identityStatus || '').toLowerCase();
+    return st === 'application signed' || st === 'signed';
+  });
+  const anyoneSignedOnPackage = (applications || []).some((a: any) =>
+    a?.allSigned || (a?.signers || []).some((s: any) => s?.signed)
+  );
+  if (anyoneSignedOnRoster || anyoneSignedOnPackage) return portalLockStatus;
+  try {
+    await base44.asServiceRole.entities.MerchantCorporateProfile.update(profile.id, {
+      portalLockStatus: 'unlocked',
+    });
+    portalLockStatus = 'unlocked';
+    console.log('[signApplication] Unlocked portal — premature lock with no signatures');
+  } catch (e: any) {
+    console.warn('[signApplication] healPrematurePortalLock failed (non-fatal):', e?.message);
+  }
+  return portalLockStatus;
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   try {
@@ -1696,9 +1727,12 @@ Deno.serve(async (req) => {
       });
     } catch (earlyPricingErr: any) {
       const msg = earlyPricingErr?.message || String(earlyPricingErr);
+      const portalLockStatus = await healPrematurePortalLock(base44, profile, signers);
       return Response.json({
         error: msg,
         code: earlyPricingErr instanceof PricingIntegrityError ? earlyPricingErr.code : 'PRICING_NOT_READY',
+        hasUsableSigningPackage: false,
+        portalLockStatus,
       }, { status: 422 });
     }
 
@@ -1725,7 +1759,12 @@ Deno.serve(async (req) => {
     const primaryEmail     = primarySigner?.signerEmail || profile.signerEmail;
 
     if (!primaryEmail) {
-      return Response.json({ error: 'No signer email found on profile or signers' }, { status: 400 });
+      const portalLockStatus = await healPrematurePortalLock(base44, profile, signers);
+      return Response.json({
+        error: 'No signer email found on profile or signers',
+        hasUsableSigningPackage: false,
+        portalLockStatus,
+      }, { status: 400 });
     }
 
     // Build a locationId → location map (normalize to string — Base44 ids can mismatch on type)
@@ -1783,18 +1822,24 @@ Deno.serve(async (req) => {
 
     // ── 3. Auto-create MSPWare drafts for ANY merchantMID missing one (not just when signable=0) ──
     if ((allMerchantMIDs || []).length === 0) {
+      const portalLockStatus = await healPrematurePortalLock(base44, profile, signers);
       return Response.json({
         success: false,
         error: 'No processing merchantMIDs found.',
         hint: 'Please complete the locations and banking setup steps first.',
+        hasUsableSigningPackage: false,
+        portalLockStatus,
       });
     }
 
     if (candidateMerchantMIDs.length === 0) {
+      const portalLockStatus = await healPrematurePortalLock(base44, profile, signers);
       return Response.json({
         success: false,
         error: 'No signable merchantMIDs.',
         hint: 'All MIDs are already Pending MID / Active. Nothing left to sign.',
+        hasUsableSigningPackage: false,
+        portalLockStatus,
       });
     }
 
@@ -1903,6 +1948,7 @@ Deno.serve(async (req) => {
       const detail = draftErrors.length
         ? draftErrors.join(' | ')
         : 'No MSPWare application number on any MID and draft creation did not run.';
+      const portalLockStatus = await healPrematurePortalLock(base44, profile, signers);
       return Response.json({
         success: false,
         error: 'Unable to prepare signing documents.',
@@ -1911,6 +1957,8 @@ Deno.serve(async (req) => {
         midCount: (allMerchantMIDs || []).length,
         candidateCount: candidateMerchantMIDs.length,
         needsDraftCount: needsDraft.length,
+        hasUsableSigningPackage: false,
+        portalLockStatus,
       });
     }
 
@@ -2287,11 +2335,21 @@ Deno.serve(async (req) => {
     const totalSigned = applications.filter((a: any) => a.allSigned).length;
     const allSigned   = totalCount > 0 && totalSigned === totalCount;
 
-    // Lock portal forms once signing packages exist (idempotent).
-    // Merchants must call demoteApplication to unlock and edit again.
+    // Only lock forms when at least one MID has a usable signing package
+    // (link available or already signed). Failed form fills / package creates
+    // still land in `applications` with `error` — locking those left merchants
+    // stuck on "Forms Locked" with no way to fix ownership % / MCC / etc.
+    const hasUsableSigningPackage = applications.some((a: any) => {
+      if (a.allSigned) return true;
+      if (a.signingUrl) return true;
+      return (a.signers || []).some((s: any) => s.signingUrl || s.signed);
+    });
+
     let portalLockStatus = String(profiles?.[0]?.portalLockStatus || 'unlocked').toLowerCase();
     try {
-      if (totalCount > 0 && profiles?.[0]?.id) {
+      if (hasUsableSigningPackage && profiles?.[0]?.id) {
+        // Lock once signing packages exist (idempotent).
+        // Merchants must call demoteApplication to unlock and edit again.
         const nextLock = allSigned ? 'all_signed' : 'signing';
         const alreadyLocked = ['signing', 'pending_signature', 'all_signed'].includes(portalLockStatus);
         if (!alreadyLocked || (allSigned && portalLockStatus !== 'all_signed')) {
@@ -2310,12 +2368,20 @@ Deno.serve(async (req) => {
             console.warn('[signApplication] pricingContractSnapshot backfill failed (non-fatal):', snapErr?.message);
           }
         }
+      } else if (
+        profiles?.[0]?.id
+        && ['signing', 'pending_signature'].includes(portalLockStatus)
+        && !hasUsableSigningPackage
+      ) {
+        // Heal the premature-lock bug: locked after a failed package create with
+        // nobody signed yet — unlock so the merchant can fix validation errors.
+        portalLockStatus = await healPrematurePortalLock(base44, profiles[0], signers, applications);
       }
     } catch (lockErr: any) {
       console.warn('[signApplication] portalLockStatus update failed (non-fatal):', lockErr?.message);
     }
 
-    console.log(`[signApplication] Done. ${totalSigned}/${totalCount} signed. portalLockStatus=${portalLockStatus}`);
+    console.log(`[signApplication] Done. ${totalSigned}/${totalCount} signed. usablePackage=${hasUsableSigningPackage} portalLockStatus=${portalLockStatus}`);
 
     return Response.json({
       success: true,
@@ -2324,6 +2390,7 @@ Deno.serve(async (req) => {
       totalCount,
       totalSigned,
       allSigned,
+      hasUsableSigningPackage,
       portalLockStatus,
     });
 

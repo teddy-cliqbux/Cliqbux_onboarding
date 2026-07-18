@@ -1,10 +1,12 @@
 /**
  * Portal form lock — signing-phase edit guard.
  *
- * When packages are issued (or the app is Submitted), locations / MIDs /
- * banking / legal entities / signer KYC must not change until an explicit
- * demoteApplication unlock. Maps the product intent of
- * signing | pending_signature | all_signed onto MerchantCorporateProfile.portalLockStatus.
+ * When packages are issued with a usable signing link (or the app is Submitted),
+ * locations / MIDs / banking / legal entities / signer KYC must not change until
+ * an explicit demoteApplication unlock. Failed signApplication attempts (form
+ * incomplete, package create rejected) must NOT lock — merchants need to edit
+ * and retry. Maps signing | pending_signature | all_signed onto
+ * MerchantCorporateProfile.portalLockStatus.
  */
 
 export const PORTAL_LOCK_SIGNING = 'signing';
@@ -49,3 +51,34 @@ export const FORMS_LOCKED_MESSAGE =
 
 export const DEMOTE_CONFIRM_MESSAGE =
   'Unlocking this application will instantly invalidate all current signature links. Outstanding signers will need to verify and sign a newly updated agreement. Are you sure you want to continue?';
+
+/**
+ * True when at least one MID has a signing link or a completed signature.
+ * Error-only rows (form incomplete / package rejected) do not count.
+ * @param {object|null|undefined} data — signApplication response body
+ */
+export function hasUsableSigningPackage(data) {
+  if (data?.hasUsableSigningPackage === true) return true;
+  return (data?.applications || []).some((a) =>
+    a?.allSigned
+    || a?.signingUrl
+    || (a?.signers || []).some((s) => s?.signingUrl || s?.signed)
+  );
+}
+
+/**
+ * Apply portal lock from a signApplication response.
+ * Locks only when a usable package exists; otherwise always unlocks so a
+ * failed link generation cannot leave the merchant stuck on Forms Locked.
+ * @param {object|null|undefined} data
+ * @param {(status: string) => void} setPortalLockStatus
+ */
+export function applyPortalLockFromSigningResponse(data, setPortalLockStatus) {
+  if (!setPortalLockStatus) return;
+  if (hasUsableSigningPackage(data)) {
+    const next = data?.portalLockStatus || PORTAL_LOCK_SIGNING;
+    setPortalLockStatus(next);
+    return;
+  }
+  setPortalLockStatus(PORTAL_LOCK_UNLOCKED);
+}
