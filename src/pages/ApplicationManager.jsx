@@ -1,16 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { base44 } from '@/api/base44Client';
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Pencil, Loader2, Send, Trash2, Check, X, Copy, ExternalLink,
   Clock, Store, Users, FileText, Search, Building2, CreditCard,
-  CheckCircle2, AlertCircle, Eye, BarChart2, Zap, LayoutDashboard,
+  CheckCircle2, AlertCircle, Eye, Zap, LayoutDashboard,
   ChevronDown, ChevronRight, XCircle, RefreshCw, Percent, Wrench
 } from 'lucide-react';
 import {
   lifecycleLabel,
-  lifecycleBadgeClass,
+  lifecycleDotClass,
   isVerifiedOrHigher,
   isApplicationSigned,
 } from '@/lib/signerLifecycle';
@@ -18,11 +17,32 @@ import PricingEditorPanel from '@/components/pricing/PricingEditorPanel';
 import { isPricingComplete, TIER_LABELS } from '@/lib/pricingPresets';
 import {
   resolveApplicationRowMode,
+  modeSortRank,
   readNudgeChannelPref,
   writeNudgeChannelPref,
 } from '@/lib/applicationRowMode';
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
-const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
+const labelCls = 'block text-cb-caption text-gray-500 mb-1.5';
+
+function countMspErrors(status) {
+  if (!status) return 0;
+  return [
+    ...(status.completion_errors || []),
+    ...(status.data_errors || []),
+    ...(status.rule_violations || []),
+    ...(status.errors || []),
+  ].length;
+}
+
+function countLocalMidIssues(mid) {
+  let n = 0;
+  if (!mid?.mccCode) n += 1;
+  if (!mid?.monthlyCardSales) n += 1;
+  if (!mid?.avgSaleAmount) n += 1;
+  if (!mid?.highestTicketAmount) n += 1;
+  if (mid?.cardPresentPct == null || mid?.cardPresentPct === '') n += 1;
+  return n;
+}
 
 /** Prefer live profile tier; track prefilledData is a stale copy (Porky's STANDARD bug 2026-07-14). */
 function displayPricingTier(profile, trackPrefill = {}) {
@@ -52,8 +72,6 @@ function slugifyCorporateId(raw) {
     .slice(0, 64);
   return slug || 'merchant';
 }
-const STAGE_COLORS = { draft: '#6b7280', ready: '#FEAC27', sent: '#4ADE80' };
-const STAGE_LABELS = { draft: 'Draft', ready: 'Ready', sent: 'Sent' };
 
 // Align with live portal (2026-07-10): Locations → Banking → Signing → Submitted.
 // "agreement" / Step1Agreement is retired; map legacy track values in ApplicationRow.
@@ -104,37 +122,27 @@ function activityActorLabel(actor) {
 
 function activityActorDot(actor) {
   if (actor === 'agent') return 'bg-cb-accent';
-  if (actor === 'signer') return 'bg-sky-400';
+  if (actor === 'signer') return 'bg-cb-accent';
   return 'bg-gray-500';
 }
 
 function PortalActivityPanel({ activity }) {
   const a = activity || {};
   const recent = Array.isArray(a.recent) ? a.recent : [];
-  // Empty state still considers invite/signer events (timeline-only; no metric cards for those).
   const hasAny = (
     a.invitesSent || a.merchantOpens || a.agentOpens || a.merchantSeconds
     || a.signerInvitesSent || a.signerLinkOpens
     || recent.length > 0
   );
-  const stats = [
-    { label: 'Merchant opens', value: a.merchantOpens || 0, sub: a.merchantLastOpenAt ? `Last ${formatActivityAt(a.merchantLastOpenAt)}` : 'None yet' },
-    { label: 'Merchant time', value: formatDuration(a.merchantSeconds), sub: 'Time in portal' },
-    { label: 'Agent opens', value: a.agentOpens || 0, sub: a.agentLastOpenAt ? `Last ${formatActivityAt(a.agentLastOpenAt)}` : 'None yet' },
-  ];
 
   return (
     <div>
-      <p className="text-cb-caption uppercase text-gray-500 mb-2">Portal activity</p>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
-        {stats.map(st => (
-          <div key={st.label} className="rounded-cb border border-cb-border bg-cb-surface-raised px-2.5 py-2">
-            <p className="text-cb-caption uppercase text-gray-500">{st.label}</p>
-            <p className="text-cb-body font-semibold text-white mt-0.5">{st.value}</p>
-            <p className="text-cb-caption text-gray-600 mt-0.5 truncate">{st.sub}</p>
-          </div>
-        ))}
-      </div>
+      <p className="text-cb-caption text-gray-500 mb-2">Portal activity</p>
+      {hasAny && (
+        <p className="text-cb-caption text-gray-400 mb-2">
+          {a.merchantOpens || 0} merchant opens · {formatDuration(a.merchantSeconds)} in portal · {a.agentOpens || 0} agent opens
+        </p>
+      )}
       {recent.length > 0 && (
         <div className="rounded-cb border border-cb-border bg-cb-bg/50 divide-y divide-cb-border max-h-40 overflow-y-auto">
           {recent.slice(0, 12).map((ev, i) => (
@@ -241,14 +249,14 @@ function StepTracker({ currentStep, completedSteps, missingByStep }) {
               className="flex flex-col items-center w-9"
               title={`${STEP_LABELS_MAP[step]}${active ? ' · current' : ''}${miss ? ` · ${miss} missing` : ''}`}
             >
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold border transition-all ${
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center text-cb-caption font-bold border transition-all ${
                 done   ? 'bg-cb-accent border-cb-accent text-cb-bg' :
                 active ? 'bg-cb-accent-muted border-cb-accent text-cb-accent' :
                          'bg-transparent border-gray-700 text-gray-600'
               }`}>
                 {done ? '✓' : (miss > 0 ? miss : i + 1)}
               </div>
-              <span className={`mt-0.5 text-[8px] font-semibold leading-none ${
+              <span className={`mt-0.5 text-cb-caption font-semibold leading-none ${
                 active ? 'text-cb-accent' : done ? 'text-gray-400' : 'text-gray-600'
               }`}>
                 {SHORT[step]}
@@ -416,6 +424,12 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
   const slug = slugifyCorporateId(businessName);
   const canSave = businessName.trim() && signerName.trim() && signerEmail.includes('@') && !saving;
 
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape' && !saving) onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose, saving]);
+
   const handleCreate = async () => {
     if (!canSave) return;
     setSaving(true);
@@ -439,12 +453,19 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-[9100] flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[9100] flex items-center justify-center bg-black/60 px-4"
+      onClick={onClose}
+      role="presentation"
+    >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="local-stage-title"
         className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-md p-6"
         onClick={e => e.stopPropagation()}
       >
-        <h3 className="font-display text-cb-title text-white mb-1">Start without HubSpot</h3>
+        <h3 id="local-stage-title" className="font-display text-cb-title text-white mb-1">Start without HubSpot</h3>
         <p className="text-cb-caption text-gray-500 mb-4">
           Creates a merchant in Cliqbux only. No HubSpot deal or equipment quote until you link one later.
         </p>
@@ -512,21 +533,26 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
 }
 
 // ── Pipeline Overview Bar ─────────────────────────────────────────────────────
-function PipelineOverview({ profiles, stages, loading, onRefresh, onQuickCreate }) {
+function PipelineOverview({ profiles, trackMap, rowModes, loading, onRefresh, onQuickCreate }) {
   const [quickId, setQuickId] = useState('');
 
-  const counts = stages.reduce((acc, s) => {
-    if (s.label !== '__auto_track__') acc[s.status] = (acc[s.status] || 0) + 1;
-    return acc;
-  }, {});
-
-  const submitted  = profiles.filter(p => p.applicationStatus === 'Submitted').length;
-  const inProgress = profiles.filter(p => p.applicationStatus === 'Quote Signed' || p.applicationStatus === 'Pricing Selected').length;
-  const notStarted = profiles.filter(p => !p.applicationStatus || p.applicationStatus === 'Incomplete').length;
-
-  const chartData = ['draft', 'ready', 'sent']
-    .filter(k => counts[k])
-    .map(k => ({ name: STAGE_LABELS[k], value: counts[k], color: STAGE_COLORS[k] }));
+  const modeCounts = { prep: 0, nudge: 0, stuck: 0, underwriting: 0 };
+  for (const p of profiles) {
+    const cid = String(p.corporateId);
+    let mode = rowModes[cid];
+    if (!mode) {
+      const track = trackMap[cid] || null;
+      const pipeline = resolvePipelineProgress({ profile: p, track, locations: [], signers: [] });
+      mode = resolveApplicationRowMode({
+        profile: p,
+        track,
+        pipeline,
+        mspErrorCount: 0,
+        detailLoaded: false,
+      }).mode;
+    }
+    if (modeCounts[mode] != null) modeCounts[mode] += 1;
+  }
 
   const handleQuickCreate = () => {
     if (!quickId.trim()) return;
@@ -536,43 +562,38 @@ function PipelineOverview({ profiles, stages, loading, onRefresh, onQuickCreate 
 
   return (
     <div className="border-b border-cb-border bg-cb-surface px-6 py-4 flex flex-wrap items-center gap-8">
-      {/* Pie + stage counts */}
-      <div className="flex items-center gap-4">
-        {chartData.length > 0 ? (
-          <div className="w-20 h-14 flex-shrink-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={chartData} dataKey="value" cx="50%" cy="50%" innerRadius={18} outerRadius={30} strokeWidth={0}>
-                  {chartData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
-                <Tooltip contentStyle={{ background: '#1A212C', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, fontSize: 11 }} itemStyle={{ color: '#e5e7eb' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        ) : (
-          <div className="w-9 h-9 rounded-cb bg-cb-accent-muted flex items-center justify-center flex-shrink-0">
-            <BarChart2 className="w-4 h-4 text-cb-accent" />
-          </div>
-        )}
+      <div className="flex items-center gap-4 min-w-0">
         <div>
-          <p className="text-cb-caption uppercase text-gray-500 mb-1">Merchant applications</p>
+          <p className="text-cb-caption text-gray-500 mb-1">Merchant applications</p>
           <div className="flex items-center gap-3">
             <span className="text-cb-title font-display text-white">{profiles.length}</span>
             {loading && <Loader2 className="w-3 h-3 text-gray-600 animate-spin" />}
           </div>
-          <div className="flex items-center gap-3 mt-1">
-            <span className="text-cb-caption text-cb-success">{submitted} submitted</span>
-            <span className="text-cb-caption text-cb-accent">{inProgress} in progress</span>
-            <span className="text-cb-caption text-gray-500">{notStarted} not started</span>
+          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-cb-accent" />
+              {modeCounts.prep} needs setup
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-cb-accent" />
+              {modeCounts.nudge} waiting
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-cb-accent" />
+              {modeCounts.stuck} stuck
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-cb-success" />
+              {modeCounts.underwriting} underwriting
+            </span>
           </div>
         </div>
       </div>
 
       <div className="hidden sm:block w-px h-10 bg-cb-border flex-shrink-0" />
 
-      {/* Quick create */}
       <div className="flex-shrink-0">
-        <p className="text-cb-caption uppercase text-gray-500 mb-1.5">Start application</p>
+        <p className="text-cb-caption text-gray-500 mb-1.5">Start application</p>
         <div className="flex gap-2 items-center">
           <input
             value={quickId}
@@ -779,11 +800,11 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 px-6 py-4 border-b border-cb-border">
-        <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-cb transition-colors" title="Close">
+        <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-cb transition-colors" title="Close" aria-label="Close">
           <X className="w-4 h-4" />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-cb-caption uppercase text-gray-500">{merchantName}</p>
+          <p className="text-cb-caption text-gray-500">{merchantName}</p>
           <p className="text-cb-body font-semibold text-white">{stage?.id ? 'Edit application' : 'Set up application'}</p>
         </div>
         {onRequestSend && (
@@ -818,9 +839,9 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
             <label className={labelCls}>Internal label (optional)</label>
             <input value={label} onChange={e => setLabel(e.target.value)} placeholder="e.g. Main application" className={inputCls} />
           </div>
-          <div className="flex border-b border-cb-border px-6 gap-1 pt-2">
+          <div className="flex border-b border-cb-border px-6 gap-1 pt-2" role="tablist">
             {tabs.map(t => (
-              <button key={t.key} onClick={() => setActiveTab(t.key)}
+              <button key={t.key} type="button" role="tab" aria-selected={activeTab === t.key} onClick={() => setActiveTab(t.key)}
                 className={`flex items-center gap-1.5 px-3 py-2 text-cb-body font-medium rounded-t-lg border-b-2 transition-all -mb-px ${activeTab === t.key ? 'border-cb-accent text-cb-accent' : 'border-transparent text-gray-500 hover:text-gray-300'}`}>
                 <t.icon className="w-3.5 h-3.5" />
                 {t.label}
@@ -880,7 +901,8 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
                         <p className="text-cb-caption text-gray-500 truncate">{s.signerEmail}</p>
                       </div>
                       <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${lifecycleBadgeClass(s.identityStatus)}`}>
+                        <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+                          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${lifecycleDotClass(s.identityStatus)}`} />
                           {lifecycleLabel(s.identityStatus)}
                         </span>
                       </span>
@@ -1018,7 +1040,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
             )}
           </div>
           {error && (
-            <div className="mx-6 mb-4 bg-cb-surface-raised border border-cb-danger/30 border-l-2 border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-gray-300 flex items-center gap-2">
+            <div className="mx-6 mb-4 bg-cb-surface-raised border border-cb-danger/30 rounded-cb px-4 py-3 text-cb-body text-gray-300 flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0 text-cb-danger" /> {error}
             </div>
           )}
@@ -1066,13 +1088,19 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
   const copyLink = () => { navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000); };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-4" onClick={onClose}>
-      <div className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 px-4" onClick={onClose} role="presentation">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="send-modal-title"
+        className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-md p-6"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-cb bg-cb-accent-muted flex items-center justify-center"><Send className="w-4 h-4 text-cb-accent" /></div>
             <div>
-              <h3 className="font-semibold text-white text-cb-body">Email application link</h3>
+              <h3 id="send-modal-title" className="font-semibold text-white text-cb-body">Email application link</h3>
               <p className="text-cb-caption text-gray-500 truncate max-w-[200px]">{stage?.label || 'Merchant portal link'}</p>
             </div>
           </div>
@@ -1080,7 +1108,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
         </div>
         {sent ? (
           <div className="space-y-4">
-            <div className="flex items-center gap-2 bg-cb-surface border border-cb-border border-l-2 border-l-cb-success rounded-cb px-4 py-3">
+            <div className="flex items-center gap-2 bg-cb-surface border border-cb-success/30 rounded-cb px-4 py-3">
               <CheckCircle2 className="w-4 h-4 text-cb-success flex-shrink-0" />
               <p className="text-cb-body text-white font-semibold">Email sent to {email}</p>
             </div>
@@ -1103,7 +1131,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
               <input value={email} onChange={e => setEmail(e.target.value)} placeholder="merchant@example.com"
                 className={inputCls} autoFocus onKeyDown={e => e.key === 'Enter' && handleSend()} />
             </div>
-            {error && <div className="bg-cb-surface border border-cb-danger/30 border-l-2 border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-gray-300">{error}</div>}
+            {error && <div className="bg-cb-surface border border-cb-danger/30 rounded-cb px-4 py-3 text-cb-body text-gray-300">{error}</div>}
             <div className="flex gap-3">
               <button onClick={handleSend} disabled={sending}
                 className="flex-1 flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-body py-2.5 rounded-cb transition-opacity">
@@ -1120,7 +1148,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
 }
 
 // ── Application Row ───────────────────────────────────────────────────────────
-function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onDeleteMerchant }) {
+function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onDeleteMerchant, onModeChange }) {
   const [expanded, setExpanded]         = useState(false);
   const [mids, setMids]                 = useState([]);
   const [locations, setLocations]       = useState([]);
@@ -1128,15 +1156,83 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const [mspStatuses, setMspStatuses]   = useState({});
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [loadingMsp, setLoadingMsp]     = useState(false);
+  const [healthReady, setHealthReady]   = useState(false);
+  const [detailError, setDetailError]   = useState('');
   const [copied, setCopied]             = useState(null);
   const [impersonating, setImpersonating] = useState(false);
   const [openingDashboard, setOpeningDashboard] = useState(false);
-  const [signerLinkBusy, setSignerLinkBusy] = useState({}); // { [signerId]: 'copy' | 'send' }
+  const [signerLinkBusy, setSignerLinkBusy] = useState({});
   const [nudgeOpen, setNudgeOpen]       = useState(false);
   const [nudging, setNudging]           = useState(false);
   const [nudgeMsg, setNudgeMsg]         = useState('');
   const [nudgeMenuPos, setNudgeMenuPos] = useState(null);
   const nudgeWrapRef = useRef(null);
+
+  const loadRowHealth = useCallback(async () => {
+    setLoadingDetail(true);
+    setDetailError('');
+    try {
+      const [midRes, sigRes, locRes] = await Promise.all([
+        base44.functions.invoke('manageMerchantID', { action: 'list', corporateId }),
+        base44.functions.invoke('manageSigner', { action: 'list', corporateId }),
+        base44.functions.invoke('listLocations', { corporateId }),
+      ]);
+      const loadedMids = midRes.data?.merchantIDs || [];
+      setMids(loadedMids);
+      setSigners(sigRes.data?.signers || []);
+      setLocations(locRes.data?.locations || []);
+
+      const midsWithApp = loadedMids.filter(m => m.mspApplicationNo);
+      if (midsWithApp.length > 0) {
+        setLoadingMsp(true);
+        const statuses = {};
+        for (let i = 0; i < midsWithApp.length; i += 3) {
+          const batch = midsWithApp.slice(i, i + 3);
+          await Promise.all(batch.map(async mid => {
+            try {
+              const res = await base44.functions.invoke('getMSPFormStatus', {
+                corporateId,
+                applicationNo: mid.mspApplicationNo,
+                formOnly: true,
+              });
+              statuses[mid.mspApplicationNo] = res.data;
+            } catch {
+              statuses[mid.mspApplicationNo] = null;
+            }
+          }));
+        }
+        setMspStatuses(statuses);
+        setLoadingMsp(false);
+      }
+      setHealthReady(true);
+    } catch (err) {
+      console.error('[ApplicationRow health]', err);
+      setDetailError(err?.message || 'Couldn’t load merchant details. Try again.');
+    } finally {
+      setLoadingDetail(false);
+    }
+  }, [corporateId]);
+
+  useEffect(() => {
+    const lock = String(profile?.portalLockStatus || '').toLowerCase();
+    const step = normalizeTrackStep(trackStage?.prefilledData?.currentStep);
+    const atRisk = ['signing', 'pending_signature'].includes(lock) || step === 'verification';
+    if (atRisk) loadRowHealth();
+  }, [loadRowHealth, profile?.portalLockStatus, trackStage?.prefilledData?.currentStep]);
+
+  const toggleExpand = () => {
+    setExpanded((v) => {
+      const next = !v;
+      if (next && !healthReady && !loadingDetail) loadRowHealth();
+      return next;
+    });
+  };
+  const onExpandKey = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleExpand();
+    }
+  };
 
   useEffect(() => {
     if (!nudgeOpen) {
@@ -1158,13 +1254,16 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       if (e.target?.closest?.('[data-nudge-menu]')) return;
       setNudgeOpen(false);
     };
+    const onKey = (e) => { if (e.key === 'Escape') setNudgeOpen(false); };
     window.addEventListener('resize', place);
     window.addEventListener('scroll', place, true);
     document.addEventListener('mousedown', onDoc);
+    window.addEventListener('keydown', onKey);
     return () => {
       window.removeEventListener('resize', place);
       window.removeEventListener('scroll', place, true);
       document.removeEventListener('mousedown', onDoc);
+      window.removeEventListener('keydown', onKey);
     };
   }, [nudgeOpen]);
 
@@ -1189,55 +1288,26 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
 
   const isSubmitted = appStatus === 'Submitted' || currentStep === 'submitted';
 
-  // Aggregate MSP health
   const mspValues = Object.values(mspStatuses);
   const avgMspPct = mspValues.length > 0
     ? Math.round(mspValues.reduce((s, v) => s + (v?.percent_complete != null ? parseFloat(String(v.percent_complete)) : 0), 0) / mspValues.length)
     : null;
-  const totalErrors = mspValues.reduce((s, v) => s + ([...(v?.completion_errors||[]), ...(v?.data_errors||[]), ...(v?.rule_violations||[]), ...(v?.errors||[])]).length, 0);
+  const mspErrCount = mspValues.reduce((s, v) => s + countMspErrors(v), 0);
+  const localErrCount = mids.reduce((s, m) => s + countLocalMidIssues(m), 0);
+  const totalErrors = mspErrCount + (healthReady ? localErrCount : 0);
 
   const rowMode = resolveApplicationRowMode({
     profile,
     track: trackStage,
     pipeline,
     mspErrorCount: totalErrors,
-    detailLoaded: locations.length > 0 || signers.length > 0 || mids.length > 0,
+    detailLoaded: healthReady,
   });
   const isStuck = rowMode.mode === 'stuck';
 
-  const handleExpand = async () => {
-    const next = !expanded;
-    setExpanded(next);
-    if (next && mids.length === 0) {
-      setLoadingDetail(true);
-      try {
-        const [midRes, sigRes, locRes] = await Promise.all([
-          base44.functions.invoke('manageMerchantID', { action: 'list', corporateId }),
-          base44.functions.invoke('manageSigner', { action: 'list', corporateId }),
-          base44.functions.invoke('listLocations', { corporateId }),
-        ]);
-        const loadedMids = midRes.data?.merchantIDs || [];
-        setMids(loadedMids);
-        setSigners(sigRes.data?.signers || []);
-        setLocations(locRes.data?.locations || []);
-
-        const midsWithApp = loadedMids.filter(m => m.mspApplicationNo);
-        if (midsWithApp.length > 0) {
-          setLoadingMsp(true);
-          const statuses = {};
-          await Promise.all(midsWithApp.map(async mid => {
-            try {
-              const res = await base44.functions.invoke('getMSPFormStatus', { corporateId, applicationNo: mid.mspApplicationNo });
-              statuses[mid.mspApplicationNo] = res.data;
-            } catch (_) { statuses[mid.mspApplicationNo] = null; }
-          }));
-          setMspStatuses(statuses);
-          setLoadingMsp(false);
-        }
-      } catch (_) {}
-      finally { setLoadingDetail(false); }
-    }
-  };
+  useEffect(() => {
+    onModeChange?.(corporateId, rowMode.mode);
+  }, [corporateId, rowMode.mode, onModeChange]);
 
   const copySignerDirectLink = async (e, signer) => {
     e?.stopPropagation?.();
@@ -1407,10 +1477,23 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   return (
     <div className={`bg-cb-surface border ${borderColor} rounded-cb overflow-hidden hover:border-cb-border-strong transition-all`}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 cursor-pointer" onClick={handleExpand}>
-        <button className="text-gray-500 flex-shrink-0">
+      <div className="flex items-center gap-3 px-4 py-3">
+        <button
+          type="button"
+          className="text-gray-500 flex-shrink-0 p-1 rounded-cb hover:text-white focus:outline-none focus:ring-2 focus:ring-cb-accent"
+          aria-expanded={expanded}
+          aria-label={expanded ? 'Collapse merchant details' : 'Expand merchant details'}
+          onClick={toggleExpand}
+          onKeyDown={onExpandKey}
+        >
           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
+        <button
+          type="button"
+          className="flex flex-1 min-w-0 items-center gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-cb-accent rounded-cb"
+          onClick={toggleExpand}
+          aria-expanded={expanded}
+        >
         <div className={`w-7 h-7 rounded-cb flex items-center justify-center flex-shrink-0 ${isSubmitted ? 'bg-cb-success/15' : totalErrors > 0 ? 'bg-cb-danger/15' : 'bg-cb-accent-muted'}`}>
           <Building2 className={`w-3.5 h-3.5 ${isSubmitted ? 'text-cb-success' : totalErrors > 0 ? 'text-cb-danger' : 'text-cb-accent'}`} />
         </div>
@@ -1419,7 +1502,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             <p className="text-cb-body font-semibold text-white truncate">{merchantName || corporateId}</p>
             <span className="text-cb-caption font-mono text-gray-600">{corporateId}</span>
             {rowMode.mode === 'stuck' && (
-              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap" title={rowMode.blocker || rowMode.reason}>
+              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
                 <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
                 Stuck
               </span>
@@ -1436,26 +1519,34 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                 Underwriting
               </span>
             )}
-            {rowMode.blocker && rowMode.mode === 'stuck' && (
-              <span className="text-cb-caption text-cb-danger truncate max-w-[14rem]" title={rowMode.blocker}>
-                {rowMode.blocker}
-              </span>
-            )}
-            {!isSubmitted && currentStep === 'banking' && rowMode.mode === 'nudge' && (
+            {rowMode.mode === 'nudge' && currentStep === 'banking' && (
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
                 <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
                 Waiting on bank
               </span>
             )}
+            {rowMode.mode === 'nudge' && currentStep !== 'banking' && (
+              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
+                Waiting on sign
+              </span>
+            )}
+            {rowMode.blocker && rowMode.mode === 'stuck' && (
+              <span className="text-cb-caption text-cb-danger truncate max-w-[14rem]" title={rowMode.blocker}>
+                {rowMode.blocker}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-            {(p.signerEmail || profile?.signerEmail) && <p className="text-cb-caption text-gray-500 truncate">{p.signerEmail || profile?.signerEmail}</p>}
+            <p className="text-cb-caption text-gray-500 truncate max-w-full">{rowMode.reason}</p>
+            {(p.signerEmail || profile?.signerEmail) && <p className="text-cb-caption text-gray-600 truncate">{p.signerEmail || profile?.signerEmail}</p>}
             {(displayPricingTier(profile, p)) && (
               <span className="text-cb-caption text-gray-600">{displayPricingTier(profile, p)}</span>
             )}
             {lastSeen && <p className="hidden sm:flex items-center gap-1 text-cb-caption text-gray-600"><Clock className="w-2.5 h-2.5" /> {lastSeen}</p>}
           </div>
         </div>
+        </button>
 
         {/* Step tracker */}
         <div className="hidden md:flex flex-col items-center gap-0.5 flex-shrink-0 px-1">
@@ -1603,20 +1694,35 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       {/* Expanded detail */}
       {expanded && (
         <div className="border-t border-cb-border bg-cb-bg/60">
-          {loadingDetail ? (
+          {loadingDetail && !healthReady ? (
             <div className="flex items-center justify-center py-6 gap-2">
               <Loader2 className="w-4 h-4 text-gray-500 animate-spin" />
-              <span className="text-cb-body text-gray-500">Loading…</span>
+              <span className="text-cb-body text-gray-500">Loading details…</span>
+            </div>
+          ) : detailError ? (
+            <div className="p-4 flex flex-col items-center gap-2">
+              <p className="text-cb-body text-cb-danger text-center">{detailError}</p>
+              <button
+                type="button"
+                onClick={loadRowHealth}
+                className="text-cb-caption font-semibold text-cb-bg bg-cb-accent px-3 py-1.5 rounded-cb"
+              >
+                Retry
+              </button>
             </div>
           ) : (
             <div className="p-4 space-y-4">
+              <p className="text-cb-caption text-gray-400">
+                <span className="text-white font-medium">Next: </span>
+                {rowMode.blocker || rowMode.reason}
+              </p>
               <PortalActivityPanel activity={p.activity} />
 
               {/* MIDs */}
               {mids.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-cb-caption uppercase text-gray-500">
+                    <p className="text-cb-caption text-gray-500">
                       MIDs ({mids.length}) {loadingMsp && <Loader2 className="inline w-3 h-3 animate-spin ml-1" />}
                     </p>
                     {avgMspPct !== null && (
@@ -1642,7 +1748,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               {/* Signers */}
               {signers.length > 0 && (
                 <div>
-                  <p className="text-cb-caption uppercase text-gray-500 mb-2">Owners</p>
+                  <p className="text-cb-caption text-gray-500 mb-2">Owners</p>
                   <div className="space-y-1.5">
                     {signers.map(s => {
                       const miss = signerMissingFields(s);
@@ -1668,7 +1774,8 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                                   Primary
                                 </span>
                               )}
-                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${lifecycleBadgeClass(s.identityStatus)}`}>
+                              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
+                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${lifecycleDotClass(s.identityStatus)}`} />
                                 {lifecycleLabel(s.identityStatus)}
                               </span>
                               {hasIssues && (
@@ -1682,6 +1789,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                                 onClick={(e) => copySignerDirectLink(e, s)}
                                 disabled={!!busy}
                                 title="Copy verify & sign link"
+                                aria-label={`Copy verify and sign link for ${s.firstName || ''} ${s.lastName || ''}`.trim()}
                                 className="p-1.5 text-gray-500 hover:text-white rounded-cb transition-colors disabled:opacity-40"
                               >
                                 {busy === 'copy' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : copied === s.id ? <Check className="w-3.5 h-3.5 text-cb-success" /> : <Copy className="w-3.5 h-3.5" />}
@@ -1691,6 +1799,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                                 onClick={(e) => sendSignerInvite(e, s)}
                                 disabled={!!busy}
                                 title="Email verify & sign invite"
+                                aria-label={`Email verify and sign invite to ${s.signerEmail || s.firstName || 'owner'}`}
                                 className="p-1.5 text-gray-500 hover:text-cb-accent rounded-cb transition-colors disabled:opacity-40"
                               >
                                 {busy === 'send' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
@@ -1701,7 +1810,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                                   onClick={(e) => revertSignerToVerified(e, s)}
                                   disabled={!!busy}
                                   title="Correct status: verified but not signed"
-                                  className="text-[10px] font-semibold text-amber-400/90 hover:text-amber-300 px-1.5 py-1 rounded-cb border border-amber-500/30 disabled:opacity-40"
+                                  className="text-cb-caption font-semibold text-gray-400 hover:text-white px-1.5 py-1 rounded-cb border border-cb-border disabled:opacity-40"
                                 >
                                   {busy === 'revert' ? <Loader2 className="w-3 h-3 animate-spin" /> : '→ Verified'}
                                 </button>
@@ -1742,21 +1851,30 @@ export default function ApplicationManager() {
   const [allStages, setAllStages]         = useState([]);
   const [merchantNames, setMerchantNames] = useState({});
   const [loading, setLoading]             = useState(true);
+  const [loadError, setLoadError]         = useState('');
+  const [rowModes, setRowModes]           = useState({});
   const [searching, setSearching]         = useState(false);
+  const [jumpError, setJumpError]         = useState('');
   const [editing, setEditing]             = useState(null);
   const [sending, setSending]             = useState(null);
-  const [deleteMerchantConfirm, setDeleteMerchantConfirm] = useState(null); // { corporateId, merchantName }
+  const [deleteMerchantConfirm, setDeleteMerchantConfirm] = useState(null);
   const [deleteMerchantTyped, setDeleteMerchantTyped]     = useState('');
   const [deletingMerchant, setDeletingMerchant]           = useState(false);
   const [deleteMerchantError, setDeleteMerchantError]     = useState('');
   const [searchText, setSearchText]       = useState('');
   const [jumpId, setJumpId]               = useState('');
-  const [localStageDraft, setLocalStageDraft] = useState(null); // { businessName } | null
+  const [localStageDraft, setLocalStageDraft] = useState(null);
 
   const publicUrl = (import.meta.env.VITE_PUBLIC_URL || window.location.origin).replace(/\/$/, '');
 
+  const handleModeChange = useCallback((corporateId, mode) => {
+    const key = String(corporateId);
+    setRowModes((prev) => (prev[key] === mode ? prev : { ...prev, [key]: mode }));
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const [profilesRes, stagesRes] = await Promise.all([
         base44.entities.MerchantCorporateProfile.list('-updated_date', 200),
@@ -1769,11 +1887,29 @@ export default function ApplicationManager() {
       const nameMap = {};
       for (const p of loadedProfiles) nameMap[p.corporateId] = p.legalName || p.corporateId;
       setMerchantNames(nameMap);
-    } catch (_) {}
-    finally { setLoading(false); }
+    } catch (err) {
+      console.error('[ApplicationManager load]', err);
+      setLoadError(err?.message || 'Couldn’t load applications. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!editing && !sending && !deleteMerchantConfirm && !localStageDraft) return undefined;
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return;
+      if (deletingMerchant) return;
+      if (deleteMerchantConfirm) { setDeleteMerchantConfirm(null); setDeleteMerchantTyped(''); return; }
+      if (sending) { setSending(null); return; }
+      if (localStageDraft) { setLocalStageDraft(null); return; }
+      if (editing) setEditing(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editing, sending, deleteMerchantConfirm, localStageDraft, deletingMerchant]);
 
   const handleQuickCreate = (raw) => {
     const id = String(raw || '').trim();
@@ -1884,18 +2020,22 @@ export default function ApplicationManager() {
   const handleJump = async () => {
     if (!jumpId.trim()) return;
     setSearching(true);
+    setJumpError('');
     try {
       const r = await base44.functions.invoke('getMerchantData', { corporateId: jumpId.trim() });
       const name = r.data?.profile?.legalName || jumpId.trim();
       setMerchantNames(prev => ({ ...prev, [jumpId.trim()]: name }));
-      // If not in profiles, add a synthetic entry so it appears
       setProfiles(prev => {
         if (prev.find(p => p.corporateId === jumpId.trim())) return prev;
         return [r.data?.profile || { corporateId: jumpId.trim(), legalName: name }, ...prev];
       });
       setSearchText(jumpId.trim());
-    } catch (_) { setSearchText(jumpId.trim()); }
-    finally { setSearching(false); }
+    } catch (err) {
+      setJumpError(err?.message || 'Merchant not found for that ID.');
+      setSearchText(jumpId.trim());
+    } finally {
+      setSearching(false);
+    }
   };
 
   // Build grouped map: corporateId → { profile, track, admin[] }
@@ -1915,14 +2055,28 @@ export default function ApplicationManager() {
     return name.includes(searchText.toLowerCase()) || p.corporateId?.includes(searchText);
   });
 
-  // Sort: submitted last, stuck + active first, then by updated
+  // Sort by mode priority (stuck first), then recent activity
   const sorted = [...filtered].sort((a, b) => {
-    const aTrack = trackMap[String(a.corporateId)];
-    const bTrack = trackMap[String(b.corporateId)];
-    const aStuck = aTrack?.prefilledData?.lastSeenAt && (Date.now() - new Date(aTrack.prefilledData.lastSeenAt).getTime()) > 3 * 24 * 60 * 60 * 1000 && a.applicationStatus !== 'Submitted';
-    const bStuck = bTrack?.prefilledData?.lastSeenAt && (Date.now() - new Date(bTrack.prefilledData.lastSeenAt).getTime()) > 3 * 24 * 60 * 60 * 1000 && b.applicationStatus !== 'Submitted';
-    if (aStuck && !bStuck) return -1;
-    if (!aStuck && bStuck) return 1;
+    const aKey = String(a.corporateId);
+    const bKey = String(b.corporateId);
+    const aTrack = trackMap[aKey];
+    const bTrack = trackMap[bKey];
+    const aMode = rowModes[aKey] || resolveApplicationRowMode({
+      profile: a,
+      track: aTrack,
+      pipeline: resolvePipelineProgress({ profile: a, track: aTrack, locations: [], signers: [] }),
+      mspErrorCount: 0,
+      detailLoaded: false,
+    }).mode;
+    const bMode = rowModes[bKey] || resolveApplicationRowMode({
+      profile: b,
+      track: bTrack,
+      pipeline: resolvePipelineProgress({ profile: b, track: bTrack, locations: [], signers: [] }),
+      mspErrorCount: 0,
+      detailLoaded: false,
+    }).mode;
+    const rankDiff = modeSortRank(aMode) - modeSortRank(bMode);
+    if (rankDiff !== 0) return rankDiff;
     const aT = aTrack?.prefilledData?.lastSeenAt ? new Date(aTrack.prefilledData.lastSeenAt).getTime() : 0;
     const bT = bTrack?.prefilledData?.lastSeenAt ? new Date(bTrack.prefilledData.lastSeenAt).getTime() : 0;
     return bT - aT;
@@ -1932,37 +2086,53 @@ export default function ApplicationManager() {
 
   return (
     <div className="min-h-screen bg-cb-bg flex flex-col">
-      <PipelineOverview profiles={profiles} stages={allStages} loading={loading} onRefresh={load} onQuickCreate={handleQuickCreate} />
+      <PipelineOverview
+        profiles={profiles}
+        trackMap={trackMap}
+        rowModes={rowModes}
+        loading={loading}
+        onRefresh={load}
+        onQuickCreate={handleQuickCreate}
+      />
+
+      {loadError && (
+        <div className="mx-6 mt-3 bg-cb-surface border border-cb-danger/30 rounded-cb px-4 py-3 flex items-center justify-between gap-3">
+          <p className="text-cb-body text-gray-300">{loadError}</p>
+          <button type="button" onClick={load} className="text-cb-caption font-semibold text-cb-bg bg-cb-accent px-3 py-1.5 rounded-cb flex-shrink-0">
+            Retry
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-1 min-h-0">
-        {/* Full-width list — editor is an overlay so it never crushes this column */}
         <div className="flex flex-col flex-1 min-w-0 border-r border-cb-border">
           <div className="px-6 py-4 border-b border-cb-border flex-shrink-0">
-            <p className="text-cb-caption uppercase text-cb-accent mb-1">Sales workspace</p>
+            <p className="text-cb-caption text-cb-accent mb-1">Sales workspace</p>
             <h1 className="font-display text-cb-display text-white">Applications</h1>
           </div>
 
-          {/* Toolbar */}
-          <div className="px-4 py-3 border-b border-cb-border flex-shrink-0 flex gap-2">
-            <div className="relative flex-1">
+          <div className="px-4 py-3 border-b border-cb-border flex-shrink-0 flex gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[12rem]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-500" />
               <input value={searchText} onChange={e => setSearchText(e.target.value)}
                 placeholder="Search by merchant name or ID…"
                 aria-label="Search merchants"
                 className={`${inputCls} pl-9 py-2`} />
             </div>
-            <input value={jumpId} onChange={e => setJumpId(e.target.value)}
+            <input value={jumpId} onChange={e => { setJumpId(e.target.value); setJumpError(''); }}
               placeholder="Jump to ID…"
               aria-label="Jump to merchant ID"
-              className="bg-cb-bg border border-cb-border rounded-cb px-2.5 py-1.5 text-cb-caption text-white placeholder:text-gray-600 hover:border-cb-border-strong focus:outline-none focus:ring-1 focus:ring-cb-accent w-28"
+              className="bg-cb-bg border border-cb-border rounded-cb px-2.5 py-1.5 text-cb-caption text-white placeholder:text-gray-600 hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent w-28"
               onKeyDown={e => e.key === 'Enter' && handleJump()} />
             <button onClick={handleJump} disabled={searching || !jumpId.trim()}
               className="flex items-center gap-1 bg-cb-accent hover:opacity-90 disabled:opacity-40 text-cb-bg font-semibold text-cb-caption px-2.5 py-1.5 rounded-cb transition-opacity flex-shrink-0">
               {searching ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Jump'}
             </button>
           </div>
+          {jumpError && (
+            <p className="px-4 py-2 text-cb-caption text-cb-danger border-b border-cb-border">{jumpError}</p>
+          )}
 
-          {/* List */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-20">
@@ -1972,7 +2142,9 @@ export default function ApplicationManager() {
               <div className="text-center py-16 px-8">
                 <FileText className="w-7 h-7 text-gray-600 mx-auto mb-3" />
                 <p className="text-gray-500 text-cb-body">
-                  {profiles.length === 0
+                  {loadError
+                    ? 'Applications didn’t load.'
+                    : profiles.length === 0
                     ? 'No merchants yet. Start one above with a HubSpot deal ID or business name.'
                     : 'No merchants match that search.'}
                 </p>
@@ -1988,6 +2160,7 @@ export default function ApplicationManager() {
                     trackStage={trackMap[String(profile.corporateId)] || null}
                     adminStages={adminMap[String(profile.corporateId)] || []}
                     publicUrl={publicUrl}
+                    onModeChange={handleModeChange}
                     onEdit={(corpId, name, stage) => setEditing({ corporateId: corpId, merchantName: name, stage: stage || null })}
                     onDeleteMerchant={(info) => { setDeleteMerchantConfirm(info); setDeleteMerchantTyped(''); setDeleteMerchantError(''); }}
                   />
@@ -2008,7 +2181,7 @@ export default function ApplicationManager() {
 
       {/* Edit overlay — does not shrink the applications list */}
       {showEditor && (
-        <div className="fixed inset-0 z-[9000] flex justify-end bg-black/60 backdrop-blur-sm" onClick={() => setEditing(null)}>
+        <div className="fixed inset-0 z-[9000] flex justify-end bg-black/60" onClick={() => setEditing(null)}>
           <div
             className="w-full max-w-xl h-full bg-cb-surface border-l border-cb-border shadow-cb-overlay flex flex-col"
             onClick={e => e.stopPropagation()}
@@ -2048,9 +2221,16 @@ export default function ApplicationManager() {
 
       {deleteMerchantConfirm && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 px-4"
-          onClick={() => { if (!deletingMerchant) { setDeleteMerchantConfirm(null); setDeleteMerchantTyped(''); } }}>
-          <div className="bg-cb-surface-raised border border-cb-danger/30 rounded-cb shadow-cb-overlay w-full max-w-sm p-6" onClick={e => e.stopPropagation()}>
-            <h3 className="font-semibold text-white mb-2">Delete {deleteMerchantConfirm.merchantName}?</h3>
+          onClick={() => { if (!deletingMerchant) { setDeleteMerchantConfirm(null); setDeleteMerchantTyped(''); } }}
+          role="presentation">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-merchant-title"
+            className="bg-cb-surface-raised border border-cb-danger/30 rounded-cb shadow-cb-overlay w-full max-w-sm p-6"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 id="delete-merchant-title" className="font-semibold text-white mb-2">Delete {deleteMerchantConfirm.merchantName}?</h3>
             <p className="text-cb-body text-gray-400 mb-1">
               ID: <span className="font-mono text-gray-300">{deleteMerchantConfirm.corporateId}</span>
             </p>

@@ -11,6 +11,18 @@ const STUCK_IDLE_MS = 3 * 24 * 60 * 60 * 1000;
  * @typedef {'prep'|'nudge'|'stuck'|'underwriting'} ApplicationRowMode
  */
 
+/** Lower = higher list priority (stuck first, underwriting last among open work). */
+export const MODE_SORT_RANK = {
+  stuck: 0,
+  prep: 1,
+  nudge: 2,
+  underwriting: 3,
+};
+
+export function modeSortRank(mode) {
+  return MODE_SORT_RANK[mode] ?? 9;
+}
+
 /**
  * @param {object} args
  * @param {object|null} args.profile
@@ -48,18 +60,18 @@ export function resolveApplicationRowMode({
     && (Date.now() - new Date(p.lastSeenAt).getTime()) > STUCK_IDLE_MS
   );
   const hasMspErrors = (Number(mspErrorCount) || 0) > 0;
-  const awaitingSignature = ['signing', 'pending_signature'].includes(lock);
+  const lockWithoutSubmit = ['signing', 'pending_signature'].includes(lock);
 
-  // Real blockers only — do NOT treat "forms locked / ready for signature" as a
-  // failed signing link. That lock means packages exist and we're waiting on the merchant.
   if (
-    (merchantTouched && hasMspErrors)
+    (merchantTouched && (hasMspErrors || (lockWithoutSubmit && step === 'verification')))
     || (idleStuck && merchantTouched)
     || (hasMspErrors && detailLoaded)
   ) {
     let blocker = null;
     if (hasMspErrors) {
       blocker = `${mspErrorCount} application error${mspErrorCount === 1 ? '' : 's'} — open to fix`;
+    } else if (lockWithoutSubmit) {
+      blocker = 'Signing link failed — open to fix form errors';
     } else if (idleStuck) {
       blocker = 'No progress in 3+ days';
     }
@@ -78,14 +90,6 @@ export function resolveApplicationRowMode({
       reason: missingLocStep
         ? 'Add locations and merchant IDs before the merchant continues'
         : 'Open their application to add locations and merchant IDs',
-      blocker: null,
-    };
-  }
-
-  if (awaitingSignature && (step === 'verification' || step === 'verify')) {
-    return {
-      mode: 'nudge',
-      reason: 'Merchant agreement is ready — waiting for them to sign',
       blocker: null,
     };
   }

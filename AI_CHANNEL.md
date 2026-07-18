@@ -2151,3 +2151,20 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **? Waiting on:** Teddy (push when ready)
 ---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Action Taken — Full impeccable pass on `/admin/applications` (harden→distill→layout→audit→quieter→polish)
+
+**Shipped:**
+1. **Harden:** At-risk rows prefetch MSP health with `getMSPFormStatus formOnly: true` (no signature POST). Expand loads health + Retry on failure. Page load/jump errors surfaced. Sort by `modeSortRank`.
+2. **Distill:** Header = mode counts (Needs setup / Waiting / Stuck / Underwriting); pie + Incomplete-as-not-started removed.
+3. **Layout:** Waiting on sign chip; visible `rowMode.reason`; expand leads with Next action.
+4. **Audit (fixes applied despite report-only skill):** keyboard expand, Escape closes overlays, dialog roles, owner Copy/Send aria-labels.
+5. **Quieter:** No `border-l-2` / blur; lifecycle → `lifecycleDotClass`; activity 3-card grid → one caption; StepTracker uses `cb-caption`.
+6. **Backend:** `getMSPFormStatus` `formOnly` skip signature probe for list health.
+
+**Deploy:** push frontend + republish `getMSPFormStatus`.
+
+**? Waiting on:** Teddy (push + publish)
+---

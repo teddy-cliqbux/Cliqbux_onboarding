@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
 
     const body = await req.json();
-    const { applicationNo } = body;
+    const { applicationNo, formOnly } = body;
     if (!applicationNo) return Response.json({ error: 'applicationNo required' }, { status: 400 });
 
     const actor = await getPortalActor(req, base44);
@@ -79,20 +79,23 @@ Deno.serve(async (req) => {
     const formRes = await fetch(`${mspBase}/applications/${applicationNo}/form`, { headers });
     const formData = await formRes.json();
 
-    // Also try to create signatures package to get the blocking error
+    // Signature probe can mutate MSPWare packages — skip for admin list health (formOnly: true).
     let signaturesError = null;
-    const sigRes = await fetch(`${mspBase}/applications/${applicationNo}/signatures`, {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sendEmail: false }),
-    });
-    if (!sigRes.ok || !(await sigRes.clone().json().then((d: any) => d.success).catch(() => false))) {
-      const sigData = await sigRes.json().catch(() => ({})) as any;
-      signaturesError = sigData?.error || sigData?.message || `HTTP ${sigRes.status}`;
+    if (!formOnly) {
+      const sigRes = await fetch(`${mspBase}/applications/${applicationNo}/signatures`, {
+        method: 'POST',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sendEmail: false }),
+      });
+      if (!sigRes.ok || !(await sigRes.clone().json().then((d: any) => d.success).catch(() => false))) {
+        const sigData = await sigRes.json().catch(() => ({})) as any;
+        signaturesError = sigData?.error || sigData?.message || `HTTP ${sigRes.status}`;
+      }
     }
 
     return Response.json({
       success: formRes.ok,
+      formOnly: !!formOnly,
       percent_complete: formData.percent_complete ?? null,
       canSave: formData.canSave ?? false,
       canSubmit: formData.canSubmit ?? null,

@@ -42,7 +42,7 @@ export function lifecycleLabel(status) {
   return labels[n] || status || 'Pending';
 }
 
-/** High-fidelity admin badge classes (per product spec). */
+/** Legacy tinted pill classes — prefer lifecycleDotClass + caption in agent UI. */
 export function lifecycleBadgeClass(status) {
   const n = normalizeSignerLifecycle(status);
   const map = {
@@ -52,6 +52,20 @@ export function lifecycleBadgeClass(status) {
     verified: 'bg-amber-950/40 text-amber-400 border border-amber-800',
     'application signed': 'bg-emerald-950/40 text-emerald-400 border border-emerald-800',
     'signing failed': 'bg-rose-950/40 text-rose-400 border border-rose-800',
+  };
+  return map[n] || map.pending;
+}
+
+/** Dot color for status (cb-* tokens; agent Applications restraint). */
+export function lifecycleDotClass(status) {
+  const n = normalizeSignerLifecycle(status);
+  const map = {
+    pending: 'bg-gray-500',
+    invited: 'bg-gray-500',
+    opened: 'bg-cb-accent',
+    verified: 'bg-cb-accent',
+    'application signed': 'bg-cb-success',
+    'signing failed': 'bg-cb-danger',
   };
   return map[n] || map.pending;
 }
