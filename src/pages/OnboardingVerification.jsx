@@ -120,20 +120,56 @@ export default function OnboardingVerification({ profile, locations, initialSign
 
   // Do NOT auto-create packages when the roster first becomes valid (merchant
   // still needs time to fix ownership after unlock). DO restore existing
-  // packages when the portal is already locked for signature — otherwise every
+  // packages when we already have MSP drafts / a signing lock — otherwise every
   // refresh dumps them back on "Prepare Signing Documents" even though BoldSign
-  // links are live.
+  // links are live. (healPrematurePortalLock used to clear the lock while waiting
+  // for signature, which made lock-only restore unreliable.)
   const restoreAttemptedRef = useRef(false);
+  const [midsHaveDrafts, setMidsHaveDrafts] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!profile?.corporateId) return;
+      try {
+        const res = await invokePortalFunction('manageMerchantID', {
+          action: 'list',
+          corporateId: profile.corporateId,
+        });
+        if (cancelled) return;
+        const mids = res.data?.merchantIDs || res.data?.mids || res.data?.items || [];
+        const hasDraft = (Array.isArray(mids) ? mids : []).some(
+          (m) => m?.mspApplicationNo != null && String(m.mspApplicationNo).trim() !== ''
+        );
+        // Also check locations legacy field
+        const locDraft = (locations || []).some(
+          (l) => l?.mspApplicationNo != null && String(l.mspApplicationNo).trim() !== ''
+        );
+        setMidsHaveDrafts(hasDraft || locDraft);
+      } catch {
+        const locDraft = (locations || []).some(
+          (l) => l?.mspApplicationNo != null && String(l.mspApplicationNo).trim() !== ''
+        );
+        if (!cancelled) setMidsHaveDrafts(locDraft);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [profile?.corporateId, locations]);
+
   useEffect(() => {
     if (restoreAttemptedRef.current) return;
-    if (!allVerified || loadingSigning || applications.length > 0 || signingError) return;
+    if (!allVerified || loadingSigning || applications.length > 0) return;
     const lock = String(profile?.portalLockStatus || '').toLowerCase();
     const shouldRestore = isPortalFormsLocked(profile)
-      || ['signing', 'pending_signature', 'all_signed'].includes(lock);
+      || ['signing', 'pending_signature', 'all_signed'].includes(lock)
+      || midsHaveDrafts
+      || (typeof sessionStorage !== 'undefined'
+        && profile?.corporateId
+        && sessionStorage.getItem(`signing_prepared_${profile.corporateId}`) === '1');
     if (!shouldRestore) return;
     restoreAttemptedRef.current = true;
     fetchSigningState({ restoreOnly: true });
-  }, [allVerified, loadingSigning, applications.length, signingError, profile?.portalLockStatus, profile?.applicationStatus]);
+  }, [allVerified, loadingSigning, applications.length, profile?.portalLockStatus, profile?.applicationStatus, profile?.corporateId, midsHaveDrafts]);
 
   // When packages exist and are usable, enter signing phase
   useEffect(() => {
@@ -273,11 +309,15 @@ export default function OnboardingVerification({ profile, locations, initialSign
       if (!data?.success) {
         const parts = [data?.hint, data?.error].filter(Boolean);
         // On restore, prefer leaving the Prepare button if packages are somehow
-        // unreadable — don't scare the agent with a hard error when lock says ready.
+        // unreadable — don't scare the agent with a hard error when drafts exist.
         if (!restoreOnly) {
           setSigningError(parts[0] || 'Unable to prepare signing documents.');
         }
-        applyPortalLockFromSigningResponse(data || {}, setPortalLockStatus);
+        // Never unlock local lock state on a failed restore — that was wiping
+        // "Forms locked / Resume Signing" and bouncing back to Prepare.
+        if (!restoreOnly) {
+          applyPortalLockFromSigningResponse(data || {}, setPortalLockStatus);
+        }
         rememberSigningFixStep(
           profile.corporateId,
           resolveSigningFixStep([], [data?.hint, data?.error].filter(Boolean))
@@ -297,6 +337,9 @@ export default function OnboardingVerification({ profile, locations, initialSign
       const usable = apps.some(a =>
         !a.error && (a.signingUrl || (a.signers || []).some(s => s.signingUrl || s.signed))
       );
+      if (usable && profile?.corporateId && typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem(`signing_prepared_${profile.corporateId}`, '1');
+      }
       if (failed.length > 0 && !usable) {
         rememberSigningFixStep(profile.corporateId, resolveSigningFixStep(failed));
         if (!restoreOnly) setPhase('roster');
@@ -308,8 +351,8 @@ export default function OnboardingVerification({ profile, locations, initialSign
     } catch (err) {
       if (!restoreOnly) {
         setSigningError(err.message || 'Failed to prepare signing documents.');
+        applyPortalLockFromSigningResponse({}, setPortalLockStatus);
       }
-      applyPortalLockFromSigningResponse({}, setPortalLockStatus);
       rememberSigningFixStep(profile.corporateId, 'verify');
     } finally {
       setLoadingSigning(false);
@@ -437,7 +480,11 @@ export default function OnboardingVerification({ profile, locations, initialSign
   const showSigningChrome = allVerified && !loadingSigning && applications.length > 0 && !applications.every(a => a.error);
   const isComplete = phase === 'complete' || allRequiredSigned || packagesAllSigned;
   const packagesLikelyExist = isPortalFormsLocked(profile)
-    || ['signing', 'pending_signature', 'all_signed'].includes(String(profile?.portalLockStatus || '').toLowerCase());
+    || ['signing', 'pending_signature', 'all_signed'].includes(String(profile?.portalLockStatus || '').toLowerCase())
+    || midsHaveDrafts
+    || (typeof sessionStorage !== 'undefined'
+      && profile?.corporateId
+      && sessionStorage.getItem(`signing_prepared_${profile.corporateId}`) === '1');
 
   return (
     <div className="flex flex-col">

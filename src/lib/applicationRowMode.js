@@ -60,18 +60,18 @@ export function resolveApplicationRowMode({
     && (Date.now() - new Date(p.lastSeenAt).getTime()) > STUCK_IDLE_MS
   );
   const hasMspErrors = (Number(mspErrorCount) || 0) > 0;
-  const lockWithoutSubmit = ['signing', 'pending_signature'].includes(lock);
+  const awaitingSignature = ['signing', 'pending_signature'].includes(lock);
 
+  // Real blockers only — do NOT treat "forms locked / ready for signature" as a
+  // failed signing link. That lock means packages exist and we're waiting on the merchant.
   if (
-    (merchantTouched && (hasMspErrors || (lockWithoutSubmit && step === 'verification')))
+    (merchantTouched && hasMspErrors)
     || (idleStuck && merchantTouched)
     || (hasMspErrors && detailLoaded)
   ) {
     let blocker = null;
     if (hasMspErrors) {
       blocker = `${mspErrorCount} application error${mspErrorCount === 1 ? '' : 's'} — open to fix`;
-    } else if (lockWithoutSubmit) {
-      blocker = 'Signing link failed — open to fix form errors';
     } else if (idleStuck) {
       blocker = 'No progress in 3+ days';
     }
@@ -90,6 +90,14 @@ export function resolveApplicationRowMode({
       reason: missingLocStep
         ? 'Add locations and merchant IDs before the merchant continues'
         : 'Open their application to add locations and merchant IDs',
+      blocker: null,
+    };
+  }
+
+  if (awaitingSignature && (step === 'verification' || step === 'verify')) {
+    return {
+      mode: 'nudge',
+      reason: 'Merchant agreement is ready — waiting for them to sign',
       blocker: null,
     };
   }

@@ -1636,7 +1636,11 @@ function buildFormPayload(
   return { payload, pricingSnapshot: compiledPricing.snapshot };
 }
 
-/** Unlock when locked for signing but nobody has signed yet (failed package / early abort). */
+/** Unlock only when locked for signing with NO usable package (failed create / early abort).
+ * Do NOT unlock when packages exist and we're simply waiting for the merchant to sign —
+ * that was clearing portalLockStatus=signing on every revisit and dumping the UI
+ * back to "Prepare Signing Documents".
+ */
 async function healPrematurePortalLock(
   base44: any,
   profile: any,
@@ -1655,12 +1659,23 @@ async function healPrematurePortalLock(
     a?.allSigned || (a?.signers || []).some((s: any) => s?.signed)
   );
   if (anyoneSignedOnRoster || anyoneSignedOnPackage) return portalLockStatus;
+
+  // Live BoldSign links = awaiting signature, not a premature lock
+  const hasLiveLinks = (applications || []).some((a: any) =>
+    a?.signingUrl || (a?.signers || []).some((s: any) => s?.signingUrl)
+  );
+  if (hasLiveLinks) return portalLockStatus;
+
+  // Caller didn't pass applications (early abort) — don't unlock; we can't prove
+  // packages are missing. Only unlock when apps were evaluated and have no links.
+  if (applications == null) return portalLockStatus;
+
   try {
     await base44.asServiceRole.entities.MerchantCorporateProfile.update(profile.id, {
       portalLockStatus: 'unlocked',
     });
     portalLockStatus = 'unlocked';
-    console.log('[signApplication] Unlocked portal — premature lock with no signatures');
+    console.log('[signApplication] Unlocked portal — premature lock with no usable signing package');
   } catch (e: any) {
     console.warn('[signApplication] healPrematurePortalLock failed (non-fatal):', e?.message);
   }

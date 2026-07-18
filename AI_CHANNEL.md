@@ -2168,3 +2168,25 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **? Waiting on:** Teddy (push + publish)
 ---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Bugfix — Prepare Signing Documents regresses on every visit (conflict + root cause)
+
+**Symptoms (Porky's again):** Signer shows Signing… but main CTA resets to Prepare Signing Documents after refresh. Likely conflict with another agent's `applicationRowMode` / impeccable pass; deeper root cause also found.
+
+**Root cause:**
+1. `healPrematurePortalLock` in `signApplication` unlocked whenever `portalLockStatus=signing` and nobody had finished signing yet — including when live BoldSign links existed and we were only waiting. Early abort paths called it with no `applications` array, so it cleared the lock on failed/partial runs too.
+2. Frontend restore was gated only on lock status → once lock wiped, every revisit showed Prepare.
+3. Failed restore / empty catch called `applyPortalLockFromSigningResponse({})` which forces local unlock.
+
+**Fix:**
+1. `healPrematurePortalLock`: never unlock when live signing URLs exist; never unlock when `applications` omitted (early abort). Only unlock when apps were evaluated and have no usable package.
+2. Auto-restore when MIDs have `mspApplicationNo`, session `signing_prepared_*` flag, or lock — not lock-only.
+3. Restore failures must not wipe local lock state; set session flag when packages load.
+4. `applicationRowMode`: awaiting-signature = nudge (not Stuck / Signing link failed) — kept `MODE_SORT_RANK` from other agent.
+
+**Teddy:** Push frontend + **redeploy `signApplication`** (backend heal is the critical part). Hard-refresh Porky's impersonation — should auto-load signing iframe. If lock still unlocked in DB, one successful Prepare / restore will re-lock.
+
+**→ Waiting on:** Teddy
+---
