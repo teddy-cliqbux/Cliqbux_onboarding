@@ -66,12 +66,17 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.firstName || !form.lastName || !form.signerEmail || !form.ownershipPercentage) {
-      setError('First name, last name, email, and ownership % are required.');
+    if (!form.firstName || !form.lastName || !form.signerEmail || form.ownershipPercentage === '') {
+      setError('First name, last name, email, and ownership % are required (0% OK for Control Person or Portal Admin).');
       return;
     }
-    if (mode === 'now' && (!form.dobMonth || !form.dobDay || !form.dobYear || !form.ssn || !form.homeStreet)) {
-      setError('Please complete all identity fields.');
+    const pct = Number(form.ownershipPercentage);
+    if (Number.isNaN(pct) || pct < 0 || pct > 100) {
+      setError('Ownership % must be between 0 and 100.');
+      return;
+    }
+    if (mode === 'now' && pct >= 25 && (!form.dobMonth || !form.dobDay || !form.dobYear || !form.ssn || !form.homeStreet)) {
+      setError('Please complete all identity fields for Beneficial Owners.');
       return;
     }
     setSaving(true);
@@ -81,7 +86,15 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
         action: 'create',
         corporateId,
         sendInvite: mode === 'invite',
-        signerData: { ...form, legalName }
+        signerData: {
+          ...form,
+          legalName,
+          ownershipPercentage: pct,
+          isPrimarySigner: form.isPrimarySigner === true,
+          isAuthorizedSigner: form.isPrimarySigner === true,
+          isBeneficialOwner: pct >= 25,
+          isPortalAdmin: pct === 0 && form.isPrimarySigner !== true,
+        }
       });
       if (res.data?.error) throw new Error(res.data.error);
       onSaved(res.data.signer);
