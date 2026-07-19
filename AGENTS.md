@@ -371,7 +371,7 @@ MerchantAccount (HubSpot Tier-1 company)
 
 Quick Stage prompts for **parent company name** → creates HubSpot company + deal + MerchantAccount (no slug-only hubspotBypass path).
 
-**Deal Room v1:** `/admin/applications/:corporateId` — header, internal notes, tasks, read-only MID/signer/legal snapshot. Phase 2: underwriting@ email feed + per-MID AWB history.
+**Deal Room v1 + phase 2:** `/admin/applications/:corporateId` — notes, tasks, snapshot, **per-MID Elavon AWB + underwriting message threads**. Gmail sync of underwriting@ via `syncUnderwritingMail` (see `docs/underwriting-inbox.md`). Manual log works without Gmail env.
 
 ### Architecture: MerchantMID
 Clean three-layer model: Profile ➔ Locations ➔ MerchantMIDs.

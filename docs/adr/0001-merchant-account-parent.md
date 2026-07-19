@@ -14,7 +14,7 @@
 - **Legal entities (TINs)** live on the account (dual-written to profile for boarding).
 - **People** are assigned per deal (`MerchantSigners.corporateId`) but carry `merchantAccountId`; KYC is reused from prior signers on the same account.
 - **Quick Stage** prompts for parent company name → creates HubSpot company + deal (no more slug-only / hubspotBypass local merchants for this path).
-- **Deal room** = `/admin/applications/:corporateId` — internal notes + tasks + read-only snapshot (v1). Email feed / AWB per-MID history = phase 2.
+- **Deal room** = `/admin/applications/:corporateId` — notes, tasks, snapshot, **per-MID AWB + underwriting message threads**. Gmail sync for underwriting@ when `UNDERWRITING_GMAIL_*` env is set (`docs/underwriting-inbox.md`); manual log works without it.
 
 ## Consequences
 

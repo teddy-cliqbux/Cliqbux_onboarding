@@ -2,13 +2,17 @@
  * manageApplicationDesk — admin-only Deal Room notes/tasks + snapshot.
  *
  * Actions:
- *   get        — profile + account + mids + signers + locations + desk items
+ *   get        — profile + account + mids + signers + locations + desk items + UW messages
  *   addNote    — { corporateId, body }
  *   addTask    — { corporateId, body, assignee?, dueAt? }
  *   updateTask — { corporateId, itemId, status?, body?, assignee?, dueAt? }
  *   deleteItem — { corporateId, itemId }
+ *   setMidAwb  — { corporateId, midId, elavonAwb } — admin; works even when MID is locked
+ *   logUwMessage — { corporateId, midId?, elavonAwb?, subject?, bodyText, direction?, fromAddress?, toAddress?, messageDate? }
+ *   deleteUwMessage — { corporateId, messageId }
  *
  * Never expose to merchant portal tokens.
+ * Gmail sync of underwriting@ lives in syncUnderwritingMail (separate function).
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
@@ -89,11 +93,12 @@ Deno.serve(async (req) => {
         }
       }
 
-      const [mids, signers, locations, deskRaw] = await Promise.all([
+      const [mids, signers, locations, deskRaw, uwRaw] = await Promise.all([
         base44.asServiceRole.entities.MerchantMID.filter({ corporateId }, '-created_date', 100),
         base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }, '-created_date', 50),
         base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }, '-created_date', 50),
         base44.asServiceRole.entities.ApplicationDeskItem.filter({ corporateId }, '-created_date', 200).catch(() => []),
+        base44.asServiceRole.entities.UnderwritingMessage.filter({ corporateId }, '-created_date', 300).catch(() => []),
       ]);
 
       const legalEntities = account
@@ -103,6 +108,12 @@ Deno.serve(async (req) => {
       const items = (deskRaw || []).slice().sort((a: any, b: any) => {
         const ta = new Date(a.created_date || a.createdAt || 0).getTime();
         const tb = new Date(b.created_date || b.createdAt || 0).getTime();
+        return tb - ta;
+      });
+
+      const uwMessages = (uwRaw || []).slice().sort((a: any, b: any) => {
+        const ta = new Date(a.messageDate || a.created_date || 0).getTime();
+        const tb = new Date(b.messageDate || b.created_date || 0).getTime();
         return tb - ta;
       });
 
@@ -118,6 +129,11 @@ Deno.serve(async (req) => {
         notes: items.filter((i: any) => i.type === 'note'),
         tasks: items.filter((i: any) => i.type === 'task'),
         items,
+        uwMessages,
+        gmailSyncConfigured: !!(
+          Deno.env.get('UNDERWRITING_GMAIL_REFRESH_TOKEN')
+          || Deno.env.get('UNDERWRITING_GMAIL_ACCESS_TOKEN')
+        ),
       });
     }
 
@@ -222,9 +238,105 @@ Deno.serve(async (req) => {
       return Response.json({ success: true });
     }
 
+    // ── setMidAwb — admin can set AWB even when MID boarding status is locked ─
+    if (action === 'setMidAwb') {
+      const midId = String(body.midId || '').trim();
+      if (!midId) return Response.json({ error: 'midId required' }, { status: 400 });
+      let mid;
+      try {
+        mid = await base44.asServiceRole.entities.MerchantMID.get(midId);
+      } catch {
+        return Response.json({ error: 'MID not found' }, { status: 404 });
+      }
+      if (!mid || String(mid.corporateId) !== corporateId) {
+        return Response.json({ error: 'MID not found for this deal' }, { status: 404 });
+      }
+      const elavonAwb = String(body.elavonAwb || '').trim();
+      const updated = await base44.asServiceRole.entities.MerchantMID.update(midId, { elavonAwb });
+      // Backfill empty AWB on existing messages for this MID
+      if (elavonAwb) {
+        try {
+          const msgs = await base44.asServiceRole.entities.UnderwritingMessage.filter({ midId }, '-created_date', 100);
+          for (const m of (msgs || [])) {
+            if (!m.elavonAwb) {
+              await base44.asServiceRole.entities.UnderwritingMessage.update(m.id, { elavonAwb });
+            }
+          }
+        } catch { /* entity may not exist yet */ }
+      }
+      return Response.json({ success: true, mid: updated });
+    }
+
+    // ── logUwMessage — manual / forward into per-MID thread ───────────────────
+    if (action === 'logUwMessage') {
+      const midId = String(body.midId || '').trim();
+      const bodyText = String(body.bodyText || body.body || '').trim();
+      if (!bodyText) return Response.json({ error: 'bodyText required' }, { status: 400 });
+
+      let elavonAwb = String(body.elavonAwb || '').trim();
+      if (midId) {
+        try {
+          const mid = await base44.asServiceRole.entities.MerchantMID.get(midId);
+          if (!mid || String(mid.corporateId) !== corporateId) {
+            return Response.json({ error: 'MID not found for this deal' }, { status: 404 });
+          }
+          if (!elavonAwb) elavonAwb = String(mid.elavonAwb || '').trim();
+        } catch {
+          return Response.json({ error: 'MID not found' }, { status: 404 });
+        }
+      }
+
+      const direction = ['inbound', 'outbound', 'internal'].includes(body.direction)
+        ? body.direction
+        : 'internal';
+      const subject = String(body.subject || '').trim();
+      const snippet = bodyText.slice(0, 160);
+
+      let message;
+      try {
+        message = await base44.asServiceRole.entities.UnderwritingMessage.create({
+          corporateId,
+          midId: midId || '',
+          elavonAwb,
+          direction,
+          subject,
+          bodyText,
+          fromAddress: String(body.fromAddress || authorEmail).trim(),
+          toAddress: String(body.toAddress || 'underwriting@cliqbux.com').trim(),
+          messageDate: String(body.messageDate || new Date().toISOString()).trim(),
+          externalId: String(body.externalId || '').trim(),
+          source: body.source === 'forward' || body.source === 'gmail' ? body.source : 'manual',
+          snippet,
+        });
+      } catch (e: any) {
+        return Response.json({
+          error: 'UnderwritingMessage entity missing — republish schema in Base44, then retry.',
+          detail: e?.message,
+        }, { status: 503 });
+      }
+      return Response.json({ success: true, message });
+    }
+
+    // ── deleteUwMessage ──────────────────────────────────────────────────────
+    if (action === 'deleteUwMessage') {
+      const messageId = String(body.messageId || '').trim();
+      if (!messageId) return Response.json({ error: 'messageId required' }, { status: 400 });
+      let existing;
+      try {
+        existing = await base44.asServiceRole.entities.UnderwritingMessage.get(messageId);
+      } catch {
+        return Response.json({ error: 'Message not found' }, { status: 404 });
+      }
+      if (!existing || String(existing.corporateId) !== corporateId) {
+        return Response.json({ error: 'Message not found for this deal' }, { status: 404 });
+      }
+      await base44.asServiceRole.entities.UnderwritingMessage.delete(messageId);
+      return Response.json({ success: true });
+    }
+
     return Response.json({
       error: 'Unknown action',
-      hint: 'Expected get | addNote | addTask | updateTask | deleteItem',
+      hint: 'Expected get | addNote | addTask | updateTask | deleteItem | setMidAwb | logUwMessage | deleteUwMessage',
     }, { status: 400 });
   } catch (error: any) {
     console.error('[manageApplicationDesk]', error?.message);

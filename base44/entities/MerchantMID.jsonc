@@ -111,6 +111,10 @@
       "type": "string",
       "description": "Merchant ID assigned by Elavon after approval \u2014 populated asynchronously by pollMSPStatus"
     },
+    "elavonAwb": {
+      "type": "string",
+      "description": "Elavon Application Work Basket (AWB) number for underwriting correspondence. Distinct from deprecated MerchantLocations.awb (old direct Elavon board API). Used by Deal Room to thread underwriting@ emails per MID."
+    },
     "applicationStepStatus": {
       "type": "string",
       "enum": [

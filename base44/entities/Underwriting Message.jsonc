@@ -1,0 +1,59 @@
+{
+  "name": "UnderwritingMessage",
+  "type": "object",
+  "description": "Per-MID underwriting correspondence for Deal Room phase 2. Threaded by elavonAwb / midId. Sources: manual log, Gmail sync of underwriting@cliqbux.com.",
+  "properties": {
+    "corporateId": {
+      "type": "string",
+      "description": "FK → MerchantCorporateProfile.corporateId"
+    },
+    "midId": {
+      "type": "string",
+      "description": "FK → MerchantMID.id — null/empty until matched to a MID"
+    },
+    "elavonAwb": {
+      "type": "string",
+      "description": "Elavon AWB this message is about (copied from MID or parsed from email)"
+    },
+    "direction": {
+      "type": "string",
+      "enum": ["inbound", "outbound", "internal"],
+      "default": "inbound",
+      "description": "inbound = from Elavon/partner to underwriting@; outbound = sent from underwriting@; internal = agent-logged note on the thread"
+    },
+    "subject": {
+      "type": "string"
+    },
+    "bodyText": {
+      "type": "string",
+      "description": "Plain-text body (HTML stripped on ingest)"
+    },
+    "fromAddress": {
+      "type": "string"
+    },
+    "toAddress": {
+      "type": "string"
+    },
+    "messageDate": {
+      "type": "string",
+      "description": "ISO timestamp of the email Date header (or log time for manual)"
+    },
+    "externalId": {
+      "type": "string",
+      "description": "Provider message id for dedup (e.g. Gmail message id)"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["gmail", "manual", "forward"],
+      "default": "manual"
+    },
+    "snippet": {
+      "type": "string",
+      "description": "Short preview for list UI"
+    }
+  },
+  "required": [
+    "corporateId",
+    "bodyText"
+  ]
+}

@@ -2253,3 +2253,20 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **Deploy:** republish `ApplicationDeskItem`; redeploy `manageApplicationDesk`; push frontend. (Blocked today if Base44 credits = 0.)
 ---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Action Taken — Deal Room phase 2 (per-MID AWB + underwriting@ threads)
+
+**Shipped:**
+1. `MerchantMID.elavonAwb` — Elavon AWB (admin-settable even when MID locked)
+2. `UnderwritingMessage` entity — per-MID thread (gmail / manual / forward)
+3. Desk actions: `setMidAwb`, `logUwMessage`, `deleteUwMessage`; `get` returns `uwMessages`
+4. `syncUnderwritingMail` — Gmail API pull for underwriting@; match by AWB; dedupe by message id
+5. Deal Room UI — MID tabs, Save AWB, log email, Sync inbox, thread list
+6. Docs: `docs/underwriting-inbox.md`
+
+**Works without Gmail today:** set AWB + log emails manually. Sync needs `UNDERWRITING_GMAIL_*` env.
+
+**Deploy:** republish MerchantMID + UnderwritingMessage; redeploy manageApplicationDesk + syncUnderwritingMail; push frontend; add Gmail env when ready.
+---
