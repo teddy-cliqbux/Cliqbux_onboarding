@@ -62,7 +62,7 @@ export function lifecycleDotClass(status) {
   const map = {
     pending: 'bg-gray-500',
     invited: 'bg-gray-500',
-    opened: 'bg-cb-accent',
+    opened: 'bg-gray-400',
     verified: 'bg-cb-accent',
     'application signed': 'bg-cb-success',
     'signing failed': 'bg-cb-danger',

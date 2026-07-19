@@ -2190,3 +2190,22 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **→ Waiting on:** Teddy
 ---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Action Taken — Critique follow-up (27/40 backlog): expand-only + densify
+
+**Choices:** Prefetch = expand-only; full remaining backlog.
+
+**Shipped:**
+1. Removed at-risk mount MSP prefetch — health loads **only on expand** (`formOnly: true`)
+2. Replaced row `alert()` with dismissible inline `rowActionError`
+3. MidRow = single disclosure button + `aria-expanded`; CheckRow = focusable checkbox (not `hidden`)
+4. Mode dots differentiated: stuck=danger, waiting=gray, prep=gold, underwriting=green
+5. Collapsed row denser: merchant + mode chip + one reason line; step tracker / email / pricing in expand; Dashboard demoted to icon-only
+6. Signer lifecycle: opened=gray, verified=gold (less monoculture)
+
+**Deploy:** push frontend (`getMSPFormStatus` formOnly already needed from prior pass).
+
+**? Waiting on:** Teddy (push)
+---

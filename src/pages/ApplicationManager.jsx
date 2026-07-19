@@ -317,6 +317,14 @@ function resolvePipelineProgress({ profile, track, locations, signers }) {
   return { currentStep: step, completedSteps: completed, appStatus };
 }
 
+/** Mode status dots — stuck must not share gold with prep/waiting. */
+function modeDotClass(mode) {
+  if (mode === 'stuck') return 'bg-cb-danger';
+  if (mode === 'underwriting') return 'bg-cb-success';
+  if (mode === 'nudge') return 'bg-gray-500';
+  return 'bg-cb-accent'; // prep
+}
+
 // ── MID Row with MSP progress bar ─────────────────────────────────────────────
 function MidRow({ mid, mspStatus, isLoadingMsp }) {
   const [open, setOpen] = useState(false);
@@ -339,6 +347,16 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
   const allErrors = [...new Set([...localIssues, ...errors])];
   const isDone = ['Active', 'Active (Existing)', 'Pending MID'].includes(mid.applicationStepStatus);
   const hasIssues = allErrors.length > 0 || (pct !== null && pct < 100 && !isDone);
+  const canExpand = !!(mid.mspApplicationNo || allErrors.length > 0);
+
+  const toggleOpen = () => { if (canExpand) setOpen((o) => !o); };
+  const onKey = (e) => {
+    if (!canExpand) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleOpen();
+    }
+  };
 
   return (
     <div className={`border rounded-cb overflow-hidden transition-all ${
@@ -346,7 +364,15 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
       hasIssues ? 'border-cb-danger/30 bg-cb-surface-raised' :
       'border-cb-border bg-cb-surface-raised'
     }`}>
-      <div className="flex items-center gap-2.5 px-3 py-2.5 cursor-pointer" onClick={() => setOpen(o => !o)}>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-cb-accent focus-visible:ring-inset"
+        onClick={toggleOpen}
+        onKeyDown={onKey}
+        aria-expanded={canExpand ? open : undefined}
+        aria-label={canExpand ? (open ? `Collapse ${mid.dbaName || 'MID'} details` : `Expand ${mid.dbaName || 'MID'} details`) : undefined}
+        disabled={!canExpand}
+      >
         <CreditCard className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -373,19 +399,19 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
               {allErrors.length} issue{allErrors.length !== 1 ? 's' : ''}
             </span>
           )}
-          {(mid.mspApplicationNo || allErrors.length > 0) && (
-            <button onClick={e => { e.stopPropagation(); setOpen(o => !o); }} className="text-gray-600 hover:text-gray-300">
+          {canExpand && (
+            <span className="text-gray-600" aria-hidden>
               {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-            </button>
+            </span>
           )}
         </div>
-      </div>
+      </button>
 
-      {open && (
+      {open && canExpand && (
         <div className="border-t border-cb-border px-3 py-3 space-y-2 bg-cb-bg/40">
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {mid.mspApplicationNo && (
-              <p className="text-cb-caption text-gray-500">MSP App: <span className="font-mono text-gray-400">{mid.mspApplicationNo}</span></p>
+              <p className="text-cb-caption text-gray-500">Application #: <span className="font-mono text-gray-400">{mid.mspApplicationNo}</span></p>
             )}
             {mid.elavonMID && (
               <p className="text-cb-caption text-gray-500">MID: <span className="font-mono text-cb-success">{mid.elavonMID}</span></p>
@@ -393,7 +419,7 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
           </div>
           {allErrors.length > 0 && (
             <div className="space-y-1">
-              <p className="text-cb-caption uppercase text-cb-danger">Validation Issues</p>
+              <p className="text-cb-caption text-cb-danger">Issues to fix</p>
               {allErrors.map((err, i) => (
                 <div key={i} className="flex items-start gap-1.5">
                   <XCircle className="w-3 h-3 text-cb-danger flex-shrink-0 mt-0.5" />
@@ -571,19 +597,19 @@ function PipelineOverview({ profiles, trackMap, rowModes, loading, onRefresh, on
           </div>
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-cb-accent" />
+              <span className={`w-1.5 h-1.5 rounded-full ${modeDotClass('prep')}`} />
               {modeCounts.prep} needs setup
             </span>
             <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-cb-accent" />
+              <span className={`w-1.5 h-1.5 rounded-full ${modeDotClass('nudge')}`} />
               {modeCounts.nudge} waiting
             </span>
             <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-cb-accent" />
+              <span className={`w-1.5 h-1.5 rounded-full ${modeDotClass('stuck')}`} />
               {modeCounts.stuck} stuck
             </span>
             <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-cb-success" />
+              <span className={`w-1.5 h-1.5 rounded-full ${modeDotClass('underwriting')}`} />
               {modeCounts.underwriting} underwriting
             </span>
           </div>
@@ -624,10 +650,20 @@ function PipelineOverview({ profiles, trackMap, rowModes, loading, onRefresh, on
 function CheckRow({ checked, onChange, children }) {
   return (
     <label className={`flex items-center gap-3 px-3 py-2.5 rounded-cb border cursor-pointer transition-all ${checked ? 'border-cb-accent/40 bg-cb-accent-muted' : 'border-cb-border hover:border-cb-border-strong'}`}>
-      <div className={`w-4 h-4 rounded flex items-center justify-center flex-shrink-0 border transition-all ${checked ? 'bg-cb-accent border-cb-accent' : 'border-cb-border-strong'}`}>
-        {checked && <Check className="w-2.5 h-2.5 text-cb-bg" />}
-      </div>
-      <input type="checkbox" className="hidden" checked={checked} onChange={onChange} />
+      <span className="relative flex-shrink-0">
+        <input
+          type="checkbox"
+          className="peer absolute inset-0 w-4 h-4 opacity-0 cursor-pointer"
+          checked={checked}
+          onChange={onChange}
+        />
+        <span
+          aria-hidden
+          className={`flex w-4 h-4 rounded items-center justify-center border transition-all peer-focus-visible:ring-2 peer-focus-visible:ring-cb-accent ${checked ? 'bg-cb-accent border-cb-accent' : 'border-cb-border-strong bg-transparent'}`}
+        >
+          {checked && <Check className="w-2.5 h-2.5 text-cb-bg" />}
+        </span>
+      </span>
       {children}
     </label>
   );
@@ -1166,6 +1202,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const [nudging, setNudging]           = useState(false);
   const [nudgeMsg, setNudgeMsg]         = useState('');
   const [nudgeMenuPos, setNudgeMenuPos] = useState(null);
+  const [rowActionError, setRowActionError] = useState('');
   const nudgeWrapRef = useRef(null);
 
   const loadRowHealth = useCallback(async () => {
@@ -1213,12 +1250,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     }
   }, [corporateId]);
 
-  useEffect(() => {
-    const lock = String(profile?.portalLockStatus || '').toLowerCase();
-    const step = normalizeTrackStep(trackStage?.prefilledData?.currentStep);
-    const atRisk = ['signing', 'pending_signature'].includes(lock) || step === 'verification';
-    if (atRisk) loadRowHealth();
-  }, [loadRowHealth, profile?.portalLockStatus, trackStage?.prefilledData?.currentStep]);
+  // Expand-only health: never auto-fetch on mount (rate-limit safe).
 
   const toggleExpand = () => {
     setExpanded((v) => {
@@ -1312,10 +1344,9 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const copySignerDirectLink = async (e, signer) => {
     e?.stopPropagation?.();
     if (!signer?.id) return;
+    setRowActionError('');
     setSignerLinkBusy(prev => ({ ...prev, [signer.id]: 'copy' }));
     try {
-      // Prefer client-side URL when list already returned verifyToken — works even if
-      // getSigningInviteLink isn't force-redeployed yet (classic "Unknown action" 400).
       let link = null;
       if (signer.verifyToken) {
         link = `${publicUrl}/verify?token=${encodeURIComponent(signer.verifyToken)}&intent=sign`;
@@ -1341,9 +1372,9 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
         || (typeof err?.response?.data === 'string' ? err.response.data : null)
         || err.message;
       const hint = /Unknown action/i.test(String(apiErr || ''))
-        ? '\n\nFix: force-redeploy manageSigner in Base44 (getSigningInviteLink is missing on the live function).'
+        ? ' Redeploy manageSigner in Base44 (getSigningInviteLink missing).'
         : '';
-      alert((apiErr || 'Could not copy owner link') + hint);
+      setRowActionError((apiErr || 'Could not copy owner link') + hint);
     } finally {
       setSignerLinkBusy(prev => {
         const next = { ...prev };
@@ -1356,6 +1387,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const sendSignerInvite = async (e, signer) => {
     e?.stopPropagation?.();
     if (!signer?.id) return;
+    setRowActionError('');
     setSignerLinkBusy(prev => ({ ...prev, [signer.id]: 'send' }));
     try {
       const res = await base44.functions.invoke('manageSigner', {
@@ -1364,11 +1396,10 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
         signerId: signer.id,
       });
       if (res.data?.error) throw new Error(res.data.error);
-      // Refresh local signer row status
       setSigners(prev => prev.map(s => (s.id === signer.id ? { ...s, ...res.data.signer } : s)));
     } catch (err) {
       console.error('[sendSigningInvite]', err);
-      alert(err.message || 'Could not send invite email');
+      setRowActionError(err.message || 'Could not send invite email');
     } finally {
       setSignerLinkBusy(prev => {
         const next = { ...prev };
@@ -1382,6 +1413,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     e?.stopPropagation?.();
     if (!signer?.id) return;
     if (!window.confirm(`Mark ${signer.firstName} ${signer.lastName} as Verified only?\n\nUse when identity is done but they haven’t signed the merchant agreement yet.`)) return;
+    setRowActionError('');
     setSignerLinkBusy(prev => ({ ...prev, [signer.id]: 'revert' }));
     try {
       const res = await base44.functions.invoke('manageSigner', {
@@ -1394,7 +1426,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       setSigners(prev => prev.map(s => (s.id === signer.id ? { ...s, ...res.data.signer } : s)));
     } catch (err) {
       console.error('[setLifecycleStatus]', err);
-      alert(err.message || 'Could not update owner status');
+      setRowActionError(err.message || 'Could not update owner status');
     } finally {
       setSignerLinkBusy(prev => {
         const next = { ...prev };
@@ -1406,6 +1438,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
 
   const openMerchantView = async (e) => {
     e?.stopPropagation?.();
+    setRowActionError('');
     setImpersonating(true);
     try {
       const res = await base44.functions.invoke('manageStagedApplication', {
@@ -1419,7 +1452,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       window.open(res.data.portalUrl, '_blank', 'noopener,noreferrer');
     } catch (err) {
       console.error('[impersonate]', err);
-      alert(err.message || 'Could not open merchant portal');
+      setRowActionError(err.message || 'Could not open merchant portal');
     } finally {
       setImpersonating(false);
     }
@@ -1427,6 +1460,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
 
   const openPostSignDashboard = async (e) => {
     e?.stopPropagation?.();
+    setRowActionError('');
     setOpeningDashboard(true);
     try {
       const res = await base44.functions.invoke('manageStagedApplication', {
@@ -1440,7 +1474,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       window.open(res.data.portalUrl, '_blank', 'noopener,noreferrer');
     } catch (err) {
       console.error('[impersonate dashboard]', err);
-      alert(err.message || 'Could not open post-signing dashboard');
+      setRowActionError(err.message || 'Could not open post-signing dashboard');
     } finally {
       setOpeningDashboard(false);
     }
@@ -1449,6 +1483,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const runNudge = async (channels) => {
     setNudging(true);
     setNudgeMsg('');
+    setRowActionError('');
     setNudgeOpen(false);
     writeNudgeChannelPref(channels);
     try {
@@ -1466,17 +1501,21 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       setTimeout(() => setNudgeMsg(''), 4000);
     } catch (err) {
       console.error('[nudgeMerchant]', err);
-      alert(err?.response?.data?.error || err.message || 'Could not send reminder. Try email only, or check Quo settings.');
+      setRowActionError(err?.response?.data?.error || err.message || 'Could not send reminder. Try email only, or check Quo settings.');
     } finally {
       setNudging(false);
     }
   };
 
-  const borderColor = isSubmitted ? 'border-cb-success/25' : totalErrors > 0 ? 'border-cb-danger/30' : isStuck ? 'border-cb-accent/25' : 'border-cb-border';
+  const borderColor = isSubmitted
+    ? 'border-cb-success/25'
+    : totalErrors > 0 || isStuck
+      ? 'border-cb-danger/30'
+      : 'border-cb-border';
 
   return (
     <div className={`bg-cb-surface border ${borderColor} rounded-cb overflow-hidden hover:border-cb-border-strong transition-all`}>
-      {/* Header */}
+      {/* Header — merchant + mode CTA + one-line reason */}
       <div className="flex items-center gap-3 px-4 py-3">
         <button
           type="button"
@@ -1494,8 +1533,8 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           onClick={toggleExpand}
           aria-expanded={expanded}
         >
-        <div className={`w-7 h-7 rounded-cb flex items-center justify-center flex-shrink-0 ${isSubmitted ? 'bg-cb-success/15' : totalErrors > 0 ? 'bg-cb-danger/15' : 'bg-cb-accent-muted'}`}>
-          <Building2 className={`w-3.5 h-3.5 ${isSubmitted ? 'text-cb-success' : totalErrors > 0 ? 'text-cb-danger' : 'text-cb-accent'}`} />
+        <div className={`w-7 h-7 rounded-cb flex items-center justify-center flex-shrink-0 ${isSubmitted ? 'bg-cb-success/15' : totalErrors > 0 || isStuck ? 'bg-cb-danger/15' : 'bg-cb-accent-muted'}`}>
+          <Building2 className={`w-3.5 h-3.5 ${isSubmitted ? 'text-cb-success' : totalErrors > 0 || isStuck ? 'text-cb-danger' : 'text-cb-accent'}`} />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
@@ -1503,65 +1542,44 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             <span className="text-cb-caption font-mono text-gray-600">{corporateId}</span>
             {rowMode.mode === 'stuck' && (
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${modeDotClass('stuck')}`} />
                 Stuck
               </span>
             )}
             {rowMode.mode === 'prep' && (
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${modeDotClass('prep')}`} />
                 Needs setup
               </span>
             )}
             {rowMode.mode === 'underwriting' && (
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-success" />
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${modeDotClass('underwriting')}`} />
                 Underwriting
               </span>
             )}
-            {rowMode.mode === 'nudge' && currentStep === 'banking' && (
+            {rowMode.mode === 'nudge' && (
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
-                Waiting on bank
-              </span>
-            )}
-            {rowMode.mode === 'nudge' && currentStep !== 'banking' && (
-              <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
-                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
-                Waiting on sign
-              </span>
-            )}
-            {rowMode.blocker && rowMode.mode === 'stuck' && (
-              <span className="text-cb-caption text-cb-danger truncate max-w-[14rem]" title={rowMode.blocker}>
-                {rowMode.blocker}
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${modeDotClass('nudge')}`} />
+                {currentStep === 'banking' ? 'Waiting on bank' : 'Waiting on sign'}
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-            <p className="text-cb-caption text-gray-500 truncate max-w-full">{rowMode.reason}</p>
-            {(p.signerEmail || profile?.signerEmail) && <p className="text-cb-caption text-gray-600 truncate">{p.signerEmail || profile?.signerEmail}</p>}
-            {(displayPricingTier(profile, p)) && (
-              <span className="text-cb-caption text-gray-600">{displayPricingTier(profile, p)}</span>
-            )}
-            {lastSeen && <p className="hidden sm:flex items-center gap-1 text-cb-caption text-gray-600"><Clock className="w-2.5 h-2.5" /> {lastSeen}</p>}
-          </div>
+          <p className="text-cb-caption text-gray-500 truncate mt-0.5" title={rowMode.blocker || rowMode.reason}>
+            {rowMode.blocker || rowMode.reason}
+          </p>
         </div>
         </button>
 
-        {/* Step tracker */}
-        <div className="hidden md:flex flex-col items-center gap-0.5 flex-shrink-0 px-1">
-          <StepTracker currentStep={currentStep} completedSteps={completedSteps} missingByStep={missingByStep} />
-        </div>
-
-        {/* Health + mode-driven primary + quiet utilities */}
+        {/* Mode-driven primary + quiet utilities */}
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
-          {totalErrors > 0 && (
+          {healthReady && totalErrors > 0 && (
             <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-danger" />
               {totalErrors}
             </span>
           )}
-          {avgMspPct !== null && <HealthBadge score={avgMspPct} />}
+          {healthReady && avgMspPct !== null && <HealthBadge score={avgMspPct} />}
           {nudgeMsg && (
             <span className="text-cb-caption text-cb-success max-w-[10rem] truncate" title={nudgeMsg}>{nudgeMsg}</span>
           )}
@@ -1657,27 +1675,27 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             </button>
           )}
 
-          {/* Quiet utilities */}
-          {rowMode.mode !== 'underwriting' && (
+          {/* Quiet utilities — Dashboard only when not already primary */}
+          {rowMode.mode === 'underwriting' ? null : (
             <button
               type="button"
               onClick={openPostSignDashboard}
               disabled={impersonating || openingDashboard}
-              title="Preview the merchant’s post-signing dashboard"
-              className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong disabled:opacity-40"
+              title="Preview post-signing dashboard"
+              aria-label="Preview post-signing dashboard"
+              className="p-1.5 text-gray-600 hover:text-gray-300 rounded-cb border border-transparent hover:border-cb-border transition-all disabled:opacity-40"
             >
-              {openingDashboard ? <Loader2 className="w-3 h-3 animate-spin" /> : <LayoutDashboard className="w-3 h-3" />}
-              <span className="hidden lg:inline">Dashboard</span>
+              {openingDashboard ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LayoutDashboard className="w-3.5 h-3.5" />}
             </button>
           )}
           <button
             type="button"
             onClick={() => onEdit(corporateId, merchantName, linkStage)}
             title="Edit locations, owners, pricing, and quotes"
-            className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border transition-all border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong"
+            aria-label={`Edit ${merchantName || corporateId}`}
+            className="p-1.5 text-gray-600 hover:text-white rounded-cb border border-transparent hover:border-cb-border transition-all"
           >
-            <Pencil className="w-3 h-3" />
-            <span className="hidden lg:inline">Edit</span>
+            <Pencil className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
@@ -1690,6 +1708,23 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           </button>
         </div>
       </div>
+
+      {rowActionError && (
+        <div className="px-4 pb-3">
+          <div className="flex items-start gap-2 bg-cb-bg border border-cb-danger/30 rounded-cb px-3 py-2">
+            <AlertCircle className="w-3.5 h-3.5 text-cb-danger flex-shrink-0 mt-0.5" />
+            <p className="text-cb-caption text-gray-300 flex-1">{rowActionError}</p>
+            <button
+              type="button"
+              onClick={() => setRowActionError('')}
+              className="text-gray-500 hover:text-white"
+              aria-label="Dismiss error"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Expanded detail */}
       {expanded && (
@@ -1712,10 +1747,18 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             </div>
           ) : (
             <div className="p-4 space-y-4">
-              <p className="text-cb-caption text-gray-400">
-                <span className="text-white font-medium">Next: </span>
-                {rowMode.blocker || rowMode.reason}
-              </p>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <p className="text-cb-caption text-gray-400">
+                  <span className="text-white font-medium">Next: </span>
+                  {rowMode.blocker || rowMode.reason}
+                </p>
+                <StepTracker currentStep={currentStep} completedSteps={completedSteps} missingByStep={missingByStep} />
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-cb-caption text-gray-600">
+                {(p.signerEmail || profile?.signerEmail) && <span>{p.signerEmail || profile?.signerEmail}</span>}
+                {displayPricingTier(profile, p) && <span>{displayPricingTier(profile, p)}</span>}
+                {lastSeen && <span className="inline-flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> {lastSeen}</span>}
+              </div>
               <PortalActivityPanel activity={p.activity} />
 
               {/* MIDs */}
