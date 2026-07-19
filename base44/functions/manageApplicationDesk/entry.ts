@@ -10,6 +10,7 @@
  *   setMidAwb  — { corporateId, midId, elavonAwb } — admin; works even when MID is locked
  *   logUwMessage — { corporateId, midId?, elavonAwb?, subject?, bodyText, direction?, fromAddress?, toAddress?, messageDate? }
  *   deleteUwMessage — { corporateId, messageId }
+ *   requestStatusInquiry — { corporateId, midId } — logs outbound + returns mailto for ApplicationStatus@elavon.com (AWB in subject)
  *
  * Never expose to merchant portal tokens.
  * Gmail sync of underwriting@ lives in syncUnderwritingMail (separate function).
@@ -334,9 +335,84 @@ Deno.serve(async (req) => {
       return Response.json({ success: true });
     }
 
+    // ── requestStatusInquiry — Elavon ApplicationStatus@ with AWB in subject ─
+    // Elavon (apps submitted after 2026-07-07): one AWB per email chain;
+    // automated reply within minutes; no DBA/legal/MID/pend detail in auto-replies.
+    if (action === 'requestStatusInquiry') {
+      const midId = String(body.midId || '').trim();
+      if (!midId) return Response.json({ error: 'midId required' }, { status: 400 });
+      let mid;
+      try {
+        mid = await base44.asServiceRole.entities.MerchantMID.get(midId);
+      } catch {
+        return Response.json({ error: 'MID not found' }, { status: 404 });
+      }
+      if (!mid || String(mid.corporateId) !== corporateId) {
+        return Response.json({ error: 'MID not found for this deal' }, { status: 404 });
+      }
+      const awb = String(mid.elavonAwb || '').trim();
+      if (!awb) {
+        return Response.json({
+          error: 'Save an Elavon AWB on this MID before requesting status.',
+          code: 'AWB_REQUIRED',
+        }, { status: 422 });
+      }
+
+      const toAddress = 'ApplicationStatus@elavon.com';
+      // Subject must contain the AWB — Elavon’s automation keys off the subject line.
+      const subject = awb;
+      const bodyText = [
+        `Status inquiry for AWB ${awb}.`,
+        '',
+        'Sent from Cliqbux Deal Room. Please reply in this thread.',
+        `(Automated replies do not include DBA, legal name, MID, or data-entry pends.)`,
+      ].join('\n');
+
+      let message = null;
+      try {
+        message = await base44.asServiceRole.entities.UnderwritingMessage.create({
+          corporateId,
+          midId,
+          elavonAwb: awb,
+          direction: 'outbound',
+          subject,
+          bodyText,
+          fromAddress: authorEmail,
+          toAddress,
+          messageDate: new Date().toISOString(),
+          externalId: '',
+          source: 'manual',
+          snippet: `Status inquiry → ApplicationStatus@elavon.com · AWB ${awb}`.slice(0, 160),
+        });
+      } catch (e: any) {
+        return Response.json({
+          error: 'UnderwritingMessage entity missing — republish schema in Base44, then retry.',
+          detail: e?.message,
+        }, { status: 503 });
+      }
+
+      const mailto = `mailto:${encodeURIComponent(toAddress)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyText)}`;
+      const escalationMailtoMsp = `mailto:MSPFulSer@elavon.com?subject=${encodeURIComponent(`Escalation AWB ${awb}`)}`;
+      const escalationMailtoFul = `mailto:FulSerCenter@elavon.com?subject=${encodeURIComponent(`Escalation AWB ${awb}`)}`;
+
+      return Response.json({
+        success: true,
+        message,
+        mailto,
+        toAddress,
+        subject,
+        awb,
+        escalation: {
+          mspFulSer: escalationMailtoMsp,
+          fulSerCenter: escalationMailtoFul,
+        },
+        hint: 'One AWB per email chain. Open mailto from underwriting@cliqbux.com, then Sync inbox for the automated reply.',
+      });
+    }
+
     return Response.json({
       error: 'Unknown action',
-      hint: 'Expected get | addNote | addTask | updateTask | deleteItem | setMidAwb | logUwMessage | deleteUwMessage',
+      hint: 'Expected get | addNote | addTask | updateTask | deleteItem | setMidAwb | logUwMessage | deleteUwMessage | requestStatusInquiry',
     }, { status: 400 });
   } catch (error: any) {
     console.error('[manageApplicationDesk]', error?.message);

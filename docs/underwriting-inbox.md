@@ -2,12 +2,27 @@
 
 Pulls mail from **underwriting@cliqbux.com** into per-MID threads, matched by **Elavon AWB**.
 
-## What agents do today (no Gmail yet)
+## Elavon status inquiry process (effective for apps submitted after 2026-07-07)
+
+From Elavon Credit & Underwriting:
+
+| Need | Action |
+|---|---|
+| **Standard status** | Email **ApplicationStatus@elavon.com** with the **AWB in the subject line**. Automated reply within minutes. |
+| **Escalation / no AWB** | **MSPFulSer@elavon.com** or **FulSerCenter@elavon.com** |
+| **Multiple applications** | **One AWB per email chain** — never batch AWBs in one thread |
+
+**Automated replies will not include** DBA, legal name, MID, or data-entry technical pends. Data Entry still emails directly when action is needed.
+
+Deal Room **Request status** builds that email (subject = AWB), opens compose, and logs an outbound entry on the MID thread.
+
+## What agents do
 
 1. Open Deal room → **Underwriting by MID**
 2. Select a MID → paste **Elavon AWB** → Save AWB
-3. **Log email** (paste subject/body) onto that MID’s thread  
-   — or click **Sync inbox** once Gmail env is configured
+3. **Request status** (ApplicationStatus@) — one MID / one AWB at a time
+4. **Sync inbox** to pull the automated reply onto the thread  
+   — or **Log email** if pasting manually
 
 ## Gmail setup (Google Workspace)
 
@@ -26,11 +41,15 @@ Set in Base44 env:
 
 Scopes needed: `https://www.googleapis.com/auth/gmail.readonly`
 
-Then redeploy `syncUnderwritingMail`. From Deal Room, **Sync inbox** calls it scoped to the current deal’s MIDs that have an AWB set.
+Default search (when query unset) includes mail to underwriting@ **and** from Elavon status/escalation addresses:
+
+`to:underwriting@cliqbux.com OR from:(ApplicationStatus@elavon.com OR MSPFulSer@elavon.com OR FulSerCenter@elavon.com) newer_than:90d`
+
+Then redeploy `syncUnderwritingMail`. From Deal Room, **Sync inbox** matches by AWB on the current deal’s MIDs.
 
 ## Matching rules
 
-1. Parse AWB-like tokens from subject/body (`AWB: …`, `Application #…`, etc.)
+1. Parse AWB-like tokens from subject/body — **subject-line AWB is the primary Elavon signal**
 2. Also substring-match any known `MerchantMID.elavonAwb` (≥6 chars)
 3. Dedup by Gmail message id → `UnderwritingMessage.externalId`
 4. Unmatched messages are reported in the sync response (not stored) — set AWB on the MID and re-sync
@@ -39,5 +58,5 @@ Then redeploy `syncUnderwritingMail`. From Deal Room, **Sync inbox** calls it sc
 
 - `MerchantMID.elavonAwb`
 - `UnderwritingMessage`
-- `manageApplicationDesk` — `setMidAwb`, `logUwMessage`, `deleteUwMessage`
+- `manageApplicationDesk` — `setMidAwb`, `logUwMessage`, `deleteUwMessage`, `requestStatusInquiry`
 - `syncUnderwritingMail` — Gmail pull

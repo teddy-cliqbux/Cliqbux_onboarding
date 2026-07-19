@@ -8,7 +8,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
   ArrowLeft, Loader2, Plus, Check, Trash2, Eye, LayoutDashboard,
-  Building2, Users, CreditCard, FileText, AlertCircle, Mail, RefreshCw,
+  Building2, Users, CreditCard, FileText, AlertCircle, Mail, RefreshCw, Send,
 } from 'lucide-react';
 import { lifecycleLabel, lifecycleDotClass } from '@/lib/signerLifecycle';
 import { TIER_LABELS } from '@/lib/pricingPresets';
@@ -56,6 +56,7 @@ export default function ApplicationDealRoom() {
   const [uwBody, setUwBody] = useState('');
   const [uwDirection, setUwDirection] = useState('inbound');
   const [loggingUw, setLoggingUw] = useState(false);
+  const [requestingStatus, setRequestingStatus] = useState(false);
   const [syncingMail, setSyncingMail] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
 
@@ -241,6 +242,42 @@ export default function ApplicationDealRoom() {
     } finally {
       setLoggingUw(false);
     }
+  };
+
+  const requestStatus = async () => {
+    if (!selectedMidId || requestingStatus) return;
+    setRequestingStatus(true);
+    setError('');
+    try {
+      const res = await base44.functions.invoke('manageApplicationDesk', {
+        action: 'requestStatusInquiry',
+        corporateId,
+        midId: selectedMidId,
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      if (res.data?.mailto) {
+        window.open(res.data.mailto, '_blank', 'noopener,noreferrer');
+      }
+      setSyncMsg(
+        `Status request logged for AWB ${res.data.awb}. Send from underwriting@, then Sync inbox for Elavon’s automated reply (no DBA/MID in auto-replies).`
+      );
+      await load();
+    } catch (err) {
+      setError(err?.response?.data?.error || err.message || 'Could not start status request');
+    } finally {
+      setRequestingStatus(false);
+    }
+  };
+
+  const openEscalation = (which) => {
+    const awb = (selectedMid?.elavonAwb || awbDraft || '').trim();
+    if (!awb) {
+      setError('Save an AWB on this MID before escalating, or use FulSer without AWB from your mail client.');
+      return;
+    }
+    const addr = which === 'msp' ? 'MSPFulSer@elavon.com' : 'FulSerCenter@elavon.com';
+    const mailto = `mailto:${addr}?subject=${encodeURIComponent(`Escalation AWB ${awb}`)}`;
+    window.open(mailto, '_blank', 'noopener,noreferrer');
   };
 
   const deleteUw = async (messageId) => {
@@ -440,6 +477,35 @@ export default function ApplicationDealRoom() {
                         {selectedMid.mspApplicationNo && <> · MSP #{selectedMid.mspApplicationNo}</>}
                         {selectedMid.elavonMID && <> · MID {selectedMid.elavonMID}</>}
                       </p>
+                      <p className="text-cb-caption text-gray-600">
+                        Apps submitted after Jul 7, 2026: request status via ApplicationStatus@elavon.com with{' '}
+                        <span className="text-gray-400">AWB in the subject</span> — one AWB per email. Auto-replies omit DBA, legal name, MID, and data-entry pends.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={requestStatus}
+                          disabled={requestingStatus || !(awbDraft || selectedMid.elavonAwb)}
+                          className="flex items-center gap-1.5 bg-cb-accent text-cb-bg font-semibold text-cb-caption px-3 py-2 rounded-cb hover:opacity-90 disabled:opacity-40"
+                        >
+                          {requestingStatus ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                          Request status
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEscalation('msp')}
+                          className="flex items-center gap-1.5 text-cb-caption font-medium px-3 py-2 rounded-cb border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong"
+                        >
+                          Escalate MSPFulSer
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openEscalation('ful')}
+                          className="flex items-center gap-1.5 text-cb-caption font-medium px-3 py-2 rounded-cb border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong"
+                        >
+                          Escalate FulSer
+                        </button>
+                      </div>
 
                       <div className="rounded-cb border border-cb-border bg-cb-bg p-3 space-y-2">
                         <p className="text-cb-caption text-gray-500">Log email / note on this MID</p>

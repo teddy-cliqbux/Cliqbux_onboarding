@@ -152,8 +152,10 @@ Deno.serve(async (req) => {
     }
 
     const mailbox = Deno.env.get('UNDERWRITING_GMAIL_USER') || DEFAULT_MAILBOX;
+    // Prefer Elavon status/escalation traffic + mail to the shared inbox.
+    // Subject-line AWB is how ApplicationStatus@elavon.com auto-replies match back.
     const query = Deno.env.get('UNDERWRITING_GMAIL_QUERY')
-      || `to:${mailbox} OR in:inbox newer_than:90d`;
+      || `(to:${mailbox} OR from:(ApplicationStatus@elavon.com OR MSPFulSer@elavon.com OR FulSerCenter@elavon.com)) newer_than:90d`;
 
     const listRes = await fetch(
       `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${maxResults}&q=${encodeURIComponent(query)}`,

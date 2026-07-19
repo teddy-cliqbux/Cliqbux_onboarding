@@ -2270,3 +2270,19 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **Deploy:** republish MerchantMID + UnderwritingMessage; redeploy manageApplicationDesk + syncUnderwritingMail; push frontend; add Gmail env when ready.
 ---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Action Taken — Elavon ApplicationStatus@ workflow wired into Deal Room
+
+**Elavon process (apps after 2026-07-07):**
+- Status → `ApplicationStatus@elavon.com` with **AWB in subject** (one AWB per chain)
+- Escalation → `MSPFulSer@elavon.com` / `FulSerCenter@elavon.com`
+- Auto-replies omit DBA / legal / MID / data-entry pends
+
+**Shipped:**
+1. Deal Room **Request status** + escalate buttons
+2. `requestStatusInquiry` logs outbound + opens mailto (subject = AWB)
+3. Gmail sync default query includes from ApplicationStatus@ / MSPFulSer / FulSerCenter
+4. Docs updated in `docs/underwriting-inbox.md`
+---
