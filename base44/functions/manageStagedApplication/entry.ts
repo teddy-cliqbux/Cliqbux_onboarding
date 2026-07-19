@@ -15,6 +15,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //   getInviteLink                           — ADMIN ONLY: return the staged magic link once
 //                                             (avoids leaking accessToken via list/get)
 //   list, get, create, update, delete, send — ADMIN ONLY (Base44 workspace session)
+//   sendApplication                         — ADMIN ONLY: create blank invite if needed + email merchant
+//                                             (agents may send before prepping locations/MIDs)
 //                                             list/get responses are sanitized (no accessToken)
 // POST /functions/manageStagedApplication
 
@@ -739,6 +741,119 @@ Deno.serve(async (req) => {
       ).catch(() => null);
 
       return Response.json({ success: true, stage: sanitizeStage(updated), link });
+    }
+
+    // ── sendApplication — blank-friendly invite (no prep required) ────────────
+    // Body: { corporateId, email?, stageId? }
+    // Finds or creates a non-__auto_track__ stage, then emails the portal link.
+    // Agents can send before locations/MIDs exist — merchant fills the blank app.
+    if (action === 'sendApplication') {
+      if (!corporateId) return Response.json({ error: 'corporateId required' }, { status: 400 });
+
+      const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter(
+        { corporateId: String(corporateId) }, '-created_date', 1
+      );
+      const profile = profiles?.[0] || null;
+      if (!profile) return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
+
+      const toEmail = String(
+        data?.email || body.email || profile.signerEmail || ''
+      ).trim().toLowerCase();
+      if (!toEmail || !toEmail.includes('@')) {
+        return Response.json({ error: 'Valid recipient email required' }, { status: 400 });
+      }
+
+      let stage: any = null;
+      if (data?.stageId || body.stageId) {
+        stage = await base44.asServiceRole.entities.StagedApplication.get(String(data?.stageId || body.stageId));
+        if (!stage || String(stage.corporateId) !== String(corporateId)) {
+          return Response.json({ error: 'Stage not found for this merchant' }, { status: 404 });
+        }
+        if (stage.label === '__auto_track__') {
+          stage = null; // never send auto-track — fall through to create
+        }
+      }
+      if (!stage) {
+        const all = await base44.asServiceRole.entities.StagedApplication.filter(
+          { corporateId: String(corporateId) }, '-created_date', 20
+        );
+        stage = (all || []).find((s: any) => s.label !== '__auto_track__') || null;
+      }
+      if (!stage) {
+        const token = generateToken();
+        const merchantLabel = String(
+          data?.label || profile.legalName || `Application ${corporateId}`
+        ).trim();
+        stage = await base44.asServiceRole.entities.StagedApplication.create({
+          corporateId: String(corporateId),
+          status: 'draft',
+          label: merchantLabel,
+          includedLocationIds: [],
+          includedMidIds: [],
+          includedSignerIds: [],
+          prefilledData: {
+            merchantName: profile.legalName || '',
+            signerEmail: toEmail,
+            source: 'blank_application_invite',
+          },
+          accessToken: token,
+          sentToEmail: toEmail,
+        });
+      } else if (!stage.accessToken) {
+        const token = generateToken();
+        stage = await base44.asServiceRole.entities.StagedApplication.update(stage.id, { accessToken: token });
+      }
+
+      const link = `${publicUrl}/?stageId=${stage.id}&token=${stage.accessToken}`;
+      const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+      if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY not configured');
+
+      const emailHtml = `
+<div style="font-family: Inter, sans-serif; background: #111318; color: #e5e7eb; padding: 40px; max-width: 600px; margin: 0 auto; border-radius: 16px;">
+  <div style="margin-bottom: 24px;text-align:center;">${emailLogoHeaderHtml()}</div>
+  <h2 style="font-size: 20px; font-weight: 700; color: #ffffff; margin-bottom: 8px;">Your merchant application is ready</h2>
+  <p style="color: #9ca3af; margin-bottom: 24px;">Click the button below to complete your onboarding. The link is secure and unique to your account.</p>
+  <a href="${link}" style="display: inline-block; background: #f0ad4e; color: #000; font-weight: 700; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-size: 15px;">
+    Complete My Application →
+  </a>
+  <p style="color: #6b7280; font-size: 12px; margin-top: 32px;">If you did not expect this email, you can ignore it. Questions? Reply to this email.</p>
+</div>`.trim();
+
+      const emailRes = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: 'Cliqbux Onboarding <onboarding@onboarding.cliqbuxpos.com>',
+          to: [toEmail],
+          subject: 'Your Cliqbux Merchant Application',
+          html: emailHtml,
+          attachments: [resendInlineLogoAttachment()],
+        }),
+      });
+      if (!emailRes.ok) {
+        const errBody = await emailRes.json().catch(() => ({})) as any;
+        throw new Error(`Email send failed (${emailRes.status}): ${errBody?.message || JSON.stringify(errBody)}`);
+      }
+
+      const updated = await base44.asServiceRole.entities.StagedApplication.update(stage.id, {
+        status: 'sent',
+        sentAt: new Date().toISOString(),
+        sentToEmail: toEmail,
+      });
+
+      await upsertAutoTrack(
+        base44,
+        String(corporateId),
+        {},
+        { type: 'invite_sent', actor: 'agent', email: toEmail }
+      ).catch(() => null);
+
+      return Response.json({
+        success: true,
+        blank: true,
+        stage: sanitizeStage(updated),
+        link,
+      });
     }
 
     return Response.json({ error: `Unknown action: ${action}` }, { status: 400 });

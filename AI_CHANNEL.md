@@ -2343,3 +2343,17 @@ Teddy chose: separate People page first (before Locations), Sign last. Form fill
 
 **ACTION:** publish frontend (no function redeploy required unless invite copy changes).
 ---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Action Taken — Blank application send from prep rows
+
+Teddy: prep is ideal, but agents must still send a blank app from Applications (e.g. Trisha Company) without prepping locations/MIDs first.
+
+**Shipped:**
+1. Prep rows: secondary **Send application** next to **Open to prep**
+2. `manageStagedApplication` action `sendApplication` — finds or creates a non-`__auto_track__` stage + emails portal link (no locations/MIDs/KYC required)
+3. SendModal copy clarifies blank send is allowed
+
+**ACTION for Base44:** redeploy `manageStagedApplication` + publish frontend.
+---

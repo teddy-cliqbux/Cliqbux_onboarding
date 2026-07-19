@@ -1092,7 +1092,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
   );
 }
 // ── Send Modal ────────────────────────────────────────────────────────────────
-function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClose }) {
+function SendModal({ stage, corporateId, prefillEmail, publicUrl, merchantName, onSent, onClose }) {
   const [email, setEmail]     = useState(stage?.sentToEmail || stage?.prefilledData?.signerEmail || prefillEmail || '');
   const [sending, setSending] = useState(false);
   const [sent, setSent]       = useState(false);
@@ -1104,27 +1104,55 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
     if (!email.trim()) { setError('Email is required'); return; }
     setSending(true); setError('');
     try {
-      if (stage) {
-        const res = await base44.functions.invoke('manageStagedApplication', { action: 'send', stageId: stage.id, data: { email } });
-        if (res.data?.error) throw new Error(res.data.error);
-        setLink(res.data.link || '');
-        onSent(res.data.stage);
-      } else {
-        const directLink = `${publicUrl}/?corporateId=${corporateId}`;
-        const res = await base44.functions.invoke('sendResumeLink', { email, corporateId, link: directLink });
-        if (res.data?.error) throw new Error(res.data.error);
-        // Resume-link path doesn't go through manageStagedApplication send — log invite here
-        await base44.functions.invoke('manageStagedApplication', {
-          action: 'trackProgress',
-          corporateId,
-          data: { activityEvent: { type: 'invite_sent', actor: 'agent', email } },
-        }).catch(() => {});
-        setLink(directLink);
-        onSent(null);
-      }
+      // Prefer sendApplication — creates a blank invite stage if none exists (no prep required)
+      const res = await base44.functions.invoke('manageStagedApplication', {
+        action: 'sendApplication',
+        corporateId,
+        data: {
+          email: email.trim(),
+          stageId: stage?.id && stage.label !== '__auto_track__' ? stage.id : undefined,
+          label: merchantName || stage?.label,
+        },
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      setLink(res.data.link || '');
+      onSent?.(res.data.stage);
       setSent(true);
-    } catch (err) { setError(err.message || 'Couldn’t send email. Check the address and try again.'); }
-    finally { setSending(false); }
+    } catch (err) {
+      // Fallback: legacy send / resume if sendApplication not deployed yet
+      try {
+        if (stage?.id && stage.label !== '__auto_track__') {
+          const res = await base44.functions.invoke('manageStagedApplication', {
+            action: 'send',
+            stageId: stage.id,
+            data: { email: email.trim() },
+          });
+          if (res.data?.error) throw new Error(res.data.error);
+          setLink(res.data.link || '');
+          onSent?.(res.data.stage);
+        } else {
+          const directLink = `${publicUrl}/?corporateId=${encodeURIComponent(corporateId)}`;
+          const res = await base44.functions.invoke('sendResumeLink', {
+            email: email.trim(),
+            corporateId,
+            link: directLink,
+          });
+          if (res.data?.error) throw new Error(res.data.error);
+          await base44.functions.invoke('manageStagedApplication', {
+            action: 'trackProgress',
+            corporateId,
+            data: { activityEvent: { type: 'invite_sent', actor: 'agent', email: email.trim() } },
+          }).catch(() => {});
+          setLink(res.data?.link || directLink);
+          onSent?.(null);
+        }
+        setSent(true);
+      } catch (err2) {
+        setError(err2.message || err.message || 'Couldn’t send email. Check the address and try again.');
+      }
+    } finally {
+      setSending(false);
+    }
   };
 
   const copyLink = () => { navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000); };
@@ -1142,8 +1170,10 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-cb bg-cb-accent-muted flex items-center justify-center"><Send className="w-4 h-4 text-cb-accent" /></div>
             <div>
-              <h3 id="send-modal-title" className="font-semibold text-white text-cb-body">Email application link</h3>
-              <p className="text-cb-caption text-gray-500 truncate max-w-[200px]">{stage?.label || 'Merchant portal link'}</p>
+              <h3 id="send-modal-title" className="font-semibold text-white text-cb-body">Send application</h3>
+              <p className="text-cb-caption text-gray-500 truncate max-w-[220px]">
+                {merchantName || stage?.label || 'Merchant portal link'}
+              </p>
             </div>
           </div>
           <button onClick={onClose} className="p-1.5 text-gray-500 hover:text-white rounded-cb" aria-label="Close"><X className="w-4 h-4" /></button>
@@ -1168,6 +1198,9 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
           </div>
         ) : (
           <div className="space-y-4">
+            <p className="text-cb-caption text-gray-500">
+              Sends a portal link even if you haven’t prepped locations or MIDs yet. The merchant can fill a blank application.
+            </p>
             <div>
               <label className={labelCls}>Recipient email</label>
               <input value={email} onChange={e => setEmail(e.target.value)} placeholder="merchant@example.com"
@@ -1178,7 +1211,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
               <button onClick={handleSend} disabled={sending}
                 className="flex-1 flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-body py-2.5 rounded-cb transition-opacity">
                 {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                {sending ? 'Sending…' : 'Send email'}
+                {sending ? 'Sending…' : 'Send application'}
               </button>
               <button onClick={onClose} className="px-4 border border-cb-border text-gray-400 font-medium text-cb-body py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong">Don’t send</button>
             </div>
@@ -1190,7 +1223,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, onSent, onClos
 }
 
 // ── Application Row ───────────────────────────────────────────────────────────
-function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onDeleteMerchant, onModeChange }) {
+function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onDeleteMerchant, onModeChange, onRequestSend }) {
   const [expanded, setExpanded]         = useState(false);
   const [mids, setMids]                 = useState([]);
   const [locations, setLocations]       = useState([]);
@@ -1595,18 +1628,39 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             <span className="text-cb-caption text-cb-success max-w-[10rem] truncate" title={nudgeMsg}>{nudgeMsg}</span>
           )}
 
-          {/* Mode primary CTA */}
+          {/* Mode primary CTA — prep first; blank send always allowed */}
           {rowMode.mode === 'prep' && (
-            <button
-              type="button"
-              onClick={openMerchantView}
-              disabled={impersonating || openingDashboard}
-              title={rowMode.reason}
-              className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
-            >
-              {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
-              Open to prep
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={openMerchantView}
+                disabled={impersonating || openingDashboard}
+                title={rowMode.reason}
+                className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
+              >
+                {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+                Open to prep
+              </button>
+              {onRequestSend && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRequestSend({
+                      stage: linkStage,
+                      corporateId,
+                      prefillEmail: profile?.signerEmail || '',
+                      merchantName,
+                    });
+                  }}
+                  title="Email a portal link now — merchant can fill a blank application (prep optional)"
+                  className="flex items-center gap-1 text-cb-caption font-medium px-2.5 py-1 rounded-cb border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong transition-all"
+                >
+                  <Send className="w-3 h-3" />
+                  Send application
+                </button>
+              )}
+            </>
           )}
 
           {rowMode.mode === 'stuck' && (
@@ -2228,6 +2282,7 @@ export default function ApplicationManager() {
                     onModeChange={handleModeChange}
                     onEdit={(corpId, name, stage) => setEditing({ corporateId: corpId, merchantName: name, stage: stage || null })}
                     onDeleteMerchant={(info) => { setDeleteMerchantConfirm(info); setDeleteMerchantTyped(''); setDeleteMerchantError(''); }}
+                    onRequestSend={(payload) => setSending(payload)}
                   />
                 ))}
               </div>
@@ -2262,7 +2317,8 @@ export default function ApplicationManager() {
               onRequestSend={(stage) => setSending({
                 stage: stage || editing.stage || null,
                 corporateId: editing.corporateId,
-                prefillEmail: '',
+                prefillEmail: editing.stage?.sentToEmail || editing.stage?.prefilledData?.signerEmail || '',
+                merchantName: editing.merchantName,
               })}
             />
           </div>
@@ -2274,9 +2330,16 @@ export default function ApplicationManager() {
           stage={sending.stage}
           corporateId={sending.corporateId}
           prefillEmail={sending.prefillEmail}
+          merchantName={sending.merchantName}
           publicUrl={publicUrl}
           onSent={async (s) => {
-            if (s) setAllStages(prev => prev.map(x => x.id === s.id ? s : x));
+            if (s) {
+              setAllStages((prev) => {
+                const exists = prev.some((x) => x.id === s.id);
+                if (exists) return prev.map((x) => (x.id === s.id ? s : x));
+                return [...prev, s];
+              });
+            }
             try {
               const stagesRes = await base44.functions.invoke('manageStagedApplication', { action: 'list' });
               if (stagesRes.data?.stages) setAllStages(stagesRes.data.stages);
