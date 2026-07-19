@@ -42,6 +42,50 @@ async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merc
   return null;
 }
 
+
+// --- BEGIN extractElavonAwb (sync with helpers/extractElavonAwb.ts) ---
+function extractElavonAwb(...payloads: unknown[]): string | null {
+  for (const payload of payloads) {
+    const found = walkForAwb(payload, 0);
+    if (found) return found;
+  }
+  return null;
+}
+const AWB_KEY_RE = /^(awb|elavon_?awb|application_?work_?basket|work_?basket(_?id|_?no|_?number)?|boarding_?id|processor_?(ref|reference|application_?id)|elavon_?(ref|reference|app(lication)?_?id))$/i;
+function walkForAwb(node: unknown, depth: number): string | null {
+  if (node == null || depth > 8) return null;
+  if (typeof node === 'string' || typeof node === 'number') return null;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const f = walkForAwb(item, depth + 1);
+      if (f) return f;
+    }
+    return null;
+  }
+  if (typeof node !== 'object') return null;
+  const obj = node as Record<string, unknown>;
+  for (const [k, v] of Object.entries(obj)) {
+    if (AWB_KEY_RE.test(k) && (typeof v === 'string' || typeof v === 'number')) {
+      const s = String(v).trim();
+      if (s && s.length >= 4 && s.length <= 32) return s;
+    }
+  }
+  for (const v of Object.values(obj)) {
+    if (typeof v === 'string') {
+      const m = v.match(/\bAWB\s*[:#]?\s*([A-Z0-9-]{4,24})\b/i);
+      if (m?.[1]) return m[1];
+    }
+  }
+  for (const v of Object.values(obj)) {
+    if (v && typeof v === 'object') {
+      const f = walkForAwb(v, depth + 1);
+      if (f) return f;
+    }
+  }
+  return null;
+}
+// --- END extractElavonAwb ---
+
 // --- BEGIN pricingMapper (sync with helpers/pricingMapper.ts + src/utils/pricingMapper.ts) ---
 /**
  * Canonical Deno copy — Base44 boarding functions INLINE this (cannot import helpers). Keep in sync with src/utils/pricingMapper.ts
@@ -1984,16 +2028,36 @@ Deno.serve(async (req) => {
         console.log(`[submitToMSP] Submit response ${submitRes.status}:`, JSON.stringify(redactSensitive(submitData), null, 2));
 
         if (submitRes.ok && submitData?.success) {
-          await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, {
-            applicationStepStatus: 'Pending MID',
-          });
+          // AWB may appear on status/application shortly after submit (pre-screen).
+          // Best-effort capture now; pollMSPStatus will retry while Pending MID.
+          let elavonAwb: string | null = extractElavonAwb(submitData);
+          try {
+            const [stRes, appRes] = await Promise.all([
+              fetch(`${mspBase}/applications/${mspApplicationNo}/status`, { headers: mspHeaders }),
+              fetch(`${mspBase}/applications/${mspApplicationNo}`, { headers: mspHeaders }),
+            ]);
+            const stData = stRes.ok ? await stRes.json().catch(() => null) : null;
+            const appData = appRes.ok ? await appRes.json().catch(() => null) : null;
+            elavonAwb = extractElavonAwb(submitData, stData, appData, appData?.application) || elavonAwb;
+            if (!elavonAwb) {
+              console.log(`[submitToMSP] AWB not yet on MSP payload for ${mspApplicationNo} — status keys: ${stData ? Object.keys(stData).join(',') : 'n/a'}`);
+            }
+          } catch (awbErr: any) {
+            console.warn(`[submitToMSP] AWB fetch after submit failed (non-fatal):`, awbErr?.message);
+          }
+
+          const midPatch: Record<string, unknown> = { applicationStepStatus: 'Pending MID' };
+          if (elavonAwb) midPatch.elavonAwb = elavonAwb;
+          await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, midPatch);
           results.push({
             midId: merchantMID.id,
             locationId: merchantMID.locationId,
             dbaName: merchantMID.dbaName,
             status: 'submitted',
             mspApplicationNo,
+            elavonAwb: elavonAwb || null,
             percentComplete,
+            note: 'Submitted to Elavon — pre-screen may auto-approve (~15m) or route to underwriting. Poll for AWB/MID.',
           });
         } else {
           await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, { applicationStepStatus: 'Error' });

@@ -2273,6 +2273,25 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 ---
 **[CURSOR]** — 2026-07-18
+**Type:** Decision + Action — Post-sign agent submits to Elavon; AWB from MSP
+
+**Ops model (Teddy):**
+1. After signing, **agent** submits to Elavon via MSP
+2. Pre-screen → auto-approve ~15m **or** underwriting
+3. **AWB retrievable from MSP** (not paste-first)
+
+**Shipped:**
+- `extractElavonAwb` helper (inlined) — probes common MSP keys until live field confirmed
+- `submitToMSP` best-effort AWB after submit → `MerchantMID.elavonAwb`
+- `pollMSPStatus` captures AWB while Pending MID / on approve
+- Deal Room **From MSP** → `refreshAwbFromMsp` (returns status keys if not found)
+- Docs: agent flow in `docs/underwriting-inbox.md`
+
+**Still need live confirm:** exact MSPWare JSON key for AWB — first successful refresh/poll after a real submit should pin it in AGENTS.md.
+---
+
+---
+**[CURSOR]** — 2026-07-18
 **Type:** Action Taken — Elavon ApplicationStatus@ workflow wired into Deal Room
 
 **Elavon process (apps after 2026-07-07):**

@@ -2,6 +2,19 @@
 
 Pulls mail from **underwriting@cliqbux.com** into per-MID threads, matched by **Elavon AWB**.
 
+## Agent flow after signing
+
+1. Merchant finishes signing in the portal.
+2. **Agent submits** the application to Elavon via MSPWare (`submitToMSP` with `MSP_SUBMIT_ENABLED=true`).
+3. Elavon **pre-screens** — may **auto-approve in ~15 minutes** or route to **underwriting**.
+4. **AWB** should be retrievable from MSPWare (`GET /applications/{no}/status` + application). Stored on `MerchantMID.elavonAwb` by:
+   - `submitToMSP` (best-effort right after submit)
+   - `pollMSPStatus` (while `Pending MID`)
+   - Deal Room **From MSP** (`refreshAwbFromMsp`)
+5. Use AWB for **ApplicationStatus@elavon.com** status inquiries (subject = AWB).
+
+Manual paste remains a fallback until the live MSP field name is confirmed and pinned.
+
 ## Elavon status inquiry process (effective for apps submitted after 2026-07-07)
 
 From Elavon Credit & Underwriting:
@@ -19,7 +32,7 @@ Deal Room **Request status** builds that email (subject = AWB), opens compose, a
 ## What agents do
 
 1. Open Deal room → **Underwriting by MID**
-2. Select a MID → paste **Elavon AWB** → Save AWB
+2. Select a MID → **From MSP** (or wait for poll / auto-fill after submit) → confirm AWB
 3. **Request status** (ApplicationStatus@) — one MID / one AWB at a time
 4. **Sync inbox** to pull the automated reply onto the thread  
    — or **Log email** if pasting manually
@@ -58,5 +71,6 @@ Then redeploy `syncUnderwritingMail`. From Deal Room, **Sync inbox** matches by 
 
 - `MerchantMID.elavonAwb`
 - `UnderwritingMessage`
-- `manageApplicationDesk` — `setMidAwb`, `logUwMessage`, `deleteUwMessage`, `requestStatusInquiry`
+- `manageApplicationDesk` — `setMidAwb`, `logUwMessage`, `deleteUwMessage`, `requestStatusInquiry`, `refreshAwbFromMsp`
+- `submitToMSP` / `pollMSPStatus` — capture `elavonAwb` from MSP after submit
 - `syncUnderwritingMail` — Gmail pull

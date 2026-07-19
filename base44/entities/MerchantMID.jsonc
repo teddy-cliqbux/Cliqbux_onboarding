@@ -113,7 +113,7 @@
     },
     "elavonAwb": {
       "type": "string",
-      "description": "Elavon Application Work Basket (AWB) number for underwriting correspondence. Distinct from deprecated MerchantLocations.awb (old direct Elavon board API). Used by Deal Room to thread underwriting@ emails per MID."
+      "description": "Elavon Application Work Basket (AWB). Sourced from MSPWare after agent submit (submitToMSP / pollMSPStatus / Deal Room refreshAwbFromMsp). Used for ApplicationStatus@elavon.com inquiries. Manual paste is fallback only."
     },
     "applicationStepStatus": {
       "type": "string",

@@ -6,8 +6,55 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // When MSPWare reports Approved/Complete, extracts the MID and transitions
 // the record to Active.
 //
+// Also extracts Elavon AWB whenever present (pre-screen / underwriting) and
+// writes MerchantMID.elavonAwb — Deal Room status inquiries need it.
+//
 // Call this on a schedule (e.g. every 10 minutes) or invoke manually.
 // MSPWare submit is async — can take up to 4 minutes per their docs.
+// Auto-approve can complete in ~15 minutes; otherwise the app goes to underwriting.
+
+// --- BEGIN extractElavonAwb (sync with helpers/extractElavonAwb.ts) ---
+function extractElavonAwb(...payloads: unknown[]): string | null {
+  for (const payload of payloads) {
+    const found = walkForAwb(payload, 0);
+    if (found) return found;
+  }
+  return null;
+}
+const AWB_KEY_RE = /^(awb|elavon_?awb|application_?work_?basket|work_?basket(_?id|_?no|_?number)?|boarding_?id|processor_?(ref|reference|application_?id)|elavon_?(ref|reference|app(lication)?_?id))$/i;
+function walkForAwb(node: unknown, depth: number): string | null {
+  if (node == null || depth > 8) return null;
+  if (typeof node === 'string' || typeof node === 'number') return null;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const f = walkForAwb(item, depth + 1);
+      if (f) return f;
+    }
+    return null;
+  }
+  if (typeof node !== 'object') return null;
+  const obj = node as Record<string, unknown>;
+  for (const [k, v] of Object.entries(obj)) {
+    if (AWB_KEY_RE.test(k) && (typeof v === 'string' || typeof v === 'number')) {
+      const s = String(v).trim();
+      if (s && s.length >= 4 && s.length <= 32) return s;
+    }
+  }
+  for (const v of Object.values(obj)) {
+    if (typeof v === 'string') {
+      const m = v.match(/\bAWB\s*[:#]?\s*([A-Z0-9-]{4,24})\b/i);
+      if (m?.[1]) return m[1];
+    }
+  }
+  for (const v of Object.values(obj)) {
+    if (v && typeof v === 'object') {
+      const f = walkForAwb(v, depth + 1);
+      if (f) return f;
+    }
+  }
+  return null;
+}
+// --- END extractElavonAwb ---
 
 Deno.serve(async (req) => {
   try {
@@ -77,10 +124,28 @@ Deno.serve(async (req) => {
           ? base44.asServiceRole.entities.MerchantMID
           : base44.asServiceRole.entities.MerchantLocations;
 
-        if (currentState === 'APPROVED' || currentState === 'COMPLETE') {
-          // Fetch full application to extract the assigned MID
+        // Always try to capture AWB while pending / on approve (needed for ApplicationStatus@)
+        let appData: any = null;
+        try {
           const appRes = await fetch(`${mspBase}/applications/${mspApplicationNo}`, { headers: mspHeaders });
-          const appData = await appRes.json();
+          if (appRes.ok) appData = await appRes.json();
+        } catch { /* non-fatal */ }
+
+        const elavonAwb = extractElavonAwb(statusData, appData, appData?.application);
+        if (elavonAwb && entityType === 'merchantMID') {
+          try {
+            await entity.update(id, { elavonAwb });
+            console.log(`[pollMSPStatus] ${entityType} ${id} AWB captured: ${elavonAwb}`);
+          } catch (e: any) {
+            console.warn(`[pollMSPStatus] AWB persist failed:`, e?.message);
+          }
+        }
+
+        if (currentState === 'APPROVED' || currentState === 'COMPLETE') {
+          if (!appData) {
+            const appRes = await fetch(`${mspBase}/applications/${mspApplicationNo}`, { headers: mspHeaders });
+            appData = await appRes.json();
+          }
           const elavonMID = appData?.application?.merchant_id
             || appData?.application?.elavon_mid
             || appData?.application?.mid
@@ -88,20 +153,30 @@ Deno.serve(async (req) => {
             || String(appData?.applications?.[0]?.mid || '')
             || null;
 
-          await entity.update(id, {
+          const patch: Record<string, unknown> = {
             applicationStepStatus: 'Active',
             elavonMID,
-          });
-          console.log(`[pollMSPStatus] ${entityType} ${id} (${dbaName}) activated — MID: ${elavonMID}`);
-          results.push({ id, dbaName, entityType, mspApplicationNo, result: 'activated', elavonMID, currentState });
+          };
+          if (elavonAwb) patch.elavonAwb = elavonAwb;
+          await entity.update(id, patch);
+          console.log(`[pollMSPStatus] ${entityType} ${id} (${dbaName}) activated — MID: ${elavonMID} AWB: ${elavonAwb || '—'}`);
+          results.push({ id, dbaName, entityType, mspApplicationNo, result: 'activated', elavonMID, elavonAwb, currentState });
 
         } else if (['DECLINED', 'RETURNED', 'PROCESSORRETURNED', 'PROCESSORRETURN', 'ERROR'].includes(currentState)) {
           await entity.update(id, { applicationStepStatus: 'Error' });
           console.log(`[pollMSPStatus] ${entityType} ${id} (${dbaName}) declined — state: ${currentState}`);
-          results.push({ id, dbaName, entityType, mspApplicationNo, result: 'declined', currentState, details: statusData });
+          results.push({ id, dbaName, entityType, mspApplicationNo, result: 'declined', currentState, elavonAwb, details: statusData });
 
         } else {
-          results.push({ id, dbaName, entityType, mspApplicationNo, result: 'still_pending', currentState });
+          results.push({
+            id, dbaName, entityType, mspApplicationNo,
+            result: 'still_pending',
+            currentState,
+            elavonAwb: elavonAwb || null,
+            note: elavonAwb
+              ? 'In pre-screen or underwriting — AWB available for ApplicationStatus@'
+              : 'Pending — AWB not yet visible on MSP status/application payload (check field name live)',
+          });
         }
 
       } catch (err: any) {

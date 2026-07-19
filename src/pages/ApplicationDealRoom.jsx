@@ -52,6 +52,7 @@ export default function ApplicationDealRoom() {
   const [selectedMidId, setSelectedMidId] = useState('');
   const [awbDraft, setAwbDraft] = useState('');
   const [savingAwb, setSavingAwb] = useState(false);
+  const [refreshingAwb, setRefreshingAwb] = useState(false);
   const [uwSubject, setUwSubject] = useState('');
   const [uwBody, setUwBody] = useState('');
   const [uwDirection, setUwDirection] = useState('inbound');
@@ -217,6 +218,35 @@ export default function ApplicationDealRoom() {
       setError(err?.response?.data?.error || err.message || 'Could not save AWB');
     } finally {
       setSavingAwb(false);
+    }
+  };
+
+  const refreshAwbFromMsp = async () => {
+    if (!selectedMidId || refreshingAwb) return;
+    setRefreshingAwb(true);
+    setError('');
+    setSyncMsg('');
+    try {
+      const res = await base44.functions.invoke('manageApplicationDesk', {
+        action: 'refreshAwbFromMsp',
+        corporateId,
+        midId: selectedMidId,
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      if (res.data?.found && res.data?.elavonAwb) {
+        setAwbDraft(res.data.elavonAwb);
+        setSyncMsg(`AWB from MSP: ${res.data.elavonAwb}${res.data.currentState ? ` · state ${res.data.currentState}` : ''}`);
+        await load();
+      } else {
+        setSyncMsg(
+          res.data?.hint
+          || `AWB not on MSP yet${res.data?.currentState ? ` (state: ${res.data.currentState})` : ''}. Poll again after submit, or paste manually.`
+        );
+      }
+    } catch (err) {
+      setError(err?.response?.data?.error || err.message || 'Could not refresh AWB from MSP');
+    } finally {
+      setRefreshingAwb(false);
     }
   };
 
@@ -458,10 +488,20 @@ export default function ApplicationDealRoom() {
                           <input
                             value={awbDraft}
                             onChange={(e) => setAwbDraft(e.target.value)}
-                            placeholder="Paste AWB from Elavon underwriting"
+                            placeholder="Pulled from MSP after submit — or paste if needed"
                             className={inputCls}
                           />
                         </div>
+                        <button
+                          type="button"
+                          onClick={refreshAwbFromMsp}
+                          disabled={refreshingAwb || !selectedMid?.mspApplicationNo}
+                          title={selectedMid?.mspApplicationNo ? 'GET AWB from MSPWare' : 'Submit to Elavon first (needs MSP app #)'}
+                          className="flex items-center justify-center gap-1.5 border border-cb-border text-gray-300 font-semibold text-cb-caption px-3 py-2.5 rounded-cb hover:text-white hover:border-cb-border-strong disabled:opacity-40"
+                        >
+                          {refreshingAwb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                          From MSP
+                        </button>
                         <button
                           type="button"
                           onClick={saveAwb}
@@ -469,9 +509,12 @@ export default function ApplicationDealRoom() {
                           className="flex items-center justify-center gap-1.5 bg-cb-accent text-cb-bg font-semibold text-cb-caption px-4 py-2.5 rounded-cb hover:opacity-90 disabled:opacity-40"
                         >
                           {savingAwb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                          Save AWB
+                          Save
                         </button>
                       </div>
+                      <p className="text-cb-caption text-gray-600">
+                        After signing, agents submit to Elavon via MSP. Pre-screen may auto-approve in ~15 minutes or send to underwriting. AWB should appear on MSP after submit — use <span className="text-gray-400">From MSP</span> (pollMSPStatus also fills it while Pending MID).
+                      </p>
                       <p className="text-cb-caption text-gray-600">
                         Status: {selectedMid.applicationStepStatus || '—'}
                         {selectedMid.mspApplicationNo && <> · MSP #{selectedMid.mspApplicationNo}</>}

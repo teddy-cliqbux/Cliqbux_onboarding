@@ -11,6 +11,7 @@
  *   logUwMessage — { corporateId, midId?, elavonAwb?, subject?, bodyText, direction?, fromAddress?, toAddress?, messageDate? }
  *   deleteUwMessage — { corporateId, messageId }
  *   requestStatusInquiry — { corporateId, midId } — logs outbound + returns mailto for ApplicationStatus@elavon.com (AWB in subject)
+ *   refreshAwbFromMsp — { corporateId, midId } — GET MSP status+application, persist elavonAwb
  *
  * Never expose to merchant portal tokens.
  * Gmail sync of underwriting@ lives in syncUnderwritingMail (separate function).
@@ -55,6 +56,49 @@ function parseEntities(raw: unknown): any[] {
   }
   return Array.isArray(v) ? v : [];
 }
+
+// --- BEGIN extractElavonAwb (sync with helpers/extractElavonAwb.ts) ---
+function extractElavonAwb(...payloads: unknown[]): string | null {
+  for (const payload of payloads) {
+    const found = walkForAwb(payload, 0);
+    if (found) return found;
+  }
+  return null;
+}
+const AWB_KEY_RE = /^(awb|elavon_?awb|application_?work_?basket|work_?basket(_?id|_?no|_?number)?|boarding_?id|processor_?(ref|reference|application_?id)|elavon_?(ref|reference|app(lication)?_?id))$/i;
+function walkForAwb(node: unknown, depth: number): string | null {
+  if (node == null || depth > 8) return null;
+  if (typeof node === 'string' || typeof node === 'number') return null;
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const f = walkForAwb(item, depth + 1);
+      if (f) return f;
+    }
+    return null;
+  }
+  if (typeof node !== 'object') return null;
+  const obj = node as Record<string, unknown>;
+  for (const [k, v] of Object.entries(obj)) {
+    if (AWB_KEY_RE.test(k) && (typeof v === 'string' || typeof v === 'number')) {
+      const s = String(v).trim();
+      if (s && s.length >= 4 && s.length <= 32) return s;
+    }
+  }
+  for (const v of Object.values(obj)) {
+    if (typeof v === 'string') {
+      const m = v.match(/\bAWB\s*[:#]?\s*([A-Z0-9-]{4,24})\b/i);
+      if (m?.[1]) return m[1];
+    }
+  }
+  for (const v of Object.values(obj)) {
+    if (v && typeof v === 'object') {
+      const f = walkForAwb(v, depth + 1);
+      if (f) return f;
+    }
+  }
+  return null;
+}
+// --- END extractElavonAwb ---
 
 Deno.serve(async (req) => {
   try {
@@ -410,9 +454,72 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── refreshAwbFromMsp — pull AWB from MSPWare for this MID ────────────────
+    if (action === 'refreshAwbFromMsp') {
+      const midId = String(body.midId || '').trim();
+      if (!midId) return Response.json({ error: 'midId required' }, { status: 400 });
+      let mid;
+      try {
+        mid = await base44.asServiceRole.entities.MerchantMID.get(midId);
+      } catch {
+        return Response.json({ error: 'MID not found' }, { status: 404 });
+      }
+      if (!mid || String(mid.corporateId) !== corporateId) {
+        return Response.json({ error: 'MID not found for this deal' }, { status: 404 });
+      }
+      const appNo = String(mid.mspApplicationNo || '').trim();
+      if (!appNo) {
+        return Response.json({
+          error: 'No MSPWare application number on this MID — submit to Elavon first.',
+          code: 'NO_MSP_APP',
+        }, { status: 422 });
+      }
+
+      const mspBase = (Deno.env.get('MSP_BASE_URL') || 'https://api.msppulsepoint.com/v2').replace(/\/$/, '');
+      const apiKey = Deno.env.get('MSP_APP_KEY') || '';
+      const appId = Deno.env.get('MSP_APP_ID') || 'cliqbux';
+      if (!apiKey) return Response.json({ error: 'MSP_APP_KEY not set' }, { status: 500 });
+      const mspHeaders = { 'X-API-KEY': apiKey, 'X-App-ID': appId, Accept: 'application/json' };
+
+      const [stRes, appRes] = await Promise.all([
+        fetch(`${mspBase}/applications/${appNo}/status`, { headers: mspHeaders }),
+        fetch(`${mspBase}/applications/${appNo}`, { headers: mspHeaders }),
+      ]);
+      const statusData = stRes.ok ? await stRes.json().catch(() => null) : null;
+      const appData = appRes.ok ? await appRes.json().catch(() => null) : null;
+      const elavonAwb = extractElavonAwb(statusData, appData, appData?.application);
+      const currentState = String(statusData?.currentState || statusData?.status || '').toUpperCase() || null;
+
+      if (!elavonAwb) {
+        return Response.json({
+          success: false,
+          found: false,
+          mspApplicationNo: appNo,
+          currentState,
+          statusHttp: stRes.status,
+          appHttp: appRes.status,
+          statusKeys: statusData && typeof statusData === 'object' ? Object.keys(statusData) : [],
+          applicationKeys: appData?.application && typeof appData.application === 'object'
+            ? Object.keys(appData.application)
+            : (appData && typeof appData === 'object' ? Object.keys(appData) : []),
+          hint: 'AWB not found on MSP payload yet — confirm field name via debugMSPFormRaw / live status after submit. Manual paste still works.',
+        });
+      }
+
+      const updated = await base44.asServiceRole.entities.MerchantMID.update(midId, { elavonAwb });
+      return Response.json({
+        success: true,
+        found: true,
+        elavonAwb,
+        currentState,
+        mid: updated,
+        mspApplicationNo: appNo,
+      });
+    }
+
     return Response.json({
       error: 'Unknown action',
-      hint: 'Expected get | addNote | addTask | updateTask | deleteItem | setMidAwb | logUwMessage | deleteUwMessage | requestStatusInquiry',
+      hint: 'Expected get | addNote | addTask | updateTask | deleteItem | setMidAwb | logUwMessage | deleteUwMessage | requestStatusInquiry | refreshAwbFromMsp',
     }, { status: 400 });
   } catch (error: any) {
     console.error('[manageApplicationDesk]', error?.message);
