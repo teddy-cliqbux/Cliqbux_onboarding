@@ -9,6 +9,8 @@ Boarding people on a Deal are not all “signers.” We distinguish three roles 
 ## Workflow (2026-07-18)
 
 - **KYC first, then sign.** Signing unlocks only when every AML principal (Control Person + Beneficial Owners) is verified. Outstanding invites do **not** unlock — the Control Person waits.
+- **People step is first** (before Locations/Banking). Form filler defaults to Control Person with plain-language guidance. Continue = roster configured (1 CP), not all KYC done — remotes finish in parallel.
+- **Sign & Submit is a separate last step** (`OnboardingSigning`). Waiting room links back to People / Locations / Banking while KYC is pending.
 - **Do not stage for signing while KYC is pending.** `signApplication` returns `KYC_INCOMPLETE` and will not create BoldSign packages or set `portalLockStatus` to signing. Premature locks are healed to `unlocked` so Locations / Banking stay editable while remotes finish KYC.
 - **Invite absent Beneficial Owners** with `intent=kyc` (identity only).
 - **Invite absent Control Person** with `intent=sign` (KYC + BoldSign) — used when the form filler is not the Control Person.

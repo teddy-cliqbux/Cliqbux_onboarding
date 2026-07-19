@@ -24,18 +24,18 @@ function detectRawFormIssues(rawForm) {
         issues.push({
           field: 'owner_id_number',
           label: 'Owner SSN appears to be test/sequential data',
-          detail: 'The SSN on file is not valid. Please re-enter your real Social Security Number in Identity Verification.',
-          step: 'verify',
-          stepLabel: 'Identity Verification',
+          detail: 'The SSN on file is not valid. Please re-enter your real Social Security Number in People & KYC.',
+          step: 'people',
+          stepLabel: 'People & KYC',
           severity: 'critical',
         });
       }
     }
     if (!owner.owner_dob) {
-      issues.push({ field: 'owner_dob', label: 'Owner Date of Birth is missing', step: 'verify', stepLabel: 'Identity Verification', severity: 'error' });
+      issues.push({ field: 'owner_dob', label: 'Owner Date of Birth is missing', step: 'people', stepLabel: 'People & KYC', severity: 'error' });
     }
     if (!ssn) {
-      issues.push({ field: 'owner_id_number', label: 'Owner SSN is missing', step: 'verify', stepLabel: 'Identity Verification', severity: 'error' });
+      issues.push({ field: 'owner_id_number', label: 'Owner SSN is missing', step: 'people', stepLabel: 'People & KYC', severity: 'error' });
     }
   }
 
@@ -67,13 +67,15 @@ function primaryStep(byStep, rawIssues) {
 }
 
 const STEP_COLORS = {
+  people:    'text-gray-300 bg-cb-bg border-cb-border',
   locations: 'text-gray-300 bg-cb-bg border-cb-border',
   banking:   'text-gray-300 bg-cb-bg border-cb-border',
   verify:    'text-gray-300 bg-cb-bg border-cb-border',
 };
 
 const STEP_LABELS = {
-  verify: 'Identity Verification',
+  people: 'People & KYC',
+  verify: 'Sign & Submit',
   locations: 'Locations & MIDs',
   banking: 'Banking Setup',
 };

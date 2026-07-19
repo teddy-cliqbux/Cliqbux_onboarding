@@ -652,22 +652,28 @@ MSPWare rolls back the entire form and returns `percent_complete: -1` when **any
 
 ---
 
-## Onboarding Portal Flow (REORDERED 2026-07-10 — quote signing moved to LAST)
+## Onboarding Portal Flow (REORDERED 2026-07-18 — People first; signing last)
 
-**Decided by Teddy 2026-07-10:** the equipment quote is signed AFTER the merchant
-account signing, and nothing in the application flow is gated on it. The flow is now:
+**Decided by Teddy 2026-07-18:** People & KYC is decoupled from Application Signing so remote KYC does not brick-wall Locations/Banking.
 
 ```
-Step 1: Locations & Org Chart (OnboardingLocations) — always unlocked
-Step 2: Banking (OnboardingBanking) — unlocked when ≥1 location exists
-Step 3: Identity Verification & Merchant Agreement Signing (OnboardingVerification) — unlocked when 1+2 done
-Step 4: Equipment Quote signing — EMBEDDED IFRAME on PostSubmissionDashboard, after submission
+Step 1: People & KYC (OnboardingPeople) — Control Person default = form filler; invite remotes; Continue without all KYC
+Step 2: Locations & Org Chart (OnboardingLocations)
+Step 3: Banking (OnboardingBanking)
+Step 4: Sign & Submit (OnboardingSigning / OnboardingVerification) — BoldSign only after all AML KYC verified
+Step 5: Equipment Quote — EMBEDDED on PostSubmissionDashboard after submission
 ```
 
-- `Step1Agreement` is RETIRED (no longer imported/rendered anywhere). Do not route merchants to it.
+- `completedSteps.people` = roster configured (1 Control Person), not all KYC complete
+- `signApplication` still refuses staging while KYC incomplete (`KYC_INCOMPLETE`)
+- `Step1Agreement` is RETIRED. Do not route merchants to it.
 - `applicationStatus: 'Incomplete'` no longer locks anything — it's just the pre-quote-signed state.
 - **Quote iframing: the 2026-06-27 "CONFIRMED BLOCKED" finding is SUPERSEDED for custom-domain quotes.** Quotes served from `www.cliqbux.com` (HubSpot custom domain) send NO `X-Frame-Options`/`frame-ancestors` — verified via curl 2026-07-10 — so `PostSubmissionDashboard` embeds them directly. HubSpot's own `*.hs-sites-na2.com` URLs remain unframeable; if a quote URL ever isn't on cliqbux.com, fall back to the "Open in new tab" link (already rendered next to the iframe).
 - Quote signature detection: `syncFromHubspot` reads the quote's `hs_quote_esign_status` and upgrades `applicationStatus` Incomplete → 'Quote Signed' (never regresses later statuses). The `quote_signed` HubSpot webhook remains a second path.
+
+### Historical (pre-2026-07-18) — Locations first
+
+Pre-2026-07-18 flow was Locations → Banking → combined Identity & Signing. Quote-last (2026-07-10) still applies.
 
 ### Historical (pre-2026-07-10) flow — quote-first, for context only
 
@@ -684,7 +690,7 @@ The `STEP_SUMMARY` (review step) was removed — it was redundant.
 - Entity details (ownershipType, taxClassType, establishmentYear) are per-entity inline panels
 - BusinessDetailsPanel was removed from the top-level — now inline per entity
 
-**Progress tracker** (`src/components/onboarding/ProgressTracker.jsx`): 4-step clickable nav.
+**Progress tracker** (`src/components/onboarding/ProgressTracker.jsx`): People → Locations → Banking → Sign & Submit (+ Equipment after submit).
 
 ---
 

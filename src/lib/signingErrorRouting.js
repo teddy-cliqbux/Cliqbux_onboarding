@@ -3,7 +3,7 @@
  * Shared by SigningErrorGuide (Fix buttons) and unlock navigation.
  */
 
-export const SIGNING_FIX_STEP_ORDER = ['verify', 'locations', 'banking'];
+export const SIGNING_FIX_STEP_ORDER = ['people', 'verify', 'locations', 'banking'];
 
 export const SIGNING_FIELD_STEP_MAP = {
   deposit_account_no:        { label: 'Bank Account Number',            step: 'banking',   stepLabel: 'Banking Setup' },
@@ -22,12 +22,12 @@ export const SIGNING_FIELD_STEP_MAP = {
   ownership_type:            { label: 'Business Entity Type',           step: 'locations', stepLabel: 'Business Info' },
   year_business_established: { label: 'Year Established',               step: 'locations', stepLabel: 'Business Info' },
   ownership_years:           { label: 'Years in Business',              step: 'locations', stepLabel: 'Business Info' },
-  ownership_percent:         { label: 'Ownership Percentage',           step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_dob:                 { label: 'Owner Date of Birth',            step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_id_number:           { label: 'Owner SSN',                      step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_address:             { label: 'Owner Home Address',             step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_firstname:           { label: 'Owner First Name',               step: 'verify',    stepLabel: 'Identity Verification' },
-  owner_lastname:            { label: 'Owner Last Name',                step: 'verify',    stepLabel: 'Identity Verification' },
+  ownership_percent:         { label: 'Ownership Percentage',           step: 'people',    stepLabel: 'People & KYC' },
+  owner_dob:                 { label: 'Owner Date of Birth',            step: 'people',    stepLabel: 'People & KYC' },
+  owner_id_number:           { label: 'Owner SSN',                      step: 'people',    stepLabel: 'People & KYC' },
+  owner_address:             { label: 'Owner Home Address',             step: 'people',    stepLabel: 'People & KYC' },
+  owner_firstname:           { label: 'Owner First Name',               step: 'people',    stepLabel: 'People & KYC' },
+  owner_lastname:            { label: 'Owner Last Name',                step: 'people',    stepLabel: 'People & KYC' },
   business_address:          { label: 'Business Street Address',        step: 'locations', stepLabel: 'Locations & MIDs' },
   business_city:             { label: 'Business City',                  step: 'locations', stepLabel: 'Locations & MIDs' },
   business_state_usa:        { label: 'Business State',                 step: 'locations', stepLabel: 'Locations & MIDs' },
@@ -36,8 +36,8 @@ export const SIGNING_FIELD_STEP_MAP = {
 
 /** Heuristic phrases → step (checked before field-key matching). */
 const PHRASE_STEP_RULES = [
-  { re: /ownership\s*%|ownership\s*percent|must total\s*100|sole\s*propriet/i, step: 'verify' },
-  { re: /\bssn\b|social security|owner_id|date of birth|\bdob\b/i, step: 'verify' },
+  { re: /ownership\s*%|ownership\s*percent|must total\s*100|sole\s*propriet/i, step: 'people' },
+  { re: /\bssn\b|social security|owner_id|date of birth|\bdob\b/i, step: 'people' },
   { re: /deposit_account|routing|bank account/i, step: 'banking' },
   { re: /\bmcc\b|monthly_sales|highest_ticket|business_address|legal address/i, step: 'locations' },
 ];
@@ -78,8 +78,8 @@ export function categorizeSigningErrors(errors) {
     const raw = typeof err === 'string' ? err : (err?.message || err?.description || JSON.stringify(err));
     const phrase = PHRASE_STEP_RULES.find((r) => r.re.test(raw));
     if (phrase) {
-      const meta = phrase.step === 'verify'
-        ? { step: 'verify', stepLabel: 'Identity Verification', label: 'Signer / ownership details' }
+      const meta = phrase.step === 'people' || phrase.step === 'verify'
+        ? { step: phrase.step === 'verify' ? 'people' : phrase.step, stepLabel: 'People & KYC', label: 'Signer / ownership details' }
         : phrase.step === 'banking'
           ? { step: 'banking', stepLabel: 'Banking Setup', label: 'Bank details' }
           : { step: 'locations', stepLabel: 'Locations & MIDs', label: 'Business / MID details' };

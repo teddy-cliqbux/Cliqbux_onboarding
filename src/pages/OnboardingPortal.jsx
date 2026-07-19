@@ -9,7 +9,8 @@ import SelfServePricing from '@/components/onboarding/SelfServePricing';
 // Plaid verification is now handled per-location inside OnboardingLocations
 import OnboardingLocations from './OnboardingLocations';
 import OnboardingBanking from './OnboardingBanking';
-import OnboardingVerification from './OnboardingVerification';
+import OnboardingPeople from './OnboardingPeople';
+import OnboardingSigning from './OnboardingSigning';
 // OnboardingSummary import removed — the summary step was retired 2026-07-10
 import MobilePricing from '@/components/onboarding/MobilePricing';
 import PortalEntry from '@/components/onboarding/PortalEntry';
@@ -31,13 +32,14 @@ const SELF_SERVE_TIERS = ['Self_Swiped', 'Self_Keyed', 'SELF_SERVE_CASH_DISCOUNT
 
 // Steps within the post-agreement flow
 const STEP_WELCOME      = 'welcome';
+const STEP_PEOPLE       = 'people';
 const STEP_LOCATIONS    = 'locations';
 const STEP_BANKING      = 'banking';
 const STEP_VERIFICATION = 'verification';
 const STEP_SUCCESS      = 'success';
 
 // Order used for directional step transitions (forward = slide left, back = slide right)
-const STEP_ORDER = [STEP_WELCOME, STEP_LOCATIONS, STEP_BANKING, STEP_VERIFICATION];
+const STEP_ORDER = [STEP_WELCOME, STEP_PEOPLE, STEP_LOCATIONS, STEP_BANKING, STEP_VERIFICATION];
 
 // pricingTier simplified 2026-07-06 to CUSTOM_FLAT_RATE / CUSTOM_INTERCHANGE_PLUS /
 // SELF_SERVE_CASH_DISCOUNT (see AGENTS.md Critical Lesson #12). Legacy labels kept
@@ -545,19 +547,34 @@ export default function OnboardingPortal() {
     }
   };
 
+  const handlePeopleContinue = () => {
+    setCompletedSteps(prev => ({ ...prev, people: true }));
+    goToStep(STEP_LOCATIONS);
+    trackProgress(profile?.corporateId, {
+      currentStep: 'locations',
+      completedSteps: { agreement: true, people: true },
+    });
+  };
+
   const handleLocationsContinue = ({ locations: updatedLocations, legalEntities }) => {
     setLocations(updatedLocations);
     setCompletedSteps(prev => ({ ...prev, locations: true }));
     goToStep(STEP_BANKING);
     pushMilestoneToHubspot(profile?.corporateId, 'locations_added');
-    trackProgress(profile?.corporateId, { currentStep: 'banking', completedSteps: { agreement: true, locations: true } });
+    trackProgress(profile?.corporateId, {
+      currentStep: 'banking',
+      completedSteps: { agreement: true, people: true, locations: true },
+    });
   };
 
   const handleBankingContinue = ({ locations: updatedLocations }) => {
     setLocations(updatedLocations);
     setCompletedSteps(prev => ({ ...prev, banking: true }));
     goToStep(STEP_VERIFICATION);
-    trackProgress(profile?.corporateId, { currentStep: 'verification', completedSteps: { agreement: true, locations: true, banking: true } });
+    trackProgress(profile?.corporateId, {
+      currentStep: 'verification',
+      completedSteps: { agreement: true, people: true, locations: true, banking: true },
+    });
   };
 
   const onBackStep = () => goToStep(STEP_WELCOME);
@@ -587,6 +604,7 @@ export default function OnboardingPortal() {
       // merchants can fix signers without being dumped on Locations.
       const fixKey = readSigningFixStep(profile.corporateId) || 'verify';
       const stepMap = {
+        people: STEP_PEOPLE,
         locations: STEP_LOCATIONS,
         banking: STEP_BANKING,
         verify: STEP_VERIFICATION,
@@ -604,7 +622,13 @@ export default function OnboardingPortal() {
 
   // Step key → internal step constant
   const handleNavigate = (stepKey) => {
-    const map = { quote: null, locations: STEP_LOCATIONS, banking: STEP_BANKING, verify: STEP_VERIFICATION };
+    const map = {
+      quote: null,
+      people: STEP_PEOPLE,
+      locations: STEP_LOCATIONS,
+      banking: STEP_BANKING,
+      verify: STEP_VERIFICATION,
+    };
     const target = map[stepKey];
     if (target) goToStep(target);
   };
@@ -620,7 +644,11 @@ export default function OnboardingPortal() {
       console.error('[handleSigningComplete] failed to persist Submitted', err);
     }
     pushMilestoneToHubspot(profile?.corporateId, 'application_submitted');
-    trackProgress(profile?.corporateId, { currentStep: 'submitted', completedSteps: { agreement: true, locations: true, banking: true, verify: true }, applicationStatus: 'Submitted' });
+    trackProgress(profile?.corporateId, {
+      currentStep: 'submitted',
+      completedSteps: { agreement: true, people: true, locations: true, banking: true, verify: true },
+      applicationStatus: 'Submitted',
+    });
     setProfile(prev => ({ ...prev, applicationStatus: 'Submitted', portalLockStatus: 'all_signed' }));
     navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`, { replace: true });
   };
@@ -664,12 +692,16 @@ export default function OnboardingPortal() {
       // new tab via a resume link) re-locks milestones the merchant already
       // finished, even though the data is safely on the server.
       const hasLocations = (locations?.length ?? 0) > 0;
+      // People "done" = merchant clicked Continue on People, or (legacy) all KYC already verified.
+      // Having locations alone does NOT mark People complete — they may still need to invite BOs.
+      const hasPeople = !!allCompletedSteps.people || signersVerified;
       const hasBanking = hasLocations && locations.every(l => l.bankDetails?.routingNumber);
       // "Complete" means the data can actually build a valid application — the
       // backend readiness check covers entity, location, and MID required fields.
       // HubSpot prefill creates partially-filled records, so records merely
       // existing is NOT completion (Teddy, 2026-07-10).
       const dataReady = readiness ? readiness.complete : hasLocations;
+      const mPeopleDone = hasPeople;
       const m1Done = hasLocations && dataReady;
       const m1Attention = hasLocations && !dataReady;
       const attentionItems = readiness ? [
@@ -679,6 +711,7 @@ export default function OnboardingPortal() {
       ] : [];
       const m2Done = !!allCompletedSteps.banking || hasBanking;
       const m3Done = applicationStatus === 'Submitted';
+      const mLocUnlocked = mPeopleDone || hasLocations;
       const m2Unlocked = hasLocations;
       const m3Unlocked = m1Done && m2Done;
 
@@ -688,13 +721,22 @@ export default function OnboardingPortal() {
             <p className="text-cb-caption uppercase text-gray-500 mb-2">Your application</p>
             <h2 className="font-display text-cb-display text-white">{profile.legalName}</h2>
             <p className="text-cb-body-lg text-gray-400 mt-2 max-w-xl">
-              Work through Locations, Banking, and Sign & Submit — usually one sitting. Have your business details, bank account, and a photo ID ready.
+              Start with who signs and owns the business, then Locations, Banking, and Sign & Submit. Invite remote owners early so their KYC can finish while you work.
             </p>
           </div>
 
           <div className="flex flex-col gap-3">
             <MilestoneCard
               index={1}
+              title="People & KYC"
+              description="Name the Control Person (who signs) and Beneficial Owners. Invite anyone who isn't here — they can finish identity checks remotely."
+              done={mPeopleDone}
+              unlocked={true}
+              ctaLabel={mPeopleDone ? 'Review people' : 'Set up people'}
+              onCta={() => goToStep(STEP_PEOPLE)}
+            />
+            <MilestoneCard
+              index={2}
               title="Locations"
               description={m1Attention
                 ? 'We prefilled what we could from your Cliqbux representative — a few details still need your input:'
@@ -702,12 +744,13 @@ export default function OnboardingPortal() {
               done={m1Done}
               attention={m1Attention}
               attentionItems={attentionItems}
-              unlocked={true}
+              unlocked={mLocUnlocked}
               ctaLabel={m1Attention ? 'Finish Details' : 'Set up locations'}
               onCta={() => goToStep(STEP_LOCATIONS)}
+              ctaDisabled={!mLocUnlocked}
             />
             <MilestoneCard
-              index={2}
+              index={3}
               title="Banking"
               description="Connect or manually enter the bank account where your processing funds will deposit."
               done={m2Done}
@@ -716,19 +759,21 @@ export default function OnboardingPortal() {
               onCta={() => goToStep(STEP_BANKING)}
             />
             <MilestoneCard
-              index={3}
+              index={4}
               title="Sign & Submit"
-              description="Verify signer identities, sign your merchant processing agreement, and submit for underwriting approval."
+              description={signersVerified
+                ? 'Sign your merchant processing agreement and submit for underwriting approval.'
+                : 'Opens when every Beneficial Owner and the Control Person finish KYC. Keep working on Locations and Banking while you wait.'}
               done={m3Done}
               unlocked={m3Unlocked}
-              ctaLabel="Continue to signing"
+              ctaLabel={signersVerified ? 'Continue to signing' : 'Check signing status'}
               onCta={() => goToStep(STEP_VERIFICATION)}
             />
             {/* Equipment is dashboard-only until Submitted (critique 2026-07-15).
                 Agents still reach the dashboard via the impersonation banner CTA. */}
             {m3Done && (
               <MilestoneCard
-                index={4}
+                index={5}
                 title="Equipment"
                 description="Your equipment and services order — review and sign on the post-signing dashboard."
                 done={quoteSigned}
@@ -745,13 +790,22 @@ export default function OnboardingPortal() {
     // Deep data-entry steps — available regardless of quote status
     // (2026-07-10 reorder: the equipment quote no longer gates anything)
     {
+      if (step === STEP_PEOPLE) {
+        return (
+          <OnboardingPeople
+            profile={profile}
+            onContinue={handlePeopleContinue}
+            onBack={onBackStep}
+          />
+        );
+      }
       if (step === STEP_LOCATIONS) {
         return (
           <OnboardingLocations
             profile={profile}
             locations={locations}
             onContinue={handleLocationsContinue}
-            onBack={onBackStep}
+            onBack={() => goToStep(STEP_PEOPLE)}
           />
         );
       }
@@ -766,7 +820,7 @@ export default function OnboardingPortal() {
       }
       if (step === STEP_VERIFICATION) {
         return (
-          <OnboardingVerification
+          <OnboardingSigning
             key={`verify-${verifySessionKey}`}
             profile={profile}
             locations={locations}
@@ -790,7 +844,12 @@ export default function OnboardingPortal() {
 
   // Map internal step → tracker key. On the Welcome Hub, highlight the next
   // incomplete merchant step so ProgressTracker matches the worklist.
-  const stepToKey = { [STEP_LOCATIONS]: 'locations', [STEP_BANKING]: 'banking', [STEP_VERIFICATION]: 'verify' };
+  const stepToKey = {
+    [STEP_PEOPLE]: 'people',
+    [STEP_LOCATIONS]: 'locations',
+    [STEP_BANKING]: 'banking',
+    [STEP_VERIFICATION]: 'verify',
+  };
   // 2026-07-10 flow reorder: the equipment quote is signed LAST (embedded on the
   // post-submission dashboard). 'Quote Signed' status = HubSpot esign came back
   // SIGNED via syncFromHubspot or the quote_signed webhook.
@@ -799,9 +858,10 @@ export default function OnboardingPortal() {
   const hasLocsForTracker = (locations?.length ?? 0) > 0;
   const hasBankForTracker = hasLocsForTracker && locations.every((l) => l.bankDetails?.routingNumber);
   const dataReadyForTracker = readiness ? readiness.complete : hasLocsForTracker;
-  let currentTrackerStep = stepToKey[step] || 'locations';
+  let currentTrackerStep = stepToKey[step] || 'people';
   if (step === STEP_WELCOME) {
-    if (!(hasLocsForTracker && dataReadyForTracker)) currentTrackerStep = 'locations';
+    if (!(completedSteps.people || signersVerified || hasLocsForTracker)) currentTrackerStep = 'people';
+    else if (!(hasLocsForTracker && dataReadyForTracker)) currentTrackerStep = 'locations';
     else if (!(completedSteps.banking || hasBankForTracker)) currentTrackerStep = 'banking';
     else if (applicationStatus !== 'Submitted') currentTrackerStep = 'verify';
     else currentTrackerStep = quoteSigned ? 'quote' : 'verify';

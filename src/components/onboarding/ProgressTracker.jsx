@@ -7,12 +7,13 @@ const SPRING = { type: 'spring', stiffness: 150, damping: 20 };
 // 2026-07-10 flow reorder: data entry and the merchant agreement come first;
 // the equipment quote is signed LAST (on the post-submission dashboard).
 const CORE_STEPS = [
-  { id: 1, label: 'Locations',      key: 'locations' },
-  { id: 2, label: 'Banking',        key: 'banking'   },
-  { id: 3, label: 'Sign & Submit',  key: 'verify'    },
+  { id: 1, label: 'People',         key: 'people'    },
+  { id: 2, label: 'Locations',      key: 'locations' },
+  { id: 3, label: 'Banking',        key: 'banking'   },
+  { id: 4, label: 'Sign & Submit',  key: 'verify'    },
 ];
 
-const EQUIPMENT_STEP = { id: 4, label: 'Equipment', key: 'quote' };
+const EQUIPMENT_STEP = { id: 5, label: 'Equipment', key: 'quote' };
 
 export default function ProgressTracker({
   currentStep,

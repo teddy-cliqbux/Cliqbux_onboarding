@@ -179,6 +179,19 @@ export function isRosterReadyForSigning(signers = []) {
   return allAmlKycComplete(list);
 }
 
+/**
+ * People step Continue gate — roster configured, NOT all KYC complete.
+ * Exactly one Control Person; remotes may still have outstanding invites.
+ */
+export function isRosterConfiguredForPeopleStep(signers = []) {
+  const list = signers || [];
+  if (list.length === 0) return false;
+  const rules = assertSignerRosterRules(list);
+  if (!rules.ok) return false;
+  const controls = effectiveControlPersons(list);
+  return controls.length === 1;
+}
+
 /** Cleared enough for Control Person signing prep (invite out, verified, or signed). */
 export function isClearedForSigning(s) {
   const n = normalizeSignerLifecycle(s?.identityStatus);

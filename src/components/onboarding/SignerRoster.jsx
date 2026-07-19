@@ -3,7 +3,18 @@ import { UserPlus, Trash2, Send, Loader2, Pencil, ShieldCheck, UserCheck } from 
 import SignerModal from './SignerModal';
 import SignerDetailsModal from './SignerDetailsModal';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
-import { isControlPerson, isBeneficialOwner, isPortalAdmin, isKycComplete, effectiveControlPersons, resolveSoleControlCandidate, isEffectivelyRequiredSigner, isRosterReadyForSigning, needsKyc } from '@/lib/signerRules';
+import {
+  isControlPerson,
+  isBeneficialOwner,
+  isPortalAdmin,
+  isKycComplete,
+  effectiveControlPersons,
+  resolveSoleControlCandidate,
+  isEffectivelyRequiredSigner,
+  isRosterReadyForSigning,
+  isRosterConfiguredForPeopleStep,
+  needsKyc,
+} from '@/lib/signerRules';
 import {
   lifecycleLabel,
   normalizeSignerLifecycle,
@@ -30,7 +41,20 @@ function StatusBadge({ status }) {
   );
 }
 
-export default function SignerRoster({ profile, onValidChange, onSignersChange, onSignHere, selectedSignerId }) {
+/**
+ * @param {'people'|'signing'} [mode='people']
+ *   people — People & KYC step (configure roster; Continue does not need all KYC)
+ *   signing — Sign step (Sign here + hard KYC gate for onValidChange)
+ */
+export default function SignerRoster({
+  profile,
+  onValidChange,
+  onConfiguredChange,
+  onSignersChange,
+  onSignHere,
+  selectedSignerId,
+  mode = 'people',
+}) {
   const [signers, setSigners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -42,10 +66,10 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
     loadSigners();
   }, []);
 
-  // While remote KYC invites are outstanding, poll the roster so unlocking
-  // flips automatically when they finish (Control Person is waiting).
+  // Poll while any AML KYC is incomplete (invite out or still pending) so
+  // activity updates and Sign unlock appear without a manual refresh.
   useEffect(() => {
-    const waiting = signers.some((s) => needsKyc(s) && !isKycComplete(s) && isInviteOutstanding(s.identityStatus));
+    const waiting = signers.some((s) => needsKyc(s) && !isKycComplete(s));
     if (!waiting || !profile?.corporateId) return undefined;
     const id = setInterval(async () => {
       try {
@@ -123,12 +147,12 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
     }
   };
 
-  // Hard gate: every Control Person + Beneficial Owner must finish KYC before
-  // signing unlocks. Invites do NOT count — Control Person waits for remotes.
   useEffect(() => {
     const totalPct = signers.reduce((sum, s) => sum + (Number(s.ownershipPercentage) || 0), 0);
-    const valid = isRosterReadyForSigning(signers);
-    onValidChange(valid, totalPct, signers.length);
+    const readyToSign = isRosterReadyForSigning(signers);
+    const configured = isRosterConfiguredForPeopleStep(signers);
+    if (onValidChange) onValidChange(readyToSign, totalPct, signers.length);
+    if (onConfiguredChange) onConfiguredChange(configured, totalPct, signers.length);
     if (onSignersChange) onSignersChange(signers);
   }, [signers]);
 
@@ -184,8 +208,10 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
             {isSoleSigner
               ? (soleSignerVerified
                   ? "You're verified as the Control Person and Beneficial Owner on this application."
-                  : "You're completing this application as the Control Person — confirm a few details below to continue.")
-              : 'One Control Person signs the agreement. Beneficial Owners (≥25%) complete identity (KYC) only — invite them if they are not here. Signing unlocks after all KYC is done.'}
+                  : "You're set as the Control Person by default — the person who signs the merchant agreement. Confirm your identity below when ready.")
+              : mode === 'people'
+                ? 'Add every Beneficial Owner (≥25%). Invite anyone who is not here — they can finish KYC while you continue Locations and Banking. Signing happens later.'
+                : 'One Control Person signs the agreement. Beneficial Owners (≥25%) provide KYC only. Signing unlocks after all KYC is done.'}
           </p>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -213,7 +239,9 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
       {waitingOnKyc.length > 0 && !readyToSign && (
         <div className="px-5 py-3 bg-cb-bg border-b border-cb-border border-l-2 border-l-cb-accent">
           <p className="text-cb-body text-gray-300">
-            Signing is locked until every Beneficial Owner and the Control Person finish identity verification.
+            {mode === 'people'
+              ? 'You can continue the application while waiting. Remote owners will appear as verified here when they finish.'
+              : 'Signing unlocks when every Beneficial Owner and the Control Person finish identity verification.'}
           </p>
           <ul className="mt-2 space-y-1">
             {waitingOnKyc.map((s) => (
@@ -283,7 +311,7 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
                     <StatusBadge status={signer.identityStatus} />
                   )}
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {canSignHere && (
+                    {mode === 'signing' && canSignHere && (
                       <button
                         onClick={() => onSignHere ? onSignHere(signer) : openDetail(signer, { allowKyc: true })}
                         className="text-cb-body text-cb-bg bg-cb-accent hover:opacity-90 px-2.5 py-1.5 rounded-cb font-medium transition-opacity flex items-center gap-1.5"

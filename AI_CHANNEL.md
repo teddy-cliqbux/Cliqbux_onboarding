@@ -2329,5 +2329,17 @@ Teddy clarified: one Control Person signs MSP; multiple Beneficial Owners may ne
 Teddy: preparing signing while waiting on other owners' KYC locks the app un-editable.
 
 **Fix:** `signApplication` returns 422 `KYC_INCOMPLETE` before creating packages; heals `portalLockStatus` to unlocked when KYC still pending. UI blocks Prepare until roster Ready; auto-heals stuck lock while waiting.
-**ACTION:** redeploy `signApplication` + publish frontend.
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Action Taken — People & KYC vs Application Signing split
+
+Teddy chose: separate People page first (before Locations), Sign last. Form filler defaults to Control Person with UI guidance. Remote KYC runs in parallel; live activity strip on opened/verified.
+
+**Shipped:**
+1. `OnboardingPeople` (step 1) + `OnboardingSigning` (step 4); ProgressTracker 4 core steps
+2. Continue People = roster configured (`isRosterConfiguredForPeopleStep`), not all KYC
+3. Sign waiting room + `KycActivityStrip`; CP chooser I-am / someone-else
+4. Docs: ADR 0003, AGENTS.md flow
+
+**ACTION:** publish frontend (no function redeploy required unless invite copy changes).
 ---

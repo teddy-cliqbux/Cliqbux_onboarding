@@ -6,7 +6,8 @@ import ApplicationTracker from '@/components/onboarding/ApplicationTracker';
 import { MilestoneCard } from './OnboardingPortal';
 import OnboardingLocations from './OnboardingLocations';
 import OnboardingBanking from './OnboardingBanking';
-import OnboardingVerification from './OnboardingVerification';
+import OnboardingPeople from './OnboardingPeople';
+import OnboardingSigning from './OnboardingSigning';
 
 // Dev-only visual harness for the onboarding portal redesign. Not part of the
 // merchant flow — mounts the real step pages against a stubbed fetch layer so
@@ -247,9 +248,10 @@ export default function DevPortalPreview() {
         <div className="w-full max-w-4xl space-y-3">
           {sectionTitle('ProgressTracker — states')}
           <div className="portal-card p-6 flex flex-col gap-6">
-            <ProgressTracker currentStep="locations" completedSteps={{}} onNavigate={noop} />
-            <ProgressTracker currentStep="banking" completedSteps={{ locations: true }} onNavigate={noop} />
-            <ProgressTracker currentStep="quote" completedSteps={{ locations: true, banking: true, verify: true }} onNavigate={noop} includeEquipment />
+            <ProgressTracker currentStep="people" completedSteps={{}} onNavigate={noop} />
+            <ProgressTracker currentStep="locations" completedSteps={{ people: true }} onNavigate={noop} />
+            <ProgressTracker currentStep="banking" completedSteps={{ people: true, locations: true }} onNavigate={noop} />
+            <ProgressTracker currentStep="quote" completedSteps={{ people: true, locations: true, banking: true, verify: true }} onNavigate={noop} includeEquipment />
           </div>
         </div>
 
@@ -262,10 +264,17 @@ export default function DevPortalPreview() {
         <div className="w-full max-w-4xl space-y-3">
           {sectionTitle('MilestoneCard — states')}
           <div className="portal-card p-6 flex flex-col gap-3" data-capture="milestones">
-            <MilestoneCard index={1} title="Complete Merchant Profile & Storefronts" description="Review and confirm your legal entities, storefront locations, and Merchant IDs." done unlocked ctaLabel="Review" onCta={noop} />
-            <MilestoneCard index={2} title="Link Deposit Bank Account" description="Connect or manually enter the bank account where your processing funds will deposit." unlocked ctaLabel="Set Up Banking" onCta={noop} />
-            <MilestoneCard index={2} title="Complete Merchant Profile & Storefronts" description="We prefilled what we could — a few details still need your input:" unlocked attention attentionItems={[{ label: 'Northside Hospitality Inc', missing: ['Business Entity Type', 'Federal EIN'] }]} ctaLabel="Finish Details" onCta={noop} />
-            <MilestoneCard index={3} title="Sign & Submit" description="Verify signer identities and sign your merchant processing agreement." unlocked={false} ctaLabel="Continue to signing" onCta={noop} />
+            <MilestoneCard index={1} title="People & KYC" description="Name the Control Person and Beneficial Owners." done unlocked ctaLabel="Review" onCta={noop} />
+            <MilestoneCard index={2} title="Locations" description="Review and confirm your legal entities, storefront locations, and Merchant IDs." unlocked ctaLabel="Set up locations" onCta={noop} />
+            <MilestoneCard index={3} title="Banking" description="Connect or manually enter the bank account where your processing funds will deposit." unlocked ctaLabel="Set Up Banking" onCta={noop} />
+            <MilestoneCard index={4} title="Sign & Submit" description="Sign your merchant processing agreement once KYC is complete." unlocked={false} ctaLabel="Continue to signing" onCta={noop} />
+          </div>
+        </div>
+
+        <div className="w-full max-w-4xl space-y-3">
+          {sectionTitle('OnboardingPeople — full step (mock data)')}
+          <div className="portal-card overflow-hidden" data-capture="people-step">
+            <OnboardingPeople profile={PROFILE} onContinue={noop} onBack={noop} />
           </div>
         </div>
 
@@ -284,9 +293,9 @@ export default function DevPortalPreview() {
         </div>
 
         <div className="w-full max-w-4xl space-y-3">
-          {sectionTitle('OnboardingVerification — full step (mock data)')}
+          {sectionTitle('OnboardingSigning — full step (mock data)')}
           <div className="portal-card overflow-hidden" data-capture="verification-step">
-            <OnboardingVerification profile={PROFILE} locations={LOCATIONS} initialSignersVerified={false} onSignersVerified={noop} onBack={noop} onComplete={noop} onNavigate={noop} />
+            <OnboardingSigning profile={PROFILE} locations={LOCATIONS} initialSignersVerified={false} onSignersVerified={noop} onBack={noop} onComplete={noop} onNavigate={noop} />
           </div>
         </div>
       </div>

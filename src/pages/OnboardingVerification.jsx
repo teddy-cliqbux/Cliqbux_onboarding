@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeft, Lock, Loader2, CheckCircle2, AlertCircle, ShieldCheck, PenLine, ChevronRight, Users } from 'lucide-react';
 import SignerRoster from '@/components/onboarding/SignerRoster';
+import KycActivityStrip from '@/components/onboarding/KycActivityStrip';
 import SigningErrorGuide from '@/components/onboarding/SigningErrorGuide';
 import SignerDetailsModal from '@/components/onboarding/SignerDetailsModal';
 import { invokePortalFunction, merchantTokenHasImp } from '@/lib/merchantAuthFetch';
-import { isEffectivelyRequiredSigner } from '@/lib/signerRules';
+import { isEffectivelyRequiredSigner, needsKyc, isKycComplete } from '@/lib/signerRules';
 import {
   isVerifiedOrHigher,
   isApplicationSigned,
@@ -33,13 +34,11 @@ function findSignerLink(app, email) {
 }
 
 /**
- * Control Person signing coordinator.
- *
- * - Exactly one Control Person receives BoldSign / MSP signing URLs.
- * - Beneficial Owners complete KYC only (roster gate waits for them).
- * - This session mounts the Control Person's MID iframes after KYC is complete.
+ * Application Signing — last onboarding step.
+ * BoldSign / submit only. People & KYC is a separate earlier step.
+ * Hard gate: all AML KYC must be verified before packages are staged.
  */
-export default function OnboardingVerification({ profile, locations, initialSignersVerified, onSignersVerified, onBack, onComplete, onNavigate }) {
+export default function OnboardingSigning({ profile, locations, initialSignersVerified, onSignersVerified, onBack, onComplete, onNavigate }) {
   const { setPortalLockStatus } = usePortalLock();
   const [allVerified, setAllVerified] = useState(initialSignersVerified || false);
   const [rosterSigners, setRosterSigners] = useState([]);
@@ -458,7 +457,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
       const req = (await invokePortalFunction('manageSigner', {
         action: 'list',
         corporateId: profile.corporateId,
-      }).catch(() => null))?.data?.signers?.filter(isRequiredSigner) || requiredSigners;
+      }).catch(() => null))?.data?.signers?.filter((s) => isEffectivelyRequiredSigner(s, rosterSigners)) || requiredSigners;
 
       if (req.length > 0 && req.every(s => isApplicationSigned(s.identityStatus))) {
         setPhase('complete');
@@ -513,11 +512,13 @@ export default function OnboardingVerification({ profile, locations, initialSign
   return (
     <div className="flex flex-col">
       <div className="px-8 pt-10 pb-8 border-b border-cb-border">
-        <p className="text-cb-caption uppercase text-gray-500 mb-2">Step 4 of 4 — Identity &amp; Signing</p>
+        <p className="text-cb-caption uppercase text-gray-500 mb-2">Step 4 of 4 — Sign &amp; Submit</p>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-display text-cb-display text-white mb-2">Principal &amp; Corporate Verification</h2>
-            <p className="text-cb-body-lg text-gray-400 max-w-xl">Beneficial owners complete identity verification. The Control Person signs the Merchant Processing Agreement once everyone&apos;s KYC is done.</p>
+            <h2 className="font-display text-cb-display text-white mb-2">Sign Merchant Agreement</h2>
+            <p className="text-cb-body-lg text-gray-400 max-w-xl">
+              Once every Beneficial Owner and the Control Person have finished identity verification, the Control Person signs the Merchant Processing Agreement and submits for underwriting.
+            </p>
           </div>
           <button
             onClick={onBack}
@@ -530,8 +531,51 @@ export default function OnboardingVerification({ profile, locations, initialSign
       </div>
 
       <div className="px-8 py-8 flex flex-col gap-8">
+        <KycActivityStrip signers={rosterSigners} />
+
+        {!allVerified && (
+          <div className="border border-cb-border rounded-cb bg-cb-surface-raised border-l-2 border-l-cb-accent px-5 py-5 flex flex-col gap-3">
+            <p className="text-cb-body font-semibold text-white">Waiting on identity verification</p>
+            <p className="text-cb-body text-gray-400">
+              Signing documents are not prepared yet — that keeps Locations and Banking editable. Finish KYC on the People step or wait for remote owners. You can keep working elsewhere while you wait.
+            </p>
+            <ul className="space-y-1">
+              {rosterSigners.filter((s) => needsKyc(s) && !isKycComplete(s)).map((s) => (
+                <li key={s.id} className="text-cb-caption normal-case tracking-normal text-gray-500">
+                  {s.firstName} {s.lastName}
+                  {isInviteOutstanding(s.identityStatus) ? ' — invite sent' : ' — needs verify or invite'}
+                </li>
+              ))}
+            </ul>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => onNavigate?.('people')}
+                className="text-cb-body font-medium text-cb-bg bg-cb-accent hover:opacity-90 px-4 py-2 rounded-cb transition-opacity"
+              >
+                Open People &amp; KYC
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate?.('locations')}
+                className="text-cb-body font-medium text-gray-300 border border-cb-border hover:border-cb-border-strong px-4 py-2 rounded-cb transition-colors"
+              >
+                Go to Locations
+              </button>
+              <button
+                type="button"
+                onClick={() => onNavigate?.('banking')}
+                className="text-cb-body font-medium text-gray-300 border border-cb-border hover:border-cb-border-strong px-4 py-2 rounded-cb transition-colors"
+              >
+                Go to Banking
+              </button>
+            </div>
+          </div>
+        )}
+
         <SignerRoster
           profile={profile}
+          mode="signing"
           onValidChange={handleVerifiedChange}
           onSignersChange={handleSignersChange}
           onSignHere={selectSignerForDevice}
@@ -548,17 +592,17 @@ export default function OnboardingVerification({ profile, locations, initialSign
           </div>
 
           {!allVerified && (
-            <div className="border border-cb-border rounded-cb flex flex-col items-center justify-center py-14 gap-3 bg-cb-surface-raised px-5">
+            <div className="border border-cb-border rounded-cb flex flex-col items-center justify-center py-10 gap-3 bg-cb-surface-raised px-5">
               <div className="w-12 h-12 rounded-full bg-cb-bg border border-cb-border flex items-center justify-center">
                 <Lock className="w-6 h-6 text-gray-500" />
               </div>
-              <p className="text-cb-body font-semibold text-gray-300">Signing Locked</p>
+              <p className="text-cb-body font-semibold text-gray-300">Signing not ready yet</p>
               <p className="text-cb-body text-gray-500 text-center max-w-sm">
-                Signing documents are not prepared yet — that keeps your application editable. Invite Beneficial Owners for KYC and wait until everyone is verified. Only then can the Control Person prepare and sign the agreement.
+                Prepare Signing unlocks after the roster shows Ready to sign. Use People &amp; KYC to invite remotes or verify on this device.
               </p>
               {isAgentPreview && (
                 <p className="text-cb-caption normal-case tracking-normal text-cb-accent text-center max-w-md mt-1">
-                  Agent tip: do not prepare signing while KYC invites are outstanding — packaging locks forms. Wait until the roster shows Ready to sign.
+                  Agent tip: do not prepare signing while KYC is outstanding — packaging locks forms.
                 </p>
               )}
             </div>
@@ -777,8 +821,9 @@ export default function OnboardingVerification({ profile, locations, initialSign
               key={app.mspApplicationNo}
               app={app}
               onNavigate={(step) => {
-                if (step === 'verify') {
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                if (step === 'verify' || step === 'people') {
+                  if (step === 'people') onNavigate?.('people');
+                  else window.scrollTo({ top: 0, behavior: 'smooth' });
                 } else {
                   onNavigate(step);
                 }
