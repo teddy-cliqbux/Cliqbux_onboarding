@@ -5,8 +5,9 @@ import {
   Pencil, Loader2, Send, Trash2, Check, X, Copy, ExternalLink,
   Clock, Store, Users, FileText, Search, Building2, CreditCard,
   CheckCircle2, AlertCircle, Eye, Zap, LayoutDashboard,
-  ChevronDown, ChevronRight, XCircle, RefreshCw, Percent, Wrench
+  ChevronDown, ChevronRight, XCircle, RefreshCw, Percent, Wrench, FolderOpen
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import {
   lifecycleLabel,
   lifecycleDotClass,
@@ -1684,6 +1685,16 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               Open dashboard
             </button>
           )}
+
+          <Link
+            to={`/admin/applications/${encodeURIComponent(corporateId)}`}
+            onClick={(e) => e.stopPropagation()}
+            title="Deal room — notes and tasks"
+            className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong transition-all"
+          >
+            <FolderOpen className="w-3 h-3" />
+            <span className="hidden sm:inline">Deal room</span>
+          </Link>
 
           {/* Quiet utilities — Dashboard only when not already primary */}
           {rowMode.mode === 'underwriting' ? null : (

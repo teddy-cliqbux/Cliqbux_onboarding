@@ -2239,3 +2239,17 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **Teddy deploy:** republish MerchantAccount + profile/signer schemas; redeploy manageStagedApplication, manageLegalEntity, manageSigner, createHubspotDeal; push frontend.
 ---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Action Taken — Deal Room v1 (`/admin/applications/:corporateId`)
+
+**Shipped:**
+1. `ApplicationDeskItem` entity (notes + tasks)
+2. `manageApplicationDesk` — admin-only get / addNote / addTask / updateTask / deleteItem + snapshot
+3. `ApplicationDealRoom.jsx` — header, Open portal / Dashboard, tasks, notes, MID/signer/legal snapshot
+4. Route + **Deal room** link on every Applications row
+5. Phase 2 still deferred: underwriting@ email feed, per-MID AWB history
+
+**Deploy:** republish `ApplicationDeskItem`; redeploy `manageApplicationDesk`; push frontend. (Blocked today if Base44 credits = 0.)
+---

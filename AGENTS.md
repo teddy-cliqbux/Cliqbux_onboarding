@@ -366,9 +366,12 @@ MerchantAccount (HubSpot Tier-1 company)
   └── MerchantCorporateProfile (deal) × N
         └── Locations → MIDs
         └── MerchantSigners (this deal's roster)
+        └── ApplicationDeskItem (Deal Room notes/tasks — admin only)
 ```
 
-Quick Stage prompts for **parent company name** → creates HubSpot company + deal + MerchantAccount (no slug-only hubspotBypass path). Deal room / UW email feeds wait until this model is deployed.
+Quick Stage prompts for **parent company name** → creates HubSpot company + deal + MerchantAccount (no slug-only hubspotBypass path).
+
+**Deal Room v1:** `/admin/applications/:corporateId` — header, internal notes, tasks, read-only MID/signer/legal snapshot. Phase 2: underwriting@ email feed + per-MID AWB history.
 
 ### Architecture: MerchantMID
 Clean three-layer model: Profile ➔ Locations ➔ MerchantMIDs.

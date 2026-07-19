@@ -1,0 +1,58 @@
+{
+  "name": "ApplicationDeskItem",
+  "type": "object",
+  "description": "Internal notes and tasks for the agent Deal Room (/admin/applications/:corporateId). Sales/CS/UW only — never shown to merchants. See docs/adr/0001-merchant-account-parent.md and AI_CHANNEL 2026-07-18 grill.",
+  "properties": {
+    "corporateId": {
+      "type": "string",
+      "description": "FK → MerchantCorporateProfile.corporateId (this deal)"
+    },
+    "merchantAccountId": {
+      "type": "string",
+      "description": "Optional FK → MerchantAccount for account-level continuity later"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["note", "task"],
+      "description": "note = internal thread entry; task = checklist item"
+    },
+    "body": {
+      "type": "string",
+      "description": "Note text or task title"
+    },
+    "authorEmail": {
+      "type": "string",
+      "description": "Workspace user email who created the item"
+    },
+    "authorName": {
+      "type": "string",
+      "description": "Display name of author"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["open", "done"],
+      "default": "open",
+      "description": "Task status only (notes ignore this)"
+    },
+    "assignee": {
+      "type": "string",
+      "description": "Optional task owner (free-text name or email)"
+    },
+    "dueAt": {
+      "type": "string",
+      "description": "Optional ISO date for task due"
+    },
+    "completedAt": {
+      "type": "string",
+      "description": "ISO timestamp when task marked done"
+    },
+    "completedByEmail": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "corporateId",
+    "type",
+    "body"
+  ]
+}

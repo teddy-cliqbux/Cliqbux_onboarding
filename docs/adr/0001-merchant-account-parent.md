@@ -14,10 +14,10 @@
 - **Legal entities (TINs)** live on the account (dual-written to profile for boarding).
 - **People** are assigned per deal (`MerchantSigners.corporateId`) but carry `merchantAccountId`; KYC is reused from prior signers on the same account.
 - **Quick Stage** prompts for parent company name → creates HubSpot company + deal (no more slug-only / hubspotBypass local merchants for this path).
-- **Deal room** (`/admin/applications/:id`) and underwriting@ email / AWB feeds are **blocked until** this parent model is live.
+- **Deal room** = `/admin/applications/:corporateId` — internal notes + tasks + read-only snapshot (v1). Email feed / AWB per-MID history = phase 2.
 
 ## Consequences
 
-- Republish `MerchantAccount`, `MerchantCorporateProfile`, `MerchantSigners` schemas in Base44.
-- Redeploy `manageStagedApplication`, `manageLegalEntity`, `manageSigner`, `createHubspotDeal`.
+- Republish `MerchantAccount`, `MerchantCorporateProfile`, `MerchantSigners`, `ApplicationDeskItem` schemas in Base44.
+- Redeploy `manageStagedApplication`, `manageLegalEntity`, `manageSigner`, `createHubspotDeal`, `manageApplicationDesk`.
 - Existing deal-scoped profiles without `merchantAccountId` keep working; migrate/link as agents touch them.
