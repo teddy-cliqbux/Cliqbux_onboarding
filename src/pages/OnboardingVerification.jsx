@@ -33,15 +33,11 @@ function findSignerLink(app, email) {
 }
 
 /**
- * Concurrent multi-signer coordinator.
+ * Control Person signing coordinator.
  *
- * Each required owner (≥25% or primary) has their own BoldSign URL and can sign
- * from their own instance at the same time:
- *  - This portal session: pick any Verified owner and sign their MIDs (MID-inner).
- *  - Remote owners: /verify?intent=sign on their device (same links, parallel).
- *
- * We no longer serialize humans (signer-outer queue). Submit unlocks when every
- * required owner is locally `Signed` (poll + postMessage remain dual signals).
+ * - Exactly one Control Person receives BoldSign / MSP signing URLs.
+ * - Beneficial Owners complete KYC only (roster gate waits for them).
+ * - This session mounts the Control Person's MID iframes after KYC is complete.
  */
 export default function OnboardingVerification({ profile, locations, initialSignersVerified, onSignersVerified, onBack, onComplete, onNavigate }) {
   const { setPortalLockStatus } = usePortalLock();
@@ -171,6 +167,24 @@ export default function OnboardingVerification({ profile, locations, initialSign
     fetchSigningState({ restoreOnly: true });
   }, [allVerified, loadingSigning, applications.length, profile?.portalLockStatus, profile?.applicationStatus, profile?.corporateId, midsHaveDrafts]);
 
+  // Stuck lock while waiting on remote KYC — unlock so Locations/Banking stay editable.
+  // signApplication returns KYC_INCOMPLETE and heals portalLockStatus=unlocked.
+  const kycHealAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (kycHealAttemptedRef.current) return;
+    if (allVerified || !profile?.corporateId) return;
+    if (!isPortalFormsLocked(profile)) return;
+    kycHealAttemptedRef.current = true;
+    (async () => {
+      try {
+        const res = await invokePortalFunction('signApplication', { corporateId: profile.corporateId });
+        applyPortalLockFromSigningResponse(res.data || { portalLockStatus: 'unlocked' }, setPortalLockStatus);
+      } catch {
+        setPortalLockStatus('unlocked');
+      }
+    })();
+  }, [allVerified, profile?.portalLockStatus, profile?.applicationStatus, profile?.corporateId]);
+
   // When packages exist and are usable, enter signing phase
   useEffect(() => {
     if (!allVerified || loadingSigning || applications.length === 0) return;
@@ -298,6 +312,13 @@ export default function OnboardingVerification({ profile, locations, initialSign
   };
 
   const fetchSigningState = async ({ restoreOnly = false } = {}) => {
+    // Never stage packages while KYC is outstanding — that locks forms un-editable.
+    if (!allVerified) {
+      if (!restoreOnly) {
+        setSigningError('Finish identity verification for every Beneficial Owner and the Control Person before preparing signing documents.');
+      }
+      return;
+    }
     setLoadingSigning(true);
     setSigningError('');
     // Keep sticky URLs on restore so a remount after refresh doesn't thrash the iframe
@@ -313,9 +334,12 @@ export default function OnboardingVerification({ profile, locations, initialSign
         if (!restoreOnly) {
           setSigningError(parts[0] || 'Unable to prepare signing documents.');
         }
-        // Never unlock local lock state on a failed restore — that was wiping
-        // "Forms locked / Resume Signing" and bouncing back to Prepare.
-        if (!restoreOnly) {
+        // KYC incomplete: apply unlock from server so forms stay editable
+        if (data?.code === 'KYC_INCOMPLETE' || data?.portalLockStatus === 'unlocked') {
+          applyPortalLockFromSigningResponse(data || {}, setPortalLockStatus);
+        } else if (!restoreOnly) {
+          // Never unlock local lock state on a failed restore — that was wiping
+          // "Forms locked / Resume Signing" and bouncing back to Prepare.
           applyPortalLockFromSigningResponse(data || {}, setPortalLockStatus);
         }
         rememberSigningFixStep(
@@ -493,7 +517,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="font-display text-cb-display text-white mb-2">Principal &amp; Corporate Verification</h2>
-            <p className="text-cb-body-lg text-gray-400 max-w-xl">Verify all beneficial owners, then review and sign your Merchant Processing Agreement. Each owner can sign from their own device at the same time.</p>
+            <p className="text-cb-body-lg text-gray-400 max-w-xl">Beneficial owners complete identity verification. The Control Person signs the Merchant Processing Agreement once everyone&apos;s KYC is done.</p>
           </div>
           <button
             onClick={onBack}
@@ -519,7 +543,7 @@ export default function OnboardingVerification({ profile, locations, initialSign
             <PenLine className={`w-4 h-4 ${allVerified ? 'text-cb-accent' : 'text-gray-500'}`} />
             <div>
               <p className="text-cb-body font-semibold text-white">Review &amp; Sign Merchant Processing Agreement</p>
-              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Powered by MSPWare — each owner gets their own signing link; sign concurrently from separate devices</p>
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">Powered by MSPWare — only the Control Person signs; beneficial owners provide KYC for AML</p>
             </div>
           </div>
 
@@ -530,11 +554,11 @@ export default function OnboardingVerification({ profile, locations, initialSign
               </div>
               <p className="text-cb-body font-semibold text-gray-300">Signing Locked</p>
               <p className="text-cb-body text-gray-500 text-center max-w-sm">
-                The Control Person (Authorized Signer) must complete identity verification — or receive a Verify &amp; Sign invite — before the merchant agreement can load. Beneficial Owners (≥25%) need KYC for AML but only the Control Person signs.
+                Signing documents are not prepared yet — that keeps your application editable. Invite Beneficial Owners for KYC and wait until everyone is verified. Only then can the Control Person prepare and sign the agreement.
               </p>
               {isAgentPreview && (
                 <p className="text-cb-caption normal-case tracking-normal text-cb-accent text-center max-w-md mt-1">
-                  Agent tip: if this owner is Verified but missing the Control Person badge, refresh the page — we auto-heal sole owners. Then use Prepare Signing Documents to preview the same BoldSign links the merchant gets.
+                  Agent tip: do not prepare signing while KYC invites are outstanding — packaging locks forms. Wait until the roster shows Ready to sign.
                 </p>
               )}
             </div>

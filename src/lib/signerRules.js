@@ -146,6 +146,39 @@ export function assertSignerRosterRules(signers = []) {
   return { ok: true, controlPerson: controls[0], kycIncomplete: kycMissing };
 }
 
+/** Beneficial Owner / Control Person KYC ready (verified or higher). */
+export function isKycComplete(s) {
+  if (!needsKyc(s)) return true;
+  return isVerifiedOrHigher(s?.identityStatus);
+}
+
+/**
+ * Hard gate before MSP signing: every AML principal (Control Person + Beneficial
+ * Owners) must have completed KYC. Outstanding invites do NOT count — the Control
+ * Person waits until remote owners finish identity.
+ */
+export function allAmlKycComplete(signers = []) {
+  const list = signers || [];
+  const aml = list.filter((s) => needsKyc(s) || resolveSoleControlCandidate(list)?.id === s?.id);
+  if (aml.length === 0) return false;
+  return aml.every(isKycComplete);
+}
+
+/**
+ * Signing unlock: exactly one Control Person (or sole-owner heal), that person
+ * verified+, and every Beneficial Owner KYC complete.
+ */
+export function isRosterReadyForSigning(signers = []) {
+  const list = signers || [];
+  if (list.length === 0) return false;
+  const controls = effectiveControlPersons(list);
+  if (controls.length !== 1) return false;
+  if (!isVerifiedOrHigher(controls[0]?.identityStatus) && !isApplicationSigned(controls[0]?.identityStatus)) {
+    return false;
+  }
+  return allAmlKycComplete(list);
+}
+
 /** Cleared enough for Control Person signing prep (invite out, verified, or signed). */
 export function isClearedForSigning(s) {
   const n = normalizeSignerLifecycle(s?.identityStatus);
@@ -153,12 +186,6 @@ export function isClearedForSigning(s) {
     || n === 'application signed'
     || n === 'invited'
     || n === 'opened';
-}
-
-/** Beneficial Owner / Control Person KYC ready (verified or higher). */
-export function isKycComplete(s) {
-  if (!needsKyc(s)) return true;
-  return isVerifiedOrHigher(s?.identityStatus);
 }
 
 export { isVerifiedOrHigher, isApplicationSigned, isInviteOutstanding, normalizeSignerLifecycle };

@@ -149,10 +149,10 @@ async function sendViaResend(to: string, subject: string, html: string): Promise
   }
 }
 
-// Unified remote loop (2026-07-13): one email = identity KYC + BoldSign session.
-// Link uses intent=sign so /verify routes verified+ signers straight into their iframe.
-// Lifecycle writes: invited → opened (on first get) → verified → application signed.
-function buildInviteEmail(firstName: string, verifyUrl: string, businessName: string | null): string {
+// Remote invites:
+// - Beneficial Owners (KYC-only): intent=kyc — confirm identity, no BoldSign
+// - Control Person: intent=sign — KYC (if needed) then Merchant Processing Agreement
+function buildKycInviteEmail(firstName: string, verifyUrl: string, businessName: string | null): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -168,16 +168,16 @@ function buildInviteEmail(firstName: string, verifyUrl: string, businessName: st
         <tr>
           <td style="padding:36px 40px;">
             <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.06em;">Action Required</p>
-            <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">Review &amp; Sign Your Documents</h1>
+            <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">Confirm Your Identity</h1>
             <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
               Hi ${firstName},<br><br>
-              You've been added as a <strong>beneficial owner</strong> on the <strong>${businessName || 'Cliqbux'}</strong> merchant application. One secure link covers both steps: confirm your identity (if needed), then sign the Merchant Processing Agreement.
+              You've been listed as a <strong>beneficial owner</strong> on the <strong>${businessName || 'Cliqbux'}</strong> merchant application. We need a few identity details for compliance — you do <strong>not</strong> need to sign the processing agreement (the Control Person handles that).
             </p>
             <table width="100%" cellpadding="0" cellspacing="0">
               <tr>
                 <td align="center" style="padding:8px 0 28px;">
                   <a href="${verifyUrl}" target="_blank" style="display:inline-block;background:#FEAC27;color:#111827;font-size:15px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;letter-spacing:0.01em;">
-                    Review &amp; Sign Documents
+                    Verify My Identity
                   </a>
                 </td>
               </tr>
@@ -204,8 +204,64 @@ function buildInviteEmail(firstName: string, verifyUrl: string, businessName: st
 </html>`;
 }
 
+function buildSignInviteEmail(firstName: string, verifyUrl: string, businessName: string | null): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f4f4f5;font-family:Inter,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+        <tr>
+          <td style="background:#111827;padding:28px 40px;text-align:center;">
+            ${emailLogoHeaderHtml()}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:36px 40px;">
+            <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.06em;">Action Required</p>
+            <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;line-height:1.3;">Verify &amp; Sign Merchant Agreement</h1>
+            <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
+              Hi ${firstName},<br><br>
+              You're the <strong>Control Person</strong> (authorized signer) for the <strong>${businessName || 'Cliqbux'}</strong> merchant application. One secure link covers identity confirmation (if needed) and signing the Merchant Processing Agreement.
+            </p>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="padding:8px 0 28px;">
+                  <a href="${verifyUrl}" target="_blank" style="display:inline-block;background:#FEAC27;color:#111827;font-size:15px;font-weight:700;padding:14px 36px;border-radius:10px;text-decoration:none;letter-spacing:0.01em;">
+                    Verify &amp; Sign Documents
+                  </a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:0 0 8px;font-size:13px;color:#6B7280;line-height:1.6;">
+              This link is unique to you — please do not share it. It expires after 7 days.
+            </p>
+            <hr style="border:none;border-top:1px solid #E5E7EB;margin:24px 0;">
+            <p style="margin:0;font-size:12px;color:#9CA3AF;">
+              Having trouble? Copy and paste this link into your browser:<br>
+              <span style="color:#3B82F6;word-break:break-all;">${verifyUrl}</span>
+            </p>
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#F9FAFB;border-top:1px solid #E5E7EB;padding:20px 40px;text-align:center;">
+            <p style="margin:0;font-size:12px;color:#9CA3AF;">© ${new Date().getFullYear()} Cliqbux · onboarding.cliqbux.com</p>
+          </td>
+        </tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
+function buildInviteUrl(token: string, intent: 'kyc' | 'sign'): string {
+  return `${getVerifyBaseUrl()}/verify?token=${encodeURIComponent(token)}&intent=${intent}`;
+}
+
 function buildSigningInviteUrl(token: string): string {
-  return `${getVerifyBaseUrl()}/verify?token=${encodeURIComponent(token)}&intent=sign`;
+  return buildInviteUrl(token, 'sign');
 }
 
 /** Log signer invite/open onto __auto_track__.prefilledData.activity (Applications panel). */
@@ -392,13 +448,16 @@ Deno.serve(async (req) => {
       let emailError: string | null = null;
       if (sendInvite && !roles.isPortalAdmin) {
         try {
-          const verifyUrl = buildSigningInviteUrl(token);
+          const intent: 'kyc' | 'sign' = roles.isAuthorizedSigner ? 'sign' : 'kyc';
+          const verifyUrl = buildInviteUrl(token, intent);
           const invitedAt = new Date().toISOString();
-          await sendViaResend(
-            signerData.signerEmail,
-            `Action Required: Review & Sign — ${signerData.legalName || 'Cliqbux'} Merchant Application`,
-            buildInviteEmail(signerData.firstName, verifyUrl, signerData.legalName)
-          );
+          const html = intent === 'sign'
+            ? buildSignInviteEmail(signerData.firstName, verifyUrl, signerData.legalName)
+            : buildKycInviteEmail(signerData.firstName, verifyUrl, signerData.legalName);
+          const subject = intent === 'sign'
+            ? `Action Required: Verify & Sign — ${signerData.legalName || 'Cliqbux'} Merchant Application`
+            : `Action Required: Confirm Your Identity — ${signerData.legalName || 'Cliqbux'} Merchant Application`;
+          await sendViaResend(signerData.signerEmail, subject, html);
           await base44.asServiceRole.entities.MerchantSigners.update(record.id, {
             identityStatus: 'invited',
             verifyTokenSentAt: invitedAt,
@@ -489,9 +548,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // --- SEND INVITE (unified Verify + Sign remote loop) ---
-    // Portal merchants + admins may send. Sets `invited` only when KYC is not done yet.
-    // Never regress verified / opened / application signed — re-sends are signing reminders.
+    // --- SEND INVITE ---
+    // intent: 'kyc' (Beneficial Owner identity only) | 'sign' (Control Person KYC + BoldSign).
+    // Auto: Control Person → sign; everyone else → kyc. Form fillers who are NOT the
+    // Control Person use intent=sign when inviting the Control Person remotely.
     if (action === 'sendInvite' || action === 'sendSigningInvite') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
       const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
@@ -504,15 +564,24 @@ Deno.serve(async (req) => {
         businessName = profiles?.[0]?.legalName || null;
       } catch { /* non-fatal */ }
 
-      const token = signer.verifyToken || generateToken();
-      const verifyUrl = buildSigningInviteUrl(token);
-      const sentAt = new Date().toISOString();
+      const requestedIntent = String(body.intent || '').toLowerCase();
+      const isControl = isControlPerson(signer);
+      const intent: 'kyc' | 'sign' =
+        requestedIntent === 'kyc' || requestedIntent === 'sign'
+          ? (requestedIntent as 'kyc' | 'sign')
+          : (action === 'sendSigningInvite' || isControl ? 'sign' : 'kyc');
 
-      await sendViaResend(
-        signer.signerEmail,
-        `Action Required: Review & Sign — ${businessName || 'Cliqbux'} Merchant Application`,
-        buildInviteEmail(signer.firstName, verifyUrl, businessName)
-      );
+      const token = signer.verifyToken || generateToken();
+      const verifyUrl = buildInviteUrl(token, intent);
+      const sentAt = new Date().toISOString();
+      const html = intent === 'sign'
+        ? buildSignInviteEmail(signer.firstName, verifyUrl, businessName)
+        : buildKycInviteEmail(signer.firstName, verifyUrl, businessName);
+      const subject = intent === 'sign'
+        ? `Action Required: Verify & Sign — ${businessName || 'Cliqbux'} Merchant Application`
+        : `Action Required: Confirm Your Identity — ${businessName || 'Cliqbux'} Merchant Application`;
+
+      await sendViaResend(signer.signerEmail, subject, html);
 
       const st = String(signer.identityStatus || '').trim();
       const preserveStatus =
@@ -537,7 +606,7 @@ Deno.serve(async (req) => {
         actor: actor.actor === 'admin' ? 'agent' : 'merchant',
         email: signer.signerEmail,
       });
-      return Response.json({ success: true, signer: updated, link: verifyUrl });
+      return Response.json({ success: true, signer: updated, link: verifyUrl, intent });
     }
 
     // --- MARK SIGNED (local persistence — never poll MSPWare from admin list UIs) ---

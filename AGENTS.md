@@ -548,19 +548,18 @@ After application submit, `PostSubmissionDashboard` shows underwriting + setup c
 
 `signApplication` packages MSPWare applications for BoldSign e-signature and returns iframe-embeddable signing URLs.
 
-### Multi-signer coordinator (shipped 2026-07-13; concurrent 2026-07-13 evening)
+### Multi-signer coordinator (Control Person model — 2026-07-18)
 
-Portal signing is **concurrent per owner**, not a serialized hot-seat:
+Portal signing is **one Control Person signs**; Beneficial Owners complete **KYC only**:
 
-1. **Required owners** = `ownershipPercentage >= 25` OR `isPrimarySigner`. Under-25% non-primaries stay on the roster but are **bypassed** (`src/lib/signerRules.js`).
-2. **Each required owner gets their own BoldSign URL** from `signApplication` (`signers[].signingUrl`). They can sign from separate devices/instances at the same time.
-3. **This portal session:** pick any Verified owner (defaults to primary) and run MID-inner for *their* links. Switching owners does not lock others out.
-4. **Remote:** Resend invite → `/verify?token=…&intent=sign` on their device (parallel).
-5. **Stale packages:** if a co-owner is added after `POST /signatures`, `signApplication` detects missing required emails on an **unsigned** package, DELETEs it (best-effort), refills `owners[]`, and recreates so every email has a link. Never rebuild once anyone has signed.
-6. **Completion:** BoldSign `onDocumentSigned` + 5s poll; persist `identityStatus: 'Signed'` locally.
-7. Submit when every required owner is `Signed`.
+1. **Control Person** (`isAuthorizedSigner` / legacy `isPrimarySigner`) — exactly one; only person on BoldSign (`isRequiredSigner` / `isEffectivelyRequiredSigner`).
+2. **Beneficial Owners** (≥25%) — KYC/AML principals on MSPWare `owners[]`; invite with `intent=kyc`; no BoldSign.
+3. **Hard KYC gate** — `isRosterReadyForSigning`: all AML KYC must be verified before signing unlocks. Invites do **not** count; roster polls while waiting. **`signApplication` refuses to stage packages** (`KYC_INCOMPLETE`) and unlocks any premature `portalLockStatus` so forms stay editable while waiting.
+4. **Remote Control Person** — form filler who is not CP uses **Send Verify & Sign Invite** (`intent=sign`) so CP gets KYC + BoldSign packet.
+5. **Completion** — BoldSign `onDocumentSigned` + 5s poll; persist `identityStatus: 'application signed'` on Control Person only.
+6. Submit when Control Person is signed (and packages report complete).
 
-`signApplication` still: GET form first (skip refill at 100% unless owner-rebuild), `POST /signatures` with `sendEmail: false`, per-email link fetch + **exactly one 1s retry**, clear `mspApplicationNo` **only on HTTP 404**.
+`signApplication` still: GET form first (skip refill at 100% unless owner-rebuild), `POST /signatures` with `sendEmail: false`, Control Person link fetch + **exactly one 1s retry**, clear `mspApplicationNo` **only on HTTP 404**. MSPWare `owners[]` includes all AML principals; `principal_sign_agreement` true only for Control Person.
 
 ### Flow
 1. Load profile, signers, MIDs, locations

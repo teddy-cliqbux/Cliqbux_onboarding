@@ -2305,3 +2305,29 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 3. Gmail sync default query includes from ApplicationStatus@ / MSPFulSer / FulSerCenter
 4. Docs updated in `docs/underwriting-inbox.md`
 ---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Decision + Action Taken — Control Person signing + KYC-wait workflow
+
+Teddy clarified: one Control Person signs MSP; multiple Beneficial Owners may need KYC only. Absent owners get invites; Control Person waits for KYC before signing. Form filler who is not CP can send Verify & Sign packet to CP.
+
+**Shipped:**
+1. Hard gate `isRosterReadyForSigning` — all AML KYC verified (invites do not unlock)
+2. BO invites = `intent=kyc` email; CP invites = `intent=sign`
+3. Roster: Send KYC Invite (BO), Send Verify & Sign Invite (CP), waiting banner + 8s poll
+4. `/verify` KYC-only stops after identity; sign path continues to BoldSign for CP
+5. Docs: ADR 0003 + AGENTS.md multi-signer section updated
+
+**ACTION for Base44:** force-redeploy `manageSigner`, `verifySignerToken` (if needed), publish frontend.
+---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Action Taken — Do not stage signing while KYC pending
+
+Teddy: preparing signing while waiting on other owners' KYC locks the app un-editable.
+
+**Fix:** `signApplication` returns 422 `KYC_INCOMPLETE` before creating packages; heals `portalLockStatus` to unlocked when KYC still pending. UI blocks Prepare until roster Ready; auto-heals stuck lock while waiting.
+**ACTION:** redeploy `signApplication` + publish frontend.
+---

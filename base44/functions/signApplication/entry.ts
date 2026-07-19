@@ -1640,6 +1640,9 @@ function buildFormPayload(
  * Do NOT unlock when packages exist and we're simply waiting for the merchant to sign —
  * that was clearing portalLockStatus=signing on every revisit and dumping the UI
  * back to "Prepare Signing Documents".
+ *
+ * Exception (2026-07-18): if AML KYC is still incomplete (waiting on Beneficial Owners),
+ * always unlock — staging for signature must not freeze edits while remotes finish KYC.
  */
 async function healPrematurePortalLock(
   base44: any,
@@ -1651,6 +1654,41 @@ async function healPrematurePortalLock(
   if (!profile?.id || !['signing', 'pending_signature'].includes(portalLockStatus)) {
     return portalLockStatus;
   }
+
+  const isPortalAdminFn = (s: any) => s?.isPortalAdmin === true;
+  const isControlFn = (s: any) => {
+    if (!s || isPortalAdminFn(s)) return false;
+    if (s.isAuthorizedSigner === true) return true;
+    if (s.isAuthorizedSigner == null && s.isPrimarySigner === true) return true;
+    return false;
+  };
+  const isBoFn = (s: any) => {
+    if (!s || isPortalAdminFn(s)) return false;
+    if (s.isBeneficialOwner === true) return true;
+    return (Number(s.ownershipPercentage) || 0) >= 25;
+  };
+  const isVerifiedPlus = (st: any) => {
+    const s = String(st || '').toLowerCase();
+    return s === 'verified' || s === 'application signed' || s === 'signed';
+  };
+  const kycIncomplete = (signers || []).filter((s: any) =>
+    !isPortalAdminFn(s) && (isControlFn(s) || isBoFn(s)) && !isVerifiedPlus(s?.identityStatus)
+  );
+  if (kycIncomplete.length > 0) {
+    try {
+      await base44.asServiceRole.entities.MerchantCorporateProfile.update(profile.id, {
+        portalLockStatus: 'unlocked',
+      });
+      portalLockStatus = 'unlocked';
+      console.log(
+        `[signApplication] Unlocked portal — KYC still pending for ${kycIncomplete.map((s: any) => s.signerEmail || s.id).join(', ')}`
+      );
+    } catch (e: any) {
+      console.warn('[signApplication] healPrematurePortalLock (kyc) failed (non-fatal):', e?.message);
+    }
+    return portalLockStatus;
+  }
+
   const anyoneSignedOnRoster = (signers || []).some((s: any) => {
     const st = String(s?.identityStatus || '').toLowerCase();
     return st === 'application signed' || st === 'signed';
@@ -1772,6 +1810,29 @@ Deno.serve(async (req) => {
     const primarySigner = amlPrincipals.find(isControlFn) || amlPrincipals[0] || signers?.find((s: any) => s.isPrimarySigner) || signers?.[0];
     const additionalSigners = amlPrincipals.filter((s: any) => String(s?.id) !== String(primarySigner?.id));
     const primaryEmail     = primarySigner?.signerEmail || profile.signerEmail;
+
+    // Hard gate: do NOT stage BoldSign packages (or lock forms) while Beneficial
+    // Owners / Control Person KYC is still outstanding. Staging early freezes edits.
+    const isVerifiedPlus = (st: any) => {
+      const s = String(st || '').toLowerCase();
+      return s === 'verified' || s === 'application signed' || s === 'signed';
+    };
+    const kycIncomplete = amlPrincipals.filter((s: any) => !isVerifiedPlus(s?.identityStatus));
+    if (kycIncomplete.length > 0) {
+      const names = kycIncomplete.map((s: any) =>
+        `${s.firstName || ''} ${s.lastName || ''}`.trim() || s.signerEmail || 'owner'
+      );
+      const portalLockStatus = await healPrematurePortalLock(base44, profile, signers, []);
+      return Response.json({
+        success: false,
+        error: `Cannot prepare signing until all owners finish identity verification. Still waiting on: ${names.join(', ')}.`,
+        code: 'KYC_INCOMPLETE',
+        kycIncomplete: names,
+        hasUsableSigningPackage: false,
+        portalLockStatus,
+        hint: 'Invite absent Beneficial Owners for KYC. Forms stay editable until everyone is verified — then prepare signing.',
+      }, { status: 422 });
+    }
 
     if (!primaryEmail) {
       const portalLockStatus = await healPrematurePortalLock(base44, profile, signers);

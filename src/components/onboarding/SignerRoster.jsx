@@ -3,7 +3,7 @@ import { UserPlus, Trash2, Send, Loader2, Pencil, ShieldCheck, UserCheck } from 
 import SignerModal from './SignerModal';
 import SignerDetailsModal from './SignerDetailsModal';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
-import { isClearedForSigning, isControlPerson, isBeneficialOwner, isPortalAdmin, isKycComplete, effectiveControlPersons, resolveSoleControlCandidate, isEffectivelyRequiredSigner } from '@/lib/signerRules';
+import { isControlPerson, isBeneficialOwner, isPortalAdmin, isKycComplete, effectiveControlPersons, resolveSoleControlCandidate, isEffectivelyRequiredSigner, isRosterReadyForSigning, needsKyc } from '@/lib/signerRules';
 import {
   lifecycleLabel,
   normalizeSignerLifecycle,
@@ -41,6 +41,20 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
   useEffect(() => {
     loadSigners();
   }, []);
+
+  // While remote KYC invites are outstanding, poll the roster so unlocking
+  // flips automatically when they finish (Control Person is waiting).
+  useEffect(() => {
+    const waiting = signers.some((s) => needsKyc(s) && !isKycComplete(s) && isInviteOutstanding(s.identityStatus));
+    if (!waiting || !profile?.corporateId) return undefined;
+    const id = setInterval(async () => {
+      try {
+        const res = await invokePortalFunction('manageSigner', { action: 'list', corporateId: profile.corporateId });
+        if (res.data?.signers) publish(res.data.signers);
+      } catch { /* non-fatal */ }
+    }, 8000);
+    return () => clearInterval(id);
+  }, [signers, profile?.corporateId]);
 
   const publish = (list) => {
     setSigners(list);
@@ -109,20 +123,11 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
     }
   };
 
-  // Unlock when exactly one Control Person is cleared for signing, and every
-  // Beneficial Owner / Control Person has KYC verified (or invite in flight for remote).
+  // Hard gate: every Control Person + Beneficial Owner must finish KYC before
+  // signing unlocks. Invites do NOT count — Control Person waits for remotes.
   useEffect(() => {
     const totalPct = signers.reduce((sum, s) => sum + (Number(s.ownershipPercentage) || 0), 0);
-    const controls = effectiveControlPersons(signers);
-    const controlOk = controls.length === 1 && controls.every(isClearedForSigning);
-    const amlPeople = signers.filter((s) => isControlPerson(s) || isBeneficialOwner(s) || resolveSoleControlCandidate(signers)?.id === s.id);
-    const kycOk = amlPeople.every((s) =>
-      isKycComplete(s)
-      || isInviteOutstanding(s.identityStatus)
-      || normalizeSignerLifecycle(s.identityStatus) === 'opened'
-      || normalizeSignerLifecycle(s.identityStatus) === 'invited'
-    );
-    const valid = signers.length > 0 && controlOk && kycOk;
+    const valid = isRosterReadyForSigning(signers);
     onValidChange(valid, totalPct, signers.length);
     if (onSignersChange) onSignersChange(signers);
   }, [signers]);
@@ -137,19 +142,20 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
     publish(signers.filter(s => s.id !== signerId));
   };
 
-  const handleSendSigningInvite = async (signer) => {
+  const handleSendInvite = async (signer, intent) => {
     setResendingId(signer.id);
     try {
       const res = await invokePortalFunction('manageSigner', {
         action: 'sendInvite',
         corporateId: profile.corporateId,
         signerId: signer.id,
+        intent, // 'kyc' | 'sign'
       });
       if (res.data?.signer) {
         publish(signers.map(s => s.id === signer.id ? { ...s, ...res.data.signer } : s));
       }
     } catch (err) {
-      console.error('[SignerRoster.handleSendSigningInvite]', err?.message || 'Unknown error');
+      console.error('[SignerRoster.handleSendInvite]', err?.message || 'Unknown error');
     }
     setResendingId(null);
   };
@@ -161,7 +167,8 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
 
   const totalPct = signers.reduce((sum, s) => sum + (Number(s.ownershipPercentage) || 0), 0);
   const controls = effectiveControlPersons(signers);
-  const allRequiredCleared = controls.length > 0 && controls.every(isClearedForSigning);
+  const readyToSign = isRosterReadyForSigning(signers);
+  const waitingOnKyc = signers.filter((s) => needsKyc(s) && !isKycComplete(s));
 
   const isSoleSigner = signers.length === 1 && !isPortalAdmin(signers[0]);
   const soleSignerVerified = isSoleSigner && isVerifiedOrHigher(signers[0]?.identityStatus);
@@ -178,7 +185,7 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
               ? (soleSignerVerified
                   ? "You're verified as the Control Person and Beneficial Owner on this application."
                   : "You're completing this application as the Control Person — confirm a few details below to continue.")
-              : 'Control Person signs. Beneficial Owners (≥25%) need KYC for AML. Portal Admins (0%) skip the contract.'}
+              : 'One Control Person signs the agreement. Beneficial Owners (≥25%) complete identity (KYC) only — invite them if they are not here. Signing unlocks after all KYC is done.'}
           </p>
         </div>
         <div className="flex items-center gap-3 flex-shrink-0">
@@ -187,9 +194,13 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
               {totalPct}% ownership
             </span>
           )}
-          {allRequiredCleared ? (
+          {readyToSign ? (
             <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
               <span className="w-1.5 h-1.5 rounded-full bg-cb-success flex-shrink-0" /> Ready to sign
+            </span>
+          ) : waitingOnKyc.length > 0 ? (
+            <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-accent whitespace-nowrap">
+              <span className="w-1.5 h-1.5 rounded-full bg-cb-accent flex-shrink-0" /> Waiting on KYC
             </span>
           ) : controls.length > 0 ? (
             <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-accent whitespace-nowrap">
@@ -198,6 +209,22 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
           ) : null}
         </div>
       </div>
+
+      {waitingOnKyc.length > 0 && !readyToSign && (
+        <div className="px-5 py-3 bg-cb-bg border-b border-cb-border border-l-2 border-l-cb-accent">
+          <p className="text-cb-body text-gray-300">
+            Signing is locked until every Beneficial Owner and the Control Person finish identity verification.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {waitingOnKyc.map((s) => (
+              <li key={s.id} className="text-cb-caption normal-case tracking-normal text-gray-500">
+                {s.firstName} {s.lastName}
+                {isInviteOutstanding(s.identityStatus) ? ' — invite sent, waiting for them to complete' : ' — needs verify here or invite'}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="divide-y divide-cb-border">
         {loading ? (
@@ -211,19 +238,21 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
         ) : (
           signers.map(signer => {
             const isPrimary = isControlPerson(signer) || resolveSoleControlCandidate(signers)?.id === signer.id;
-            const required = isEffectivelyRequiredSigner(signer, signers);
+            const required = isEffectivelyRequiredSigner(signer, signers); // Control Person = BoldSign
             const bo = isBeneficialOwner(signer);
             const adminOnly = isPortalAdmin(signer);
             const catalogOnly = !required && !bo && !adminOnly;
-            const needsRemoteInvite = (required || bo) && !isPrimary && (
-              normalizeSignerLifecycle(signer.identityStatus) === 'pending'
-              || isInviteOutstanding(signer.identityStatus)
-            );
-            // Any verified Control Person can open their concurrent signing session on this device
+            const lifecycle = normalizeSignerLifecycle(signer.identityStatus);
+            const kycDone = isKycComplete(signer);
+
+            // BO (not CP): invite for KYC only when not yet verified
+            const canInviteKyc = bo && !isPrimary && !kycDone && !adminOnly;
+            // Control Person: invite for Verify & Sign when form filler isn't them / they're remote
+            const canInviteControl = isPrimary && !kycDone && !isApplicationSigned(signer.identityStatus);
+            const inviteOutstanding = isInviteOutstanding(signer.identityStatus);
+
+            // Only Control Person signs on this device after KYC
             const canSignHere = required && isVerifiedOrHigher(signer.identityStatus) && !isApplicationSigned(signer.identityStatus);
-            const inviteBtnLabel = isInviteOutstanding(signer.identityStatus)
-              ? 'Resend Invite'
-              : (required ? 'Send Verify & Sign Invite' : 'Send Verify Invite');
             const isSelected = selectedSignerId && signer.id === selectedSignerId;
 
             return (
@@ -250,7 +279,7 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
                     </div>
                     <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 truncate">{signer.signerEmail} · {signer.ownershipPercentage}% ownership</p>
                   </div>
-                  {!(isPrimary && normalizeSignerLifecycle(signer.identityStatus) === 'pending') && (
+                  {!(isPrimary && lifecycle === 'pending') && (
                     <StatusBadge status={signer.identityStatus} />
                   )}
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -258,34 +287,45 @@ export default function SignerRoster({ profile, onValidChange, onSignersChange, 
                       <button
                         onClick={() => onSignHere ? onSignHere(signer) : openDetail(signer, { allowKyc: true })}
                         className="text-cb-body text-cb-bg bg-cb-accent hover:opacity-90 px-2.5 py-1.5 rounded-cb font-medium transition-opacity flex items-center gap-1.5"
-                        title="Open this owner's signing session on this device"
+                        title="Open Control Person signing session on this device"
                       >
                         <UserCheck className="w-3 h-3" />
                         {isSelected ? 'Signing…' : 'Sign here'}
                       </button>
                     )}
-                    {required && !isPrimary && normalizeSignerLifecycle(signer.identityStatus) === 'pending' && (
+                    {!kycDone && (isPrimary || bo) && lifecycle === 'pending' && (
                       <button
                         onClick={() => openDetail(signer, { allowKyc: true })}
                         className="text-cb-body text-gray-300 hover:text-white border border-cb-border hover:border-cb-border-strong px-2.5 py-1.5 rounded-cb font-medium transition-colors flex items-center gap-1.5"
-                        title="Verify on this device"
+                        title="Complete identity on this device"
                       >
                         <UserCheck className="w-3 h-3" />
                         Verify here
                       </button>
                     )}
-                    {needsRemoteInvite && (
+                    {canInviteKyc && (
                       <button
-                        onClick={() => handleSendSigningInvite(signer)}
+                        onClick={() => handleSendInvite(signer, 'kyc')}
                         disabled={resendingId === signer.id}
                         className="text-cb-body text-gray-300 hover:text-white border border-cb-border hover:border-cb-border-strong px-2.5 py-1.5 rounded-cb font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50"
-                        title="Email a combined Verify & Sign link for their own device"
+                        title="Email KYC-only link — they do not sign"
                       >
                         {resendingId === signer.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                        {inviteBtnLabel}
+                        {inviteOutstanding ? 'Resend KYC Invite' : 'Send KYC Invite'}
                       </button>
                     )}
-                    <button onClick={() => openDetail(signer, { allowKyc: isPrimary || normalizeSignerLifecycle(signer.identityStatus) === 'pending' })}
+                    {canInviteControl && (
+                      <button
+                        onClick={() => handleSendInvite(signer, 'sign')}
+                        disabled={resendingId === signer.id}
+                        className="text-cb-body text-gray-300 hover:text-white border border-cb-border hover:border-cb-border-strong px-2.5 py-1.5 rounded-cb font-medium transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                        title="Email Control Person Verify & Sign packet"
+                      >
+                        {resendingId === signer.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                        {inviteOutstanding ? 'Resend Sign Invite' : 'Send Verify & Sign Invite'}
+                      </button>
+                    )}
+                    <button onClick={() => openDetail(signer, { allowKyc: isPrimary || bo || lifecycle === 'pending' })}
                       className="text-cb-body text-gray-400 hover:text-white font-medium px-2 py-1.5 rounded-cb flex items-center gap-1.5 transition-colors whitespace-nowrap"
                       title="Edit details">
                       <Pencil className="w-3.5 h-3.5" /> Edit

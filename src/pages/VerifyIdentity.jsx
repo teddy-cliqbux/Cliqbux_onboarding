@@ -21,13 +21,13 @@ const inputCls = 'w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 f
 const labelCls = 'text-xs font-semibold text-gray-600 block mb-1.5';
 
 /**
- * Remote signer landing page — unified Verify + Sign loop.
- * Email links: /verify?token=…&intent=sign
- * Flow: KYC (if needed) → per-MID BoldSign iframes → markSigned → done.
+ * Remote landing page for invited people.
+ * - intent=kyc  → Beneficial Owner identity only (no BoldSign)
+ * - intent=sign → Control Person: KYC (if needed) then Merchant Processing Agreement
  */
 export default function VerifyIdentity() {
   const [token, setToken] = useState('');
-  const [intentSign, setIntentSign] = useState(true); // default true for unified invites
+  const [intentSign, setIntentSign] = useState(false);
   const [signerInfo, setSignerInfo] = useState(null);
   const [legalName, setLegalName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -52,8 +52,9 @@ export default function VerifyIdentity() {
     const params = new URLSearchParams(window.location.search);
     const t = params.get('token');
     const intent = params.get('intent');
-    // Legacy links without intent still support KYC-only; new invites always send intent=sign
-    const wantsSign = intent !== 'kyc';
+    // Explicit intent=sign → Control Person packet. Everything else (incl. intent=kyc
+    // or missing) is KYC-only so Beneficial Owners never hit a dead BoldSign step.
+    const wantsSign = intent === 'sign';
     setIntentSign(wantsSign);
     if (!t) { setError('No verification token found. Please use the link from your email.'); setLoading(false); setPhase('kyc'); return; }
     setToken(t);
@@ -225,8 +226,7 @@ export default function VerifyIdentity() {
       });
       if (res.data?.error) throw new Error(res.data.error);
       setSignerInfo(res.data.signer);
-      // Unified loop: continue into signing (no second email)
-      if (intentSign !== false) {
+      if (intentSign) {
         await loadSigningSession(token);
       } else {
         setPhase('done');
@@ -282,7 +282,9 @@ export default function VerifyIdentity() {
             <div>
               <p className="font-bold text-gray-900 text-lg mb-1">You&apos;re all set!</p>
               <p className="text-sm text-gray-500">
-                Thank you, {signerInfo?.firstName}. Your identity is verified and your signing is complete.
+                {intentSign
+                  ? <>Thank you, {signerInfo?.firstName}. Your identity is verified and signing is complete.</>
+                  : <>Thank you, {signerInfo?.firstName}. Your identity is verified. The Control Person can now continue signing the merchant agreement.</>}
               </p>
             </div>
             <p className="text-xs text-gray-400 mt-2">You may safely close this window.</p>
@@ -296,7 +298,9 @@ export default function VerifyIdentity() {
               <h2 className="text-xl font-bold text-gray-900">Hello, {signerInfo.firstName}</h2>
               {legalName && (
                 <p className="text-sm text-gray-500 mt-0.5">
-                  You&apos;ve been added as a beneficial owner for <strong>{legalName}</strong>. Confirm your identity, then you&apos;ll sign the agreement on the next screen.
+                  {intentSign
+                    ? <>You&apos;re the Control Person for <strong>{legalName}</strong>. Confirm your identity, then sign the Merchant Processing Agreement.</>
+                    : <>You&apos;ve been listed as a beneficial owner for <strong>{legalName}</strong>. Confirm your identity for compliance — you do not need to sign the agreement.</>}
                 </p>
               )}
             </div>
@@ -360,7 +364,7 @@ export default function VerifyIdentity() {
                 className="w-full flex items-center justify-center gap-2 text-sm font-bold text-white bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 py-3 rounded-xl transition-all mt-1"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
-                {saving ? 'Saving...' : 'Continue to Sign'}
+                {saving ? 'Saving...' : (intentSign ? 'Continue to Sign' : 'Submit Verification')}
               </button>
             </form>
           </>
