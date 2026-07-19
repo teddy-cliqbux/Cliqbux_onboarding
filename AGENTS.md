@@ -348,22 +348,34 @@ Published function base URL: `https://cliqbux-onboard-prime.base44.app/functions
 ## Entity Architecture
 
 ### Current entities
-- **MerchantCorporateProfile** — legal entity, TIN, ownership type, signers
-- **MerchantSigners** — individual owners/signers with SSN, DOB, address
+- **MerchantAccount** — HubSpot Tier-1 Corporation parent (continuity across deals). Multiple TINs and deals hang under one account. See `docs/adr/0001-merchant-account-parent.md`.
+- **MerchantCorporateProfile** — one HubSpot **deal** (`corporateId` = dealId); FK `merchantAccountId`
+- **MerchantSigners** — deal roster assignment + KYC; FK `merchantAccountId` for cross-deal reuse
 - **MerchantLocations** — physical storefronts (address + bank details)
 - **MerchantMID** — one per Elavon MID; links to a location
 - **MerchantAccessTokens** — magic-link tokens for merchant portal access
 - **StagedApplication** — admin-built targeted application invites for merchants
 - **MerchantInventoryAssets** — equipment/inventory tracking
-- **MerchantSigners** — individual owners/signers with SSN, DOB, address
 - **User** — portal users
+
+### Architecture: MerchantAccount (2026-07-18)
+```
+MerchantAccount (HubSpot Tier-1 company)
+  └── legalEntities[]  — TINs / EINs (source of truth; dual-written to profile)
+  └── people KYC via MerchantSigners.merchantAccountId
+  └── MerchantCorporateProfile (deal) × N
+        └── Locations → MIDs
+        └── MerchantSigners (this deal's roster)
+```
+
+Quick Stage prompts for **parent company name** → creates HubSpot company + deal + MerchantAccount (no slug-only hubspotBypass path). Deal room / UW email feeds wait until this model is deployed.
 
 ### Architecture: MerchantMID
 Clean three-layer model: Profile ➔ Locations ➔ MerchantMIDs.
 
 ```
 MerchantCorporateProfile
-  └── legalEntities[] (embedded array — each has EIN, ownershipType, taxClassType, mailingAddress)
+  └── legalEntities[] (mirrored from MerchantAccount when linked — each has EIN, ownershipType, taxClassType, mailingAddress)
   └── MerchantLocations (physical address + bank account, FK corporateId)
         └── MerchantMID (one per MID — mcc, dba, status, elavonMID, FK locationId + corporateId)
 ```
@@ -372,8 +384,8 @@ A single physical location can have multiple MIDs (e.g. a grocery store with a B
 
 **Do NOT build new features against the flat `MerchantLocations` boarding fields.** Use `MerchantMID` for anything MID-related.
 
-### legalEntities embedded array on MerchantCorporateProfile
-Legal entities (EIN groups) are stored as an embedded array on the profile, NOT as a separate entity. Managed via `manageLegalEntity` function. Each entry has: `entityId` (UUID), `legalBusinessName`, `federalEIN`, `mailingStreet/City/State/Zip`, `legalAddressSameAsStore`, `correspondenceStreet/City/State/Zip` (optional mail), `ownershipType`, `taxClassType`, `establishmentYear`.
+### legalEntities embedded array
+Legal entities (EIN groups) live on **MerchantAccount** when `merchantAccountId` is set; `manageLegalEntity` dual-writes account + profile. Legacy profiles without an account still store `legalEntities` on the profile only. Each entry has: `entityId` (UUID), `legalBusinessName`, `federalEIN`, `mailingStreet/City/State/Zip`, `legalAddressSameAsStore`, `correspondenceStreet/City/State/Zip` (optional mail), `ownershipType`, `taxClassType`, `establishmentYear`.
 
 ### MerchantLocations.entityId
 Each location links to a `legalEntity.entityId` in the profile's embedded array. This determines which EIN group the location belongs to for MSPWare submission.

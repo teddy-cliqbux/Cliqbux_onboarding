@@ -6,8 +6,9 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 //                                             staged-link token; returns a signed merchant
 //                                             JWT + a sanitized stage record
 //   trackProgress                           — merchant token (matching corporateId) or admin
-//   createLocalStage                        — ADMIN ONLY: Quick Stage for no-HubSpot merchants
-//                                             (slugified alphanumeric corporateId)
+//   createLocalStage                        — ADMIN ONLY: Quick Stage — prompts for HubSpot
+//                                             Tier-1 parent company name, creates company + deal
+//                                             + MerchantAccount, then profile/location/primary signer
 //   impersonate                             — ADMIN ONLY: mint a 30-min merchant JWT so sales
 //                                             can open the live portal and Save on behalf of
 //                                             the merchant. Never returns stage accessToken.
@@ -364,38 +365,148 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // ── createLocalStage — Quick Stage for merchants with no HubSpot deal ─────
-    // Body: { businessName, signerName, signerEmail } (optional corporateIdOverride)
-    // Slugifies businessName → corporateId, creates Profile + Location + Signer + Stage.
+    // ── createLocalStage — Quick Stage: HubSpot Tier-1 parent + deal ───────────
+    // Body: { parentCompanyName, businessName?, signerName, signerEmail }
+    // Creates/finds HubSpot Corporation company, creates deal, MerchantAccount,
+    // Profile (corporateId = dealId), Location, primary Signer, Stage.
     if (action === 'createLocalStage') {
-      const businessName = String(data?.businessName || body.businessName || '').trim();
+      const parentCompanyName = String(
+        data?.parentCompanyName || body.parentCompanyName || data?.businessName || body.businessName || ''
+      ).trim();
+      const businessName = String(data?.businessName || body.businessName || parentCompanyName).trim();
       const signerName = String(data?.signerName || body.signerName || '').trim();
       const signerEmail = String(data?.signerEmail || body.signerEmail || '').trim().toLowerCase();
-      if (!businessName) return Response.json({ error: 'businessName required' }, { status: 400 });
+      if (!parentCompanyName) {
+        return Response.json({ error: 'parentCompanyName required (HubSpot Tier-1 Corporation)' }, { status: 400 });
+      }
       if (!signerName) return Response.json({ error: 'signerName (primary signer) required' }, { status: 400 });
       if (!signerEmail || !signerEmail.includes('@')) {
         return Response.json({ error: 'Valid primary signer email required' }, { status: 400 });
       }
 
-      const corporateId = data?.corporateIdOverride
-        ? slugifyCorporateId(String(data.corporateIdOverride))
-        : slugifyCorporateId(businessName);
-
-      if (isHubSpotDealId(corporateId)) {
-        return Response.json({
-          error: 'Slug resolved to digits only — use Quick Stage with a HubSpot deal ID, or pick a name with letters.',
-        }, { status: 400 });
+      const hsApiKey = Deno.env.get('HUBSPOT_API_KEY');
+      if (!hsApiKey) {
+        return Response.json({ error: 'HUBSPOT_API_KEY is not configured' }, { status: 500 });
       }
+      const hsHeaders = {
+        Authorization: `Bearer ${hsApiKey}`,
+        'Content-Type': 'application/json',
+      };
+
+      // 1. Find or create HubSpot Tier-1 company by exact name
+      let hubspotCompanyId: string | null = null;
+      try {
+        const searchRes = await fetch('https://api.hubapi.com/crm/v3/objects/companies/search', {
+          method: 'POST',
+          headers: hsHeaders,
+          body: JSON.stringify({
+            filterGroups: [{
+              filters: [{ propertyName: 'name', operator: 'EQ', value: parentCompanyName }],
+            }],
+            limit: 1,
+          }),
+        });
+        const searchData = await searchRes.json().catch(() => ({}));
+        if (searchRes.ok && searchData.results?.[0]?.id) {
+          hubspotCompanyId = String(searchData.results[0].id);
+        }
+      } catch (e: any) {
+        console.warn('[createLocalStage] company search failed:', e?.message);
+      }
+
+      if (!hubspotCompanyId) {
+        const companyRes = await fetch('https://api.hubapi.com/crm/v3/objects/companies', {
+          method: 'POST',
+          headers: hsHeaders,
+          body: JSON.stringify({
+            properties: {
+              name: parentCompanyName,
+              domain: signerEmail.split('@')[1] || '',
+            },
+          }),
+        });
+        const companyData = await companyRes.json().catch(() => ({}));
+        if (!companyRes.ok || !companyData.id) {
+          return Response.json({
+            error: 'Failed to create HubSpot parent company',
+            hubspotStatus: companyRes.status,
+            hubspotError: companyData,
+          }, { status: 502 });
+        }
+        hubspotCompanyId = String(companyData.id);
+      }
+
+      // 2. Create HubSpot deal
+      const dealRes = await fetch('https://api.hubapi.com/crm/v3/objects/deals', {
+        method: 'POST',
+        headers: hsHeaders,
+        body: JSON.stringify({
+          properties: {
+            dealname: `${businessName} — Onboarding`,
+            dealstage: 'appointmentscheduled',
+            pipeline: 'default',
+            amount: '0',
+            closedate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          },
+        }),
+      });
+      const dealData = await dealRes.json().catch(() => ({}));
+      const dealId = dealData.id ? String(dealData.id) : null;
+      if (!dealId) {
+        return Response.json({
+          error: 'Failed to create HubSpot deal',
+          hubspotStatus: dealRes.status,
+          hubspotError: dealData,
+        }, { status: 502 });
+      }
+
+      // 3. Associate deal ↔ company (best-effort)
+      await fetch(
+        `https://api.hubapi.com/crm/v3/objects/deals/${dealId}/associations/companies/${hubspotCompanyId}/deal_to_company`,
+        { method: 'PUT', headers: hsHeaders }
+      ).catch(() => null);
+
+      const corporateId = dealId;
 
       const existingProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter(
         { corporateId }, '-created_date', 1
       );
       if (existingProfiles?.length) {
         return Response.json({
-          error: `A merchant with corporateId "${corporateId}" already exists. Open that application or choose a different name.`,
+          error: `A merchant with corporateId "${corporateId}" already exists.`,
           corporateId,
           exists: true,
         }, { status: 409 });
+      }
+
+      // 4. Find or create MerchantAccount for this HubSpot company
+      let account: any = null;
+      try {
+        const byHs = await base44.asServiceRole.entities.MerchantAccount.filter(
+          { hubspotCompanyId }, '-created_date', 1
+        );
+        account = byHs?.[0] || null;
+      } catch (e: any) {
+        // Entity may not be published yet in Base44
+        console.warn('[createLocalStage] MerchantAccount filter failed:', e?.message);
+      }
+      if (!account) {
+        try {
+          account = await base44.asServiceRole.entities.MerchantAccount.create({
+            hubspotCompanyId,
+            name: parentCompanyName,
+            domain: signerEmail.split('@')[1] || '',
+            legalEntities: [],
+          });
+        } catch (e: any) {
+          console.error('[createLocalStage] MerchantAccount.create failed:', e?.message);
+          return Response.json({
+            error: 'MerchantAccount entity missing or create failed — republish MerchantAccount schema in Base44, then retry.',
+            detail: e?.message,
+            hubspotCompanyId,
+            dealId,
+          }, { status: 503 });
+        }
       }
 
       const nameParts = signerName.split(/\s+/).filter(Boolean);
@@ -404,7 +515,9 @@ Deno.serve(async (req) => {
 
       const profile = await base44.asServiceRole.entities.MerchantCorporateProfile.create({
         corporateId,
-        legalName: businessName,
+        merchantAccountId: account.id,
+        hubspotCompanyId,
+        legalName: parentCompanyName,
         signerEmail,
         firstName,
         lastName,
@@ -421,6 +534,7 @@ Deno.serve(async (req) => {
       const verifyToken = generateToken();
       const signer = await base44.asServiceRole.entities.MerchantSigners.create({
         corporateId,
+        merchantAccountId: account.id,
         firstName,
         lastName,
         signerEmail,
@@ -440,9 +554,11 @@ Deno.serve(async (req) => {
         includedSignerIds: [signer.id],
         prefilledData: {
           merchantName: businessName,
+          parentCompanyName,
           signerEmail,
-          source: 'local_quick_stage',
-          hubspotBypass: true,
+          source: 'quick_stage_hubspot',
+          hubspotCompanyId,
+          merchantAccountId: account.id,
         },
         accessToken,
         sentToEmail: signerEmail,
@@ -450,19 +566,26 @@ Deno.serve(async (req) => {
 
       await upsertAutoTrack(base44, corporateId, {
         merchantName: businessName,
+        parentCompanyName,
         signerEmail,
         applicationStatus: 'Incomplete',
         currentStep: 'locations',
-        source: 'local_quick_stage',
-        hubspotBypass: true,
+        source: 'quick_stage_hubspot',
+        hubspotCompanyId,
+        merchantAccountId: account.id,
       }).catch(() => null);
 
       return Response.json({
         success: true,
-        hubspotBypass: true,
+        hubspotBypass: false,
         corporateId,
+        dealId,
+        hubspotCompanyId,
+        merchantAccountId: account.id,
+        parentCompanyName,
         businessName,
         profile,
+        account,
         location,
         signer,
         stage: sanitizeStage(stage),

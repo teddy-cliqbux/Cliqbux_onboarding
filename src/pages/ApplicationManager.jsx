@@ -439,16 +439,16 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
   );
 }
 
-// ── Quick Local Stage Modal (alphanumeric / no-HubSpot corp IDs) ───────────────
+// ── Quick Stage Modal — HubSpot Tier-1 parent company + deal ──────────────────
 function QuickLocalStageModal({ initialName, onCreated, onClose }) {
+  const [parentCompanyName, setParentCompanyName] = useState(initialName || '');
   const [businessName, setBusinessName] = useState(initialName || '');
   const [signerName, setSignerName] = useState('');
   const [signerEmail, setSignerEmail] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const slug = slugifyCorporateId(businessName);
-  const canSave = businessName.trim() && signerName.trim() && signerEmail.includes('@') && !saving;
+  const canSave = parentCompanyName.trim() && signerName.trim() && signerEmail.includes('@') && !saving;
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape' && !saving) onClose(); };
@@ -464,7 +464,8 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
       const res = await base44.functions.invoke('manageStagedApplication', {
         action: 'createLocalStage',
         data: {
-          businessName: businessName.trim(),
+          parentCompanyName: parentCompanyName.trim(),
+          businessName: (businessName.trim() || parentCompanyName.trim()),
           signerName: signerName.trim(),
           signerEmail: signerEmail.trim(),
         },
@@ -472,7 +473,7 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
       if (res.data?.error) throw new Error(res.data.error);
       onCreated?.(res.data);
     } catch (err) {
-      setError(err?.response?.data?.error || err.message || 'Couldn’t create merchant. Check the name and email, then try again.');
+      setError(err?.response?.data?.error || err.message || 'Couldn’t create merchant. Check the parent company name and email, then try again.');
     } finally {
       setSaving(false);
     }
@@ -491,30 +492,34 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
         className="bg-cb-surface-raised border border-cb-border rounded-cb shadow-cb-overlay w-full max-w-md p-6"
         onClick={e => e.stopPropagation()}
       >
-        <h3 id="local-stage-title" className="font-display text-cb-title text-white mb-1">Start without HubSpot</h3>
+        <h3 id="local-stage-title" className="font-display text-cb-title text-white mb-1">Start application</h3>
         <p className="text-cb-caption text-gray-500 mb-4">
-          Creates a merchant in Cliqbux only. No HubSpot deal or equipment quote until you link one later.
+          Creates a HubSpot parent company (Tier-1) and a new deal, then opens this application so you can add owners.
         </p>
 
-        <label className={labelCls}>Business name</label>
+        <label className={labelCls}>Parent company name</label>
+        <input
+          value={parentCompanyName}
+          onChange={e => {
+            const v = e.target.value;
+            setParentCompanyName(v);
+            if (!businessName || businessName === parentCompanyName) setBusinessName(v);
+          }}
+          className={`${inputCls} mb-3`}
+          placeholder="Island Pacific Corporation"
+          autoFocus
+        />
+        <p className="text-cb-caption text-gray-600 -mt-2 mb-3">
+          HubSpot Tier-1 Corporation. Multiple TINs and deals can hang under this parent.
+        </p>
+
+        <label className={labelCls}>Deal / store name <span className="text-gray-600 font-normal">(optional)</span></label>
         <input
           value={businessName}
           onChange={e => setBusinessName(e.target.value)}
           className={`${inputCls} mb-3`}
-          placeholder="Danono's Donuts"
-          autoFocus
+          placeholder="Same as parent, or a location DBA"
         />
-
-        <label className={labelCls}>Merchant ID</label>
-        <input
-          value={slug}
-          readOnly
-          className={`${inputCls} mb-3 opacity-80 font-mono text-cb-caption`}
-          aria-describedby="local-merchant-id-hint"
-        />
-        <p id="local-merchant-id-hint" className="text-cb-caption text-gray-600 -mt-2 mb-3">
-          Auto-generated from the business name.
-        </p>
 
         <label className={labelCls}>Primary owner name</label>
         <input
@@ -543,7 +548,7 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
             className="flex-1 flex items-center justify-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-gray-700 disabled:text-gray-500 text-cb-bg font-semibold text-cb-body py-2.5 rounded-cb transition-opacity"
           >
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            Create merchant
+            Create in HubSpot
           </button>
           <button
             onClick={onClose}
@@ -624,8 +629,8 @@ function PipelineOverview({ profiles, trackMap, rowModes, loading, onRefresh, on
           <input
             value={quickId}
             onChange={e => setQuickId(e.target.value)}
-            placeholder="HubSpot deal ID or business name…"
-            aria-label="HubSpot deal ID or business name"
+            placeholder="HubSpot deal ID or parent company name…"
+            aria-label="HubSpot deal ID or parent company name"
             onKeyDown={e => e.key === 'Enter' && handleQuickCreate()}
             className="bg-cb-bg border border-cb-border rounded-cb px-3 py-2 text-cb-body text-white placeholder:text-gray-600 hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent w-56"
           />
@@ -670,7 +675,7 @@ function CheckRow({ checked, onChange, children }) {
 }
 
 // ── Stage Editor ──────────────────────────────────────────────────────────────
-function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved, onClose, onRequestSend }) {
+function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved, onClose, onRequestSend, initialTab }) {
   const hubspotDeal = isHubSpotDealId(corporateId);
   const [label, setLabel]             = useState(stage?.label || '');
   const [locations, setLocations]     = useState([]);
@@ -687,7 +692,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
   const [saving, setSaving]           = useState(false);
   const [error, setError]             = useState('');
   const [syncMsg, setSyncMsg]         = useState('');
-  const [activeTab, setActiveTab]     = useState('locations');
+  const [activeTab, setActiveTab]     = useState(initialTab || 'locations');
   const [pricing, setPricing]         = useState(null);
 
   useEffect(() => { loadData(); }, []);
@@ -1540,6 +1545,11 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-cb-body font-semibold text-white truncate">{merchantName || corporateId}</p>
             <span className="text-cb-caption font-mono text-gray-600">{corporateId}</span>
+            {profile?.legalName && profile.legalName !== merchantName && (
+              <span className="text-cb-caption text-gray-600 truncate max-w-[12rem]" title={profile.legalName}>
+                {profile.legalName}
+              </span>
+            )}
             {rowMode.mode === 'stuck' && (
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${modeDotClass('stuck')}`} />
@@ -1958,9 +1968,9 @@ export default function ApplicationManager() {
     const id = String(raw || '').trim();
     if (!id) return;
 
-    // Alphanumeric / business name → local Quick Stage modal (no HubSpot)
+    // Alphanumeric / parent company name → Quick Stage modal (creates HubSpot Tier-1 + deal)
     if (!isHubSpotDealId(id)) {
-      setLocalStageDraft({ businessName: id });
+      setLocalStageDraft({ parentCompanyName: id, businessName: id });
       return;
     }
 
@@ -1974,7 +1984,7 @@ export default function ApplicationManager() {
 
   const handleLocalStageCreated = (data) => {
     const cid = String(data.corporateId);
-    const name = data.businessName || cid;
+    const name = data.businessName || data.parentCompanyName || cid;
     setLocalStageDraft(null);
     setMerchantNames(prev => ({ ...prev, [cid]: name }));
     if (data.profile) {
@@ -1989,7 +1999,8 @@ export default function ApplicationManager() {
         return [data.stage, ...prev];
       });
     }
-    setEditing({ corporateId: cid, merchantName: name, stage: data.stage || null });
+    // Open StageEditor on SIGNERS so agents can add owners right away
+    setEditing({ corporateId: cid, merchantName: name, stage: data.stage || null, initialTab: 'signers' });
   };
 
   const handleStageSaved = (stage) => {
@@ -2216,7 +2227,7 @@ export default function ApplicationManager() {
 
       {localStageDraft && (
         <QuickLocalStageModal
-          initialName={localStageDraft.businessName}
+          initialName={localStageDraft.parentCompanyName || localStageDraft.businessName}
           onCreated={handleLocalStageCreated}
           onClose={() => setLocalStageDraft(null)}
         />
@@ -2233,6 +2244,7 @@ export default function ApplicationManager() {
               stage={editing.stage}
               corporateId={editing.corporateId}
               merchantName={editing.merchantName}
+              initialTab={editing.initialTab}
               onSaved={handleStageSaved}
               onPricingSaved={handlePricingSaved}
               onClose={() => setEditing(null)}

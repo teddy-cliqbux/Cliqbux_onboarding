@@ -2209,3 +2209,33 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **? Waiting on:** Teddy (push)
 ---
+
+---
+**[CURSOR]** — 2026-07-18
+**Type:** Decision — `/grill-me` Admin/applications → Merchant Account parent model (v1 gate)
+
+**Audience:** Sales + underwriting/CS share `/admin/applications`. Handoff is blurry. Deep UW (email feed from underwriting@, per-MID AWB history) is **phase 2**. Deal room (`/admin/applications/:id`) is **blocked until** parent model ships.
+
+**Locked:**
+1. Continuity key = **Merchant Account Parent** = HubSpot **Tier-1 Corporation** company (not TIN; multiple TINs under one account).
+2. No provisional Cliqbux-only parents — create Tier-1 in HubSpot from applicant/agent entry.
+3. **Quick Stage:** prompt for **parent company name** → create HubSpot company + deal → agents add signers in admin.
+4. **Legal entities (TINs)** live on the **account** (reuse across deals).
+5. **People** live on the **account** with **KYC retained**; roster **assigned per deal** (agents adjust before send).
+6. Account MVP gate before deal room: MerchantAccount↔HS Tier-1, legal entities on account, people+KYC, deal assignment, list shows account, migration path.
+
+**Deferred:** deal-room notes/tasks, underwriting@ email feed, AWB per-MID threads.
+
+**→ Shipping now:** Account MVP (entity + Quick Stage HubSpot parent + continuity FKs). Deal room after.
+
+**Shipped in repo (needs publish):**
+- `MerchantAccount` entity schema
+- Profile/Signers FKs `merchantAccountId` / `hubspotCompanyId`
+- Quick Stage → HubSpot Tier-1 company + deal; opens Signers tab
+- `manageLegalEntity` dual-write to account
+- `manageSigner` stamps account + prefers same-account KYC
+- `createHubspotDeal` links/creates MerchantAccount
+- ADR `docs/adr/0001-merchant-account-parent.md`
+
+**Teddy deploy:** republish MerchantAccount + profile/signer schemas; redeploy manageStagedApplication, manageLegalEntity, manageSigner, createHubspotDeal; push frontend.
+---

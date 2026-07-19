@@ -313,10 +313,47 @@ Deno.serve(async (req) => {
     if (action === 'create') {
       const token = generateToken();
       const roles = normalizePersonRoleFlags(signerData || {});
+
+      // Continuity: stamp merchantAccountId from profile; prefer KYC from same-account prior signer
+      let merchantAccountId = '';
+      let kycFromAccount: Record<string, string> = {};
+      try {
+        const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
+        merchantAccountId = profiles?.[0]?.merchantAccountId ? String(profiles[0].merchantAccountId) : '';
+        if (merchantAccountId && signerData?.signerEmail) {
+          const accountSigners = await base44.asServiceRole.entities.MerchantSigners.filter({
+            merchantAccountId,
+            signerEmail: String(signerData.signerEmail).toLowerCase(),
+          });
+          const prior = (accountSigners || []).find((s: any) =>
+            s.corporateId !== String(corporateId) &&
+            s.dobYear && s.ssn &&
+            ['verified', 'Verified', 'application signed', 'Signed'].includes(String(s.identityStatus || ''))
+          );
+          if (prior) {
+            kycFromAccount = {
+              dobYear: prior.dobYear || '',
+              dobMonth: prior.dobMonth || '',
+              dobDay: prior.dobDay || '',
+              ssn: prior.ssn || '',
+              homeStreet: prior.homeStreet || '',
+              homeCity: prior.homeCity || '',
+              homeState: prior.homeState || '',
+              homeZip: prior.homeZip || '',
+              corporatePhone: prior.corporatePhone || '',
+              titleType: prior.titleType || '',
+            };
+          }
+        }
+      } catch (e: any) {
+        console.warn('[manageSigner.create] account KYC lookup failed:', e?.message);
+      }
+
       let record;
       try {
         record = await base44.asServiceRole.entities.MerchantSigners.create({
           corporateId,
+          ...(merchantAccountId ? { merchantAccountId } : {}),
           firstName: signerData.firstName,
           lastName: signerData.lastName,
           signerEmail: signerData.signerEmail,
@@ -328,15 +365,16 @@ Deno.serve(async (req) => {
           needsGatewayUserProvisioning: roles.needsGatewayUserProvisioning,
           identityStatus: roles.isPortalAdmin ? 'verified' : 'Pending Invitation',
           verifyToken: token,
-          dobYear: signerData.dobYear || '',
-          dobMonth: signerData.dobMonth || '',
-          dobDay: signerData.dobDay || '',
-          ssn: signerData.ssn || '',
-          homeStreet: signerData.homeStreet || '',
-          homeCity: signerData.homeCity || '',
-          homeState: signerData.homeState || '',
-          homeZip: signerData.homeZip || '',
-          corporatePhone: signerData.corporatePhone || '',
+          dobYear: signerData.dobYear || kycFromAccount.dobYear || '',
+          dobMonth: signerData.dobMonth || kycFromAccount.dobMonth || '',
+          dobDay: signerData.dobDay || kycFromAccount.dobDay || '',
+          ssn: signerData.ssn || kycFromAccount.ssn || '',
+          homeStreet: signerData.homeStreet || kycFromAccount.homeStreet || '',
+          homeCity: signerData.homeCity || kycFromAccount.homeCity || '',
+          homeState: signerData.homeState || kycFromAccount.homeState || '',
+          homeZip: signerData.homeZip || kycFromAccount.homeZip || '',
+          corporatePhone: signerData.corporatePhone || kycFromAccount.corporatePhone || '',
+          ...(kycFromAccount.titleType && !signerData.titleType ? { titleType: kycFromAccount.titleType } : {}),
         });
       } catch (createErr: any) {
         console.error('[manageSigner] create failed:', createErr.message);
@@ -672,14 +710,27 @@ Deno.serve(async (req) => {
       const { signerEmail } = body;
       if (!signerEmail) return Response.json({ found: false });
       const allMatches = await base44.asServiceRole.entities.MerchantSigners.filter({ signerEmail });
-      const prior = allMatches.find((s: any) =>
-        s.corporateId !== corporateId &&
-        (s.identityStatus === 'Verified' || s.identityStatus === 'verified' || s.identityStatus === 'Signed' || s.identityStatus === 'application signed') &&
-        s.dobYear && s.ssn
-      );
+      let accountId = '';
+      try {
+        const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
+        accountId = profiles?.[0]?.merchantAccountId ? String(profiles[0].merchantAccountId) : '';
+      } catch { /* ignore */ }
+      const scored = (allMatches || [])
+        .filter((s: any) =>
+          s.corporateId !== corporateId &&
+          (s.identityStatus === 'Verified' || s.identityStatus === 'verified' || s.identityStatus === 'Signed' || s.identityStatus === 'application signed') &&
+          s.dobYear && s.ssn
+        )
+        .sort((a: any, b: any) => {
+          const aSame = accountId && a.merchantAccountId === accountId ? 0 : 1;
+          const bSame = accountId && b.merchantAccountId === accountId ? 0 : 1;
+          return aSame - bSame;
+        });
+      const prior = scored[0];
       if (!prior) return Response.json({ found: false });
       return Response.json({
         found: true,
+        fromSameAccount: !!(accountId && prior.merchantAccountId === accountId),
         signerData: {
           dobMonth: prior.dobMonth || '',
           dobDay: prior.dobDay || '',

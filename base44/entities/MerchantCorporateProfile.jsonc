@@ -4,7 +4,15 @@
   "properties": {
     "corporateId": {
       "type": "string",
-      "description": "Primary Key \u2014 matches HubSpot dealId or auto-generated for self-serve"
+      "description": "Primary Key \u2014 matches HubSpot dealId (or legacy local slug). One deal under a MerchantAccount."
+    },
+    "merchantAccountId": {
+      "type": "string",
+      "description": "FK to MerchantAccount (HubSpot Tier-1 Corporation parent). Continuity across deals — legal entities and people KYC hang on the account."
+    },
+    "hubspotCompanyId": {
+      "type": "string",
+      "description": "Denormalized HubSpot Tier-1 company id (same as MerchantAccount.hubspotCompanyId) for list/filter without a join."
     },
     "legalName": {
       "type": "string"

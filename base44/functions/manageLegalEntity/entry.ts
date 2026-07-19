@@ -87,13 +87,37 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Prefer account-level legalEntities when MerchantAccount exists (continuity across deals)
+    let accountId = profile.merchantAccountId ? String(profile.merchantAccountId) : '';
+    let account: any = null;
+    if (accountId) {
+      try {
+        account = await base44.asServiceRole.entities.MerchantAccount.get(accountId);
+      } catch (e: any) {
+        console.warn('[manageLegalEntity] MerchantAccount.get failed:', e?.message);
+        account = null;
+        accountId = '';
+      }
+    }
+
     // Defensive: Base44 sometimes returns JSON fields as strings — parse if needed
-    let rawEntities = profile.legalEntities ?? [];
+    let rawEntities = (account?.legalEntities != null ? account.legalEntities : profile.legalEntities) ?? [];
     if (typeof rawEntities === 'string') {
       try { rawEntities = JSON.parse(rawEntities); } catch { rawEntities = []; }
     }
     let entities: any[] = Array.isArray(rawEntities) ? rawEntities : [];
     const updateId = profile.id;
+
+    async function persistEntities(next: any[]) {
+      await base44.asServiceRole.entities.MerchantCorporateProfile.update(updateId, { legalEntities: next });
+      if (accountId) {
+        try {
+          await base44.asServiceRole.entities.MerchantAccount.update(accountId, { legalEntities: next });
+        } catch (e: any) {
+          console.warn('[manageLegalEntity] MerchantAccount.update failed:', e?.message);
+        }
+      }
+    }
 
     if (action === 'edit') {
       if (!entityId) {
@@ -151,7 +175,7 @@ Deno.serve(async (req) => {
         taxClassType: taxClassType !== undefined ? taxClassType : (existing.taxClassType || ''),
         establishmentYear: establishmentYear !== undefined ? establishmentYear : (existing.establishmentYear || ''),
       };
-      await base44.asServiceRole.entities.MerchantCorporateProfile.update(updateId, { legalEntities: entities });
+      await persistEntities(entities);
       return Response.json({ success: true, entities });
     }
 
@@ -195,7 +219,7 @@ Deno.serve(async (req) => {
       // to add their first location. The EIN can now be filled in later via
       // EntityDetailsPanel. See AGENTS.md.
       entities = entities.concat({ entityId: randomUUID(), legalBusinessName: legalBusinessName.trim(), tradeNameDBA: (tradeNameDBA || legalBusinessName).trim(), federalEIN: (federalEIN || '').trim(), corporateMailingAddress: (corporateMailingAddress || '').trim() });
-      await base44.asServiceRole.entities.MerchantCorporateProfile.update(updateId, { legalEntities: entities });
+      await persistEntities(entities);
       return Response.json({ success: true, entities });
     }
 
@@ -204,7 +228,7 @@ Deno.serve(async (req) => {
         return Response.json({ error: 'entityId is required' }, { status: 400 });
       }
       entities = entities.filter(e => e.entityId !== entityId);
-      await base44.asServiceRole.entities.MerchantCorporateProfile.update(updateId, { legalEntities: entities });
+      await persistEntities(entities);
 
       // Restore orphaned locations back to In Review
       await base44.asServiceRole.entities.MerchantLocations.updateMany({ corporateId, entityId }, { $set: { entityId: null, applicationStepStatus: 'In Review' } });

@@ -1,0 +1,83 @@
+{
+  "name": "MerchantAccount",
+  "type": "object",
+  "description": "Tier-1 merchant parent (HubSpot Corporation company). Multiple deals (MerchantCorporateProfile.corporateId = HubSpot dealId) and multiple TINs (legalEntities) hang under one account. Continuity home for legal entities and people KYC across signings. See AGENTS.md / AI_CHANNEL 2026-07-18 grill.",
+  "properties": {
+    "hubspotCompanyId": {
+      "type": "string",
+      "description": "HubSpot Tier-1 Corporation company id — primary external identity for this account"
+    },
+    "name": {
+      "type": "string",
+      "description": "Corporation / group display name (matches HubSpot company name at create time)"
+    },
+    "domain": {
+      "type": "string",
+      "description": "Optional company domain from HubSpot or primary signer email"
+    },
+    "legalEntities": {
+      "type": "array",
+      "description": "Multi-EIN legal entities owned by this account — reusable across deals. Source of truth when merchantAccountId is set on a profile; profile.legalEntities is mirrored for boarding compatibility.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string",
+            "description": "UUID — unique identifier for this legal entity"
+          },
+          "legalBusinessName": {
+            "type": "string"
+          },
+          "tradeNameDBA": {
+            "type": "string"
+          },
+          "federalEIN": {
+            "type": "string"
+          },
+          "mailingStreet": {
+            "type": "string"
+          },
+          "mailingCity": {
+            "type": "string"
+          },
+          "mailingState": {
+            "type": "string"
+          },
+          "mailingZip": {
+            "type": "string"
+          },
+          "legalAddressSameAsStore": {
+            "type": "boolean"
+          },
+          "correspondenceStreet": {
+            "type": "string"
+          },
+          "correspondenceCity": {
+            "type": "string"
+          },
+          "correspondenceState": {
+            "type": "string"
+          },
+          "correspondenceZip": {
+            "type": "string"
+          },
+          "corporateMailingAddress": {
+            "type": "string"
+          },
+          "ownershipType": {
+            "type": "string"
+          },
+          "taxClassType": {
+            "type": "string"
+          },
+          "establishmentYear": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

@@ -4,7 +4,11 @@
   "properties": {
     "corporateId": {
       "type": "string",
-      "description": "FK to MerchantCorporateProfile"
+      "description": "FK to MerchantCorporateProfile (this deal's roster assignment)"
+    },
+    "merchantAccountId": {
+      "type": "string",
+      "description": "FK to MerchantAccount — people KYC is retained at account level across deals; corporateId assigns this person to a specific application roster"
     },
     "firstName": {
       "type": "string"

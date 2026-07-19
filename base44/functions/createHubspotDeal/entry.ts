@@ -162,9 +162,29 @@ Deno.serve(async (req) => {
       await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}/associations/contacts/${contactId}/deal_to_contact`, { method: 'PUT', headers });
     }
 
-    // 5. Create MerchantCorporateProfile in Base44
+    // 5. Create MerchantCorporateProfile (+ MerchantAccount parent) in Base44
     const corporateId = dealId;
     const existing = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
+
+    let merchantAccountId: string | null = null;
+    try {
+      const byHs = await base44.asServiceRole.entities.MerchantAccount.filter(
+        { hubspotCompanyId: String(companyId) }, '-created_date', 1
+      );
+      if (byHs?.[0]?.id) {
+        merchantAccountId = String(byHs[0].id);
+      } else {
+        const account = await base44.asServiceRole.entities.MerchantAccount.create({
+          hubspotCompanyId: String(companyId),
+          name: businessName,
+          domain: signerEmail.split('@')[1] || '',
+          legalEntities: [],
+        });
+        merchantAccountId = account?.id ? String(account.id) : null;
+      }
+    } catch (e: any) {
+      console.warn('[createHubspotDeal] MerchantAccount create/link skipped:', e?.message);
+    }
 
     if (!existing || existing.length === 0) {
       const profileFields: Record<string, unknown> = {
@@ -176,6 +196,8 @@ Deno.serve(async (req) => {
         firstName: signerName.split(' ')[0] || signerName,
         lastName: signerName.split(' ').slice(1).join(' ') || '',
       };
+      if (merchantAccountId) profileFields.merchantAccountId = merchantAccountId;
+      if (companyId) profileFields.hubspotCompanyId = String(companyId);
 
       if (corporatePhone) profileFields.corporatePhone = corporatePhone.replace(/\D/g, '');
 
@@ -190,7 +212,15 @@ Deno.serve(async (req) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const merchantToken = await signMerchantToken(corporateId, signerEmail, expiresAt);
 
-    return Response.json({ success: true, corporateId, dealId, companyId, contactId, merchantToken });
+    return Response.json({
+      success: true,
+      corporateId,
+      dealId,
+      companyId,
+      contactId,
+      merchantAccountId,
+      merchantToken,
+    });
 
   } catch (error) {
     return Response.json({ error: error.message, stack: error.stack?.split('\n').slice(0, 3).join(' | ') }, { status: 500 });
