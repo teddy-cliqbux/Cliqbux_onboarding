@@ -649,7 +649,12 @@ export default function OnboardingPortal() {
       completedSteps: { agreement: true, people: true, locations: true, banking: true, verify: true },
       applicationStatus: 'Submitted',
     });
-    setProfile(prev => ({ ...prev, applicationStatus: 'Submitted', portalLockStatus: 'all_signed' }));
+    setProfile(prev => ({
+      ...prev,
+      applicationStatus: 'Submitted',
+      portalLockStatus: 'all_signed',
+      handoffStage: prev?.handoffStage || 'underwriting',
+    }));
     navigate(`/onboarding/dashboard?dealId=${profile.corporateId}`, { replace: true });
   };
 

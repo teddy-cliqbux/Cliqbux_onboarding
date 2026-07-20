@@ -1,0 +1,49 @@
+{
+  "name": "MerchantOnboardingFact",
+  "type": "object",
+  "description": "Ask-once fact store for Merchant Center handoffs. Sales/UW/implementation/install/support share gathered facts so merchants are not re-asked. Republish in Base44 or fields strip (Lesson #4).",
+  "properties": {
+    "corporateId": {
+      "type": "string",
+      "description": "FK → MerchantCorporateProfile.corporateId"
+    },
+    "locationId": {
+      "type": "string",
+      "description": "Optional FK → MerchantLocations.id when fact is location-scoped"
+    },
+    "factKey": {
+      "type": "string",
+      "description": "Stable key e.g. business_hours, store_contact, tax_rates, menu, employee_list, floor_plan, isp, mid, sow_signed"
+    },
+    "value": {
+      "type": "string",
+      "description": "Short text value or summary"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["unknown", "gathered", "verified"],
+      "default": "unknown"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["portal", "agent", "transcript", "hubspot", "system"],
+      "description": "How this fact was gathered"
+    },
+    "evidenceRef": {
+      "type": "string",
+      "description": "Checklist item id, transcript id, note id, or file URL"
+    },
+    "gatheredAt": {
+      "type": "string",
+      "description": "ISO timestamp"
+    },
+    "gatheredBy": {
+      "type": "string",
+      "description": "Email or system label"
+    }
+  },
+  "required": [
+    "corporateId",
+    "factKey"
+  ]
+}

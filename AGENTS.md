@@ -311,6 +311,8 @@ Auth Stage 1: magic-link JWT via `src/lib/merchantCenterAuth.js` (swap-friendly)
 
 **Deployment checklist (2026-07-20):** Excel Template 2 (~183 tasks) is encoded in `deploymentChecklistCatalog`. Merchants see `audience=merchant|shared` via `MerchantBeforeInstall`; agents use Deal Room `InstallerRunbook` (full phases + Template 2 statuses). Spawn with `scheduleInstall` / `instantiateDeployment` per location. `enterpriseInstall` on location unlocks Airport & Enterprise phase. Auto-complete: quote_paid, install_date_set, hours_present, mid_live, menu_uploaded.
 
+**Team handoff pipeline (2026-07-20):** `handoffStage` on profile (`sales|underwriting|implementation|installation|support`). Ask-once facts: `MerchantOnboardingFact` + `src/lib/onboardingFacts.js`. Deal Room `HandoffPanel` (stage strip, missing/gathered, advance with soft warnings / hard blockers + override). Call notes inbox: `CallTranscript` via `manageHandoff` ingest → suggest → Accept/Reject (never auto-apply). Completing checklist items upserts facts; merchant pack hides items whose fact is already gathered. Submit → `underwriting`; `scheduleInstall` → `installation` if earlier. Republish `MerchantOnboardingFact`, `CallTranscript`, `MerchantCorporateProfile` (handoff fields); redeploy `manageHandoff`, `manageMerchantChecklist`, `updateMerchantProfile`.
+
 Base44 App slug: `cliqbux-onboard-prime`
 Base44 App ID: `6a3dfa34316c4e5018c750f7`
 Published function base URL: `https://cliqbux-onboard-prime.base44.app/functions/`

@@ -140,6 +140,30 @@
       ],
       "default": "unlocked"
     },
+    "handoffStage": {
+      "type": "string",
+      "description": "Internal team pipeline stage: sales → underwriting → implementation → installation → support. Not a HubSpot deal stage. Default underwriting after Submitted.",
+      "enum": [
+        "sales",
+        "underwriting",
+        "implementation",
+        "installation",
+        "support"
+      ],
+      "default": "sales"
+    },
+    "handoffStageUpdatedAt": {
+      "type": "string",
+      "description": "ISO timestamp when handoffStage last changed"
+    },
+    "handoffStageUpdatedBy": {
+      "type": "string",
+      "description": "Agent email who last advanced handoffStage"
+    },
+    "handoffOverrideReason": {
+      "type": "string",
+      "description": "Reason when stage was advanced despite hard blockers"
+    },
     "isManualMode": {
       "type": "boolean",
       "default": false

@@ -13,6 +13,8 @@ import {
 import { lifecycleLabel, lifecycleDotClass } from '@/lib/signerLifecycle';
 import { TIER_LABELS } from '@/lib/pricingPresets';
 import InstallerRunbook from '@/components/merchant-center/InstallerRunbook';
+import HandoffPanel from '@/components/deal-room/HandoffPanel';
+import { HANDOFF_STAGE_LABELS } from '@/lib/onboardingFacts';
 
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 
@@ -413,6 +415,16 @@ export default function ApplicationDealRoom() {
               )}
               {profile?.applicationStatus && <span>{profile.applicationStatus}</span>}
               <span>{pricingLabel}</span>
+              {(profile?.handoffStage || (profile?.applicationStatus === 'Submitted' ? 'underwriting' : null)) && (
+                <span className="text-cb-accent">
+                  Stage:{' '}
+                  {HANDOFF_STAGE_LABELS[profile?.handoffStage]
+                    || HANDOFF_STAGE_LABELS[
+                      profile?.applicationStatus === 'Submitted' ? 'underwriting' : 'sales'
+                    ]
+                    || profile?.handoffStage}
+                </span>
+              )}
               {profile?.portalLockStatus && profile.portalLockStatus !== 'unlocked' && (
                 <span className="text-cb-accent">Lock: {profile.portalLockStatus}</span>
               )}
@@ -457,6 +469,8 @@ export default function ApplicationDealRoom() {
 
         {!loading && data && (
           <div className="space-y-6">
+            <HandoffPanel corporateId={corporateId} />
+
             {/* Underwriting / per-MID AWB threads */}
             <section className="bg-cb-surface border border-cb-border rounded-cb p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">

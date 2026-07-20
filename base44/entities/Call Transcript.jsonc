@@ -1,0 +1,43 @@
+{
+  "name": "CallTranscript",
+  "type": "object",
+  "description": "Deal Room call-notes inbox (Gemini/other paste). Suggestions require human Accept before checklist/facts update. Republish in Base44.",
+  "properties": {
+    "corporateId": {
+      "type": "string"
+    },
+    "locationId": {
+      "type": "string"
+    },
+    "callType": {
+      "type": "string",
+      "enum": ["discovery", "demo", "implementation", "install", "other"],
+      "default": "other"
+    },
+    "callDate": {
+      "type": "string",
+      "description": "ISO date of the call"
+    },
+    "title": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string",
+      "description": "Full transcript text"
+    },
+    "suggestionsJson": {
+      "type": "string",
+      "description": "JSON array of { id, kind, catalogKey?, factKey?, title, suggestedValue?, status: pending|accepted|rejected, checklistItemId? }"
+    },
+    "ingestedByEmail": {
+      "type": "string"
+    },
+    "ingestedAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "corporateId",
+    "body"
+  ]
+}

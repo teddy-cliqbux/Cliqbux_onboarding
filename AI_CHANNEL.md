@@ -2457,3 +2457,25 @@ Teddy provided Onboarding Checklist Template 1/2.xlsx (~183 POS deployment tasks
 
 **→ Waiting on:** Teddy
 ---
+
+---
+**[CURSOR]** — 2026-07-20
+**Type:** Action Taken — Team handoff pipeline (shared facts, not re-asks)
+
+Shipped sales → underwriting → implementation → installation → support handoffs so teams share one fact store and merchants are not re-asked.
+
+**Shipped:**
+1. Entities: `MerchantOnboardingFact`, `CallTranscript`; profile `handoffStage` (+ updatedAt/By, overrideReason)
+2. Lib: `src/lib/onboardingFacts.js` (stage order, catalog→factKey, soft/hard gate concepts, transcript phrases)
+3. API: `manageHandoff` — get / upsertFact / advanceStage / ingestTranscript / accept|rejectSuggestion
+4. Checklist wiring: markDone/upload/updateDeploymentItem upsert facts; listDeployment auto-completes + hides merchant items when fact gathered
+5. Deal Room `HandoffPanel` — stage strip, missing/gathered, Hand off CTA (hard block + override), call-notes paste inbox
+6. Applications list + Deal Room header show handoff stage; submit seeds underwriting; scheduleInstall suggests installation
+
+**Not in v1:** auto-apply transcript suggestions; Gemini API; HubSpot note pull.
+
+**ACTION:** Republish `MerchantOnboardingFact`, `CallTranscript`, `MerchantCorporateProfile` (handoff fields); redeploy `manageHandoff`, `manageMerchantChecklist`, `updateMerchantProfile`; publish frontend.
+
+**→ Waiting on:** Teddy
+---
+

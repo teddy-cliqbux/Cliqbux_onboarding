@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Allowed fields to update
+    // Allowed fields to update (also accept nested `fields` from portal callers)
     const ALLOWED = [
       'firstName', 'lastName', 'dobYear', 'dobMonth', 'dobDay',
       'ssn', 'homeStreet', 'homeCity', 'homeState', 'homeZip',
@@ -67,14 +67,25 @@ Deno.serve(async (req) => {
       'monthlyCardSales', 'avgSaleAmount', 'highestTicketAmount', 'annualRevenue',
     ];
 
+    const nested = fields.fields && typeof fields.fields === 'object' ? fields.fields : {};
+    const candidate = { ...nested, ...fields };
+    delete candidate.fields;
+
     const update = {};
     for (const key of ALLOWED) {
-      if (fields[key] !== undefined) update[key] = fields[key];
+      if (candidate[key] !== undefined) update[key] = candidate[key];
     }
 
     const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
     if (!profiles || profiles.length === 0) {
       return Response.json({ error: 'Profile not found' }, { status: 404 });
+    }
+
+    // On first submit → underwriting handoff (do not clobber an agent-set stage).
+    if (update.applicationStatus === 'Submitted' && !profiles[0].handoffStage) {
+      update.handoffStage = 'underwriting';
+      update.handoffStageUpdatedAt = new Date().toISOString();
+      update.handoffStageUpdatedBy = 'system:submit';
     }
 
     const updated = await base44.asServiceRole.entities.MerchantCorporateProfile.update(profiles[0].id, update);

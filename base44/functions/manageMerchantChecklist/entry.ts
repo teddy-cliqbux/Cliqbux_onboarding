@@ -70,6 +70,79 @@ function deploymentAutoKey(locationId: string, catalogKey: string) {
   return `deploy:${locationId}:${catalogKey}`;
 }
 
+/** Map catalog key → fact (inline; sync with src/lib/onboardingFacts.js) */
+function catalogKeyToFactKey(catalogKey: string, autoRule?: string) {
+  const key = String(catalogKey || '').toLowerCase();
+  const rule = String(autoRule || '').toLowerCase();
+  if (rule === 'hours_present' || key.includes('business_hours') || key.includes('verify_business_hours')) return 'business_hours';
+  if (rule === 'menu_uploaded' || key.includes('menu_product') || key.includes('confirm_menu')) return 'menu';
+  if (rule === 'mid_live' || key.includes('merchant_id_mid') || key.includes('verify_merchant_id')) return 'mid';
+  if (rule === 'quote_paid' || key.includes('signed_agreement') || key.includes('agreement_sow')) return 'sow_signed';
+  if (rule === 'install_date_set' || key.includes('installation_date')) return 'install_date';
+  if (key.includes('store_contact') || key.includes('contact_information')) return 'store_contact';
+  if (key.includes('floor_plan')) return 'floor_plan';
+  if (key.includes('tax_rate')) return 'tax_rates';
+  if (key.includes('employee_list')) return 'employee_list';
+  if (key.includes('printer_location')) return 'printer_locations';
+  if (key.includes('kitchen_workflow')) return 'kitchen_workflow';
+  if (key.includes('internet_provider')) return 'isp';
+  if (key.includes('client_sign') || key.includes('sign_off') || key.includes('sign-off')) return 'client_signoff';
+  if (key.includes('training_complete') || key.includes('confirm_training')) return 'training_complete';
+  return null;
+}
+
+async function upsertOnboardingFact(base44: any, opts: {
+  corporateId: string;
+  factKey: string;
+  value?: string;
+  locationId?: string;
+  source?: string;
+  evidenceRef?: string;
+}) {
+  try {
+    const all = await base44.asServiceRole.entities.MerchantOnboardingFact.filter({
+      corporateId: opts.corporateId,
+    }) || [];
+    const match = all.find((f: any) =>
+      f.factKey === opts.factKey &&
+      String(f.locationId || '') === String(opts.locationId || '')
+    );
+    const patch = {
+      corporateId: opts.corporateId,
+      factKey: opts.factKey,
+      locationId: opts.locationId || '',
+      value: opts.value || '',
+      status: 'gathered',
+      source: opts.source || 'portal',
+      evidenceRef: opts.evidenceRef || '',
+      gatheredAt: new Date().toISOString(),
+    };
+    if (match) {
+      await base44.asServiceRole.entities.MerchantOnboardingFact.update(match.id, patch);
+    } else {
+      await base44.asServiceRole.entities.MerchantOnboardingFact.create(patch);
+    }
+  } catch (e) {
+    console.warn('[manageMerchantChecklist] fact upsert skipped', e);
+  }
+}
+
+async function gatheredFactKeys(base44: any, corporateId: string, locationId?: string) {
+  try {
+    const all = await base44.asServiceRole.entities.MerchantOnboardingFact.filter({ corporateId }) || [];
+    return new Set(
+      all
+        .filter((f: any) =>
+          (f.status === 'gathered' || f.status === 'verified') &&
+          (!locationId || !f.locationId || String(f.locationId) === String(locationId))
+        )
+        .map((f: any) => f.factKey)
+    );
+  } catch {
+    return new Set<string>();
+  }
+}
+
 function isDeploymentDone(status: string) {
   return status === 'completed' || status === 'done';
 }
@@ -167,12 +240,19 @@ async function applyDeploymentAutoComplete(
     (i: any) => String(i.catalogKey || '').toLowerCase().includes('menu') && !!i.fileUrl,
   );
 
+  let factKeys = new Set<string>();
+  try {
+    factKeys = await gatheredFactKeys(base44, corporateId, locationId);
+  } catch {
+    factKeys = new Set();
+  }
+
   for (const item of items) {
     if (item.status === 'hold') continue; // do not downgrade hold / skip agent hold
     if (isDeploymentDone(item.status)) continue;
 
     const rule = String(item.autoRule || '');
-    if (!rule) continue;
+    const fk = catalogKeyToFactKey(item.catalogKey || item.kind, item.autoRule);
 
     let shouldComplete = false;
     if (rule === 'quote_paid' && profile?.equipmentPaidAt) shouldComplete = true;
@@ -180,6 +260,7 @@ async function applyDeploymentAutoComplete(
     else if (rule === 'hours_present' && loc.businessHours) shouldComplete = true;
     else if (rule === 'mid_live' && hasMidLive) shouldComplete = true;
     else if (rule === 'menu_uploaded' && (hasMenuAsset || hasMenuUpload)) shouldComplete = true;
+    else if (fk && factKeys.has(fk)) shouldComplete = true;
 
     if (!shouldComplete) continue;
     try {
@@ -590,6 +671,18 @@ Deno.serve(async (req) => {
         }
       }
 
+      const fk = catalogKeyToFactKey(item.catalogKey || item.kind, item.autoRule);
+      if (fk) {
+        await upsertOnboardingFact(base44, {
+          corporateId,
+          factKey: fk,
+          value: fileName || fileUrl,
+          locationId: item.locationId || '',
+          source: 'portal',
+          evidenceRef: itemId,
+        });
+      }
+
       return Response.json({ success: true, item: updated });
     }
 
@@ -607,6 +700,17 @@ Deno.serve(async (req) => {
         status: doneStatus,
         completedAt: new Date().toISOString(),
       });
+      const fk = catalogKeyToFactKey(item.catalogKey || item.kind, item.autoRule);
+      if (fk) {
+        await upsertOnboardingFact(base44, {
+          corporateId,
+          factKey: fk,
+          value: item.title || fk,
+          locationId: item.locationId || '',
+          source: actor.actor === 'merchant' ? 'portal' : 'agent',
+          evidenceRef: itemId,
+        });
+      }
       return Response.json({ success: true, item: updated });
     }
 
@@ -683,6 +787,17 @@ Deno.serve(async (req) => {
 
       if (actor.actor === 'merchant') {
         items = items.filter((i: any) => i.audience === 'merchant' || i.audience === 'shared');
+        // Skip open merchant prompts when the fact is already gathered (ask-once).
+        try {
+          const gKeys = await gatheredFactKeys(base44, corporateId, locationId || undefined);
+          if (gKeys.size) {
+            items = items.filter((i: any) => {
+              if (isDeploymentDone(i.status)) return true;
+              const fk = catalogKeyToFactKey(i.catalogKey || i.kind, i.autoRule);
+              return !(fk && gKeys.has(fk));
+            });
+          }
+        } catch { /* facts entity may be unpublished */ }
       }
       if (audienceFilter) {
         items = items.filter((i: any) => i.audience === audienceFilter);
@@ -751,6 +866,19 @@ Deno.serve(async (req) => {
       }
 
       const updated = await base44.asServiceRole.entities.MerchantChecklistItem.update(itemId, patch);
+      if (patch.status === 'completed') {
+        const fk = catalogKeyToFactKey(item.catalogKey || item.kind, item.autoRule);
+        if (fk) {
+          await upsertOnboardingFact(base44, {
+            corporateId,
+            factKey: fk,
+            value: item.title || fk,
+            locationId: item.locationId || '',
+            source: actor.actor === 'merchant' ? 'portal' : 'agent',
+            evidenceRef: itemId,
+          });
+        }
+      }
       return Response.json({ success: true, item: updated });
     }
 
@@ -785,6 +913,24 @@ Deno.serve(async (req) => {
       const result = await instantiateDeploymentForLocation(base44, corporateId, locationId);
       if (result.error) {
         return Response.json({ error: result.error }, { status: result.status || 400 });
+      }
+      // Suggest installation stage when merchant/agent starts the install runbook.
+      try {
+        const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter(
+          { corporateId }, '-created_date', 1
+        );
+        const p = profiles[0];
+        const order = ['sales', 'underwriting', 'implementation', 'installation', 'support'];
+        const cur = String(p?.handoffStage || (p?.applicationStatus === 'Submitted' ? 'underwriting' : 'sales'));
+        if (p && order.indexOf(cur) < order.indexOf('installation')) {
+          await base44.asServiceRole.entities.MerchantCorporateProfile.update(p.id, {
+            handoffStage: 'installation',
+            handoffStageUpdatedAt: new Date().toISOString(),
+            handoffStageUpdatedBy: 'system:scheduleInstall',
+          });
+        }
+      } catch (e) {
+        console.warn('[manageMerchantChecklist] handoffStage install suggest', e);
       }
       return Response.json(result);
     }

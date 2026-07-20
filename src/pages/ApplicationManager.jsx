@@ -26,6 +26,7 @@ import {
   collectMspStatusErrors,
   summarizeMspHealth,
 } from '@/lib/mspFormHealth';
+import { HANDOFF_STAGE_LABELS } from '@/lib/onboardingFacts';
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption text-gray-500 mb-1.5';
 
@@ -1623,6 +1624,17 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-accent whitespace-nowrap" title="No HubSpot quote on the Merchant Center yet">
                 <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
                 Quote needed
+              </span>
+            )}
+            {(profile?.handoffStage
+              || (isSubmitted ? 'underwriting' : null)) && (
+              <span
+                className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap"
+                title="Team handoff stage"
+              >
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-gray-500" />
+                {HANDOFF_STAGE_LABELS[profile?.handoffStage]
+                  || (isSubmitted ? HANDOFF_STAGE_LABELS.underwriting : HANDOFF_STAGE_LABELS.sales)}
               </span>
             )}
             {rowMode.mode === 'prep' && (
