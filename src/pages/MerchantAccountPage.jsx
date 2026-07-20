@@ -24,6 +24,9 @@ export default function MerchantAccountPage() {
     if (imp && paramsCorp) {
       setMerchantToken(imp);
       sessionStorage.setItem('portal_impersonating', String(paramsCorp));
+      const clean = new URL(window.location.href);
+      clean.searchParams.delete('impersonateToken');
+      window.history.replaceState({}, '', clean.pathname + clean.search);
     }
     const session = getSession();
     const corporateId = session?.corporateId || paramsCorp;

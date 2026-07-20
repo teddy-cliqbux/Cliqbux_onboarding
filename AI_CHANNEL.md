@@ -2360,6 +2360,21 @@ Teddy: prep is ideal, but agents must still send a blank app from Applications (
 
 ---
 **[CURSOR]** — 2026-07-20
+**Type:** Bugfix — People & KYC hub shows "Set up people" after Control Person already saved (Porky's)
+
+**Symptom:** People step shows Michael as Control Person + Verified + Ready to sign, but Welcome Hub still Incomplete / "Set up people".
+
+**Cause:** Locations/Banking mark complete from **saved data**. People only marked complete from in-memory `completedSteps.people` (set on Continue) or `signersVerified` (set only after visiting Sign). Refresh wiped both.
+
+**Fix:** On `fetchMerchantData`, load signers; derive People done via `isRosterConfiguredForPeopleStep`; derive verify via `isRosterReadyForSigning`; merge into ProgressTracker `completedSteps`.
+
+**Teddy:** Push + publish frontend (no function redeploy). Hard-refresh Porky's — People should show Complete / Review people.
+
+**→ Waiting on:** Teddy
+---
+
+---
+**[CURSOR]** — 2026-07-20
 **Type:** Bugfix — MSPWare rejects `business_state_usa: "California"` (Trisha Company)
 
 **Live evidence (corp 336613831402):** Processor validation
@@ -2475,6 +2490,23 @@ Shipped sales → underwriting → implementation → installation → support h
 **Not in v1:** auto-apply transcript suggestions; Gemini API; HubSpot note pull.
 
 **ACTION:** Republish `MerchantOnboardingFact`, `CallTranscript`, `MerchantCorporateProfile` (handoff fields); redeploy `manageHandoff`, `manageMerchantChecklist`, `updateMerchantProfile`; publish frontend.
+
+**→ Waiting on:** Teddy
+---
+
+
+---
+**[CURSOR]** — 2026-07-20
+**Type:** Action Taken — Admin QA hub at `/admin/center`
+
+Built admin explorer so Teddy/agents can open every POV without hitting bare `/center` “unavailable”.
+
+**Shipped:**
+1. Page `AdminQaHub` at `/admin/center` — lists `MerchantCorporateProfile` (same as Applications); search; buttons Portal / Merchant Center / Locations / Account / Deal Room
+2. `manageStagedApplication` impersonate destinations extended: `portal` | `dashboard` | `locations` | `account` (30-min JWT)
+3. Link from Applications header → QA hub; Locations/Account strip `impersonateToken` from URL after load
+
+**ACTION:** Redeploy `manageStagedApplication`; publish frontend. Then open `/admin/center` while signed into Base44 workspace.
 
 **→ Waiting on:** Teddy
 ---

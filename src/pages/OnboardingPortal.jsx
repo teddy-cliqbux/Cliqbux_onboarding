@@ -21,6 +21,7 @@ import FormsLockedBanner from '@/components/onboarding/FormsLockedBanner';
 import { PortalLockContext } from '@/lib/PortalLockContext';
 import { isPortalFormsLocked } from '@/lib/portalLock';
 import { readSigningFixStep } from '@/lib/signingErrorRouting';
+import { isRosterConfiguredForPeopleStep, isRosterReadyForSigning } from '@/lib/signerRules';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
 // 2026-07-06: fixed a real bug here — this array checked for 'Self_CashDiscount'
@@ -182,6 +183,9 @@ export default function OnboardingPortal() {
   const [completedSteps, setCompletedSteps] = useState({});
   // Track whether verification step had all signers verified (survives back navigation)
   const [signersVerified, setSignersVerified] = useState(false);
+  // Live roster for Welcome Hub — People completion must derive from saved signers,
+  // not only in-memory completedSteps.people (lost on refresh / never Continue).
+  const [portalSigners, setPortalSigners] = useState([]);
   // Bump on unlock so Verification remounts clean (no auto-restaging stale packages)
   const [verifySessionKey, setVerifySessionKey] = useState(0);
   // true when a workspace admin opened the portal via impersonate (30-min JWT)
@@ -429,6 +433,36 @@ export default function OnboardingPortal() {
       setProfile(mergedProfile);
       setLocations(filteredLocations);
       setReadiness(data.readiness || null);
+
+      // People hub completion: load roster and derive from saved Control Person
+      // (same pattern as Locations/Banking deriving from location/bank records).
+      // Without this, refresh always showed "Set up people" even when Michael was
+      // already Control Person + Verified (Porky's 2026-07-20).
+      try {
+        const signerRes = await invokePortalFunction('manageSigner', {
+          action: 'list',
+          corporateId: id,
+        });
+        const list = signerRes.data?.signers || [];
+        setPortalSigners(list);
+        const peopleConfigured = isRosterConfiguredForPeopleStep(list);
+        const kycReady = isRosterReadyForSigning(list);
+        if (peopleConfigured) {
+          setCompletedSteps((prev) => (prev.people ? prev : { ...prev, people: true }));
+        }
+        if (kycReady) {
+          setSignersVerified(true);
+          setCompletedSteps((prev) => (prev.verify ? prev : { ...prev, verify: true }));
+        }
+        if (peopleConfigured && !silent && mergedProfile?.corporateId && mergedProfile?.applicationStatus !== 'Submitted') {
+          trackProgress(mergedProfile.corporateId, {
+            completedSteps: { people: true, ...(kycReady ? { verify: true } : {}) },
+          });
+        }
+      } catch (signerErr) {
+        console.warn('[fetchMerchantData] signer list for People hub (non-fatal):', signerErr?.message || signerErr);
+      }
+
       // Heartbeat metadata + portal_open (once per tab). Agent View opens are
       // counted by manageStagedApplication impersonate — never log those as merchant.
       if (mergedProfile?.corporateId && mergedProfile?.applicationStatus !== 'Submitted') {
@@ -697,9 +731,10 @@ export default function OnboardingPortal() {
       // new tab via a resume link) re-locks milestones the merchant already
       // finished, even though the data is safely on the server.
       const hasLocations = (locations?.length ?? 0) > 0;
-      // People "done" = merchant clicked Continue on People, or (legacy) all KYC already verified.
-      // Having locations alone does NOT mark People complete — they may still need to invite BOs.
-      const hasPeople = !!allCompletedSteps.people || signersVerified;
+      // People "done" = Continue clicked OR roster has exactly one Control Person
+      // (live signers), OR legacy all-KYC-ready. Locations alone do NOT mark People done.
+      const rosterPeopleDone = isRosterConfiguredForPeopleStep(portalSigners);
+      const hasPeople = !!allCompletedSteps.people || signersVerified || rosterPeopleDone;
       const hasBanking = hasLocations && locations.every(l => l.bankDetails?.routingNumber);
       // "Complete" means the data can actually build a valid application — the
       // backend readiness check covers entity, location, and MID required fields.
@@ -858,16 +893,22 @@ export default function OnboardingPortal() {
   // 2026-07-10 flow reorder: the equipment quote is signed LAST (embedded on the
   // post-submission dashboard). 'Quote Signed' status = HubSpot esign came back
   // SIGNED via syncFromHubspot or the quote_signed webhook.
-  const quoteSigned = applicationStatus === 'Quote Signed';
-  const allCompletedSteps = { ...completedSteps, ...(quoteSigned ? { quote: true } : {}) };
+  const quoteSigned = applicationStatus === 'Quote Signed' || !!profile.quoteSignedAt;
+  const allCompletedSteps = {
+    ...completedSteps,
+    ...(quoteSigned ? { quote: true } : {}),
+    // Always reflect live roster so ProgressTracker matches Welcome Hub after refresh
+    ...(isRosterConfiguredForPeopleStep(portalSigners) ? { people: true } : {}),
+    ...(isRosterReadyForSigning(portalSigners) || signersVerified ? { verify: true } : {}),
+  };
   const hasLocsForTracker = (locations?.length ?? 0) > 0;
   const hasBankForTracker = hasLocsForTracker && locations.every((l) => l.bankDetails?.routingNumber);
   const dataReadyForTracker = readiness ? readiness.complete : hasLocsForTracker;
   let currentTrackerStep = stepToKey[step] || 'people';
   if (step === STEP_WELCOME) {
-    if (!(completedSteps.people || signersVerified || hasLocsForTracker)) currentTrackerStep = 'people';
+    if (!(allCompletedSteps.people || signersVerified || hasLocsForTracker)) currentTrackerStep = 'people';
     else if (!(hasLocsForTracker && dataReadyForTracker)) currentTrackerStep = 'locations';
-    else if (!(completedSteps.banking || hasBankForTracker)) currentTrackerStep = 'banking';
+    else if (!(allCompletedSteps.banking || hasBankForTracker)) currentTrackerStep = 'banking';
     else if (applicationStatus !== 'Submitted') currentTrackerStep = 'verify';
     else currentTrackerStep = quoteSigned ? 'quote' : 'verify';
   }

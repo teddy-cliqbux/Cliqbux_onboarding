@@ -2272,9 +2272,18 @@ export default function ApplicationManager() {
 
       <div className="flex flex-1 min-h-0">
         <div className="flex flex-col flex-1 min-w-0 border-r border-cb-border">
-          <div className="px-6 py-4 border-b border-cb-border flex-shrink-0">
-            <p className="text-cb-caption text-cb-accent mb-1">Sales workspace</p>
-            <h1 className="font-display text-cb-display text-white">Applications</h1>
+          <div className="px-6 py-4 border-b border-cb-border flex-shrink-0 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-cb-caption text-cb-accent mb-1">Sales workspace</p>
+              <h1 className="font-display text-cb-display text-white">Applications</h1>
+            </div>
+            <Link
+              to="/admin/center"
+              className="text-cb-caption font-semibold px-3 py-2 rounded-cb border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong flex-shrink-0 mt-1"
+              title="Open Portal / Merchant Center / Locations / Deal Room for any merchant"
+            >
+              QA hub
+            </Link>
           </div>
 
           <div className="px-4 py-3 border-b border-cb-border flex-shrink-0 flex gap-2 flex-wrap">

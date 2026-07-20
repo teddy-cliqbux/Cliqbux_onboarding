@@ -305,7 +305,9 @@ Post-signing is the **Merchant Center** start; onboarding is the **entrance**. L
 | `/onboarding/dashboard`, `/center`, `/center/deals/:corporateId` | Deal board — checklist, quote sign→pay, UW status, setup gates |
 | `/locations` | Merchant account home — storefront list + status |
 | `/locations/:id` | Live location detail + go-live (logo/hours/install/chat) |
-| `/account` | Statements shell + MID join key (`elavonMID`) |
+| `/admin/applications` | Agent Applications desk |
+| `/admin/applications/:corporateId` | Deal Room (handoff, call notes, runbook) |
+| `/admin/center` | Admin QA hub — list merchants; open Portal / Merchant Center / Locations / Account (impersonate) or Deal Room |
 
 Auth Stage 1: magic-link JWT via `src/lib/merchantCenterAuth.js` (swap-friendly). Checklist: `manageMerchantChecklist` + `MerchantChecklistItem` (republish entity). Agent **Request document** lives in Deal Room. Quotes never block application signing. Do not call POS dashboard APIs; join later on `elavonMID`.
 
