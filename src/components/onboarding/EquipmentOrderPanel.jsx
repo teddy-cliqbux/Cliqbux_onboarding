@@ -179,11 +179,28 @@ export default function EquipmentOrderPanel({ corporateId, onModalOpenChange }) 
 
   if (!data?.quoteId) {
     return (
-      <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-5">
-        <h3 className="text-cb-body font-semibold text-white mb-1">Equipment &amp; Services</h3>
-        <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
-          Your rep is finalizing your quote. It will appear here when ready to review and sign.
+      <div className="bg-cb-surface-raised rounded-cb border border-cb-border border-l-2 border-l-cb-accent p-5 space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-cb-caption uppercase text-gray-500 mb-1">Order</p>
+            <h3 className="font-display text-cb-title text-white">Equipment quote coming</h3>
+          </div>
+          <StatusCaption label="Waiting on Cliqbux" tone="accent" />
+        </div>
+        <p className="text-cb-body text-gray-300">
+          Your application is in. Your rep is attaching the equipment quote to this Merchant Center page —
+          you do not need a separate HubSpot email to continue.
         </p>
+        <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
+          Stay here. When the quote is ready, you will sign it, then pay the invoice. Shipping unlocks after payment.
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent"
+        >
+          Check again
+        </button>
       </div>
     );
   }
@@ -284,9 +301,9 @@ export default function EquipmentOrderPanel({ corporateId, onModalOpenChange }) 
               <Check className="w-4 h-4 text-cb-success" strokeWidth={2.5} />
             </span>
             <div>
-              <p className="text-cb-body text-white font-medium">Quote signed</p>
+              <p className="text-cb-body text-white font-medium">Step 1 of 2 done — quote signed</p>
               <p className="text-cb-caption normal-case tracking-normal text-gray-500">
-                Menu &amp; POS setup are unlocked. Complete payment to release terminal shipping.
+                Next: pay the invoice. Terminals ship only after payment clears.
               </p>
             </div>
           </div>
@@ -295,27 +312,30 @@ export default function EquipmentOrderPanel({ corporateId, onModalOpenChange }) 
               <button
                 type="button"
                 onClick={openPay}
-                className="w-full inline-flex items-center justify-center gap-2 rounded-cb bg-cb-accent text-cb-bg font-semibold text-cb-body py-3 hover:opacity-95 transition-opacity"
+                className="w-full inline-flex items-center justify-center gap-2 rounded-cb bg-cb-accent text-cb-bg font-semibold text-cb-body py-3 hover:opacity-95 transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
               >
-                View Invoice / Pay
+                Step 2 — View invoice / Pay
               </button>
               <p className="text-center text-cb-caption normal-case tracking-normal text-gray-500">
-                HubSpot Payments — secure portal window.
+                HubSpot Payments opens in a secure window on this page.
               </p>
             </div>
           )}
         </div>
       ) : quoteUrl ? (
         <div className="space-y-2">
+          <p className="text-cb-caption normal-case tracking-normal text-gray-500">
+            Step 1 of 2 — review the quote, then you will pay the invoice.
+          </p>
           <button
             type="button"
             onClick={openSign}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-cb bg-cb-accent text-cb-bg font-semibold text-cb-body py-3 hover:opacity-95 transition-opacity"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-cb bg-cb-accent text-cb-bg font-semibold text-cb-body py-3 hover:opacity-95 transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
           >
-            Review &amp; Sign Quote
+            Step 1 — Review &amp; sign quote
           </button>
           <p className="text-center text-cb-caption normal-case tracking-normal text-gray-500">
-            Opens in a secure portal window. Payment comes after signing.
+            Stays in the Merchant Center. No separate email link required.
           </p>
         </div>
       ) : null}

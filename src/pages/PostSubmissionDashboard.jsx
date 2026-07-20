@@ -1,10 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, Link, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
 import UnderwritingTracker from '@/components/onboarding/UnderwritingTracker';
 import ApplicationTracker from '@/components/onboarding/ApplicationTracker';
 import EquipmentShippingModal from '@/components/onboarding/EquipmentShippingModal';
@@ -12,6 +11,9 @@ import EquipmentOrderPanel from '@/components/onboarding/EquipmentOrderPanel';
 import InventoryUpload from '@/components/onboarding/InventoryUpload';
 import ConnectLegacyPOS from '@/components/onboarding/ConnectLegacyPOS';
 import SetupGate from '@/components/onboarding/SetupGate';
+import MerchantCenterShell from '@/components/merchant-center/MerchantCenterShell';
+import MerchantChecklist from '@/components/merchant-center/MerchantChecklist';
+import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
 import { base44 } from '@/api/base44Client';
 import {
   invokePortalFunction,
@@ -78,6 +80,7 @@ function deriveQuoteFlags(quoteData, profile) {
 
 export default function PostSubmissionDashboard() {
   const navigate = useNavigate();
+  const { corporateId: routeCorporateId } = useParams();
   const queryClient = useQueryClient();
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
@@ -88,14 +91,22 @@ export default function PostSubmissionDashboard() {
   /** QuoteSignModal open — drives 10s pull poll (HubSpot tier has no workflow webhooks). */
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
+  const [openChecklistCount, setOpenChecklistCount] = useState(0);
+  const [accountName, setAccountName] = useState('');
   const lifecycleAtModalOpen = useRef(null);
   const profileRef = useRef(profile);
   profileRef.current = profile;
 
+  const onOpenCountChange = useCallback((n) => setOpenChecklistCount(n), []);
+
   useEffect(() => {
     const load = async () => {
       const params = new URLSearchParams(window.location.search);
-      let corporateId = params.get('dealId') || params.get('corporateId');
+      let corporateId =
+        params.get('dealId') ||
+        params.get('corporateId') ||
+        routeCorporateId ||
+        '';
       const impersonateToken = params.get('impersonateToken');
 
       // Admin Applications "Dashboard" opens with a 30-min impersonation JWT.
@@ -124,6 +135,11 @@ export default function PostSubmissionDashboard() {
         setProfile(data.profile);
         setLocations(data.locations || []);
         setMerchantIDs(data.merchantIDs || []);
+        setAccountName(
+          data.merchantAccount?.name ||
+          data.profile?.legalName ||
+          'Merchant account'
+        );
 
         const submitted = data.profile?.applicationStatus === 'Submitted';
         // Merchants cannot skip signing — only agents/admins may preview early.
@@ -142,7 +158,7 @@ export default function PostSubmissionDashboard() {
       }
     };
     load();
-  }, []);
+  }, [routeCorporateId]);
 
   const corporateId = profile?.corporateId;
 
@@ -241,47 +257,43 @@ export default function PostSubmissionDashboard() {
 
   if (loading) {
     return (
-      <div className="portal-bg min-h-screen px-4 py-16" aria-busy="true" aria-label="Loading dashboard">
-        <div className="max-w-3xl mx-auto space-y-4 pt-16">
+      <MerchantCenterShell title="Loading…" subtitle="Merchant Center" showDealLink>
+        <div className="space-y-4" aria-busy="true" aria-label="Loading Merchant Center">
           <div className="skeleton h-12 w-12 !rounded-full mx-auto" />
           <div className="skeleton h-4 w-40 !rounded-cb mx-auto" />
           <div className="skeleton h-8 w-56 !rounded-cb mx-auto" />
-          <div className="skeleton h-4 w-72 !rounded-cb mx-auto" />
           <div className="skeleton h-28 w-full !rounded-cb mt-8" />
           <div className="skeleton h-40 w-full !rounded-cb" />
-          <div className="skeleton h-24 w-full !rounded-cb" />
         </div>
-      </div>
+      </MerchantCenterShell>
     );
   }
 
   if (!profile) {
     return (
-      <div className="portal-bg flex flex-col items-center justify-center gap-4 px-4">
+      <div className="portal-bg flex flex-col items-center justify-center gap-4 px-4 min-h-screen">
         <CliqbuxLogo />
         <div className="text-center">
-          <h1 className="font-display text-cb-title text-white mb-1">Dashboard Not Available</h1>
+          <h1 className="font-display text-cb-title text-white mb-1">Merchant Center unavailable</h1>
           <p className="text-cb-body text-gray-400 max-w-md">
-            No merchant profile found. Please use your onboarding link or contact your Cliqbux representative.
+            No merchant profile found. Use your onboarding link or contact your Cliqbux representative.
           </p>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="portal-bg" style={{ fontFamily: 'Inter, sans-serif' }}>
-      <div className="fixed top-0 left-0 right-0 bg-cb-surface/95 backdrop-blur border-b border-cb-border z-40 px-6 py-3">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <CliqbuxLogo />
-          <span className="text-cb-caption normal-case tracking-normal text-gray-500 truncate max-w-[50%]">
-            {profile.legalName || 'Merchant'}
-          </span>
-        </div>
-      </div>
+  const shippingTrack = locations.find((l) => l.shippingTrackingNumber);
 
-      <div className="max-w-3xl mx-auto px-4 pt-24 pb-12">
-        <div className="space-y-8">
+  return (
+    <MerchantCenterShell
+      title={accountName || profile.legalName || 'Merchant'}
+      subtitle={agentPreview ? 'Setup preview' : 'Merchant Center'}
+      corporateId={profile.corporateId}
+      openChecklistCount={openChecklistCount}
+      showDealLink
+    >
+      <div className="space-y-8">
           <motion.div
             className="text-center"
             initial={{ opacity: 0, y: 8 }}
@@ -292,15 +304,23 @@ export default function PostSubmissionDashboard() {
               <Check className="w-6 h-6 text-cb-success" strokeWidth={2.5} />
             </span>
             <p className="text-cb-caption uppercase text-gray-500 mb-2">
-              {agentPreview ? 'Post-signing dashboard' : 'Application submitted'}
+              {agentPreview ? 'Agent preview' : 'Application submitted'}
             </p>
             <h1 className="font-display text-cb-display text-white">
-              {agentPreview ? 'Setup preview' : "You're all set"}
+              {agentPreview ? 'Setup preview' : 'Your Merchant Center'}
             </h1>
             <p className="text-cb-body-lg text-gray-400 mt-2 max-w-md mx-auto">
               {agentPreview
-                ? 'Review equipment quote, shipping, and storefront setup before the merchant completes signing.'
-                : 'Finish storefront setup below while Elavon reviews your application.'}
+                ? 'Review quote, checklist, shipping, and storefront setup before the merchant finishes signing.'
+                : 'Track underwriting, sign and pay your quote, and clear anything that needs your attention — all in one place.'}
+            </p>
+            <p className="mt-3">
+              <Link
+                to="/locations"
+                className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent"
+              >
+                View locations
+              </Link>
             </p>
           </motion.div>
 
@@ -331,13 +351,17 @@ export default function PostSubmissionDashboard() {
             />
           )}
 
+          <MerchantChecklist
+            corporateId={profile.corporateId}
+            onOpenCountChange={onOpenCountChange}
+          />
+
           {merchantIDs.length > 0 && <UnderwritingTracker locations={locations} merchantIDs={merchantIDs} />}
 
-          {/* Underwriting pipeline — post-submit only (moved off Welcome Hub 2026-07-15) */}
           <ApplicationTracker currentStatus="SUBMITTED" />
 
           <div>
-            <h2 className="text-cb-caption uppercase text-gray-400 mb-4">Complete Your Setup</h2>
+            <h2 className="text-cb-caption uppercase text-gray-400 mb-4">Equipment &amp; storefront</h2>
             <div className="flex flex-col gap-4">
               <EquipmentOrderPanel
                 corporateId={profile.corporateId}
@@ -353,13 +377,13 @@ export default function PostSubmissionDashboard() {
                 <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-5">
                   <div className="flex items-center justify-between mb-1">
                     <h3 className="text-cb-body font-semibold text-white">
-                      {quotePaid ? 'Ready to Ship' : 'Equipment Shipping Router'}
+                      {quotePaid ? 'Ready to Ship' : 'Equipment Shipping'}
                     </h3>
                     {quotePaid && (
                       <button
                         type="button"
                         onClick={() => setShowShipping(true)}
-                        className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent hover:opacity-90 underline"
+                        className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent hover:opacity-90 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent"
                       >
                         Route
                       </button>
@@ -370,6 +394,12 @@ export default function PostSubmissionDashboard() {
                       ? 'Tell us where to ship your payment terminals — storefront, corporate mailing, or a staging warehouse.'
                       : 'Terminal shipping unlocks after your invoice is paid in full.'}
                   </p>
+                  {shippingTrack?.shippingTrackingNumber && (
+                    <p className="mt-3 text-cb-caption normal-case tracking-normal text-gray-300">
+                      Tracking{shippingTrack.shippingCarrier ? ` (${shippingTrack.shippingCarrier})` : ''}:{' '}
+                      <span className="font-mono text-white">{shippingTrack.shippingTrackingNumber}</span>
+                    </p>
+                  )}
                 </div>
               </SetupGate>
 
@@ -397,10 +427,9 @@ export default function PostSubmissionDashboard() {
 
           <div className="text-center pt-4 pb-6">
             <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">
-              Secured by <span className="text-cb-accent font-medium">Cliqbux</span> &nbsp;·&nbsp; onboarding.cliqbux.com &nbsp;·&nbsp; {new Date().getFullYear()}
+              Secured by <span className="text-cb-accent font-medium">Cliqbux</span> &nbsp;·&nbsp; Merchant Center &nbsp;·&nbsp; {new Date().getFullYear()}
             </p>
           </div>
-        </div>
       </div>
 
       {showShipping && (
@@ -410,6 +439,6 @@ export default function PostSubmissionDashboard() {
           onClose={() => setShowShipping(false)}
         />
       )}
-    </div>
+    </MerchantCenterShell>
   );
 }

@@ -295,7 +295,21 @@ These are hard-won findings from real debugging. Each one cost hours. Read them 
 
 Merchant onboarding portal for Cliqbux, an ISO/ISV that boards merchants to Elavon via **MSPWare/PulsePoint** (NOT Elavon's direct eBanking API). Merchants complete an online application, connect their bank account via Plaid, and their processing application is submitted to Elavon through MSPWare.
 
-Base44 app slug: `cliqbux-onboard-prime`
+### Merchant Center (2026-07-20)
+
+Post-signing is the **Merchant Center** start; onboarding is the **entrance**. Language: **Merchant account** (`MerchantAccount`).
+
+| Route | Role |
+|---|---|
+| `/` | Onboarding entrance (unchanged field keys / Save buttons / `merchantAuthFetch`) |
+| `/onboarding/dashboard`, `/center`, `/center/deals/:corporateId` | Deal board — checklist, quote sign→pay, UW status, setup gates |
+| `/locations` | Merchant account home — storefront list + status |
+| `/locations/:id` | Live location detail + go-live (logo/hours/install/chat) |
+| `/account` | Statements shell + MID join key (`elavonMID`) |
+
+Auth Stage 1: magic-link JWT via `src/lib/merchantCenterAuth.js` (swap-friendly). Checklist: `manageMerchantChecklist` + `MerchantChecklistItem` (republish entity). Agent **Request document** lives in Deal Room. Quotes never block application signing. Do not call POS dashboard APIs; join later on `elavonMID`.
+
+Base44 App slug: `cliqbux-onboard-prime`
 Base44 App ID: `6a3dfa34316c4e5018c750f7`
 Published function base URL: `https://cliqbux-onboard-prime.base44.app/functions/`
 

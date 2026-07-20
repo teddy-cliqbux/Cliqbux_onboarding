@@ -27,6 +27,9 @@ export default function UnderwritingTracker({ locations = [], merchantIDs = [] }
                 ? 'MIDs are pending — Elavon is reviewing your application.'
                 : `${provisioned} of ${total} ${merchantIDs.length > 0 ? 'Merchant IDs' : 'locations'} have been activated.`}
             </p>
+            <p className="text-cb-caption normal-case tracking-normal text-gray-500 mt-1">
+              Open checklist items appear above — clear those to keep underwriting moving.
+            </p>
           </div>
           <span className="inline-flex items-center gap-1.5 text-cb-caption normal-case tracking-normal font-medium text-cb-success flex-shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-cb-success" />

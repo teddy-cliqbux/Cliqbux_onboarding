@@ -15,6 +15,9 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
+import MerchantLocationsHome from './pages/MerchantLocationsHome';
+import MerchantLocationDetail from './pages/MerchantLocationDetail';
+import MerchantAccountPage from './pages/MerchantAccountPage';
 import DevTrackerPreview from './pages/DevTrackerPreview';
 import DevSignerPreview from './pages/DevSignerPreview';
 import DevPortalPreview from './pages/DevPortalPreview';
@@ -29,6 +32,11 @@ function App() {
             <Route path="/" element={<OnboardingPortal />} />
             <Route path="/verify" element={<VerifyIdentity />} />
             <Route path="/onboarding/dashboard" element={<PostSubmissionDashboard />} />
+            <Route path="/center" element={<PostSubmissionDashboard />} />
+            <Route path="/center/deals/:corporateId" element={<PostSubmissionDashboard />} />
+            <Route path="/locations" element={<MerchantLocationsHome />} />
+            <Route path="/locations/:id" element={<MerchantLocationDetail />} />
+            <Route path="/account" element={<MerchantAccountPage />} />
             <Route path="/admin/architecture" element={<SystemAdminHidden />} />
             <Route path="/admin/applications" element={<ApplicationManager />} />
             <Route path="/admin/applications/:corporateId" element={<ApplicationDealRoom />} />

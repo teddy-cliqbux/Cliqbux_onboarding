@@ -180,6 +180,26 @@
     "liquorLicenseUploadedAt": {
       "type": "string",
       "description": "ISO timestamp when liquorLicenseDocUrl was last set."
+    },
+    "logoUrl": {
+      "type": "string",
+      "description": "Store logo image URL for Merchant Center go-live setup (Stage 3). Nullable until uploaded."
+    },
+    "businessHours": {
+      "type": "string",
+      "description": "Free-text store hours for go-live / installer briefing. Nullable."
+    },
+    "installationDate": {
+      "type": "string",
+      "description": "ISO date (YYYY-MM-DD) for scheduled POS installation. Nullable."
+    },
+    "shippingTrackingNumber": {
+      "type": "string",
+      "description": "Carrier tracking number for terminal shipment (Merchant Center Stage 3). Nullable until ops set it."
+    },
+    "shippingCarrier": {
+      "type": "string",
+      "description": "Carrier label e.g. UPS, FedEx. Nullable."
     }
   },
   "required": [

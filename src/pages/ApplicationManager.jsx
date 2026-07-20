@@ -1619,6 +1619,12 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                 Stuck
               </span>
             )}
+            {isSubmitted && !profile?.hubspotQuoteUrl && !profile?.equipmentPaidAt && (
+              <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-accent whitespace-nowrap" title="No HubSpot quote on the Merchant Center yet">
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-accent" />
+                Quote needed
+              </span>
+            )}
             {rowMode.mode === 'prep' && (
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${modeDotClass('prep')}`} />

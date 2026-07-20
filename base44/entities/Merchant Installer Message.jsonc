@@ -1,0 +1,34 @@
+{
+  "name": "MerchantInstallerMessage",
+  "type": "object",
+  "description": "Merchant Center installer chat thread per location (Stage 3). Republish in Base44 or creates fail with ENTITY_SCHEMA_MISSING.",
+  "properties": {
+    "corporateId": {
+      "type": "string",
+      "description": "FK → MerchantCorporateProfile.corporateId"
+    },
+    "locationId": {
+      "type": "string",
+      "description": "FK → MerchantLocations.id"
+    },
+    "body": {
+      "type": "string",
+      "description": "Message text"
+    },
+    "fromRole": {
+      "type": "string",
+      "enum": ["merchant", "installer", "agent"],
+      "description": "Who sent the message"
+    },
+    "authorLabel": {
+      "type": "string",
+      "description": "Display name"
+    }
+  },
+  "required": [
+    "corporateId",
+    "locationId",
+    "body",
+    "fromRole"
+  ]
+}

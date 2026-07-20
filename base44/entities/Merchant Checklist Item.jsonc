@@ -1,0 +1,80 @@
+{
+  "name": "MerchantChecklistItem",
+  "type": "object",
+  "description": "Merchant-visible underwriting / setup checklist for the Merchant Center deal board. Auto items are synced from known blockers; agent items are document requests. Never dump raw Deal Room notes here. Republish in Base44 or fields strip (Lesson #4).",
+  "properties": {
+    "corporateId": {
+      "type": "string",
+      "description": "FK → MerchantCorporateProfile.corporateId (deal)"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["auto", "agent"],
+      "description": "auto = system from known blockers; agent = Request document"
+    },
+    "kind": {
+      "type": "string",
+      "description": "Stable key e.g. quote_unsigned, quote_unpaid, mcc_help, missing_bank, liquor_license, mid_error, custom_doc"
+    },
+    "autoKey": {
+      "type": "string",
+      "description": "Dedup key for auto items (kind + midId/locationId). Unique per deal when set."
+    },
+    "title": {
+      "type": "string",
+      "description": "Merchant-facing title"
+    },
+    "detail": {
+      "type": "string",
+      "description": "Optional short explanation of what to do"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["open", "done"],
+      "default": "open"
+    },
+    "dueAt": {
+      "type": "string",
+      "description": "Optional ISO due date"
+    },
+    "midId": {
+      "type": "string",
+      "description": "Optional MerchantMID.id this item relates to"
+    },
+    "locationId": {
+      "type": "string",
+      "description": "Optional MerchantLocations.id"
+    },
+    "fileUrl": {
+      "type": "string",
+      "description": "Uploaded document URL when merchant completes an upload item"
+    },
+    "fileName": {
+      "type": "string"
+    },
+    "uploadedAt": {
+      "type": "string"
+    },
+    "requiresUpload": {
+      "type": "boolean",
+      "default": false,
+      "description": "true = merchant must upload a file to complete"
+    },
+    "requestedByEmail": {
+      "type": "string",
+      "description": "Agent email for agent-sourced items"
+    },
+    "requestedByName": {
+      "type": "string"
+    },
+    "completedAt": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "corporateId",
+    "source",
+    "kind",
+    "title"
+  ]
+}

@@ -2415,3 +2415,26 @@ Teddy: prep is ideal, but agents must still send a blank app from Applications (
 
 **→ Waiting on:** Teddy
 ---
+
+---
+**[CURSOR]** — 2026-07-20
+**Type:** Action Taken — Merchant Center Stages 1–4 (staged roadmap)
+
+Teddy approved the Merchant Center roadmap: post-signing dashboard is the deal board; applications are the entrance; Stage 1 = quote/pay + UW checklist; hybrid account home later; kitchen sink in stages.
+
+**Shipped in repo:**
+1. **Deal board** — `PostSubmissionDashboard` reframed with `MerchantCenterShell` (Locations / Account / Setup nav). Aliases: `/center`, `/center/deals/:corporateId` (old `/onboarding/dashboard` kept).
+2. **Quote → pay** — first-class “Equipment quote coming” empty state; Step 1 sign / Step 2 pay copy on `EquipmentOrderPanel`. Applications list shows **Quote needed** when Submitted and no `hubspotQuoteUrl`.
+3. **Checklist** — entity `MerchantChecklistItem` + `manageMerchantChecklist` (auto sync + agent `requestDocument` + merchant upload). UI on deal board; Deal Room **Request document** panel. Auto kinds: quote missing/unsigned/unpaid, MCC help, missing bank, liquor license, MID error.
+4. **Account home** — `/locations` storefront list with status derivation (`src/lib/locationStatus.js`); `/locations/:id` detail; Add location → onboarding.
+5. **Auth module** — `src/lib/merchantCenterAuth.js` (`getSession`/`signIn`/`signOut`/`requireAuth`) wraps magic-link JWT; does **not** change `merchantAuthFetch`.
+6. **Go-live** — logo/hours/install date + installer chat via `manageLocationGoLive` + `MerchantInstallerMessage`; schema fields on `MerchantLocations`.
+7. **Account** — `/account` statements placeholder + MID join-key display.
+
+**ACTION for Base44 / Teddy:**
+1. Republish entities: `MerchantChecklistItem`, `MerchantInstallerMessage`, `MerchantLocations` (logoUrl, businessHours, installationDate, shippingTrackingNumber, shippingCarrier)
+2. Redeploy functions: `manageMerchantChecklist`, `manageLocationGoLive`
+3. Publish frontend
+
+**→ Waiting on:** Teddy (publish + redeploy)
+---
