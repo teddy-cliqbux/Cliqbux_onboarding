@@ -93,16 +93,36 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Flatten nested validation.errors (same shape signApplication uses) so admin
+    // Applications can count processor rejects like business_state_usa "California".
+    const vErr = formData?.validation?.errors || {};
+    const completion_errors = [
+      ...(formData.completion_errors || []),
+      ...(vErr.completion || []),
+    ];
+    const data_errors = [
+      ...(formData.data_errors || []),
+      ...(vErr.data || []),
+    ];
+    const rule_violations = [
+      ...(formData.rule_violations || []),
+      ...(vErr.rules || []),
+    ];
+    const errors = [
+      ...(formData.errors || []),
+      ...(Array.isArray(vErr) ? vErr : []),
+    ];
+
     return Response.json({
       success: formRes.ok,
       formOnly: !!formOnly,
       percent_complete: formData.percent_complete ?? null,
       canSave: formData.canSave ?? false,
       canSubmit: formData.canSubmit ?? null,
-      completion_errors: formData.completion_errors || [],
-      data_errors:       formData.data_errors       || [],
-      rule_violations:   formData.rule_violations   || [],
-      errors:            formData.errors            || [],
+      completion_errors,
+      data_errors,
+      rule_violations,
+      errors,
       signaturesError,
       // Full raw form for debugging — includes all fields currently on the application
       rawForm: formData.form || formData,

@@ -29,6 +29,7 @@ export function modeSortRank(mode) {
  * @param {object|null} args.track — StagedApplication __auto_track__
  * @param {{ currentStep: string, completedSteps: object, appStatus: string }} args.pipeline
  * @param {number} [args.mspErrorCount]
+ * @param {boolean} [args.formIncomplete] — MSP % < 100 / -1 / canSave false (even if error arrays empty)
  * @param {boolean} [args.detailLoaded]
  * @returns {{ mode: ApplicationRowMode, reason: string, blocker: string|null }}
  */
@@ -37,6 +38,7 @@ export function resolveApplicationRowMode({
   track,
   pipeline,
   mspErrorCount = 0,
+  formIncomplete = false,
   detailLoaded = false,
 }) {
   const p = track?.prefilledData || {};
@@ -60,18 +62,23 @@ export function resolveApplicationRowMode({
     && (Date.now() - new Date(p.lastSeenAt).getTime()) > STUCK_IDLE_MS
   );
   const hasMspErrors = (Number(mspErrorCount) || 0) > 0;
+  const formBlocked = !!formIncomplete || hasMspErrors;
   const awaitingSignature = ['signing', 'pending_signature'].includes(lock);
 
-  // Real blockers only — do NOT treat "forms locked / ready for signature" as a
-  // failed signing link. That lock means packages exist and we're waiting on the merchant.
+  // Real blockers — incomplete MSP forms / processor rejects are AGENT work.
+  // Do NOT treat "forms locked for signature" as ready-to-remind when the form
+  // is still under 100% (Trisha Company 2026-07-20: 62% + California state reject,
+  // admin showed Remind instead of Open to fix).
   if (
-    (merchantTouched && hasMspErrors)
+    (merchantTouched && formBlocked)
     || (idleStuck && merchantTouched)
-    || (hasMspErrors && detailLoaded)
+    || (formBlocked && detailLoaded)
   ) {
     let blocker = null;
     if (hasMspErrors) {
       blocker = `${mspErrorCount} application error${mspErrorCount === 1 ? '' : 's'} — open to fix`;
+    } else if (formIncomplete) {
+      blocker = 'Application form incomplete — open to fix inputs';
     } else if (idleStuck) {
       blocker = 'No progress in 3+ days';
     }
@@ -94,6 +101,7 @@ export function resolveApplicationRowMode({
     };
   }
 
+  // Only remind when packages are staged AND the form is not known-incomplete.
   if (awaitingSignature && (step === 'verification' || step === 'verify')) {
     return {
       mode: 'nudge',

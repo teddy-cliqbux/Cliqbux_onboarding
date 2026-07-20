@@ -5,6 +5,35 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // redeployed 2026-07-10 — OWNERSHIP_HS_TO_B44 mapping (fixes sync 500 during Stage Editor pull; GitHub sync alone did not deploy)
 // redeployed 2026-07-09 — portal auth gate + processing_pricing_tier + customAuthPerCard sync
 
+// HubSpot company.state is often a full name ("California"). Normalize to 2-letter
+// before writing MerchantLocations — MSPWare rejects full names on business_state_usa.
+// Keep in sync with src/lib/usState.js
+const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']);
+const US_STATE_NAME_TO_CODE: Record<string, string> = {
+  ALABAMA: 'AL', ALASKA: 'AK', ARIZONA: 'AZ', ARKANSAS: 'AR', CALIFORNIA: 'CA',
+  COLORADO: 'CO', CONNECTICUT: 'CT', DELAWARE: 'DE', FLORIDA: 'FL', GEORGIA: 'GA',
+  HAWAII: 'HI', IDAHO: 'ID', ILLINOIS: 'IL', INDIANA: 'IN', IOWA: 'IA', KANSAS: 'KS',
+  KENTUCKY: 'KY', LOUISIANA: 'LA', MAINE: 'ME', MARYLAND: 'MD', MASSACHUSETTS: 'MA',
+  MICHIGAN: 'MI', MINNESOTA: 'MN', MISSISSIPPI: 'MS', MISSOURI: 'MO', MONTANA: 'MT',
+  NEBRASKA: 'NE', NEVADA: 'NV', 'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ',
+  'NEW MEXICO': 'NM', 'NEW YORK': 'NY', 'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND',
+  OHIO: 'OH', OKLAHOMA: 'OK', OREGON: 'OR', PENNSYLVANIA: 'PA', 'RHODE ISLAND': 'RI',
+  'SOUTH CAROLINA': 'SC', 'SOUTH DAKOTA': 'SD', TENNESSEE: 'TN', TEXAS: 'TX', UTAH: 'UT',
+  VERMONT: 'VT', VIRGINIA: 'VA', WASHINGTON: 'WA', 'WEST VIRGINIA': 'WV', WISCONSIN: 'WI',
+  WYOMING: 'WY', 'DISTRICT OF COLUMBIA': 'DC', 'WASHINGTON DC': 'DC', 'WASHINGTON D C': 'DC',
+};
+function sanitizeState(s: string): string {
+  const trimmed = String(s || '').trim();
+  if (!trimmed) return '';
+  const upper = trimmed.toUpperCase();
+  if (US_STATES.has(upper)) return upper;
+  const fromName = US_STATE_NAME_TO_CODE[upper.replace(/\./g, '').replace(/\s+/g, ' ').trim()];
+  if (fromName) return fromName;
+  const compact = upper.replace(/[^A-Z]/g, '');
+  if (compact.length === 2 && US_STATES.has(compact)) return compact;
+  return '';
+}
+
 // ─── Portal auth (inlined) ─────────────────────────────────────────────────────────────────────
 // Base44 bundles each function in isolation, so this is duplicated from
 // base44/functions/helpers/auth.ts — keep both copies in sync.
@@ -615,7 +644,8 @@ Deno.serve(async (req) => {
         const dbaName    = lc.dba_name || lc.name || legalName;
         const street     = lc.address || '';
         const city       = lc.city    || '';
-        const state      = lc.state   || '';
+        // HubSpot often stores "California"; MSPWare needs "CA"
+        const state      = sanitizeState(lc.state || '');
         const zip        = lc.zip     || '';
         const locMcc     = lc.mcc_code || mccCode;
         const locPricing = lc.pricing_tier || effectivePricingTier;
@@ -628,18 +658,15 @@ Deno.serve(async (req) => {
         let locationId: string;
 
         if (existingLocs?.length) {
+          // FILL-BLANKS for address; always normalize state to 2-letter so a prior
+          // HubSpot full-name ("California") does not keep poisoning MSPWare PUTs.
+          const nextState = sanitizeState(existingLocs[0].businessState || state || '');
           await base44.asServiceRole.entities.MerchantLocations.update(existingLocs[0].id, {
-            // FILL-BLANKS ONLY: the address is MERCHANT-owned once it exists —
-            // HubSpot values are only a prefill seed. The old precedence
-            // (HubSpot first) silently reverted merchant corrections on every
-            // portal load, since the portal re-syncs while the quote is
-            // unsigned (observed live 2026-07-10: an edited street address
-            // reverted to the stale HubSpot company address).
             businessStreet:  existingLocs[0].businessStreet || street,
             businessCity:    existingLocs[0].businessCity   || city,
-            businessState:   existingLocs[0].businessState  || state,
+            businessState:   nextState || existingLocs[0].businessState || state,
             businessZip:     existingLocs[0].businessZip    || zip,
-            businessAddress: existingLocs[0].businessAddress || [street, city, state, zip].filter(Boolean).join(', '),
+            businessAddress: existingLocs[0].businessAddress || [street, city, nextState || state, zip].filter(Boolean).join(', '),
             ...(resolvedQuoteId ? { hubspotQuoteId: resolvedQuoteId } : {}),
           });
           locationId = existingLocs[0].id;

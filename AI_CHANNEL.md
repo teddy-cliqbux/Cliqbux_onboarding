@@ -2357,3 +2357,46 @@ Teddy: prep is ideal, but agents must still send a blank app from Applications (
 
 **ACTION for Base44:** redeploy `manageStagedApplication` + publish frontend.
 ---
+
+---
+**[CURSOR]** — 2026-07-20
+**Type:** Bugfix — MSPWare rejects `business_state_usa: "California"` (Trisha Company)
+
+**Live evidence (corp 336613831402):** Processor validation
+`{"errors":"California is not a valid option.","label":"State","key":"business_state_usa"}`
+→ form `-1%` + cascade "Owner DOB/SSN missing" / "Bank account not linked" (rollback noise — Trisha's KYC was already Verified).
+
+**Root cause:** HubSpot company `state` often stores full names. `business_state_usa` / `state_of_formation` were sent **raw** (other state fields already used `sanitizeState`, which only accepted 2-letter codes and dropped full names to `''`).
+
+**Fix:**
+1. `sanitizeState` maps full names → codes (`California`→`CA`); shared `src/lib/usState.js` + `npm run test:state`
+2. Applied to `business_state_usa` + `state_of_formation` in `submitToMSP` / `signApplication` / `refillMSPForms`
+3. `syncFromHubspot` normalizes state on location write (also heals existing "California" on next sync)
+
+**John B DBA (336605066825):** separate issue — Primary "Eisenbaumer" is Pending with 8 missing KYC fields (not the California bug). Complete People & KYC (or delete stub + re-add Control Person) before signing.
+
+**Teddy:** Push + redeploy `signApplication`, `submitToMSP`, `syncFromHubspot` (+ `refillMSPForms` optional). On Trisha: HubSpot Sync once (heals stored state) or just **Retry Signing**. Ignore cascade DOB/bank until the California error is gone.
+
+**→ Waiting on:** Teddy
+---
+
+---
+**[CURSOR]** — 2026-07-20
+**Type:** Bugfix — Admin Applications showed Remind instead of Open to fix (Trisha Company)
+
+**Problem:** Corp `336613831402` was at Sign with MSP form ~62% / processor reject on `business_state_usa`, but Applications primary CTA was **Remind** ("Waiting on sign"). Agents were nudged to text the merchant instead of opening the portal to fix inputs.
+
+**Root cause:** `resolveApplicationRowMode` treated `portalLockStatus: signing` as nudge whenever `mspErrorCount === 0`. Health only loaded on row expand; and even when loaded, incomplete `%` / `-1%` with empty top-level error arrays (errors nested under `validation.errors`) did not count as stuck.
+
+**Fix:**
+1. `formIncomplete` flag — MSP `% < 100` / `-1` / `canSave: false` → **stuck** → **Open to fix** (even while awaiting signature)
+2. `src/lib/mspFormHealth.js` — shared error collect + incomplete detection; MidRow uses it
+3. Prefetch MSP health when track step is Sign or `portalLockStatus` is signing/pending_signature (collapsed rows get the right CTA)
+4. `getMSPFormStatus` flattens `validation.errors` into `completion_errors` / `data_errors` (same as `signApplication`)
+
+**Tests:** `node --test src/lib/mspFormHealth.test.js src/lib/applicationRowMode.test.js`
+
+**ACTION:** publish frontend + redeploy `getMSPFormStatus`. Still refill/retry Trisha after California→CA state fix lands so the form can reach 100%.
+
+**→ Waiting on:** Teddy
+---

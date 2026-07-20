@@ -991,9 +991,30 @@ function resolveLocationAddress(location: Record<string, any>): Record<string, a
 }
 
 const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']);
+// Full names (HubSpot company.state, etc.) → 2-letter. Sync with src/lib/usState.js
+const US_STATE_NAME_TO_CODE: Record<string, string> = {
+  ALABAMA: 'AL', ALASKA: 'AK', ARIZONA: 'AZ', ARKANSAS: 'AR', CALIFORNIA: 'CA',
+  COLORADO: 'CO', CONNECTICUT: 'CT', DELAWARE: 'DE', FLORIDA: 'FL', GEORGIA: 'GA',
+  HAWAII: 'HI', IDAHO: 'ID', ILLINOIS: 'IL', INDIANA: 'IN', IOWA: 'IA', KANSAS: 'KS',
+  KENTUCKY: 'KY', LOUISIANA: 'LA', MAINE: 'ME', MARYLAND: 'MD', MASSACHUSETTS: 'MA',
+  MICHIGAN: 'MI', MINNESOTA: 'MN', MISSISSIPPI: 'MS', MISSOURI: 'MO', MONTANA: 'MT',
+  NEBRASKA: 'NE', NEVADA: 'NV', 'NEW HAMPSHIRE': 'NH', 'NEW JERSEY': 'NJ',
+  'NEW MEXICO': 'NM', 'NEW YORK': 'NY', 'NORTH CAROLINA': 'NC', 'NORTH DAKOTA': 'ND',
+  OHIO: 'OH', OKLAHOMA: 'OK', OREGON: 'OR', PENNSYLVANIA: 'PA', 'RHODE ISLAND': 'RI',
+  'SOUTH CAROLINA': 'SC', 'SOUTH DAKOTA': 'SD', TENNESSEE: 'TN', TEXAS: 'TX', UTAH: 'UT',
+  VERMONT: 'VT', VIRGINIA: 'VA', WASHINGTON: 'WA', 'WEST VIRGINIA': 'WV', WISCONSIN: 'WI',
+  WYOMING: 'WY', 'DISTRICT OF COLUMBIA': 'DC', 'WASHINGTON DC': 'DC', 'WASHINGTON D C': 'DC',
+};
 function sanitizeState(s: string): string {
-  const code = (s || '').toUpperCase().trim();
-  return US_STATES.has(code) ? code : '';
+  const trimmed = String(s || '').trim();
+  if (!trimmed) return '';
+  const upper = trimmed.toUpperCase();
+  if (US_STATES.has(upper)) return upper;
+  const fromName = US_STATE_NAME_TO_CODE[upper.replace(/\./g, '').replace(/\s+/g, ' ').trim()];
+  if (fromName) return fromName;
+  const compact = upper.replace(/[^A-Z]/g, '');
+  if (compact.length === 2 && US_STATES.has(compact)) return compact;
+  return '';
 }
 
 function formatDob(year: string, month: string, day: string): string {
@@ -1445,7 +1466,7 @@ function buildFormPayload(
     business_address_type: 'BSA',
     business_address: location.businessStreet || location.businessAddress || '',
     business_city: location.businessCity || '',
-    business_state_usa: location.businessState || '',
+    business_state_usa: sanitizeState(location.businessState || ''),
     business_zipcode: location.businessZip || '',
     // If entity has a separate mailing address, send it as the legal address.
     // Confirmed via live resubmit: has_legal_address: 'new' is the correct value
@@ -1625,7 +1646,7 @@ function buildFormPayload(
     chargebacks_retrievals_format: 'WM',
     chargebacks_retrievals_email: signer.signerEmail || profile.signerEmail || '',
     // Additional fields commonly required for form completion
-    state_of_formation: location.businessState || profile.stateOfFormation || '',
+    state_of_formation: sanitizeState(location.businessState || profile.stateOfFormation || ''),
     currently_processing: profile.currentlyProcessing ? 'Y' : 'N',
     ...(profile.currentlyProcessing ? {
       current_processor_name: profile.currentProcessorName || '',

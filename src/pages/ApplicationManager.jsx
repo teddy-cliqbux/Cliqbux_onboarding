@@ -22,18 +22,12 @@ import {
   readNudgeChannelPref,
   writeNudgeChannelPref,
 } from '@/lib/applicationRowMode';
+import {
+  collectMspStatusErrors,
+  summarizeMspHealth,
+} from '@/lib/mspFormHealth';
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption text-gray-500 mb-1.5';
-
-function countMspErrors(status) {
-  if (!status) return 0;
-  return [
-    ...(status.completion_errors || []),
-    ...(status.data_errors || []),
-    ...(status.rule_violations || []),
-    ...(status.errors || []),
-  ].length;
-}
 
 function countLocalMidIssues(mid) {
   let n = 0;
@@ -169,6 +163,25 @@ function PortalActivityPanel({ activity }) {
 }
 
 function humanizeMspError(err) {
+  if (err && typeof err === 'object') {
+    const key = err.key || err.field || err.name || '';
+    const label = err.label || '';
+    const detail = err.errors || err.message || err.description || '';
+    if (key || label || detail) {
+      const detailStr = typeof detail === 'string' ? detail : JSON.stringify(detail);
+      const s = `${key} ${label} ${detailStr}`.toLowerCase();
+      if (s.includes('business_state') || (s.includes('state') && s.includes('not a valid option'))) {
+        return `State must be a 2-letter code (e.g. CA), not a full name${detailStr ? ` — ${detailStr}` : ''}`;
+      }
+      if (s.includes('deposit') || s.includes('routing') || s.includes('bank') || s.includes('account_no')) return 'Missing bank details';
+      if (s.includes('highest_ticket') || s.includes('highest ticket')) return 'Highest ticket amount needs adjusting';
+      if (s.includes('average_sales') || s.includes('average transaction') || s.includes('avg sale')) return 'Average sale amount needs adjusting';
+      if (s.includes('monthly_sales') || s.includes('monthly volume')) return 'Monthly volume needs adjusting';
+      if (s.includes('firearm')) return 'Firearm field conflict — leave template default (do not send this field)';
+      const prefix = label || key;
+      return prefix ? `${prefix}: ${detailStr}` : detailStr;
+    }
+  }
   const raw = typeof err === 'string' ? err : (err?.message || err?.description || JSON.stringify(err));
   const s = String(raw).toLowerCase();
   if (s.includes('deposit') || s.includes('routing') || s.includes('bank') || s.includes('account_no')) return 'Missing bank details';
@@ -331,12 +344,7 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
   const [open, setOpen] = useState(false);
 
   const pct = mspStatus?.percent_complete != null ? Math.round(parseFloat(String(mspStatus.percent_complete))) : null;
-  const errors = [
-    ...(mspStatus?.completion_errors || []),
-    ...(mspStatus?.data_errors || []),
-    ...(mspStatus?.rule_violations || []),
-    ...(mspStatus?.errors || []),
-  ].map(humanizeMspError).filter(Boolean);
+  const errors = collectMspStatusErrors(mspStatus).map(humanizeMspError).filter(Boolean);
 
   const localIssues = [];
   if (!mid.mccCode && mid.mccHelpRequested) localIssues.push('Merchant asked for MCC help — set the real MCC before signing');
@@ -433,6 +441,11 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
             <div className="flex items-center gap-1.5 text-cb-caption text-cb-success">
               <CheckCircle2 className="w-3 h-3" /> Form complete — ready to sign
             </div>
+          )}
+          {allErrors.length === 0 && pct !== null && pct < 100 && !isDone && (
+            <p className="text-cb-caption text-gray-400">
+              Form {pct}% complete — open the merchant application to fix inputs (processor may have rejected a field without listing it here).
+            </p>
           )}
         </div>
       )}
@@ -1289,7 +1302,18 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     }
   }, [corporateId]);
 
-  // Expand-only health: never auto-fetch on mount (rate-limit safe).
+  // Expand-only by default; prefetch when on Sign / signing lock so incomplete
+  // forms show Open to fix instead of Remind without requiring expand.
+  useEffect(() => {
+    if (healthReady || loadingDetail) return;
+    const lock = String(profile?.portalLockStatus || '').toLowerCase();
+    const trackStep = String(trackStage?.prefilledData?.currentStep || '').toLowerCase();
+    const onSign =
+      ['signing', 'pending_signature'].includes(lock)
+      || trackStep === 'verification'
+      || trackStep === 'verify';
+    if (onSign) loadRowHealth();
+  }, [corporateId, profile?.portalLockStatus, trackStage?.prefilledData?.currentStep, healthReady, loadingDetail, loadRowHealth]);
 
   const toggleExpand = () => {
     setExpanded((v) => {
@@ -1360,18 +1384,21 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const isSubmitted = appStatus === 'Submitted' || currentStep === 'submitted';
 
   const mspValues = Object.values(mspStatuses);
-  const avgMspPct = mspValues.length > 0
-    ? Math.round(mspValues.reduce((s, v) => s + (v?.percent_complete != null ? parseFloat(String(v.percent_complete)) : 0), 0) / mspValues.length)
+  const healthSummary = summarizeMspHealth(mspValues);
+  const avgMspPct = healthSummary.worstPct != null
+    ? Math.round(healthSummary.worstPct)
     : null;
-  const mspErrCount = mspValues.reduce((s, v) => s + countMspErrors(v), 0);
+  const mspErrCount = healthSummary.errorCount;
   const localErrCount = mids.reduce((s, m) => s + countLocalMidIssues(m), 0);
   const totalErrors = mspErrCount + (healthReady ? localErrCount : 0);
+  const formIncomplete = healthReady && healthSummary.incomplete;
 
   const rowMode = resolveApplicationRowMode({
     profile,
     track: trackStage,
     pipeline,
     mspErrorCount: totalErrors,
+    formIncomplete,
     detailLoaded: healthReady,
   });
   const isStuck = rowMode.mode === 'stuck';
