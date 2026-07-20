@@ -24,6 +24,29 @@ describe('mspFormHealth', () => {
     assert.equal(mspFormNeedsAgentFix({ percent_complete: 100, completion_errors: [], data_errors: [] }), false);
   });
 
+  it('Porky case: 100% + canSave false is still ready to sign (not stuck)', () => {
+    assert.equal(
+      mspFormNeedsAgentFix({
+        percent_complete: 100,
+        canSave: false,
+        canSubmit: false,
+        completion_errors: [],
+        data_errors: [],
+      }),
+      false,
+    );
+  });
+
+  it('summarize: all 100% forms → not incomplete', () => {
+    const s = summarizeMspHealth([
+      { percent_complete: 100, canSave: false, completion_errors: [], data_errors: [] },
+      { percent_complete: 100, canSave: false, completion_errors: [], data_errors: [] },
+    ]);
+    assert.equal(s.incomplete, false);
+    assert.equal(s.errorCount, 0);
+    assert.equal(s.worstPct, 100);
+  });
+
   it('counts nested validation.errors.data via rawForm', () => {
     const n = countMspStatusErrors({
       percent_complete: 62,

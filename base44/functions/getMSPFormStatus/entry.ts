@@ -117,7 +117,9 @@ Deno.serve(async (req) => {
       success: formRes.ok,
       formOnly: !!formOnly,
       percent_complete: formData.percent_complete ?? null,
-      canSave: formData.canSave ?? false,
+      // Do not default canSave to false — undefined coerced to false made every
+      // signing-ready form look "incomplete" in Applications (Porky's 2026-07-20).
+      canSave: formData.canSave ?? null,
       canSubmit: formData.canSubmit ?? null,
       completion_errors,
       data_errors,

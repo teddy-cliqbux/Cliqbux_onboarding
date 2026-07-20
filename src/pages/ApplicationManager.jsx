@@ -1390,8 +1390,10 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     : null;
   const mspErrCount = healthSummary.errorCount;
   const localErrCount = mids.reduce((s, m) => s + countLocalMidIssues(m), 0);
-  const totalErrors = mspErrCount + (healthReady ? localErrCount : 0);
+  // Once MSP form is 100% with no processor errors, local MID field gaps must not
+  // override Remind → stuck (those gaps are often already on the wire form).
   const formIncomplete = healthReady && healthSummary.incomplete;
+  const totalErrors = mspErrCount + (healthReady && formIncomplete ? localErrCount : 0);
 
   const rowMode = resolveApplicationRowMode({
     profile,

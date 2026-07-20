@@ -2400,3 +2400,18 @@ Teddy: prep is ideal, but agents must still send a blank app from Applications (
 
 **→ Waiting on:** Teddy
 ---
+
+---
+**[CURSOR]** — 2026-07-20
+**Type:** Bugfix — False "stuck / form incomplete" on 100% ready-to-sign apps (Porky's)
+
+**Problem:** After the Trisha "Remind→Open to fix" change, Applications marked *all* Sign-step rows stuck — including Porky's and Cliqbux at **100%** with "Form complete — ready to sign" in the MID expand.
+
+**Root cause:** `mspFormNeedsAgentFix` treated `canSave === false` as incomplete. MSPWare (and our `canSave: formData.canSave ?? false` coercion) often reports `canSave: false` when the form is already 100% / locked for signing.
+
+**Fix:** If `percent_complete >= 100` and error arrays are empty → not incomplete. Ignore `canSave`/`canSubmit` for stuck detection. Stop defaulting `canSave` to `false` in `getMSPFormStatus`.
+
+**ACTION:** publish frontend + redeploy `getMSPFormStatus`. Porky's/Cliqbux should return to **Remind**; Trisha at 62% should stay **Open to fix**.
+
+**→ Waiting on:** Teddy
+---
