@@ -191,7 +191,12 @@
     },
     "installationDate": {
       "type": "string",
-      "description": "ISO date (YYYY-MM-DD) for scheduled POS installation. Nullable."
+      "description": "ISO date (YYYY-MM-DD) for scheduled POS installation. Nullable. Setting this (or Schedule install) spawns the deployment checklist for this location."
+    },
+    "enterpriseInstall": {
+      "type": "boolean",
+      "default": false,
+      "description": "true = include Airport & Enterprise Validation phase on the deployment checklist (Template 2 add-on)."
     },
     "shippingTrackingNumber": {
       "type": "string",

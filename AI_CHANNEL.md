@@ -2438,3 +2438,22 @@ Teddy approved the Merchant Center roadmap: post-signing dashboard is the deal b
 
 **→ Waiting on:** Teddy (publish + redeploy)
 ---
+
+---
+**[CURSOR]** — 2026-07-20
+**Type:** Action Taken — Excel deployment checklist → split-audience in-app runbook
+
+Teddy provided Onboarding Checklist Template 1/2.xlsx (~183 POS deployment tasks). Decision: **split audiences** — merchants see a short pack; agents/installers get the full Template 2 tracker.
+
+**Shipped:**
+1. Catalog: `src/lib/deploymentChecklistCatalog.js` (+ raw JSON + `scripts/gen-deployment-catalog.cjs`) and same-folder `manageMerchantChecklist/deploymentCatalog.ts`
+2. Entity: `MerchantChecklistItem` extended with `lane`, `phase`, `catalogKey`, `audience`, Template 2 statuses, notes/targetDate; `MerchantLocations.enterpriseInstall`
+3. API actions: `instantiateDeployment`, `listDeployment`, `updateDeploymentItem`, `scheduleInstall` + auto-complete (`quote_paid`, `install_date_set`, `hours_present`, `mid_live`, `menu_uploaded`)
+4. Merchant UI: `MerchantBeforeInstall` on deal board + location detail
+5. Agent UI: `InstallerRunbook` in Deal Room (phase accordion, status dropdowns, tallies)
+6. Airport/enterprise pack behind `enterpriseInstall` checkbox (go-live panel + Deal Room spawn)
+
+**ACTION:** Republish `MerchantChecklistItem` + `MerchantLocations`; redeploy `manageMerchantChecklist` + `manageLocationGoLive`; publish frontend. New installs should not need the Excel files.
+
+**→ Waiting on:** Teddy
+---

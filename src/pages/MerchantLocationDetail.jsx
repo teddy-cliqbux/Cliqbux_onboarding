@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import MerchantCenterShell from '@/components/merchant-center/MerchantCenterShell';
 import LocationGoLivePanel from '@/components/merchant-center/LocationGoLivePanel';
+import MerchantBeforeInstall from '@/components/merchant-center/MerchantBeforeInstall';
 import { getSession } from '@/lib/merchantCenterAuth';
 import { invokePortalFunction, setMerchantToken } from '@/lib/merchantAuthFetch';
 import { primaryMidForLocation, deriveLocationStatus, locationStatusLabel } from '@/lib/locationStatus';
@@ -184,6 +185,11 @@ export default function MerchantLocationDetail() {
               Open account &amp; statements
             </Link>
           </section>
+
+          <MerchantBeforeInstall
+            corporateId={corporateId}
+            locationId={location.id}
+          />
 
           <LocationGoLivePanel
             corporateId={corporateId}

@@ -309,6 +309,8 @@ Post-signing is the **Merchant Center** start; onboarding is the **entrance**. L
 
 Auth Stage 1: magic-link JWT via `src/lib/merchantCenterAuth.js` (swap-friendly). Checklist: `manageMerchantChecklist` + `MerchantChecklistItem` (republish entity). Agent **Request document** lives in Deal Room. Quotes never block application signing. Do not call POS dashboard APIs; join later on `elavonMID`.
 
+**Deployment checklist (2026-07-20):** Excel Template 2 (~183 tasks) is encoded in `deploymentChecklistCatalog`. Merchants see `audience=merchant|shared` via `MerchantBeforeInstall`; agents use Deal Room `InstallerRunbook` (full phases + Template 2 statuses). Spawn with `scheduleInstall` / `instantiateDeployment` per location. `enterpriseInstall` on location unlocks Airport & Enterprise phase. Auto-complete: quote_paid, install_date_set, hours_present, mid_live, menu_uploaded.
+
 Base44 App slug: `cliqbux-onboard-prime`
 Base44 App ID: `6a3dfa34316c4e5018c750f7`
 Published function base URL: `https://cliqbux-onboard-prime.base44.app/functions/`

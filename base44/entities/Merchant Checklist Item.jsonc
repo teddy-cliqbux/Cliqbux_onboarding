@@ -1,53 +1,81 @@
 {
   "name": "MerchantChecklistItem",
   "type": "object",
-  "description": "Merchant-visible underwriting / setup checklist for the Merchant Center deal board. Auto items are synced from known blockers; agent items are document requests. Never dump raw Deal Room notes here. Republish in Base44 or fields strip (Lesson #4).",
+  "description": "Underwriting + deployment checklist instances for Merchant Center / Deal Room. lane=underwriting (UW docs) or deployment (POS install runbook from Template 2). Republish in Base44 or fields strip (Lesson #4).",
   "properties": {
     "corporateId": {
       "type": "string",
       "description": "FK → MerchantCorporateProfile.corporateId (deal)"
     },
+    "lane": {
+      "type": "string",
+      "enum": ["underwriting", "deployment"],
+      "default": "underwriting",
+      "description": "underwriting = UW/docs blockers; deployment = POS install checklist"
+    },
+    "phase": {
+      "type": "string",
+      "description": "Deployment phase id e.g. pre_installation, hardware, airport_enterprise"
+    },
+    "catalogKey": {
+      "type": "string",
+      "description": "Stable key from deploymentChecklistCatalog"
+    },
+    "audience": {
+      "type": "string",
+      "enum": ["merchant", "installer", "ops", "shared"],
+      "description": "Who owns this deployment task"
+    },
     "source": {
       "type": "string",
-      "enum": ["auto", "agent"],
-      "description": "auto = system from known blockers; agent = Request document"
+      "enum": ["auto", "agent", "catalog"],
+      "description": "auto = UW system blockers; agent = Request document; catalog = spawned from deployment template"
     },
     "kind": {
       "type": "string",
-      "description": "Stable key e.g. quote_unsigned, quote_unpaid, mcc_help, missing_bank, liquor_license, mid_error, custom_doc"
+      "description": "UW kind or deployment catalogKey shorthand"
     },
     "autoKey": {
       "type": "string",
-      "description": "Dedup key for auto items (kind + midId/locationId). Unique per deal when set."
+      "description": "Dedup key for auto/catalog items"
     },
     "title": {
       "type": "string",
-      "description": "Merchant-facing title"
+      "description": "Merchant- or agent-facing title"
     },
     "detail": {
       "type": "string",
-      "description": "Optional short explanation of what to do"
+      "description": "Description / instructions"
     },
     "status": {
       "type": "string",
-      "enum": ["open", "done"],
-      "default": "open"
+      "enum": ["open", "done", "scheduled", "in_progress", "hold", "completed"],
+      "default": "open",
+      "description": "UW uses open|done; deployment uses Template 2: scheduled|in_progress|hold|completed (done maps to completed for merchants)"
     },
     "dueAt": {
       "type": "string",
       "description": "Optional ISO due date"
     },
+    "targetDate": {
+      "type": "string",
+      "description": "Deployment target date (YYYY-MM-DD)"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Agent/installer notes"
+    },
     "midId": {
       "type": "string",
-      "description": "Optional MerchantMID.id this item relates to"
+      "description": "Optional MerchantMID.id"
     },
     "locationId": {
       "type": "string",
-      "description": "Optional MerchantLocations.id"
+      "description": "Optional MerchantLocations.id — required for deployment instances"
     },
     "fileUrl": {
       "type": "string",
-      "description": "Uploaded document URL when merchant completes an upload item"
+      "description": "Uploaded document URL"
     },
     "fileName": {
       "type": "string"
@@ -57,18 +85,20 @@
     },
     "requiresUpload": {
       "type": "boolean",
-      "default": false,
-      "description": "true = merchant must upload a file to complete"
+      "default": false
     },
     "requestedByEmail": {
-      "type": "string",
-      "description": "Agent email for agent-sourced items"
+      "type": "string"
     },
     "requestedByName": {
       "type": "string"
     },
     "completedAt": {
       "type": "string"
+    },
+    "autoRule": {
+      "type": "string",
+      "description": "Catalog autoRule snapshot e.g. hours_present, mid_live, quote_paid"
     }
   },
   "required": [

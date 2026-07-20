@@ -2,15 +2,20 @@
  * manageMerchantChecklist — merchant + admin checklist for Merchant Center.
  *
  * Actions:
- *   list            — sync auto items, return open + done (merchant own corp / admin)
- *   requestDocument — admin: create agent upload request { title, detail?, dueAt?, locationId?, midId? }
- *   upload          — merchant/admin: attach file and mark done { itemId, fileUrl, fileName }
- *   markDone        — merchant/admin: complete without file (non-upload items)
- *   reopen          — admin only
+ *   list                   — sync UW auto items, return open + done (underwriting lane only)
+ *   requestDocument        — admin: create agent upload request { title, detail?, dueAt?, locationId?, midId? }
+ *   upload                 — merchant/admin: attach file and mark done/completed { itemId, fileUrl, fileName }
+ *   markDone               — merchant/admin: complete without file (non-upload items)
+ *   reopen                 — admin only (UW → open)
+ *   instantiateDeployment  — spawn Template 2 checklist for a location { corporateId, locationId }
+ *   listDeployment         — list deployment lane items { corporateId, locationId?, audience? }
+ *   updateDeploymentItem   — update deployment status/notes/targetDate { corporateId, itemId, status?, notes?, targetDate? }
+ *   scheduleInstall        — set location install fields then instantiateDeployment { corporateId, locationId, installationDate?, enterpriseInstall? }
  *
- * Auto kinds: quote_unsigned, quote_unpaid, mcc_help, missing_bank, liquor_license, mid_error
+ * Auto kinds (UW): quote_unsigned, quote_unpaid, mcc_help, missing_bank, liquor_license, mid_error
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { DEPLOYMENT_CATALOG, PHASES, DEPLOYMENT_STATUSES } from './deploymentCatalog.ts';
 
 function __b64uDecode(str: string): Uint8Array {
   const pad = (4 - (str.length % 4)) % 4;
@@ -56,6 +61,41 @@ function hasBank(loc: any, mid: any) {
   return false;
 }
 
+/** UW open check — for UW list, only status === 'open' counts as open. */
+function isUwOpen(i: any) {
+  return i.status === 'open' || i.status === 'scheduled' || i.status === 'in_progress' || i.status === 'hold';
+}
+
+function deploymentAutoKey(locationId: string, catalogKey: string) {
+  return `deploy:${locationId}:${catalogKey}`;
+}
+
+function isDeploymentDone(status: string) {
+  return status === 'completed' || status === 'done';
+}
+
+function deploymentTallies(items: any[]) {
+  const tallies = { scheduled: 0, in_progress: 0, hold: 0, completed: 0 };
+  for (const i of items || []) {
+    if (isDeploymentDone(i.status)) tallies.completed++;
+    else if (i.status === 'in_progress') tallies.in_progress++;
+    else if (i.status === 'hold') tallies.hold++;
+    else if (i.status === 'scheduled') tallies.scheduled++;
+  }
+  return tallies;
+}
+
+function groupByPhase(items: any[]) {
+  const byPhase: Record<string, any[]> = {};
+  for (const phase of PHASES) byPhase[phase.id] = [];
+  for (const i of items || []) {
+    const key = String(i.phase || 'pre_installation');
+    if (!byPhase[key]) byPhase[key] = [];
+    byPhase[key].push(i);
+  }
+  return byPhase;
+}
+
 async function resolveQuoteFlags(base44: any, corporateId: string, profile: any) {
   let quoteMissing = !profile?.hubspotQuoteUrl;
   let quoteUnsigned = false;
@@ -79,12 +119,86 @@ async function resolveQuoteFlags(base44: any, corporateId: string, profile: any)
   return { quoteMissing, quoteUnsigned, quoteUnpaid };
 }
 
+/**
+ * Auto-complete deployment catalog items when linked data is present.
+ * Never downgrades hold. Never re-completes. Skips hold (agent hold).
+ */
+async function applyDeploymentAutoComplete(
+  base44: any,
+  corporateId: string,
+  locationId: string,
+  profile: any,
+  locations: any[],
+  mids: any[],
+  inventoryAssets?: any[],
+) {
+  const loc = (locations || []).find((l: any) => String(l.id) === String(locationId));
+  if (!loc) return;
+
+  let allItems: any[] = [];
+  try {
+    allItems = await base44.asServiceRole.entities.MerchantChecklistItem.filter({ corporateId }) || [];
+  } catch (e) {
+    console.warn('[manageMerchantChecklist] applyDeploymentAutoComplete load', e);
+    return;
+  }
+
+  const items = allItems.filter(
+    (i: any) => i.lane === 'deployment' && String(i.locationId) === String(locationId),
+  );
+  if (!items.length) return;
+
+  let assets = inventoryAssets;
+  if (assets === undefined) {
+    try {
+      assets = await base44.asServiceRole.entities.MerchantInventoryAssets.filter({ corporateId }) || [];
+    } catch {
+      assets = [];
+    }
+  }
+
+  const locMids = (mids || []).filter((m: any) => String(m.locationId) === String(locationId));
+  const hasMidLive = locMids.some((m: any) => !!String(m.elavonMID || '').trim());
+  const hasMenuAsset = (assets || []).some((a: any) => {
+    const ft = String(a.fileType || a.type || '').toLowerCase();
+    return ft.includes('menu') || ft.includes('inventory');
+  });
+  const hasMenuUpload = items.some(
+    (i: any) => String(i.catalogKey || '').toLowerCase().includes('menu') && !!i.fileUrl,
+  );
+
+  for (const item of items) {
+    if (item.status === 'hold') continue; // do not downgrade hold / skip agent hold
+    if (isDeploymentDone(item.status)) continue;
+
+    const rule = String(item.autoRule || '');
+    if (!rule) continue;
+
+    let shouldComplete = false;
+    if (rule === 'quote_paid' && profile?.equipmentPaidAt) shouldComplete = true;
+    else if (rule === 'install_date_set' && loc.installationDate) shouldComplete = true;
+    else if (rule === 'hours_present' && loc.businessHours) shouldComplete = true;
+    else if (rule === 'mid_live' && hasMidLive) shouldComplete = true;
+    else if (rule === 'menu_uploaded' && (hasMenuAsset || hasMenuUpload)) shouldComplete = true;
+
+    if (!shouldComplete) continue;
+    try {
+      await base44.asServiceRole.entities.MerchantChecklistItem.update(item.id, {
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.warn('[manageMerchantChecklist] auto-complete', item.autoKey, e);
+    }
+  }
+}
+
 async function syncAutoItems(base44: any, corporateId: string) {
   const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter(
     { corporateId }, '-created_date', 1
   );
   const profile = profiles[0];
-  if (!profile) return { profile: null, items: [] as any[] };
+  if (!profile) return { profile: null, items: [] as any[], locations: [] as any[], mids: [] as any[] };
 
   const [locations, mids, existing] = await Promise.all([
     base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }),
@@ -182,7 +296,7 @@ async function syncAutoItems(base44: any, corporateId: string) {
     }
   }
 
-  const existingAuto = (existing || []).filter((i: any) => i.source === 'auto');
+  const existingAuto = (existing || []).filter((i: any) => i.source === 'auto' && (!i.lane || i.lane === 'underwriting'));
   const byKey = new Map(existingAuto.map((i: any) => [i.autoKey || `${i.kind}:${i.id}`, i]));
 
   for (const d of desired) {
@@ -194,6 +308,7 @@ async function syncAutoItems(base44: any, corporateId: string) {
         title: d.title,
         detail: d.detail,
         requiresUpload: d.requiresUpload,
+        lane: 'underwriting',
       };
       if (prev.status === 'done' && !prev.fileUrl && d.kind !== 'liquor_license') {
         // Quote/bank auto items: if still desired, reopen unless merchant/agent marked done with intent
@@ -214,6 +329,7 @@ async function syncAutoItems(base44: any, corporateId: string) {
       try {
         await base44.asServiceRole.entities.MerchantChecklistItem.create({
           corporateId,
+          lane: 'underwriting',
           source: 'auto',
           kind: d.kind,
           autoKey: d.autoKey,
@@ -246,6 +362,101 @@ async function syncAutoItems(base44: any, corporateId: string) {
   return { profile, locations, mids, items: refreshed || [] };
 }
 
+async function instantiateDeploymentForLocation(
+  base44: any,
+  corporateId: string,
+  locationId: string,
+) {
+  const locations = await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }) || [];
+  const loc = locations.find((l: any) => String(l.id) === String(locationId));
+  if (!loc) {
+    return { error: 'Location not found', status: 404 };
+  }
+
+  const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter(
+    { corporateId }, '-created_date', 1
+  );
+  const profile = profiles[0];
+  const mids = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId }) || [];
+
+  const includeEnterprise = !!loc.enterpriseInstall;
+  const existingAll = await base44.asServiceRole.entities.MerchantChecklistItem.filter({ corporateId }) || [];
+  const existingByKey = new Map(
+    (existingAll || [])
+      .filter((i: any) => i.lane === 'deployment' && String(i.locationId) === String(locationId))
+      .map((i: any) => [i.autoKey, i]),
+  );
+
+  let created = 0;
+  let existing = 0;
+
+  for (const cat of DEPLOYMENT_CATALOG) {
+    if (cat.phase === 'airport_enterprise' && !includeEnterprise) continue;
+
+    const autoKey = deploymentAutoKey(locationId, cat.key);
+    const prev = existingByKey.get(autoKey);
+    if (prev) {
+      existing++;
+      try {
+        await base44.asServiceRole.entities.MerchantChecklistItem.update(prev.id, {
+          title: cat.title,
+          detail: cat.description,
+          audience: cat.audience,
+          phase: cat.phase,
+          catalogKey: cat.key,
+          requiresUpload: !!cat.requiresUpload,
+          autoRule: cat.autoRule || '',
+          lane: 'deployment',
+          source: 'catalog',
+        });
+      } catch (e) {
+        console.warn('[manageMerchantChecklist] update catalog item', autoKey, e);
+      }
+    } else {
+      try {
+        await base44.asServiceRole.entities.MerchantChecklistItem.create({
+          corporateId,
+          locationId,
+          lane: 'deployment',
+          source: 'catalog',
+          kind: cat.key,
+          autoKey,
+          catalogKey: cat.key,
+          title: cat.title,
+          detail: cat.description,
+          status: 'scheduled',
+          audience: cat.audience,
+          phase: cat.phase,
+          requiresUpload: !!cat.requiresUpload,
+          autoRule: cat.autoRule || '',
+        });
+        created++;
+      } catch (e) {
+        console.warn('[manageMerchantChecklist] create catalog item', autoKey, e);
+      }
+    }
+  }
+
+  try {
+    await applyDeploymentAutoComplete(base44, corporateId, locationId, profile, locations, mids);
+  } catch (e) {
+    console.warn('[manageMerchantChecklist] auto-complete after instantiate', e);
+  }
+
+  const refreshed = await base44.asServiceRole.entities.MerchantChecklistItem.filter({ corporateId }) || [];
+  const items = refreshed.filter(
+    (i: any) => i.lane === 'deployment' && String(i.locationId) === String(locationId),
+  );
+  return {
+    success: true,
+    created,
+    existing,
+    items,
+    tallies: deploymentTallies(items),
+    includeEnterprise,
+  };
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -265,13 +476,41 @@ Deno.serve(async (req) => {
     }
 
     if (action === 'list') {
-      const { items } = await syncAutoItems(base44, corporateId);
-      const open = (items || []).filter((i: any) => i.status === 'open');
-      const done = (items || []).filter((i: any) => i.status === 'done');
+      const { profile, locations, mids, items } = await syncAutoItems(base44, corporateId);
+
+      // Non-fatal: auto-complete deployment items for locations that already have them
+      const deployLocIds = [...new Set(
+        (items || [])
+          .filter((i: any) => i.lane === 'deployment' && i.locationId)
+          .map((i: any) => String(i.locationId)),
+      )];
+      if (deployLocIds.length && profile) {
+        let inventoryAssets: any[] | undefined;
+        try {
+          inventoryAssets = await base44.asServiceRole.entities.MerchantInventoryAssets.filter({ corporateId }) || [];
+        } catch {
+          inventoryAssets = [];
+        }
+        for (const locId of deployLocIds) {
+          try {
+            await applyDeploymentAutoComplete(
+              base44, corporateId, locId, profile, locations || [], mids || [], inventoryAssets,
+            );
+          } catch (e) {
+            console.warn('[manageMerchantChecklist] list deploy auto-complete', locId, e);
+          }
+        }
+      }
+
+      // UW lane only — keep MerchantChecklist.jsx open/done shape
+      const uwItems = (items || []).filter((i: any) => !i.lane || i.lane === 'underwriting');
+      // UW: only status === 'open' counts as open (isUwOpen covers deployment statuses but is not used here)
+      const open = uwItems.filter((i: any) => i.status === 'open');
+      const done = uwItems.filter((i: any) => i.status === 'done' || i.status === 'completed');
       return Response.json({
         success: true,
         openCount: open.length,
-        items: items || [],
+        items: uwItems,
         open,
         done,
       });
@@ -295,6 +534,7 @@ Deno.serve(async (req) => {
 
       const created = await base44.asServiceRole.entities.MerchantChecklistItem.create({
         corporateId,
+        lane: 'underwriting',
         source: 'agent',
         kind: 'custom_doc',
         title,
@@ -328,11 +568,12 @@ Deno.serve(async (req) => {
         return Response.json({ error: 'Item not found' }, { status: 404 });
       }
 
+      const doneStatus = item.lane === 'deployment' ? 'completed' : 'done';
       const updated = await base44.asServiceRole.entities.MerchantChecklistItem.update(itemId, {
         fileUrl,
         fileName,
         uploadedAt: new Date().toISOString(),
-        status: 'done',
+        status: doneStatus,
         completedAt: new Date().toISOString(),
       });
 
@@ -361,8 +602,9 @@ Deno.serve(async (req) => {
       if (item.requiresUpload && !item.fileUrl && actor.actor === 'merchant') {
         return Response.json({ error: 'Upload a file to complete this item' }, { status: 422 });
       }
+      const doneStatus = item.lane === 'deployment' ? 'completed' : 'done';
       const updated = await base44.asServiceRole.entities.MerchantChecklistItem.update(itemId, {
-        status: 'done',
+        status: doneStatus,
         completedAt: new Date().toISOString(),
       });
       return Response.json({ success: true, item: updated });
@@ -379,6 +621,172 @@ Deno.serve(async (req) => {
         completedAt: '',
       });
       return Response.json({ success: true, item: updated });
+    }
+
+    if (action === 'instantiateDeployment') {
+      const locationId = String(body.locationId || '').trim();
+      if (!locationId) {
+        return Response.json({ error: 'locationId required' }, { status: 400 });
+      }
+      const result = await instantiateDeploymentForLocation(base44, corporateId, locationId);
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: result.status || 400 });
+      }
+      return Response.json(result);
+    }
+
+    if (action === 'listDeployment') {
+      const locationId = body.locationId ? String(body.locationId).trim() : '';
+      const audienceFilter = body.audience ? String(body.audience).trim() : '';
+
+      const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter(
+        { corporateId }, '-created_date', 1
+      );
+      const profile = profiles[0];
+      const [locations, mids, allItems] = await Promise.all([
+        base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }),
+        base44.asServiceRole.entities.MerchantMID.filter({ corporateId }),
+        base44.asServiceRole.entities.MerchantChecklistItem.filter({ corporateId }),
+      ]);
+
+      let inventoryAssets: any[] = [];
+      try {
+        inventoryAssets = await base44.asServiceRole.entities.MerchantInventoryAssets.filter({ corporateId }) || [];
+      } catch {
+        inventoryAssets = [];
+      }
+
+      const deployLocIds = locationId
+        ? [locationId]
+        : [...new Set(
+          (allItems || [])
+            .filter((i: any) => i.lane === 'deployment' && i.locationId)
+            .map((i: any) => String(i.locationId)),
+        )];
+
+      for (const locId of deployLocIds) {
+        try {
+          await applyDeploymentAutoComplete(
+            base44, corporateId, locId, profile, locations || [], mids || [], inventoryAssets,
+          );
+        } catch (e) {
+          console.warn('[manageMerchantChecklist] listDeployment auto-complete', locId, e);
+        }
+      }
+
+      const refreshed = await base44.asServiceRole.entities.MerchantChecklistItem.filter({ corporateId }) || [];
+      let items = refreshed.filter((i: any) => i.lane === 'deployment');
+
+      if (locationId) {
+        items = items.filter((i: any) => String(i.locationId) === locationId);
+      }
+
+      if (actor.actor === 'merchant') {
+        items = items.filter((i: any) => i.audience === 'merchant' || i.audience === 'shared');
+      }
+      if (audienceFilter) {
+        items = items.filter((i: any) => i.audience === audienceFilter);
+      }
+
+      let includeEnterprise = false;
+      if (locationId) {
+        const loc = (locations || []).find((l: any) => String(l.id) === locationId);
+        includeEnterprise = !!loc?.enterpriseInstall;
+      } else {
+        includeEnterprise = (locations || []).some((l: any) => !!l.enterpriseInstall);
+      }
+
+      return Response.json({
+        success: true,
+        items,
+        byPhase: groupByPhase(items),
+        tallies: deploymentTallies(items),
+        phases: PHASES,
+        includeEnterprise,
+      });
+    }
+
+    if (action === 'updateDeploymentItem') {
+      const itemId = String(body.itemId || '').trim();
+      if (!itemId) return Response.json({ error: 'itemId required' }, { status: 400 });
+
+      const all = await base44.asServiceRole.entities.MerchantChecklistItem.filter({ corporateId }) || [];
+      const item = all.find((i: any) => String(i.id) === itemId);
+      if (!item || item.lane !== 'deployment') {
+        return Response.json({ error: 'Deployment item not found' }, { status: 404 });
+      }
+
+      const patch: any = {};
+
+      if (body.notes !== undefined) patch.notes = String(body.notes ?? '');
+      if (body.targetDate !== undefined) patch.targetDate = String(body.targetDate ?? '');
+
+      if (body.status !== undefined) {
+        let nextStatus = String(body.status).trim();
+        if (nextStatus === 'done') nextStatus = 'completed';
+
+        if (!(DEPLOYMENT_STATUSES as string[]).includes(nextStatus)) {
+          return Response.json({
+            error: `Invalid status. Allowed: ${DEPLOYMENT_STATUSES.join(', ')}`,
+          }, { status: 400 });
+        }
+
+        if (actor.actor === 'merchant') {
+          if (item.audience !== 'merchant' && item.audience !== 'shared') {
+            return Response.json({ error: 'Not allowed to update this item' }, { status: 403 });
+          }
+          if (nextStatus !== 'completed') {
+            return Response.json({ error: 'Merchants can only mark items completed' }, { status: 403 });
+          }
+        }
+
+        patch.status = nextStatus;
+        if (nextStatus === 'completed') {
+          patch.completedAt = new Date().toISOString();
+        }
+      }
+
+      if (!Object.keys(patch).length) {
+        return Response.json({ error: 'Nothing to update' }, { status: 400 });
+      }
+
+      const updated = await base44.asServiceRole.entities.MerchantChecklistItem.update(itemId, patch);
+      return Response.json({ success: true, item: updated });
+    }
+
+    if (action === 'scheduleInstall') {
+      const locationId = String(body.locationId || '').trim();
+      if (!locationId) {
+        return Response.json({ error: 'locationId required' }, { status: 400 });
+      }
+
+      const locations = await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }) || [];
+      const loc = locations.find((l: any) => String(l.id) === locationId);
+      if (!loc) {
+        return Response.json({ error: 'Location not found' }, { status: 404 });
+      }
+
+      const locPatch: any = {};
+      if (body.installationDate !== undefined) {
+        locPatch.installationDate = body.installationDate ? String(body.installationDate) : '';
+      }
+      if (body.enterpriseInstall !== undefined) {
+        locPatch.enterpriseInstall = !!body.enterpriseInstall;
+      }
+      if (Object.keys(locPatch).length) {
+        try {
+          await base44.asServiceRole.entities.MerchantLocations.update(locationId, locPatch);
+        } catch (e) {
+          console.warn('[manageMerchantChecklist] scheduleInstall location update', e);
+          return Response.json({ error: 'Failed to update location' }, { status: 500 });
+        }
+      }
+
+      const result = await instantiateDeploymentForLocation(base44, corporateId, locationId);
+      if (result.error) {
+        return Response.json({ error: result.error }, { status: result.status || 400 });
+      }
+      return Response.json(result);
     }
 
     return Response.json({ error: `Unknown action: ${action}` }, { status: 400 });

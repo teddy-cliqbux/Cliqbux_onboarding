@@ -13,6 +13,7 @@ export default function LocationGoLivePanel({ corporateId, location, onUpdated }
   const [installDate, setInstallDate] = useState(
     (location?.installationDate || '').slice(0, 10)
   );
+  const [enterpriseInstall, setEnterpriseInstall] = useState(!!location?.enterpriseInstall);
   const [messages, setMessages] = useState([]);
   const [chatDraft, setChatDraft] = useState('');
   const [saving, setSaving] = useState(false);
@@ -41,6 +42,7 @@ export default function LocationGoLivePanel({ corporateId, location, onUpdated }
     setLogoUrl(location?.logoUrl || '');
     setHours(location?.businessHours || '');
     setInstallDate((location?.installationDate || '').slice(0, 10));
+    setEnterpriseInstall(!!location?.enterpriseInstall);
   }, [location]);
 
   useEffect(() => {
@@ -60,6 +62,7 @@ export default function LocationGoLivePanel({ corporateId, location, onUpdated }
         logoUrl,
         businessHours: hours,
         installationDate: installDate,
+        enterpriseInstall,
       });
       if (res.data?.error) throw new Error(res.data.error);
       setSaved(true);
@@ -171,6 +174,16 @@ export default function LocationGoLivePanel({ corporateId, location, onUpdated }
           className="w-full sm:w-auto rounded-cb border border-cb-border bg-cb-bg px-3 py-2 text-cb-body text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-cb-accent"
         />
       </div>
+
+      <label className="flex items-center gap-2 text-cb-caption normal-case tracking-normal text-gray-300">
+        <input
+          type="checkbox"
+          checked={enterpriseInstall}
+          onChange={(e) => setEnterpriseInstall(e.target.checked)}
+          className="rounded border-cb-border"
+        />
+        Airport / enterprise location (extra validation checklist)
+      </label>
 
       <button
         type="button"

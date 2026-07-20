@@ -13,6 +13,7 @@ import ConnectLegacyPOS from '@/components/onboarding/ConnectLegacyPOS';
 import SetupGate from '@/components/onboarding/SetupGate';
 import MerchantCenterShell from '@/components/merchant-center/MerchantCenterShell';
 import MerchantChecklist from '@/components/merchant-center/MerchantChecklist';
+import MerchantBeforeInstall from '@/components/merchant-center/MerchantBeforeInstall';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
 import { base44 } from '@/api/base44Client';
 import {
@@ -355,6 +356,13 @@ export default function PostSubmissionDashboard() {
             corporateId={profile.corporateId}
             onOpenCountChange={onOpenCountChange}
           />
+
+          {locations[0]?.id && (
+            <MerchantBeforeInstall
+              corporateId={profile.corporateId}
+              locationId={locations[0].id}
+            />
+          )}
 
           {merchantIDs.length > 0 && <UnderwritingTracker locations={locations} merchantIDs={merchantIDs} />}
 

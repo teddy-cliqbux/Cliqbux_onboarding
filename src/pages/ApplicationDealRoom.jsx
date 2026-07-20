@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { lifecycleLabel, lifecycleDotClass } from '@/lib/signerLifecycle';
 import { TIER_LABELS } from '@/lib/pricingPresets';
+import InstallerRunbook from '@/components/merchant-center/InstallerRunbook';
 
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 
@@ -674,6 +675,11 @@ export default function ApplicationDealRoom() {
 
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
               <div className="lg:col-span-3 space-y-6">
+                <InstallerRunbook
+                  corporateId={corporateId}
+                  locations={data?.locations || []}
+                />
+
                 <section className="bg-cb-surface border border-cb-border rounded-cb p-4 sm:p-5">
                   <h2 className="font-display text-cb-title text-white mb-1">Request document</h2>
                   <p className="text-cb-caption normal-case tracking-normal text-gray-500 mb-3">

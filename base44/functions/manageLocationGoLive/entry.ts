@@ -71,6 +71,15 @@ Deno.serve(async (req) => {
       if (body.logoUrl !== undefined) patch.logoUrl = String(body.logoUrl || '');
       if (body.businessHours !== undefined) patch.businessHours = String(body.businessHours || '');
       if (body.installationDate !== undefined) patch.installationDate = String(body.installationDate || '');
+      if (body.enterpriseInstall !== undefined) {
+        (patch as any).enterpriseInstall = body.enterpriseInstall === true || body.enterpriseInstall === 'true';
+      }
+      if (body.shippingTrackingNumber !== undefined) {
+        patch.shippingTrackingNumber = String(body.shippingTrackingNumber || '');
+      }
+      if (body.shippingCarrier !== undefined) {
+        patch.shippingCarrier = String(body.shippingCarrier || '');
+      }
       const updated = await base44.asServiceRole.entities.MerchantLocations.update(locationId, patch);
       return Response.json({ success: true, location: updated });
     }
