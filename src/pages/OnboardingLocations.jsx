@@ -68,6 +68,15 @@ const INDUSTRY_OPTIONS = [
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
 
+/** Card-channel split options — estimate to nearest 10% (no free-typed steppers). */
+const PCT_10_OPTIONS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+function snapPct10(value, fallback) {
+  if (value == null || value === '') return String(fallback);
+  const n = Math.round(Number(value) / 10) * 10;
+  if (!Number.isFinite(n)) return String(fallback);
+  return String(Math.min(100, Math.max(0, n)));
+}
+
 // Sentinel: never persist as MCC — { mccCode: '', mccHelpRequested: true }.
 const MCC_HELP_VALUE = '__HELP__';
 const MCC_HELP_LABEL = 'My business isn\'t listed — Cliqbux will help';
@@ -298,9 +307,9 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
     monthlyCardSales: mid.monthlyCardSales || '',
     avgSaleAmount: mid.avgSaleAmount || '',
     highestTicketAmount: mid.highestTicketAmount || '',
-    cardPresentPct: mid.cardPresentPct != null ? String(mid.cardPresentPct) : '100',
-    internetPct: mid.internetPct != null ? String(mid.internetPct) : '0',
-    motoPct: mid.motoPct != null ? String(mid.motoPct) : '0',
+    cardPresentPct: snapPct10(mid.cardPresentPct, 100),
+    internetPct: snapPct10(mid.internetPct, 0),
+    motoPct: snapPct10(mid.motoPct, 0),
     businessWebsite: mid.businessWebsite || '',
     alcoholSalesPercentage: mid.alcoholSalesPercentage != null && mid.alcoholSalesPercentage !== ''
       ? String(mid.alcoholSalesPercentage)
@@ -440,13 +449,24 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
               </div>
 
               <div>
-                <label className={labelCls}>How You Take Cards (must total 100%)</label>
+                <label className={labelCls}>What percentage of your card sales come from each channel?</label>
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mb-2">
+                  Estimate to the nearest 10%. The three channels must add up to 100%.
+                </p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {[['cardPresentPct', 'In-person'], ['internetPct', 'Online'], ['motoPct', 'Phone / mail']].map(([k, lbl]) => (
                     <div key={k}>
                       <span className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mb-1 block">{lbl}</span>
-                      <input type="number" min="0" max="100" value={form[k]}
-                        onChange={e => setField(k, e.target.value)} className={inputCls} />
+                      <select
+                        value={form[k]}
+                        onChange={e => setField(k, e.target.value)}
+                        className={inputCls}
+                        style={{ colorScheme: 'dark' }}
+                      >
+                        {PCT_10_OPTIONS.map(n => (
+                          <option key={n} value={String(n)}>{n}%</option>
+                        ))}
+                      </select>
                     </div>
                   ))}
                 </div>
