@@ -2,11 +2,6 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
 import { signOut } from '@/lib/merchantCenterAuth';
 
-const NAV = [
-  { to: '/locations', label: 'Locations', end: true },
-  { to: '/account', label: 'Account', end: true },
-];
-
 /**
  * Merchant Center chrome — Locations / Account nav + optional deal-board context.
  * Uses cb-* tokens. Coming-soon routes still render real pages with empty states.
@@ -21,9 +16,15 @@ export default function MerchantCenterShell({
 }) {
   const navigate = useNavigate();
 
+  const dealQ = corporateId ? `?dealId=${encodeURIComponent(corporateId)}` : '';
   const dealHref = corporateId
     ? `/onboarding/dashboard?dealId=${encodeURIComponent(corporateId)}`
     : '/onboarding/dashboard';
+
+  const navItems = [
+    { to: `/locations${dealQ}`, label: 'Locations' },
+    { to: `/account${dealQ}`, label: 'Account' },
+  ];
 
   return (
     <div className="portal-bg min-h-screen" style={{ fontFamily: 'Inter, sans-serif' }}>
@@ -32,11 +33,10 @@ export default function MerchantCenterShell({
           <div className="flex items-center gap-6 min-w-0">
             <CliqbuxLogo size="sm" />
             <nav className="hidden sm:flex items-center gap-1" aria-label="Merchant Center">
-              {NAV.map((item) => (
+              {navItems.map((item) => (
                 <NavLink
-                  key={item.to}
+                  key={item.label}
                   to={item.to}
-                  end={item.end}
                   className={({ isActive }) =>
                     `px-3 py-1.5 rounded-cb text-cb-caption normal-case tracking-normal font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent ${
                       isActive
@@ -96,11 +96,10 @@ export default function MerchantCenterShell({
         </div>
         {/* Mobile nav */}
         <nav className="sm:hidden flex border-t border-cb-border px-2 py-1 gap-1 overflow-x-auto" aria-label="Merchant Center mobile">
-          {NAV.map((item) => (
+          {navItems.map((item) => (
             <NavLink
-              key={item.to}
+              key={item.label}
               to={item.to}
-              end={item.end}
               className={({ isActive }) =>
                 `px-3 py-2 rounded-cb text-cb-caption normal-case tracking-normal font-medium whitespace-nowrap ${
                   isActive ? 'bg-cb-accent-muted text-cb-accent' : 'text-gray-400'

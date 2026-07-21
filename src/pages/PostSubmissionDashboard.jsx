@@ -125,6 +125,10 @@ export default function PostSubmissionDashboard() {
         return;
       }
 
+      // Returning from Locations/Account: keep existing profile visible (no full-page skeleton).
+      const sameDeal = profileRef.current && String(profileRef.current.corporateId) === String(corporateId);
+      if (!sameDeal) setLoading(true);
+
       try {
         const isAgent = await resolveAgentAccess(corporateId);
         const res = await invokePortalFunction('getMerchantData', { corporateId });
@@ -159,7 +163,7 @@ export default function PostSubmissionDashboard() {
       }
     };
     load();
-  }, [routeCorporateId]);
+  }, [routeCorporateId, navigate]);
 
   const corporateId = profile?.corporateId;
 
@@ -317,7 +321,9 @@ export default function PostSubmissionDashboard() {
             </p>
             <p className="mt-3">
               <Link
-                to="/locations"
+                to={profile?.corporateId
+                  ? `/locations?dealId=${encodeURIComponent(profile.corporateId)}`
+                  : '/locations'}
                 className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent"
               >
                 View locations

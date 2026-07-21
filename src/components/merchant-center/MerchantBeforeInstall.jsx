@@ -5,8 +5,13 @@ import { base44 } from '@/api/base44Client';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 import { STATUS_LABELS } from '@/lib/deploymentChecklistCatalog';
 
+function isSchemaMissing(message) {
+  return /ENTITY_SCHEMA_MISSING|not published|MerchantChecklistItem/i.test(String(message || ''));
+}
+
 /**
  * Merchant-facing "Before we install" pack — audience merchant|shared only.
+ * Stays on this card after start — items appear in place (no route change).
  */
 export default function MerchantBeforeInstall({ corporateId, locationId, onOpenCountChange }) {
   const queryClient = useQueryClient();
@@ -17,7 +22,7 @@ export default function MerchantBeforeInstall({ corporateId, locationId, onOpenC
 
   const enabled = !!corporateId && !!locationId;
 
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching, isFetched } = useQuery({
     queryKey: ['deploymentMerchantPack', corporateId, locationId],
     queryFn: async () => {
       const res = await invokePortalFunction('manageMerchantChecklist', {
@@ -25,18 +30,24 @@ export default function MerchantBeforeInstall({ corporateId, locationId, onOpenC
         corporateId,
         locationId,
       });
-      if (res.data?.error) throw new Error(res.data.error);
+      if (res.data?.error) {
+        const err = new Error(res.data.error);
+        err.code = res.data.code;
+        throw err;
+      }
       return res.data;
     },
     enabled,
-    staleTime: 30_000,
-    refetchOnWindowFocus: true,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   const items = data?.items || [];
   const open = items.filter((i) => i.status !== 'completed' && i.status !== 'done');
   const done = items.filter((i) => i.status === 'completed' || i.status === 'done');
   const openCount = open.length;
+  const schemaMissing = isSchemaMissing(error?.message) || error?.code === 'ENTITY_SCHEMA_MISSING';
 
   useEffect(() => {
     onOpenCountChange?.(openCount);
@@ -114,7 +125,8 @@ export default function MerchantBeforeInstall({ corporateId, locationId, onOpenC
     );
   }
 
-  if (isLoading) {
+  // Only full skeleton on first load — keep prior content visible while refetching.
+  if (isLoading && !isFetched) {
     return (
       <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-5 space-y-3" aria-busy="true">
         <div className="skeleton h-4 w-48 !rounded-cb" />
@@ -123,29 +135,41 @@ export default function MerchantBeforeInstall({ corporateId, locationId, onOpenC
     );
   }
 
+  if (isError && schemaMissing) {
+    return (
+      <div className="bg-cb-surface-raised rounded-cb border border-cb-border border-l-2 border-l-cb-accent p-5">
+        <h3 className="font-display text-cb-title text-white mb-1">Install checklist unavailable</h3>
+        <p className="text-cb-body text-gray-400">
+          Checklist storage is not published yet. Ask Cliqbux to republish the MerchantChecklistItem entity,
+          then click Retry.
+        </p>
+        {actionError && <p className="text-cb-caption text-cb-danger mt-2" role="alert">{actionError}</p>}
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="mt-3 text-cb-caption font-medium text-cb-accent underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   if (isError) {
-    const empty = /not found|no deployment|instantiate|0 items/i.test(error?.message || '');
     return (
       <div className="bg-cb-surface-raised rounded-cb border border-cb-border border-l-2 border-l-cb-accent p-5 space-y-3">
         <h3 className="font-display text-cb-title text-white">Before we install</h3>
         <p className="text-cb-body text-gray-400">
-          {empty || !items.length
-            ? 'When you are ready for POS install, start the checklist. We only ask for store info — not network or hardware tasks.'
-            : (error?.message || 'Could not load install checklist.')}
+          {error?.message || 'Could not load install checklist.'}
         </p>
+        {actionError && <p className="text-cb-caption text-cb-danger" role="alert">{actionError}</p>}
         <button
           type="button"
-          onClick={scheduleInstall}
-          disabled={scheduling}
-          className="rounded-cb bg-cb-accent text-cb-bg font-semibold text-cb-body px-4 py-2.5 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent"
+          onClick={() => refetch()}
+          className="text-cb-caption font-medium text-cb-accent underline"
         >
-          {scheduling ? 'Starting…' : 'Start install checklist'}
+          Retry
         </button>
-        {!empty && (
-          <button type="button" onClick={() => refetch()} className="block text-cb-caption text-cb-accent underline">
-            Retry
-          </button>
-        )}
       </div>
     );
   }
@@ -155,14 +179,20 @@ export default function MerchantBeforeInstall({ corporateId, locationId, onOpenC
       <div className="bg-cb-surface-raised rounded-cb border border-cb-border border-l-2 border-l-cb-accent p-5 space-y-3">
         <h3 className="font-display text-cb-title text-white">Before we install</h3>
         <p className="text-cb-body text-gray-400">
-          Start the install checklist when you are ready. You will only see items your store needs to provide
-          (hours, menu, staff list, sign-off) — not the full technician runbook.
+          Start the install checklist when you are ready. Items appear here on this page — you will only see
+          what your store needs to provide (hours, menu, staff list, sign-off).
         </p>
-        {actionError && <p className="text-cb-caption text-cb-danger" role="alert">{actionError}</p>}
+        {actionError && (
+          <p className="text-cb-caption text-cb-danger" role="alert">
+            {isSchemaMissing(actionError)
+              ? 'Checklist storage is not published yet. Ask Cliqbux to republish MerchantChecklistItem, then try again.'
+              : actionError}
+          </p>
+        )}
         <button
           type="button"
           onClick={scheduleInstall}
-          disabled={scheduling}
+          disabled={scheduling || isSchemaMissing(actionError)}
           className="rounded-cb bg-cb-accent text-cb-bg font-semibold text-cb-body px-4 py-2.5 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent"
         >
           {scheduling ? 'Starting…' : 'Start install checklist'}

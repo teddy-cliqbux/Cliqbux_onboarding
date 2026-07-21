@@ -470,6 +470,7 @@ async function instantiateDeploymentForLocation(
 
   let created = 0;
   let existing = 0;
+  let lastCreateError: any = null;
 
   for (const cat of DEPLOYMENT_CATALOG) {
     if (cat.phase === 'airport_enterprise' && !includeEnterprise) continue;
@@ -492,6 +493,7 @@ async function instantiateDeploymentForLocation(
         });
       } catch (e) {
         console.warn('[manageMerchantChecklist] update catalog item', autoKey, e);
+        lastCreateError = e;
       }
     } else {
       try {
@@ -514,8 +516,24 @@ async function instantiateDeploymentForLocation(
         created++;
       } catch (e) {
         console.warn('[manageMerchantChecklist] create catalog item', autoKey, e);
+        lastCreateError = e;
       }
     }
+  }
+
+  if (created === 0 && existing === 0) {
+    const msg = String(lastCreateError?.message || lastCreateError || '');
+    if (/does not exist|unknown entity|MerchantChecklistItem/i.test(msg) || lastCreateError) {
+      return {
+        error: 'Checklist storage is not published yet. Ask Cliqbux to republish the MerchantChecklistItem entity.',
+        code: 'ENTITY_SCHEMA_MISSING',
+        status: 503,
+      };
+    }
+    return {
+      error: 'Could not create install checklist items. Try again or contact Cliqbux.',
+      status: 500,
+    };
   }
 
   try {
@@ -734,7 +752,10 @@ Deno.serve(async (req) => {
       }
       const result = await instantiateDeploymentForLocation(base44, corporateId, locationId);
       if (result.error) {
-        return Response.json({ error: result.error }, { status: result.status || 400 });
+        return Response.json({
+          error: result.error,
+          ...(result.code ? { code: result.code } : {}),
+        }, { status: result.status || 400 });
       }
       return Response.json(result);
     }
@@ -912,7 +933,10 @@ Deno.serve(async (req) => {
 
       const result = await instantiateDeploymentForLocation(base44, corporateId, locationId);
       if (result.error) {
-        return Response.json({ error: result.error }, { status: result.status || 400 });
+        return Response.json({
+          error: result.error,
+          ...(result.code ? { code: result.code } : {}),
+        }, { status: result.status || 400 });
       }
       // Suggest installation stage when merchant/agent starts the install runbook.
       try {

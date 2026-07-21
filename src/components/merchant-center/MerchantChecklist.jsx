@@ -13,7 +13,7 @@ export default function MerchantChecklist({ corporateId, onOpenCountChange }) {
   const [actionError, setActionError] = useState('');
   const fileRefs = useRef({});
 
-  const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
+  const { data, isLoading, isError, error, refetch, isFetching, isFetched } = useQuery({
     queryKey: ['merchantChecklist', corporateId],
     queryFn: async () => {
       const res = await invokePortalFunction('manageMerchantChecklist', {
@@ -24,8 +24,9 @@ export default function MerchantChecklist({ corporateId, onOpenCountChange }) {
       return res.data;
     },
     enabled: !!corporateId,
-    staleTime: 30_000,
-    refetchOnWindowFocus: true,
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    retry: 1,
   });
 
   const open = data?.open || [];
@@ -74,7 +75,8 @@ export default function MerchantChecklist({ corporateId, onOpenCountChange }) {
     }
   };
 
-  if (isLoading) {
+  // Only skeleton on first load — avoid flash when remounting with cached data.
+  if (isLoading && !isFetched && !data) {
     return (
       <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-5 space-y-3" aria-busy="true">
         <div className="skeleton h-4 w-40 !rounded-cb" />
