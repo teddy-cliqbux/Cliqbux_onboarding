@@ -744,10 +744,21 @@ function mapPortalCardSplit(cpIn: number, onlineIn: number, motoIn: number) {
 }
 
 function normalizeWebsiteUrl(raw: string): string {
-  const s = String(raw || '').trim();
+  let s = String(raw || '').trim();
   if (!s) return '';
-  if (/^https?:\/\//i.test(s)) return s;
-  return `https://${s}`;
+  s = s.replace(/[.,;)\]]+$/g, '');
+  if (!/^https?:\/\//i.test(s)) s = `https://${s}`;
+  try {
+    const url = new URL(s);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    const host = String(url.hostname || '').toLowerCase();
+    if (!host || host === 'localhost') return '';
+    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.includes(':')) return '';
+    if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(host)) return '';
+    return s;
+  } catch {
+    return '';
+  }
 }
 
 function scanWebsiteFormKeys(formData: any): Record<string, unknown> {

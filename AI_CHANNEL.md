@@ -2537,3 +2537,20 @@ Built admin explorer so Teddy/agents can open every POV without hitting bare `/c
 **→ Waiting on:** Teddy
 ---
 
+---
+**[CURSOR]** — 2026-07-20
+**Type:** Bugfix — Business homepage URL accepted junk (self-serve)
+
+**Problem:** Form only checked non-empty string when Online % > 0 — invalid values like `asdf` saved.
+
+**Fix:**
+1. `src/lib/businessWebsite.js` (+ tests) — normalize + validate real http(s) domain
+2. Locations MID editor blocks Save / complete until valid
+3. `manageMerchantID` add/update returns 422 on invalid; stores normalized URL
+4. `submitToMSP` / `signApplication` / `refillMSPForms` treat invalid as missing
+
+**Teddy:** Push frontend + redeploy `manageMerchantID` (boarding funcs optional but recommended). Edit MID → fix website → Save.
+
+**→ Waiting on:** Teddy
+---
+

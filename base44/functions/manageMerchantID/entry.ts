@@ -39,6 +39,43 @@ async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merc
   return null;
 }
 
+// Sync with src/lib/businessWebsite.js — Base44 cannot import frontend helpers.
+const BUSINESS_WEBSITE_HOST_RE = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
+function normalizeBusinessWebsite(raw: string): string {
+  let s = String(raw || '').trim();
+  if (!s) return '';
+  s = s.replace(/[.,;)\]]+$/g, '');
+  if (!/^https?:\/\//i.test(s)) s = `https://${s}`;
+  return s;
+}
+function isValidBusinessWebsite(raw: string): boolean {
+  const normalized = normalizeBusinessWebsite(raw);
+  if (!normalized) return false;
+  let url: URL;
+  try {
+    url = new URL(normalized);
+  } catch {
+    return false;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+  const host = String(url.hostname || '').toLowerCase();
+  if (!host || host === 'localhost') return false;
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.includes(':')) return false;
+  return BUSINESS_WEBSITE_HOST_RE.test(host);
+}
+function assertBusinessWebsiteOrError(raw: string, required: boolean): string | null {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) {
+    return required
+      ? 'Business homepage URL is required when Online volume is greater than 0%.'
+      : null;
+  }
+  if (!isValidBusinessWebsite(trimmed)) {
+    return 'Enter a valid website (e.g. https://www.example.com or example.com).';
+  }
+  return null;
+}
+
 
 // Maps the merchant's chosen pricingTier to the correct MSPWare pricing_method.
 // MerchantMID.pricingMethod has a schema-level default of 'ICPLS', which will
@@ -112,6 +149,13 @@ Deno.serve(async (req) => {
         }, { status: 422 });
       }
 
+      const addInt = data?.internetPct != null ? Number(data.internetPct) : 0;
+      const addSite = String(data?.businessWebsite || '').trim();
+      const addSiteErr = assertBusinessWebsiteOrError(addSite, Number.isFinite(addInt) && addInt > 0);
+      if (addSiteErr) {
+        return Response.json({ error: addSiteErr }, { status: 422 });
+      }
+
       const merchantMIDData = {
         locationId,
         corporateId,
@@ -126,7 +170,7 @@ Deno.serve(async (req) => {
         cardPresentPct: data?.cardPresentPct != null ? Number(data.cardPresentPct) : 100,
         internetPct: data?.internetPct != null ? Number(data.internetPct) : 0,
         motoPct: data?.motoPct != null ? Number(data.motoPct) : 0,
-        ...(data?.businessWebsite ? { businessWebsite: String(data.businessWebsite).trim() } : {}),
+        ...(addSite ? { businessWebsite: normalizeBusinessWebsite(addSite) } : {}),
         ...(data?.mccHelpRequested !== undefined ? { mccHelpRequested: Boolean(data.mccHelpRequested) } : {}),
         applicationStepStatus: 'In Review',
       };
@@ -179,9 +223,14 @@ Deno.serve(async (req) => {
       if (d.motoPct !== undefined) updateFields.motoPct = Number(d.motoPct);
       if (d.businessWebsite !== undefined) {
         const site = String(d.businessWebsite || '').trim();
-        updateFields.businessWebsite = site || null;
+        if (site && !isValidBusinessWebsite(site)) {
+          return Response.json({
+            error: 'Enter a valid website (e.g. https://www.example.com or example.com).',
+          }, { status: 422 });
+        }
+        updateFields.businessWebsite = site ? normalizeBusinessWebsite(site) : null;
       }
-      // Require homepage URL when Online (internet) volume > 0
+      // Require valid homepage URL when Online (internet) volume > 0
       {
         const nextInt = d.internetPct !== undefined
           ? Number(d.internetPct)
@@ -189,10 +238,9 @@ Deno.serve(async (req) => {
         const nextSite = d.businessWebsite !== undefined
           ? String(d.businessWebsite || '').trim()
           : String(existing?.businessWebsite || '').trim();
-        if (Number.isFinite(nextInt) && nextInt > 0 && !nextSite) {
-          return Response.json({
-            error: 'Business homepage URL is required when Online volume is greater than 0%.',
-          }, { status: 422 });
+        const siteErr = assertBusinessWebsiteOrError(nextSite, Number.isFinite(nextInt) && nextInt > 0);
+        if (siteErr) {
+          return Response.json({ error: siteErr }, { status: 422 });
         }
       }
       if (d.locationId !== undefined) updateFields.locationId = d.locationId;

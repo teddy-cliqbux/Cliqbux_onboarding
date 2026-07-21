@@ -702,12 +702,25 @@ function mapPortalCardSplit(cpIn: number, onlineIn: number, motoIn: number) {
   return { cp, cnp: moto, intPct: online };
 }
 
-/** Normalize URL for MSPWare business homepage field. */
+/** Normalize + validate URL for MSPWare business homepage field.
+ * Sync rules with src/lib/businessWebsite.js / manageMerchantID.
+ */
 function normalizeWebsiteUrl(raw: string): string {
-  const s = String(raw || '').trim();
+  let s = String(raw || '').trim();
   if (!s) return '';
-  if (/^https?:\/\//i.test(s)) return s;
-  return `https://${s}`;
+  s = s.replace(/[.,;)\]]+$/g, '');
+  if (!/^https?:\/\//i.test(s)) s = `https://${s}`;
+  try {
+    const url = new URL(s);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    const host = String(url.hostname || '').toLowerCase();
+    if (!host || host === 'localhost') return '';
+    if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.includes(':')) return '';
+    if (!/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(host)) return '';
+    return s;
+  } catch {
+    return '';
+  }
 }
 
 /** Flatten form object from GET /form (handles nested shapes). */
@@ -2080,8 +2093,18 @@ Deno.serve(async (req) => {
       }
     }
 
-    const isSigSigned = (s: any) =>
-      ['signed', 'complete', 'completed'].includes(String(s?.localstatus || s?.status || '').toLowerCase());
+    const isSigSigned = (s: any) => {
+      if (!s) return false;
+      if (s.signed === true) return true;
+      const st = String(s?.localstatus || s?.status || s?.signerStatus || '').toLowerCase().trim();
+      return ['signed', 'complete', 'completed'].includes(st);
+    };
+    const isPackageFullySigned = (data: any) => {
+      if (!data) return false;
+      if (data.signed === true) return true;
+      const st = String(data.status || data.envelopeStatus || data.localstatus || '').toLowerCase().trim();
+      return ['complete', 'completed', 'signed', 'allsigned', 'all_signed'].includes(st);
+    };
 
     // ── 4. Process each merchantMID ───────────────────────────────────────────────
     const applications: any[] = [];
@@ -2353,7 +2376,7 @@ Deno.serve(async (req) => {
       });
       const freshData = await freshRes.json();
       const signerList: any[] = freshData?.signers || [];
-      const overallSigned = freshData?.signed === true || freshData?.status === 'complete';
+      const overallSigned = isPackageFullySigned(freshData);
 
       // Get signing link for each package signer + any required roster email still missing
       // (concurrent signing: every required owner needs their own BoldSign URL).
@@ -2418,9 +2441,11 @@ Deno.serve(async (req) => {
           })
         : (signerList.length > 0 && signerList.every((s: any) => isSigSigned(s)));
 
-      const missingLinks = signerLinks
-        .filter((s: any) => requiredSignerEmails.includes(s.email) && !s.signed && !s.signingUrl)
-        .map((s: any) => s.email);
+      const missingLinks = (appAllSigned || overallSigned)
+        ? []
+        : signerLinks
+          .filter((s: any) => requiredSignerEmails.includes(s.email) && !s.signed && !s.signingUrl)
+          .map((s: any) => s.email);
 
       // signingUrl = primary convenience link (legacy). Concurrent UI uses signers[].signingUrl.
       applications.push({

@@ -26,6 +26,10 @@ import {
   liquorComplianceBannerText,
 } from '@/lib/liquorCompliance';
 import { usePlacesAddressRef } from '@/lib/usePlacesAddressRef';
+import {
+  normalizeBusinessWebsite,
+  businessWebsiteError,
+} from '@/lib/businessWebsite';
 
 // Motion communicates expand/collapse — keep it transform/opacity-friendly.
 // Height uses a short ease (not a spring): springs on height:"auto" look like
@@ -228,6 +232,10 @@ function isMidComplete(mid, businessState) {
   if (requiresLiquorCompliance(businessState, mid.mccCode) && !isAlcoholSalesPercentageSet(mid.alcoholSalesPercentage)) {
     return false;
   }
+  const online = Number(mid.internetPct) || 0;
+  if (online > 0 && businessWebsiteError(mid.businessWebsite, { required: true })) {
+    return false;
+  }
   return true;
 }
 
@@ -326,7 +334,12 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
 
   const pctSum = (parseInt(form.cardPresentPct) || 0) + (parseInt(form.internetPct) || 0) + (parseInt(form.motoPct) || 0);
   const onlinePct = parseInt(form.internetPct) || 0;
-  const websiteOk = onlinePct <= 0 || String(form.businessWebsite || '').trim().length > 0;
+  const websiteErr = onlinePct > 0
+    ? businessWebsiteError(form.businessWebsite, { required: true })
+    : (String(form.businessWebsite || '').trim()
+      ? businessWebsiteError(form.businessWebsite, { required: false })
+      : null);
+  const websiteOk = !websiteErr;
   const needsLiquorCompliance = requiresLiquorCompliance(businessState, form.mccCode);
   const alcoholOk = !needsLiquorCompliance || isAlcoholSalesPercentageSet(form.alcoholSalesPercentage);
   const categoryOk = !!(form.mccCode || form.mccHelpRequested);
@@ -351,7 +364,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
   const salesOk = monthlyNum > 0 && typicalNum > 0 && largestNum > 0 && !salesIssue;
   const canSave = categoryOk && salesOk && pctSum === 100 && alcoholOk && websiteOk;
   // isComplete reads from form state (not stale mid prop) so the header updates immediately after save
-  const isComplete = !!(categoryOk && salesOk && alcoholOk);
+  const isComplete = !!(categoryOk && salesOk && alcoholOk && websiteOk);
 
   const doSave = async () => {
     if (!canSave) return;
@@ -362,6 +375,9 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
         ...form,
         // Combined 1×1 panel: store name is the account name — avoid a second label.
         merchantName: combined ? (dbaName || form.merchantName) : (form.merchantName || dbaName),
+        businessWebsite: String(form.businessWebsite || '').trim()
+          ? normalizeBusinessWebsite(form.businessWebsite)
+          : '',
       };
       if (needsLiquorCompliance) {
         payload.alcoholSalesPercentage = Number(form.alcoholSalesPercentage);
@@ -501,14 +517,14 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                     value={form.businessWebsite}
                     onChange={e => setField('businessWebsite', e.target.value)}
                     placeholder="https://www.example.com"
-                    className={inputCls}
+                    className={`${inputCls}${websiteErr ? ' border-cb-danger' : ''}`}
                   />
                   <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1.5">
                     Required when any sales happen online — the underwriting team reviews your website.
                   </p>
-                  {!websiteOk && (
-                    <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1">
-                      Enter the business website URL to continue.
+                  {websiteErr && (
+                    <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger mt-1" role="alert">
+                      {websiteErr}
                     </p>
                   )}
                 </div>
@@ -566,7 +582,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                             !(largestNum > 0) && 'largest expected sale',
                             pctSum !== 100 && 'card split totaling 100%',
                             !alcoholOk && 'alcohol sales %',
-                            !websiteOk && 'business website',
+                            !websiteOk && (websiteErr || 'business website'),
                           ].filter(Boolean).join(', ')}`}
                     </span>
                   )}

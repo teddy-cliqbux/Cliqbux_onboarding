@@ -69,6 +69,10 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
 
   const [submitting, setSubmitting]   = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const autoFinishRef = useRef(false);
+  const applicationsRef = useRef(applications);
+  const requiredSignersRef = useRef([]);
+  const selectedSignerRef = useRef(null);
 
   const requiredSigners = rosterSigners.filter((s) => isEffectivelyRequiredSigner(s, rosterSigners));
   // Anyone verified+ can use the on-device iframe; invited/opened = remote parallel lane
@@ -88,6 +92,10 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
     || localSigners.find(s => !isApplicationSigned(s.identityStatus) && isVerifiedOrHigher(s.identityStatus))
     || localSigners[0]
     || null;
+
+  applicationsRef.current = applications;
+  requiredSignersRef.current = requiredSigners;
+  selectedSignerRef.current = selectedSigner;
 
   const activeApp = applications[activeMidIndex] || null;
   const activeLink = selectedSigner
@@ -262,45 +270,50 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
     if (advancingRef.current) return;
     advancingRef.current = true;
     try {
-      const signer = selectedSigner;
+      const signer = selectedSignerRef.current;
+      const required = requiredSignersRef.current;
       if (!signer) return;
 
-      setApplications(prev => prev.map((app, i) => {
+      // Build next apps locally — setState is async; reading stale `applications`
+      // would miss the MID we just marked signed (stuck on Verified forever).
+      const nextApps = applicationsRef.current.map((app, i) => {
         if (i !== activeMidIndex) return app;
         const signers = (app.signers || []).map(s =>
           (s.email || '').toLowerCase() === signerEmailKey(signer)
             ? { ...s, signed: true, status: 'signed' }
             : s
         );
-        const allSigned = signers.length > 0 && requiredSigners.every(req => {
+        const allSigned = signers.length > 0 && required.every(req => {
           const row = signers.find(s => (s.email || '').toLowerCase() === signerEmailKey(req));
           return !row || row.signed;
         });
-        return { ...app, signers, allSigned };
-      }));
+        return { ...app, signers, allSigned: allSigned || app.allSigned };
+      });
+      setApplications(nextApps);
+      applicationsRef.current = nextApps;
 
       let jump = activeMidIndex + 1;
-      while (jump < applications.length && applications[jump]?.error) jump++;
-      if (jump < applications.length) {
+      while (jump < nextApps.length && nextApps[jump]?.error) jump++;
+      if (jump < nextApps.length) {
         setActiveMidIndex(jump);
         return;
       }
 
-      // Finished the on-device queue — only persist "application signed" if every
-      // non-error MID actually has this signer marked signed (not merely skipped errors).
-      const signable = applications.filter(a => !a.error);
+      const signable = nextApps.filter(a => !a.error);
       const reallyDone = signable.length > 0 && signable.every(app => {
         const row = findSignerLink(app, signer.signerEmail);
-        return row?.signed === true;
+        return row?.signed === true || app.allSigned === true;
       });
       if (reallyDone) {
         await markSignerSignedLocally(signer);
+        setPhase('complete');
       }
 
-      // Pick next unsigned local signer for convenience (others may already be signing remotely)
-      const nextLocal = localSigners.find(s =>
-        s.id !== signer.id && isVerifiedOrHigher(s.identityStatus) && !isApplicationSigned(s.identityStatus)
-      );
+      const nextLocal = required
+        .filter(s => isVerifiedOrHigher(s.identityStatus))
+        .find(s =>
+          s.id !== signer.id && !isApplicationSigned(s.identityStatus)
+        );
       if (nextLocal) {
         setSelectedSignerId(nextLocal.id);
         setActiveMidIndex(0);
@@ -509,6 +522,26 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
       && profile?.corporateId
       && sessionStorage.getItem(`signing_prepared_${profile.corporateId}`) === '1');
 
+  // After BoldSign completes, merchants land in Merchant Center (agents stay to preview).
+  useEffect(() => {
+    if (!isComplete || isAgentPreview || autoFinishRef.current) return;
+    if (!profile?.corporateId || typeof onComplete !== 'function') return;
+    autoFinishRef.current = true;
+    (async () => {
+      for (const s of requiredSigners) {
+        if (!isApplicationSigned(s.identityStatus)) {
+          await markSignerSignedLocally(s);
+        }
+      }
+      try {
+        await invokePortalFunction('submitToMSP', { corporateId: profile.corporateId });
+      } catch (err) {
+        console.warn('[OnboardingVerification] auto submitToMSP', err?.message || err);
+      }
+      onComplete();
+    })();
+  }, [isComplete, isAgentPreview, profile?.corporateId, onComplete]);
+
   return (
     <div className="flex flex-col">
       <div className="px-8 pt-10 pb-8 border-b border-cb-border">
@@ -703,9 +736,10 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
             <div className="border border-cb-border border-l-2 border-l-cb-accent bg-cb-surface-raised rounded-cb px-5 py-4 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-cb-accent flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-cb-body font-semibold text-white">Some signer links need a refresh</p>
+                <p className="text-cb-body font-semibold text-white">Signing link needs a refresh</p>
                 <p className="text-cb-body text-gray-400 mt-1">
-                  A co-owner may have been added after documents were prepared. Refresh rebuilds unsigned packages so every owner gets their own link.
+                  The Control Person&apos;s BoldSign link may be stale. Refresh rebuilds the unsigned package
+                  (only the Control Person signs — Beneficial Owners complete KYC only).
                 </p>
                 <button onClick={() => fetchSigningState()} className="mt-2 text-cb-body font-medium text-cb-accent hover:opacity-80">
                   Refresh signing documents
@@ -759,7 +793,7 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
               <div>
                 <p className="text-cb-body font-semibold text-white">All Agreements Signed</p>
                 <p className="text-cb-body text-gray-400 mt-1">
-                  Every required owner (≥25% or primary) has signed. Click below to submit for processing.
+                  The Control Person has signed. Click below to finish and open Merchant Center.
                 </p>
               </div>
             </div>

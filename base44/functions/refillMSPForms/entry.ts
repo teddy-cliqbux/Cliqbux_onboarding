@@ -332,9 +332,22 @@ function buildFormPayload(profile: any, location: any, merchantMID: any, signer:
   const cnpPct = moto;
   const intPct = String(online);
   let websiteUrl = String(merchantMID.businessWebsite || profile.businessWebsite || profile.website || '').trim();
-  if (websiteUrl && !/^https?:\/\//i.test(websiteUrl)) websiteUrl = `https://${websiteUrl}`;
+  if (websiteUrl) {
+    websiteUrl = websiteUrl.replace(/[.,;)\]]+$/g, '');
+    if (!/^https?:\/\//i.test(websiteUrl)) websiteUrl = `https://${websiteUrl}`;
+    try {
+      const u = new URL(websiteUrl);
+      const host = String(u.hostname || '').toLowerCase();
+      const okHost = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i.test(host);
+      if ((u.protocol !== 'http:' && u.protocol !== 'https:') || !host || host === 'localhost' || !okHost) {
+        websiteUrl = '';
+      }
+    } catch {
+      websiteUrl = '';
+    }
+  }
   if (online > 0 && !websiteUrl) {
-    throw new Error(`Business homepage URL is required when Online volume > 0% (MID "${merchantMID.dbaName || merchantMID.merchantName || merchantMID.id}").`);
+    throw new Error(`Business homepage URL is required when Online volume > 0% (MID "${merchantMID.dbaName || merchantMID.merchantName || merchantMID.id}"). Enter a valid site like https://www.example.com.`);
   }
   const ownershipRaw = profile.ownershipType || profile.taxClassType || '';
   const ownershipType = mapOwnershipType(ownershipRaw);
