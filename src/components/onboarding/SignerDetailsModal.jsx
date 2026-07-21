@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ShieldCheck, CheckCircle2, Loader2, Eye, EyeOff, Sparkles, Save, Lock } from 'lucide-react';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
@@ -11,6 +11,7 @@ import {
   isPortalAdmin as personIsPortalAdmin,
   normalizePersonRoleFlags,
 } from '@/lib/signerRules';
+import { usePlacesAddressRef } from '@/lib/usePlacesAddressRef';
 
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
@@ -36,31 +37,6 @@ const TITLE_TYPES = [
 
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
 const labelCls = 'block text-cb-caption uppercase text-gray-500 mb-1.5';
-
-function useAddressAutocomplete(onParsed) {
-  const acRef = useRef(null);
-  const callbackRef = (el) => {
-    if (!el || acRef.current) return;
-    if (!window.google?.maps?.places) return;
-    const ac = new window.google.maps.places.Autocomplete(el, {
-      types: ['address'], componentRestrictions: { country: 'us' },
-      fields: ['address_components'],
-    });
-    ac.addListener('place_changed', () => {
-      const place = ac.getPlace();
-      if (!place?.address_components) return;
-      const get = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).long_name || '';
-      const getS = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).short_name || '';
-      const street = (get(['street_number']) ? `${get(['street_number'])} ` : '') + get(['route']);
-      const city = get(['locality', 'sublocality']);
-      const state = getS(['administrative_area_level_1']);
-      const zip = get(['postal_code']);
-      onParsed({ street, city, state, zip });
-    });
-    acRef.current = ac;
-  };
-  return callbackRef;
-}
 
 // Single modal for everything about an existing signer: contact info (name /
 // email / ownership %) AND identity verification (DOB / SSN / address / title /
@@ -112,13 +88,22 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
   const [priorData, setPriorData] = useState(null);
   const [lookingUp, setLookingUp] = useState(false);
 
+  const [addressKey, setAddressKey] = useState(0);
+
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  const addrRef = useAddressAutocomplete(({ street, city, state, zip }) => {
+  const addrRef = usePlacesAddressRef(({ street, city, state, zip }) => {
     setForm(p => ({ ...p, homeStreet: street, homeCity: city, homeState: state, homeZip: zip }));
     setAddressDisplay(`${street}, ${city}, ${state} ${zip}`);
     setAddressVerified(true);
   });
+
+  const clearAddress = () => {
+    setAddressVerified(false);
+    setAddressDisplay('');
+    setForm(p => ({ ...p, homeStreet: '', homeCity: '', homeState: '', homeZip: '' }));
+    setAddressKey((k) => k + 1);
+  };
 
   useEffect(() => {
     // Only worth looking up when identity data is still missing
@@ -421,11 +406,11 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
                   <div className="flex items-center gap-2.5 bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5">
                     <CheckCircle2 className="w-4 h-4 text-cb-success flex-shrink-0" />
                     <span className="text-cb-body text-gray-300 flex-1 truncate">{addressDisplay}</span>
-                    <button type="button" onClick={() => { setAddressVerified(false); setAddressDisplay(''); setForm(p => ({ ...p, homeStreet: '', homeCity: '', homeState: '', homeZip: '' })); }}
+                    <button type="button" onClick={clearAddress}
                       className="text-gray-500 hover:text-white"><X className="w-3.5 h-3.5" /></button>
                   </div>
                 ) : (
-                  <input ref={addrRef} type="text" key="addr-input" value={addressDisplay}
+                  <input ref={addrRef} type="text" key={`addr-input-${addressKey}`} value={addressDisplay}
                     onChange={e => { setAddressDisplay(e.target.value); setAddressVerified(false); }}
                     onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
                     placeholder="Start typing to search…" autoComplete="off" className={inputCls} />

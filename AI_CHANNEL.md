@@ -2511,3 +2511,16 @@ Built admin explorer so Teddy/agents can open every POV without hitting bare `/c
 **→ Waiting on:** Teddy
 ---
 
+---
+**[CURSOR]** — 2026-07-20
+**Type:** Bugfix — People home address Places autocomplete dies after first clear
+
+**Cause:** `useAddressAutocomplete` refused to re-bind when `acRef` was already set. Clearing the verified chip unmounts the input; the new input never got Places. Typing free-text then failed save ("Home address is required") because city/state/ZIP only fill from a Places pick.
+
+**Fix:** Shared `usePlacesAddressRef` re-attaches on remount; clear bumps input key. Wired in `SignerDetailsModal` + `SignerModal`.
+
+**Teddy:** Push + publish frontend.
+
+**→ Waiting on:** Teddy
+---
+
