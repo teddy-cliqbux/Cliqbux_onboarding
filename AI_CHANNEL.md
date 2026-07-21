@@ -2524,3 +2524,16 @@ Built admin explorer so Teddy/agents can open every POV without hitting bare `/c
 **→ Waiting on:** Teddy
 ---
 
+---
+**[CURSOR]** — 2026-07-20
+**Type:** UI Fix — Self-serve empty Locations first landing matches 1×1 store UI
+
+**Problem:** No HubSpot locations → page showed Legal address Yes/No + separate "New Location" card before any store existed (old/disjointed). After save, snapped into the proper "Your store" UI.
+
+**Fix:** First empty store embeds into the **Your store** card (`Save store`); legal entity waits until the store is saved. Prefill tip / external New Location chrome only after a location exists (or for add-another).
+
+**Teddy:** Push + publish frontend. Test self-serve signup with zero locations.
+
+**→ Waiting on:** Teddy
+---
+

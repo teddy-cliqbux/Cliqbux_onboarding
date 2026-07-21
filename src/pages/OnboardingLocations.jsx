@@ -25,6 +25,7 @@ import {
   isHighRiskTavern,
   liquorComplianceBannerText,
 } from '@/lib/liquorCompliance';
+import { usePlacesAddressRef } from '@/lib/usePlacesAddressRef';
 
 // Motion communicates expand/collapse — keep it transform/opacity-friendly.
 // Height uses a short ease (not a spring): springs on height:"auto" look like
@@ -1723,7 +1724,7 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
 
 // ─── Entity Section (top-level group) ────────────────────────────────────────
 
-function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, onAddLocation, isOnly, onEntityUpdated, onDeleteEntity, showValidation, onEntityDraftStatus, allEntities = [], onMoveLocation, onMoveMid, simpleMode = false, onApplicantSave }) {
+function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLocation, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, onAddLocation, isOnly, onEntityUpdated, onDeleteEntity, showValidation, onEntityDraftStatus, allEntities = [], onMoveLocation, onMoveMid, simpleMode = false, onApplicantSave, inlineAddForm = null }) {
   const entityLocs = locations.filter(l => l.entityId === entity.entityId);
   const entityMids = merchantIDs.filter(m => entityLocs.some(l => l.id === m.locationId));
   const entityMoveTargets = allEntities
@@ -1878,6 +1879,34 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
     </>
   );
 
+  // ── 1×1 empty (self-serve, no HubSpot locations): one store card, not
+  // legal-address + separate "New Location" chrome. Legal waits until a store exists.
+  if (simpleMode && entityLocs.length === 0 && inlineAddForm) {
+    return (
+      <motion.div className="rounded-cb border border-cb-border overflow-hidden">
+        <div className="px-5 pt-5 pb-1">
+          <p className="text-cb-caption uppercase text-gray-500">Your store</p>
+          <p className="text-cb-body text-gray-400 mt-1 max-w-xl">
+            Name your storefront and pick its street address. We&apos;ll ask for legal business details after this is saved.
+          </p>
+        </div>
+        <div className="px-5 pb-5 pt-4">
+          {inlineAddForm}
+        </div>
+        <div className="border-t border-cb-border px-5 py-3.5 flex items-center gap-2.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-cb-border-strong flex-shrink-0" />
+          <p className="text-cb-body text-gray-500 min-w-0">
+            <span className="text-gray-400 font-medium">Legal entity</span>
+            {entity.legalBusinessName ? (
+              <span className="text-gray-500"> · {entity.legalBusinessName}</span>
+            ) : null}
+            <span className="text-gray-600"> — opens after you save your store</span>
+          </p>
+        </div>
+      </motion.div>
+    );
+  }
+
   // ── 1×1: store + card processing first; legal entity as required accordion ──
   if (simpleMode) {
     return (
@@ -1952,7 +1981,7 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
 // (The old AddEntityModal component was deleted 2026-07-15 — it was never
 // rendered. New entities are created inline in this form via addSelfServeLocation.)
 
-function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFirstLocation, onSaved, onCancel }) {
+function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFirstLocation, onSaved, onCancel, embedded = false }) {
   // Prefill the very first location's DBA name from the Company Name entered at
   // signup — most self-serve merchants are a single storefront, so re-typing the
   // same name here was pure friction. Only applies to the first location; later
@@ -1960,16 +1989,30 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
   const [dbaName, setDbaName] = useState(isFirstLocation ? (profile.legalName || '') : '');
   const [addressDisplay, setAddressDisplay] = useState('');
   const [parsedAddress, setParsedAddress] = useState(null);
+  const [addressKey, setAddressKey] = useState(0);
   const [unverifiedWarning, setUnverifiedWarning] = useState(false);
   const [selectedEntityId, setSelectedEntityId] = useState(defaultEntityId || entities[0]?.entityId || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const addrRef = usePlacesCallbackRef((parsed) => { setAddressDisplay(parsed.display); setParsedAddress(parsed); setUnverifiedWarning(false); });
+  const addrRef = usePlacesAddressRef(({ street, city, state, zip }) => {
+    const display = `${street}, ${city}, ${state} ${zip}`;
+    setAddressDisplay(display);
+    setParsedAddress({ street, city, state, zip, display });
+    setUnverifiedWarning(false);
+  });
   // Add Entity inline — entity is created server-side inside addSelfServeLocation
   const [showAddEntity, setShowAddEntity] = useState(false);
   const [newEntityName, setNewEntityName] = useState('');
   const [newEntityEIN, setNewEntityEIN] = useState('');
   const newEntityEinDigits = newEntityEIN.replace(/\D/g, '');
+  const hideEntityPicker = embedded && isFirstLocation && entities.length === 1 && !showAddEntity;
+
+  const clearAddress = () => {
+    setAddressDisplay('');
+    setParsedAddress(null);
+    setUnverifiedWarning(false);
+    setAddressKey((k) => k + 1);
+  };
 
   const doSave = async (addr) => {
     setSaving(true); setError('');
@@ -2010,94 +2053,116 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
     await doSave(parsedAddress);
   };
 
+  const addressField = parsedAddress ? (
+    <div className="flex items-center gap-2.5 bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5">
+      <Check className="w-4 h-4 text-cb-success flex-shrink-0" />
+      <span className="text-cb-body text-gray-300 flex-1 truncate">{addressDisplay}</span>
+      <button type="button" onClick={clearAddress}><X className="w-3.5 h-3.5 text-gray-500 hover:text-white" /></button>
+    </div>
+  ) : (
+    <>
+      <input
+        ref={addrRef}
+        key={`loc-addr-${addressKey}`}
+        type="text"
+        value={addressDisplay}
+        onChange={e => { setAddressDisplay(e.target.value); setParsedAddress(null); setUnverifiedWarning(false); }}
+        onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
+        placeholder="Start typing to search…"
+        autoComplete="off"
+        className={inputCls}
+      />
+      {unverifiedWarning && (
+        <div className="mt-2 bg-cb-surface border border-cb-border border-l border-l-cb-accent rounded-cb p-3">
+          <p className="text-cb-body font-medium text-white mb-2">Address not verified — delays may occur.</p>
+          <div className="flex gap-3">
+            <button type="button" onClick={() => doSave(null)} disabled={saving}
+              className="text-cb-body text-gray-300 border border-cb-border rounded-cb px-3 py-1.5 hover:border-cb-border-strong hover:text-white transition-colors">
+              {saving ? 'Saving…' : 'Continue Anyway'}
+            </button>
+            <button type="button" onClick={() => setUnverifiedWarning(false)} className="text-cb-body text-gray-400 hover:text-white">← Fix</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const entityBlock = hideEntityPicker ? null : (
+    <div>
+      <div className="flex items-center justify-between mb-1.5">
+        <label className={labelCls + ' mb-0'}>Legal Entity</label>
+        <button type="button" onClick={() => setShowAddEntity(e => !e)}
+          className="text-cb-caption normal-case tracking-normal text-cb-accent hover:text-white flex items-center gap-1 transition-colors">
+          <Plus className="w-3 h-3" /> New Legal Entity
+        </button>
+      </div>
+      {showAddEntity ? (
+        <div className="bg-cb-bg border border-cb-border rounded-cb p-4 space-y-3">
+          <p className="text-cb-caption uppercase text-gray-500">New Legal Entity</p>
+          <input value={newEntityName} onChange={e => setNewEntityName(e.target.value)}
+            placeholder="Legal Business Name" className={inputCls} autoFocus />
+          <input value={newEntityEIN} onChange={e => setNewEntityEIN(e.target.value.replace(/\D/g,'').slice(0,9))}
+            placeholder="Federal EIN (9 digits)" className={`${inputCls} font-mono`} />
+          {newEntityEIN.length > 0 && newEntityEinDigits.length !== 9 && (
+            <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent">{newEntityEinDigits.length}/9 digits</p>
+          )}
+          <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">This entity will be created when you submit the location below.</p>
+          <button type="button" onClick={() => { setShowAddEntity(false); setNewEntityName(''); setNewEntityEIN(''); }}
+            className="text-cb-body text-gray-500 hover:text-white border border-cb-border px-3 py-2 rounded-cb transition-colors">Cancel</button>
+        </div>
+      ) : (
+        <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)}
+          className={inputCls} style={{ colorScheme: 'dark' }}>
+          {entities.map(e => (
+            <option key={e.entityId} value={e.entityId}>
+              {e.legalBusinessName}{e.federalEIN ? ` — ${formatEIN(e.federalEIN)}` : ''}
+            </option>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+
+  const formBody = (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className={embedded ? 'space-y-4' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>
+        <div>
+          <label className={labelCls}>Store / DBA Name *</label>
+          <input value={dbaName} onChange={e => setDbaName(e.target.value)} placeholder="e.g. Main Street Cafe" className={inputCls} autoFocus />
+        </div>
+        <div>
+          <label className={labelCls}>Physical Address *</label>
+          {addressField}
+        </div>
+      </div>
+
+      {entityBlock}
+
+      {error && <div className="bg-cb-surface border border-cb-border border-l border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-cb-danger">{error}</div>}
+      <div className="flex gap-3 pt-1">
+        <button type="submit" disabled={saving}
+          className="flex items-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 text-cb-bg font-semibold text-cb-body px-5 py-3 rounded-cb transition-all">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (embedded ? null : <Plus className="w-4 h-4" />)}
+          {saving ? 'Saving…' : (embedded && isFirstLocation ? 'Save store' : 'Add Location')}
+        </button>
+        {onCancel && !(embedded && isFirstLocation) && (
+          <button type="button" onClick={onCancel} className="text-cb-body text-gray-400 hover:text-white border border-cb-border px-5 py-3 rounded-cb transition-colors">Cancel</button>
+        )}
+      </div>
+    </form>
+  );
+
+  if (embedded) return formBody;
+
   return (
     <div className="bg-cb-surface-raised border border-cb-border rounded-cb p-6">
       <div className="flex items-center justify-between mb-5">
         <h3 className="text-cb-caption uppercase text-gray-500">New Location</h3>
-        <button onClick={onCancel} className="text-gray-500 hover:text-white p-1.5 rounded-cb"><X className="w-4 h-4" /></button>
+        {onCancel && (
+          <button onClick={onCancel} className="text-gray-500 hover:text-white p-1.5 rounded-cb"><X className="w-4 h-4" /></button>
+        )}
       </div>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>Store / DBA Name *</label>
-            <input value={dbaName} onChange={e => setDbaName(e.target.value)} placeholder="e.g. Main Street Cafe" className={inputCls} autoFocus />
-          </div>
-          <div>
-            <label className={labelCls}>Physical Address *</label>
-            {parsedAddress ? (
-              <div className="flex items-center gap-2.5 bg-cb-bg border border-cb-border rounded-cb px-3 py-2.5">
-                <Check className="w-4 h-4 text-cb-success flex-shrink-0" />
-                <span className="text-cb-body text-gray-300 flex-1 truncate">{addressDisplay}</span>
-                <button type="button" onClick={() => { setAddressDisplay(''); setParsedAddress(null); }}><X className="w-3.5 h-3.5 text-gray-500 hover:text-white" /></button>
-              </div>
-            ) : (
-              <>
-                <input ref={addrRef} type="text" value={addressDisplay}
-                  onChange={e => { setAddressDisplay(e.target.value); setParsedAddress(null); setUnverifiedWarning(false); }}
-                  onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
-                  placeholder="Start typing to search…" autoComplete="off" className={inputCls} />
-                {unverifiedWarning && (
-                  <div className="mt-2 bg-cb-surface border border-cb-border border-l border-l-cb-accent rounded-cb p-3">
-                    <p className="text-cb-body font-medium text-white mb-2">Address not verified — delays may occur.</p>
-                    <div className="flex gap-3">
-                      <button type="button" onClick={() => doSave(null)} disabled={saving}
-                        className="text-cb-body text-gray-300 border border-cb-border rounded-cb px-3 py-1.5 hover:border-cb-border-strong hover:text-white transition-colors">
-                        {saving ? 'Saving…' : 'Continue Anyway'}
-                      </button>
-                      <button type="button" onClick={() => setUnverifiedWarning(false)} className="text-cb-body text-gray-400 hover:text-white">← Fix</button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Entity selector — always shown so user can also add a new entity */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className={labelCls + ' mb-0'}>Legal Entity</label>
-            <button type="button" onClick={() => setShowAddEntity(e => !e)}
-              className="text-cb-caption normal-case tracking-normal text-cb-accent hover:text-white flex items-center gap-1 transition-colors">
-              <Plus className="w-3 h-3" /> New Legal Entity
-            </button>
-          </div>
-          {showAddEntity ? (
-            <div className="bg-cb-bg border border-cb-border rounded-cb p-4 space-y-3">
-              <p className="text-cb-caption uppercase text-gray-500">New Legal Entity</p>
-              <input value={newEntityName} onChange={e => setNewEntityName(e.target.value)}
-                placeholder="Legal Business Name" className={inputCls} autoFocus />
-              <input value={newEntityEIN} onChange={e => setNewEntityEIN(e.target.value.replace(/\D/g,'').slice(0,9))}
-                placeholder="Federal EIN (9 digits)" className={`${inputCls} font-mono`} />
-              {newEntityEIN.length > 0 && newEntityEinDigits.length !== 9 && (
-                <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent">{newEntityEinDigits.length}/9 digits</p>
-              )}
-              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">This entity will be created when you submit the location below.</p>
-              <button type="button" onClick={() => { setShowAddEntity(false); setNewEntityName(''); setNewEntityEIN(''); }}
-                className="text-cb-body text-gray-500 hover:text-white border border-cb-border px-3 py-2 rounded-cb transition-colors">Cancel</button>
-            </div>
-          ) : (
-            <select value={selectedEntityId} onChange={e => setSelectedEntityId(e.target.value)}
-              className={inputCls} style={{ colorScheme: 'dark' }}>
-              {entities.map(e => (
-                <option key={e.entityId} value={e.entityId}>
-                  {e.legalBusinessName}{e.federalEIN ? ` — ${formatEIN(e.federalEIN)}` : ''}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-
-        {error && <div className="bg-cb-surface border border-cb-border border-l border-l-cb-danger rounded-cb px-4 py-3 text-cb-body text-cb-danger">{error}</div>}
-        <div className="flex gap-3 pt-1">
-          <button type="submit" disabled={saving}
-            className="flex items-center gap-2 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 text-cb-bg font-semibold text-cb-body px-5 py-3 rounded-cb transition-all">
-            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-            {saving ? 'Adding…' : 'Add Location'}
-          </button>
-          <button type="button" onClick={onCancel} className="text-cb-body text-gray-400 hover:text-white border border-cb-border px-5 py-3 rounded-cb transition-colors">Cancel</button>
-        </div>
-      </form>
+      {formBody}
     </div>
   );
 }
@@ -2479,9 +2544,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
       {/* Hierarchy: Entity → Locations → MIDs */}
       <div className="px-4 sm:px-8 py-8 space-y-6">
-        {/* Prefill verification notice — full gold callout for agents + first
-            applicant visit; quiet tip after applicant's first successful save. */}
-        {showFullVerify ? (
+        {/* Prefill verification notice — only after a store exists. Empty
+            self-serve first landing has nothing to "verify" yet. */}
+        {locations.length > 0 && (showFullVerify ? (
           <div className="flex items-start gap-3 bg-cb-surface-raised border border-cb-border border-l border-l-cb-accent rounded-cb px-5 py-4">
             <Info className="w-4 h-4 text-cb-accent flex-shrink-0 mt-0.5" />
             <p className="text-cb-body text-gray-400 leading-relaxed">
@@ -2495,7 +2560,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           <p className="text-cb-body text-gray-500">
             Tip: use the <Pencil className="w-3 h-3 inline -mt-0.5" /> edit icons if anything looks off.
           </p>
-        )}
+        ))}
 
         {/* One-time multi-store coach when hierarchy expands beyond 1×1 */}
         {showMultiCoach && (
@@ -2539,7 +2604,11 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
 
         <DragDropContext onDragEnd={onDragEnd}>
           <div className="space-y-6">
-            {entities.map(entity => (
+            {entities.map(entity => {
+              const emptyFirstStore = locations.length === 0
+                && entities.length === 1
+                && addFormEntityId === entity.entityId;
+              return (
               <EntitySection
                 key={entity.entityId}
                 entity={entity}
@@ -2562,13 +2631,28 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
                 onMoveMid={moveMidToLocation}
                 simpleMode={entities.length === 1 && locations.length <= 1}
                 onApplicantSave={markApplicantSave}
+                inlineAddForm={emptyFirstStore ? (
+                  <AddLocationForm
+                    corporateId={profile.corporateId}
+                    profile={profile}
+                    entities={entities}
+                    defaultEntityId={entity.entityId}
+                    isFirstLocation
+                    embedded
+                    onSaved={handleLocationSaved}
+                    onCancel={null}
+                  />
+                ) : null}
               />
-            ))}
+              );
+            })}
           </div>
         </DragDropContext>
 
-        {/* Add Location Form — shown below when triggered */}
-        {addFormEntityId !== null && (
+        {/* Add Location Form — additional locations only. First empty store is
+            embedded in EntitySection ("Your store") so self-serve doesn't land
+            on legal-address + separate New Location chrome. */}
+        {addFormEntityId !== null && !(locations.length === 0 && entities.length === 1) && (
           <AddLocationForm
             corporateId={profile.corporateId}
             profile={profile}
@@ -2616,10 +2700,10 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
           <p className="text-center text-cb-body text-gray-500">
             {hasUnsavedEntityDetails
               ? 'You have unsaved business details — click Save Details above to store them.'
+              : locations.length === 0
+              ? 'Add your store name and address above to continue.'
               : !businessComplete
               ? 'Complete business details for each entity to continue.'
-              : locations.length === 0
-              ? 'Add at least one location to continue.'
               : `${totalMids - completeMids} processing account${totalMids - completeMids !== 1 ? 's' : ''} still need a business category and sales info.`}
           </p>
         )}
