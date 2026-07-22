@@ -2583,6 +2583,18 @@ Copy: “Preparing your signing documents” / stay on page; iframe: “Loading 
 
 ---
 **[CURSOR]** — 2026-07-21
+**Type:** Bug Fix — ProgressTracker bubble + Banking completed grey
+**Re:** Teddy screenshot: double bubble on Locations; Banking grey though bank done
+
+### Fixes
+1. Removed absolute `layoutId` capsule behind the circle (misaligned vs label-width buttons). `layoutId` now on the active circle itself.
+2. `allCompletedSteps` now derives **locations** + **banking** from live data (same spirit as people/verify) so refresh keeps Banking gold when routing numbers are saved.
+
+**Waiting on:** Teddy — push frontend; revisit Locations with banking already connected.
+---
+
+---
+**[CURSOR]** — 2026-07-21
 **Type:** Action Taken — Legal entity pencil edit + restore location nesting
 **Re:** Plan legal_entity_ui_nest — addresses were breaking hierarchy between entity header and locations
 

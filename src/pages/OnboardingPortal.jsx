@@ -894,16 +894,19 @@ export default function OnboardingPortal() {
   // post-submission dashboard). 'Quote Signed' status = HubSpot esign came back
   // SIGNED via syncFromHubspot or the quote_signed webhook.
   const quoteSigned = applicationStatus === 'Quote Signed' || !!profile.quoteSignedAt;
-  const allCompletedSteps = {
-    ...completedSteps,
-    ...(quoteSigned ? { quote: true } : {}),
-    // Always reflect live roster so ProgressTracker matches Welcome Hub after refresh
-    ...(isRosterConfiguredForPeopleStep(portalSigners) ? { people: true } : {}),
-    ...(isRosterReadyForSigning(portalSigners) || signersVerified ? { verify: true } : {}),
-  };
   const hasLocsForTracker = (locations?.length ?? 0) > 0;
   const hasBankForTracker = hasLocsForTracker && locations.every((l) => l.bankDetails?.routingNumber);
   const dataReadyForTracker = readiness ? readiness.complete : hasLocsForTracker;
+  // Derive from live saved data (not only in-memory Continue clicks) so refresh
+  // keeps Banking/Locations gold when the merchant already finished them.
+  const allCompletedSteps = {
+    ...completedSteps,
+    ...(quoteSigned ? { quote: true } : {}),
+    ...(isRosterConfiguredForPeopleStep(portalSigners) ? { people: true } : {}),
+    ...(hasLocsForTracker && dataReadyForTracker ? { locations: true } : {}),
+    ...(hasBankForTracker ? { banking: true } : {}),
+    ...(isRosterReadyForSigning(portalSigners) || signersVerified ? { verify: true } : {}),
+  };
   let currentTrackerStep = stepToKey[step] || 'people';
   if (step === STEP_WELCOME) {
     if (!(allCompletedSteps.people || signersVerified || hasLocsForTracker)) currentTrackerStep = 'people';

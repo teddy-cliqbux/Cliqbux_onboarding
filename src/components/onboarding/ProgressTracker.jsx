@@ -80,15 +80,10 @@ export default function ProgressTracker({
                 className={`group relative flex flex-col items-center gap-1.5 min-h-11 ${canClick ? 'cursor-pointer' : 'cursor-default'}`}
                 title={canClick ? `Go to ${step.label}` : step.label}
               >
-                {/* Gold capsule — single shared layoutId glides under the active step */}
-                {isActive && (
-                  <motion.div
-                    layoutId={reduceMotion ? undefined : 'cb-progress-capsule'}
-                    className="absolute -top-1 left-1/2 -translate-x-1/2 w-10 h-10 rounded-full bg-cb-accent-muted border border-cb-accent/35 pointer-events-none"
-                    transition={transition}
-                  />
-                )}
+                {/* layoutId on the circle itself — a separate absolute capsule was
+                    misaligning (double bubble) when steps have different label widths. */}
                 <motion.div
+                  layoutId={!reduceMotion && isActive ? 'cb-progress-capsule' : undefined}
                   className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-cb-body font-semibold ${circleClass}`}
                   whileTap={!reduceMotion && canClick ? { scale: 0.94 } : undefined}
                   transition={transition}
