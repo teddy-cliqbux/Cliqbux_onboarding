@@ -306,7 +306,10 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
   const { formsLocked } = usePortalLock();
   const locked = getMidLocked(mid) || formsLocked;
   const imported = getMidImported(mid);
-  const [editing, setEditing] = useState(!mid.mccCode && !mid.mccHelpRequested && !locked);
+  // Nested list: summary only until Edit. Combined 1×1 still auto-opens when incomplete.
+  const [editing, setEditing] = useState(
+    combined ? (!mid.mccCode && !mid.mccHelpRequested && !locked) : false
+  );
   const [form, setForm] = useState({
     merchantName: mid.merchantName || mid.dbaName || dbaName || '',
     mccCode: mid.mccCode || '',
@@ -740,7 +743,16 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
 
 function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchantIDAdded, onMerchantIDUpdated, onMerchantIDDeleted, onLocationUpdated, index, showValidation, allLocations = [], entityMoveTargets = [], onMoveLocation, onMoveMid, simpleMode = false, onApplicantSave }) {
   const { formsLocked } = usePortalLock();
-  const locMids = merchantIDs.filter(c => c.locationId === location.id);
+  // Oldest-first so the first-created MID (usually same name as the location) leads the list.
+  const locMids = merchantIDs
+    .filter(c => c.locationId === location.id)
+    .slice()
+    .sort((a, b) => {
+      const ta = new Date(a.created_date || a.createdAt || 0).getTime();
+      const tb = new Date(b.created_date || b.createdAt || 0).getTime();
+      if (ta !== tb) return ta - tb;
+      return String(a.id).localeCompare(String(b.id));
+    });
   // Mobile alternative to drag-and-drop (grips are hidden below sm).
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const midMoveTargets = allLocations
@@ -773,7 +785,6 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
     setLocEditError('');
     setLocVerified(false);
     setEditingLoc(true);
-    setExpanded(true);
   };
   const saveLocEdit = async () => {
     if (!locForm.dbaName.trim()) { setLocEditError('Location name is required'); return; }
@@ -798,7 +809,6 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
     } catch (err) { setLocEditError(err.message || 'Save failed'); }
     finally { setLocSaving(false); }
   };
-  const [expanded, setExpanded] = useState(locMids.length === 0 || locMids.some(m => !m.mccCode && !m.mccHelpRequested));
   const [addingMid, setAddingMid] = useState(false);
   const [addMidName, setAddMidName] = useState('');
   const [addMidSaving, setAddMidSaving] = useState(false);
@@ -806,11 +816,6 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
   const allMidsComplete = locMids.length > 0 && locMids.every(m => isMidComplete(m, location.businessState));
   const locationError = showValidation && !allMidsComplete;
   const locNeedsLiquorDocs = locMids.some(m => requiresLiquorCompliance(location.businessState, m.mccCode));
-
-  // Auto-expand when validation fires and this location is incomplete
-  useEffect(() => {
-    if (locationError) setExpanded(true);
-  }, [locationError]);
 
   const handleAddMid = async () => {
     setAddMidSaving(true);
@@ -971,7 +976,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
             <span {...provided.dragHandleProps} className="hidden sm:block text-gray-600 hover:text-gray-300 cursor-grab active:cursor-grabbing flex-shrink-0">
               <GripVertical className="w-4 h-4" />
             </span>
-            <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(e => !e)}>
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <p className="text-cb-body font-semibold text-white truncate">{location.dbaName}</p>
                 {locationError && (
@@ -1013,10 +1018,6 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => setExpanded(e => !e)} aria-expanded={expanded} aria-label="Toggle location details"
-                className="p-3 -m-1 sm:p-2 sm:m-0 text-gray-500 hover:text-white transition-colors">
-                {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-              </button>
             </div>
           </div>
 
@@ -1035,15 +1036,8 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
 
           {locEditPanel}
 
-          {/* MIDs — nested droppable, indented off a hairline rail */}
-          <AnimatePresence initial={false}>
-          {expanded && (
-            <motion.div
-              key="loc-mids"
-              {...accordionProps}
-              className="overflow-hidden"
-            >
-            <div className="border-t border-cb-border px-4 pb-4 pt-3">
+          {/* MIDs — always visible; indented off a hairline rail when 2+ accounts */}
+          <div className="border-t border-cb-border px-4 pb-4 pt-3">
               {/* The org-chart chrome (caption + rail) only appears once there is
                   actually a hierarchy to show — single-account locations stay flat. */}
               {locMids.length > 1 && (
@@ -1108,9 +1102,6 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
                 )}
               </div>
             </div>
-            </motion.div>
-          )}
-          </AnimatePresence>
         </motion.div>
       )}
     </Draggable>

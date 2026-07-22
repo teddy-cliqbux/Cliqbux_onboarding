@@ -2568,3 +2568,16 @@ Copy: “Preparing your signing documents” / stay on page; iframe: “Loading 
 **Waiting on:** Teddy — push frontend.
 ---
 
+---
+**[CURSOR]** — 2026-07-21
+**Type:** Action Taken — Locations always-open MID list + creation order
+**Re:** Teddy: no location chevron collapse; keep processing accounts visible; first-created MID first
+
+### Shipped (OnboardingLocations.jsx only)
+1. Location cards no longer collapse — chevron/toggle removed; MID list always shown
+2. Nested MidCard starts as summary (edit fields only after pencil); 1×1 combined unchanged
+3. `locMids` sorted oldest-first by `created_date` / `createdAt` (then id)
+
+**Waiting on:** Teddy — push frontend; check multi-location Island Pacific order + no chevron.
+---
+
