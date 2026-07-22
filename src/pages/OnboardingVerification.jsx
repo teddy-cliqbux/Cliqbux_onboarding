@@ -18,7 +18,7 @@ import {
   clearSigningFixStep,
   resolveSigningFixStep,
 } from '@/lib/signingErrorRouting';
-
+import { SigningLoadWait, SigningIframeOverlay } from '@/components/onboarding/SigningLoadWait';
 // How often to poll MSPWare for signing completion (ms) — ground truth / safety net
 const POLL_INTERVAL_MS = 5000;
 const BOLDSIGN_ORIGIN = 'https://app.boldsign.com';
@@ -69,6 +69,7 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
 
   const [submitting, setSubmitting]   = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [iframeReady, setIframeReady] = useState(false);
   const autoFinishRef = useRef(false);
   const applicationsRef = useRef(applications);
   const requiredSignersRef = useRef([]);
@@ -114,6 +115,11 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
     stickySigningUrlsRef.current[stickyFrameKey] = rawIframeUrl;
   }
   const iframeUrl = (stickyFrameKey && stickySigningUrlsRef.current[stickyFrameKey]) || rawIframeUrl || null;
+
+  // Reset iframe paint wait whenever the sticky BoldSign URL / signer+MID changes
+  useEffect(() => {
+    setIframeReady(false);
+  }, [stickyFrameKey, iframeUrl]);
 
   const totalCount = applications.length;
   const packagesAllSigned = totalCount > 0 && applications.every(a => a.allSigned || a.error);
@@ -642,11 +648,7 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
           )}
 
           {allVerified && loadingSigning && (
-            <div className="border border-cb-border rounded-cb bg-cb-surface-raised p-5 space-y-3" aria-busy="true" aria-label="Preparing signing documents">
-              <div className="skeleton h-4 w-48 !rounded-cb" />
-              <div className="skeleton h-3 w-64 !rounded-cb" />
-              <div className="skeleton h-40 w-full !rounded-cb mt-2" />
-            </div>
+            <SigningLoadWait />
           )}
 
           {allVerified && !loadingSigning && applications.length === 0 && !signingError && (
@@ -817,14 +819,18 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
                   </span>
                 </div>
               </div>
-              <iframe
-                key={stickyFrameKey || `${selectedSigner.id}-${activeApp.mspApplicationNo}`}
-                src={iframeUrl}
-                title={`Merchant Processing Agreement — ${activeApp.merchantIDName || activeApp.merchantName}`}
-                className="w-full"
-                style={{ height: 680, border: 'none', display: 'block' }}
-                allow="same-origin"
-              />
+              <div className="relative" style={{ minHeight: 680 }}>
+                <SigningIframeOverlay visible={!!iframeUrl && !iframeReady} />
+                <iframe
+                  key={stickyFrameKey || `${selectedSigner.id}-${activeApp.mspApplicationNo}`}
+                  src={iframeUrl}
+                  title={`Merchant Processing Agreement — ${activeApp.merchantIDName || activeApp.merchantName}`}
+                  className="w-full"
+                  style={{ height: 680, border: 'none', display: 'block' }}
+                  allow="same-origin"
+                  onLoad={() => setIframeReady(true)}
+                />
+              </div>
               <div className="bg-cb-surface-raised border-t border-cb-border px-5 py-3 flex items-center justify-between">
                 <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
                   Other owners can sign on their own devices at the same time. Switch who is signing above anytime.

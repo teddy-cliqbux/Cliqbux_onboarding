@@ -3,7 +3,7 @@ import { CheckCircle, Loader2, AlertTriangle, PenLine } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
 import { isApplicationSigned, isVerifiedOrHigher } from '@/lib/signerLifecycle';
-
+import { SigningLoadWait, SigningIframeOverlay } from '@/components/onboarding/SigningLoadWait';
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
   { value: '04', label: 'Apr' }, { value: '05', label: 'May' }, { value: '06', label: 'Jun' },
@@ -39,6 +39,7 @@ export default function VerifyIdentity() {
   const [activeMidIndex, setActiveMidIndex] = useState(0);
   const [signingHint, setSigningHint] = useState('');
   const [loadingSession, setLoadingSession] = useState(false);
+  const [iframeReady, setIframeReady] = useState(false);
   const advancingRef = useRef(false);
   const pollRef = useRef(null);
   const stickySigningUrlsRef = useRef({});
@@ -248,6 +249,10 @@ export default function VerifyIdentity() {
     || rawIframeUrl
     || null;
 
+  useEffect(() => {
+    setIframeReady(false);
+  }, [stickyKey, iframeUrl]);
+
   return (
     <div style={{ background: '#111827', minHeight: '100vh', fontFamily: 'Inter, sans-serif', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 16px' }}>
       <div className="mb-8">
@@ -404,24 +409,26 @@ export default function VerifyIdentity() {
               </div>
             )}
 
-            {(loadingSession || signingHint) && !iframeUrl && (
-              <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900 flex items-start gap-2">
-                {loadingSession && <Loader2 className="w-4 h-4 animate-spin flex-shrink-0 mt-0.5" />}
-                <div>
-                  <p>{signingHint || 'Loading signing documents…'}</p>
-                  <button
-                    type="button"
-                    onClick={() => loadSigningSession(token)}
-                    className="mt-2 text-amber-700 font-semibold hover:underline"
-                  >
-                    Refresh
-                  </button>
-                </div>
+            {loadingSession && !iframeUrl && (
+              <SigningLoadWait tone="light" />
+            )}
+
+            {!loadingSession && signingHint && !iframeUrl && (
+              <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                <p>{signingHint}</p>
+                <button
+                  type="button"
+                  onClick={() => loadSigningSession(token)}
+                  className="mt-2 text-amber-700 font-semibold hover:underline"
+                >
+                  Refresh
+                </button>
               </div>
             )}
 
             {iframeUrl && (
-              <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <div className="rounded-xl border border-gray-200 overflow-hidden relative" style={{ minHeight: 640 }}>
+                <SigningIframeOverlay tone="light" visible={!iframeReady} />
                 <iframe
                   key={stickyKey || activeApp?.mspApplicationNo}
                   src={iframeUrl}
@@ -429,6 +436,7 @@ export default function VerifyIdentity() {
                   className="w-full"
                   style={{ height: 640, border: 'none', display: 'block' }}
                   allow="same-origin"
+                  onLoad={() => setIframeReady(true)}
                 />
               </div>
             )}

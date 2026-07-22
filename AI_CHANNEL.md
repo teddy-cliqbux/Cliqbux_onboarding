@@ -2554,3 +2554,17 @@ Built admin explorer so Teddy/agents can open every POV without hitting bare `/c
 **→ Waiting on:** Teddy
 ---
 
+---
+**[CURSOR]** — 2026-07-21
+**Type:** Action Taken — Signing URL loading guidance
+**Re:** Tester confusion while BoldSign URL loaded (no wait affordance)
+
+### Shipped
+- `SigningLoadWait` + `SigningIframeOverlay` (animated circle + indeterminate bar + copy)
+- Portal Sign step (`OnboardingVerification`): replaces silent skeleton during `loadingSigning`; overlay until iframe `onLoad`
+- Remote `/verify` signing phase: same wait pattern (light tone)
+
+Copy: “Preparing your signing documents” / stay on page; iframe: “Loading your signing form… Please wait.”
+**Waiting on:** Teddy — push frontend.
+---
+

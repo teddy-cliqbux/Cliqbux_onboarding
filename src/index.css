@@ -170,6 +170,16 @@
   animation: logo-breathe 2.4s ease-in-out infinite;
 }
 
+/* Indeterminate bar while BoldSign / signing packages load */
+@keyframes signing-wait-bar {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+
+.signing-wait-bar {
+  animation: signing-wait-bar 1.4s ease-in-out infinite;
+}
+
 /* Google Places autocomplete dropdown — must sit above all modals */
 .pac-container {
   z-index: 99999 !important;
