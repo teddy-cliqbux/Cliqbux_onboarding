@@ -2581,3 +2581,19 @@ Copy: “Preparing your signing documents” / stay on page; iframe: “Loading 
 **Waiting on:** Teddy — push frontend; check multi-location Island Pacific order + no chevron.
 ---
 
+---
+**[CURSOR]** — 2026-07-21
+**Type:** Action Taken — Legal entity pencil edit + restore location nesting
+**Re:** Plan legal_entity_ui_nest — addresses were breaking hierarchy between entity header and locations
+
+### Shipped (OnboardingLocations.jsx only)
+1. `EntitySection` owns `legalEditOpen` — header **Pencil** toggles full legal edit (not rename-only)
+2. Collapsed: name + quiet summary (`LLC · Est. … · legal address…`) → **locations immediately under header**
+3. Expanded: legal name + business details + legal/mailing addresses + one **Save Details**
+4. simpleMode: Legal entity row uses Pencil (chevron removed)
+5. Successful complete Save collapses; validation force-opens when incomplete
+6. No schema / MSPWare / save-path changes beyond wiring existing saves into one surface
+
+**Waiting on:** Teddy — push frontend; verify multi-location nesting + 1×1 pencil.
+---
+

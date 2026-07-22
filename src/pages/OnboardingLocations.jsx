@@ -1169,8 +1169,9 @@ function entityMissingFields({ ownershipType, taxClassType, establishmentYear, f
   return missing;
 }
 
-function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, forceExpand, onApplicantSave }) {
+function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, forceExpand, onApplicantSave, children, onSaveSuccess }) {
   const { formsLocked, unlocking, onRequestUnlock } = usePortalLock();
+  const [legalName, setLegalName] = useState(entity.legalBusinessName || '');
   const [ownershipType, setOwnershipType] = useState(entity.ownershipType || '');
   const [taxClassType, setTaxClassType]   = useState(entity.taxClassType  || '');
   const [estYear, setEstYear]             = useState(entity.establishmentYear || '');
@@ -1181,44 +1182,44 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, for
   const [federalEIN, setFederalEIN]       = useState(entity.federalEIN || '');
   const einDigits = federalEIN.replace(/\D/g, '');
   const [saved, setSaved] = useState(entityMissingFields(entity).length === 0);
-  const [expanded, setExpanded] = useState(!saved);
 
   // Re-sync when parent reloads entity data (e.g. after navigating away and back)
   useEffect(() => {
+    setLegalName(entity.legalBusinessName || '');
     setOwnershipType(entity.ownershipType || '');
     setTaxClassType(entity.taxClassType || '');
     setEstYear(entity.establishmentYear || '');
     setFederalEIN(entity.federalEIN || '');
-    const complete = entityMissingFields(entity).length === 0;
-    setSaved(complete);
-    setExpanded(!complete);
-  }, [entity.entityId, entity.ownershipType, entity.taxClassType, entity.establishmentYear, entity.federalEIN]);
-
-  useEffect(() => {
-    if (forceExpand) setExpanded(true);
-  }, [forceExpand]);
+    setSaved(entityMissingFields(entity).length === 0);
+  }, [entity.entityId, entity.legalBusinessName, entity.ownershipType, entity.taxClassType, entity.establishmentYear, entity.federalEIN]);
 
   // Report live form gaps to the parent Continue banner (avoids listing fields
   // the merchant already typed but hasn't saved yet).
   useEffect(() => {
     if (!onDraftStatus) return;
-    const liveMissing = entityMissingFields({
-      ownershipType, taxClassType, establishmentYear: estYear, federalEIN,
-    });
-    const persistedMissing = entityMissingFields({
-      ownershipType: entity.ownershipType,
-      taxClassType: entity.taxClassType,
-      establishmentYear: entity.establishmentYear,
-      federalEIN: entity.federalEIN,
-    });
+    const liveMissing = [
+      ...(!String(legalName || '').trim() ? ['Legal business name'] : []),
+      ...entityMissingFields({
+        ownershipType, taxClassType, establishmentYear: estYear, federalEIN,
+      }),
+    ];
+    const persistedMissing = [
+      ...(!String(entity.legalBusinessName || '').trim() ? ['Legal business name'] : []),
+      ...entityMissingFields({
+        ownershipType: entity.ownershipType,
+        taxClassType: entity.taxClassType,
+        establishmentYear: entity.establishmentYear,
+        federalEIN: entity.federalEIN,
+      }),
+    ];
     onDraftStatus({
       entityId: entity.entityId,
-      name: entity.legalBusinessName || 'Legal Entity',
+      name: legalName || entity.legalBusinessName || 'Legal Entity',
       missing: liveMissing,
       needsSave: liveMissing.length === 0 && persistedMissing.length > 0,
     });
   }, [
-    ownershipType, taxClassType, estYear, federalEIN,
+    legalName, ownershipType, taxClassType, estYear, federalEIN,
     entity.entityId, entity.legalBusinessName,
     entity.ownershipType, entity.taxClassType, entity.establishmentYear, entity.federalEIN,
     onDraftStatus,
@@ -1227,20 +1228,23 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, for
   const [saving, setSaving]     = useState(false);
   const [saveError, setSaveError] = useState(null);
 
-  const liveMissing = entityMissingFields({
-    ownershipType, taxClassType, establishmentYear: estYear, federalEIN,
-  });
+  const liveMissing = [
+    ...(!String(legalName || '').trim() ? ['Legal business name'] : []),
+    ...entityMissingFields({
+      ownershipType, taxClassType, establishmentYear: estYear, federalEIN,
+    }),
+  ];
   const canSave = liveMissing.length === 0;
-  const isComplete = saved && canSave;
-  const showComplete = isComplete;
 
   const handleSave = async () => {
     if (!canSave) return;
     setSaving(true);
     setSaveError(null);
     try {
+      const nameTrim = legalName.trim();
       const res = await invokePortalFunction('manageLegalEntity', {
         action: 'edit', corporateId, entityId: entity.entityId,
+        legalBusinessName: nameTrim,
         ownershipType, taxClassType, establishmentYear: estYear, federalEIN: einDigits,
       });
       if (res.data?.error) throw new Error(res.data.error);
@@ -1250,9 +1254,18 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, for
         currentOwnershipYears: years, currentOwnershipMonths: months,
       });
       setSaved(true);
+      const updated = {
+        ...entity,
+        legalBusinessName: nameTrim,
+        ownershipType,
+        taxClassType,
+        establishmentYear: estYear,
+        federalEIN: einDigits,
+      };
       // Only notify parent once on explicit save — no feedback loop
-      onUpdated({ ...entity, ownershipType, taxClassType, establishmentYear: estYear, federalEIN: einDigits });
+      onUpdated(updated);
       onApplicantSave?.();
+      onSaveSuccess?.(updated);
     } catch (err) {
       setSaveError(err?.message || 'Save failed');
     } finally {
@@ -1260,107 +1273,94 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, for
     }
   };
 
+  // Parent mounts this only when legal edit is open — no chevron accordion.
   return (
-    <div className="border-t border-cb-border px-5 py-2.5">
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className="flex items-center gap-2.5 text-cb-body w-full text-left py-1 transition-colors"
-      >
-        {showComplete
-          ? <Check className="w-3.5 h-3.5 flex-shrink-0 text-cb-success" />
-          : <span className="w-1.5 h-1.5 rounded-full bg-cb-accent flex-shrink-0" />}
-        <span className="flex-1">
-          {showComplete
-            ? <><span className="text-gray-300 font-medium">{OWNERSHIP_TYPES.find(o => o.value === ownershipType)?.label || ownershipType}</span><span className="text-gray-600 ml-1.5">· Est. {estYear}</span></>
-            : <span className="text-white font-medium">Business details</span>}
-        </span>
-        <div className="flex items-center gap-2.5 flex-shrink-0">
-          {!showComplete && <span className="text-cb-caption uppercase text-cb-accent">Required</span>}
-          {expanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-500" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-500" />}
+    <div className="border-t border-cb-border px-5 py-4 space-y-4">
+      <div>
+        <label className={labelCls}>Legal business name *</label>
+        <input
+          value={legalName}
+          onChange={e => setLegalName(e.target.value)}
+          placeholder="Legal business name"
+          className={inputCls}
+        />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Business Entity Type *</label>
+          <select value={ownershipType} onChange={e => setOwnershipType(e.target.value)}
+            className={inputCls} style={{ colorScheme: 'dark' }}>
+            <option value="">Select…</option>
+            {OWNERSHIP_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
         </div>
-      </button>
+        <div>
+          <label className={labelCls}>IRS Tax Classification *</label>
+          <select value={taxClassType} onChange={e => setTaxClassType(e.target.value)}
+            className={inputCls} style={{ colorScheme: 'dark' }}>
+            <option value="">Select…</option>
+            {(ownershipType === 'LIMITED_COMPANY' ? LLC_TAX_CLASS_TYPES : TAX_CLASS_TYPES)
+              .map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Year Established *</label>
+          <input type="number" value={estYear}
+            onChange={e => setEstYear(e.target.value)}
+            placeholder="e.g. 2018" min="1900" max={new Date().getFullYear()} className={inputCls} />
+          {estYear && (() => {
+            const { years, months } = deriveOwnership(estYear);
+            return <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1.5">{years} yr{years !== '1' ? 's' : ''}{months !== '0' ? ` ${months} mo` : ''} in operation</p>;
+          })()}
+        </div>
+        <div>
+          <label className={labelCls}>Federal EIN *</label>
+          <input
+            value={federalEIN}
+            onChange={e => setFederalEIN(e.target.value.replace(/\D/g, '').slice(0, 9))}
+            placeholder="9 digits"
+            className={`${inputCls} font-mono ${forceExpand && einDigits.length !== 9 ? 'border-cb-danger focus:ring-cb-danger' : ''}`}
+          />
+          {federalEIN.length > 0 && einDigits.length !== 9 && (
+            <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">{einDigits.length}/9 digits</p>
+          )}
+          {forceExpand && einDigits.length === 0 && (
+            <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger mt-1.5">Required to continue — enter the 9-digit EIN, then Save Details</p>
+          )}
+        </div>
+      </div>
 
-      <AnimatePresence initial={false}>
-      {expanded && (
-        <motion.div key="entity-details" {...accordionProps} className="overflow-hidden">
-        <div className="mt-3 mb-3 space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Business Entity Type *</label>
-              <select value={ownershipType} onChange={e => setOwnershipType(e.target.value)}
-                className={inputCls} style={{ colorScheme: 'dark' }}>
-                <option value="">Select…</option>
-                {OWNERSHIP_TYPES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>IRS Tax Classification *</label>
-              <select value={taxClassType} onChange={e => setTaxClassType(e.target.value)}
-                className={inputCls} style={{ colorScheme: 'dark' }}>
-                <option value="">Select…</option>
-                {(ownershipType === 'LIMITED_COMPANY' ? LLC_TAX_CLASS_TYPES : TAX_CLASS_TYPES)
-                  .map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Year Established *</label>
-              <input type="number" value={estYear}
-                onChange={e => setEstYear(e.target.value)}
-                placeholder="e.g. 2018" min="1900" max={new Date().getFullYear()} className={inputCls} />
-              {estYear && (() => {
-                const { years, months } = deriveOwnership(estYear);
-                return <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1.5">{years} yr{years !== '1' ? 's' : ''}{months !== '0' ? ` ${months} mo` : ''} in operation</p>;
-              })()}
-            </div>
-            <div>
-              <label className={labelCls}>Federal EIN *</label>
-              <input
-                value={federalEIN}
-                onChange={e => setFederalEIN(e.target.value.replace(/\D/g, '').slice(0, 9))}
-                placeholder="9 digits"
-                className={`${inputCls} font-mono ${forceExpand && einDigits.length !== 9 ? 'border-cb-danger focus:ring-cb-danger' : ''}`}
+      {children}
+
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          onClick={handleSave}
+          disabled={!canSave || saving || formsLocked}
+          className="flex items-center gap-1.5 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface-raised disabled:text-gray-600 disabled:cursor-not-allowed text-cb-bg text-cb-body font-semibold px-4 py-2 rounded-cb transition-all"
+        >
+          {formsLocked ? <Lock className="w-3 h-3" /> : saving ? <Loader2 className="w-3 h-3 animate-spin" /> : saved ? <Check className="w-3 h-3" /> : null}
+          {formsLocked ? 'Forms Locked' : saving ? 'Saving…' : saved ? 'Saved' : 'Save Details'}
+        </button>
+        {formsLocked
+          ? (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-0">
+              <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">{FORMS_LOCKED_MESSAGE}</p>
+              <UnlockModifyControls
+                onUnlock={onRequestUnlock}
+                unlocking={unlocking}
+                buttonClassName="flex-shrink-0 min-h-10 px-3 py-1.5 rounded-cb bg-cb-accent text-cb-bg text-cb-body font-semibold hover:opacity-90 disabled:opacity-50"
               />
-              {federalEIN.length > 0 && einDigits.length !== 9 && (
-                <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-accent mt-1.5">{einDigits.length}/9 digits</p>
-              )}
-              {forceExpand && einDigits.length === 0 && (
-                <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger mt-1.5">Required to continue — enter the 9-digit EIN, then Save Details</p>
-              )}
             </div>
-          </div>
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              onClick={handleSave}
-              disabled={!canSave || saving || formsLocked}
-              className="flex items-center gap-1.5 bg-cb-accent hover:opacity-90 disabled:bg-cb-surface-raised disabled:text-gray-600 disabled:cursor-not-allowed text-cb-bg text-cb-body font-semibold px-4 py-2 rounded-cb transition-all"
-            >
-              {formsLocked ? <Lock className="w-3 h-3" /> : saving ? <Loader2 className="w-3 h-3 animate-spin" /> : saved ? <Check className="w-3 h-3" /> : null}
-              {formsLocked ? 'Forms Locked' : saving ? 'Saving…' : saved ? 'Saved' : 'Save Details'}
-            </button>
-            {formsLocked
-              ? (
-                <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-0">
-                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">{FORMS_LOCKED_MESSAGE}</p>
-                  <UnlockModifyControls
-                    onUnlock={onRequestUnlock}
-                    unlocking={unlocking}
-                    buttonClassName="flex-shrink-0 min-h-10 px-3 py-1.5 rounded-cb bg-cb-accent text-cb-bg text-cb-body font-semibold hover:opacity-90 disabled:opacity-50"
-                  />
-                </div>
-              )
-              : !canSave && (
-                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">
-                  Still need: {liveMissing.join(', ')}
-                </p>
-              )}
-            {saveError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">⚠ {saveError}</p>}
-          </div>
-        </div>
-        </motion.div>
-      )}
-      </AnimatePresence>
+          )
+          : !canSave && (
+            <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">
+              Still need: {liveMissing.join(', ')}
+            </p>
+          )}
+        {saveError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">⚠ {saveError}</p>}
+      </div>
     </div>
   );
 }
@@ -1376,6 +1376,22 @@ function entityLegalAddressComplete(entity) {
     : !(entity.mailingStreet && entity.mailingCity && entity.mailingState);
   if (same) return true;
   return !!(entity.mailingStreet && entity.mailingCity && entity.mailingState && entity.mailingZip);
+}
+
+/** Quiet collapsed caption under the entity header (ownership · year · legal address). */
+function entityLegalSummaryCaption(entity) {
+  const parts = [];
+  const ownershipLabel = OWNERSHIP_TYPES.find(o => o.value === entity.ownershipType)?.label;
+  if (ownershipLabel) parts.push(ownershipLabel);
+  if (entity.establishmentYear) parts.push(`Est. ${entity.establishmentYear}`);
+  const same = entity.legalAddressSameAsStore !== undefined
+    ? Boolean(entity.legalAddressSameAsStore)
+    : !(entity.mailingStreet && entity.mailingCity && entity.mailingState);
+  if (same) parts.push('Legal address same as store');
+  else if (entity.mailingStreet && entity.mailingCity) {
+    parts.push(`${entity.mailingStreet}, ${entity.mailingCity}`);
+  }
+  return parts.join(' · ');
 }
 
 function normalizeEntityRecord(e) {
@@ -1601,7 +1617,7 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
   const showLegalError = showValidation && legalMissing;
 
   return (
-    <div className="border-t border-cb-border px-5 py-3 space-y-4">
+    <div className="border-t border-cb-border pt-4 space-y-4">
       {/* Legal address */}
       <div className="space-y-2.5">
         <div className="flex items-start gap-2">
@@ -1760,61 +1776,42 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
   const allComplete = entityLocs.length > 0 && entityLocs.every(l =>
     merchantIDs.some(m => m.locationId === l.id && isMidComplete(m, l.businessState))
   );
-  const entityDetailsComplete = entityMissingFields(entity).length === 0 && entityLegalAddressComplete(entity);
+  const entityDetailsComplete = entityMissingFields(entity).length === 0
+    && String(entity.legalBusinessName || '').trim()
+    && entityLegalAddressComplete(entity);
   const highlightError = showValidation && (!allComplete || !entityDetailsComplete);
 
-  // Quick inline edit for the (often prefilled) legal name — 2026-07-10.
-  // EIN editing lives in one place only: the Business details panel below
-  // (dual EIN surfaces confused merchants — critique 2026-07-15).
-  const [editingHeader, setEditingHeader] = useState(false);
-  const [hdrName, setHdrName]     = useState(entity.legalBusinessName || '');
-  const [hdrSaving, setHdrSaving] = useState(false);
-  const [hdrError, setHdrError]   = useState('');
-  const startHeaderEdit = () => {
-    setHdrName(entity.legalBusinessName || '');
-    setHdrError('');
-    setEditingHeader(true);
-  };
-  const saveHeaderEdit = async () => {
-    if (!hdrName.trim()) { setHdrError('Legal name is required'); return; }
-    setHdrSaving(true); setHdrError('');
-    try {
-      const res = await invokePortalFunction('manageLegalEntity', {
-        action: 'edit', corporateId, entityId: entity.entityId,
-        legalBusinessName: hdrName.trim(),
-      });
-      if (res.data?.error) throw new Error(res.data.error);
-      onEntityUpdated({ ...entity, legalBusinessName: hdrName.trim() });
-      setEditingHeader(false);
-      onApplicantSave?.();
-    } catch (err) { setHdrError(err.message || 'Save failed'); }
-    finally { setHdrSaving(false); }
-  };
-
-  // 1×1 store-first: legal entity collapses under the store (critique 2026-07-16).
-  const [legalOpen, setLegalOpen] = useState(!entityDetailsComplete);
+  // Pencil-owned legal edit panel — name + details + addresses in one expand.
+  // Locations nest directly under the collapsed header (2026-07-21).
+  const [legalEditOpen, setLegalEditOpen] = useState(!entityDetailsComplete);
   useEffect(() => {
-    if (showValidation && !entityDetailsComplete) setLegalOpen(true);
+    if (showValidation && !entityDetailsComplete) setLegalEditOpen(true);
   }, [showValidation, entityDetailsComplete]);
 
-  const entityHeaderInner = editingHeader ? (
-    <div className="flex-1 min-w-0 flex flex-col sm:flex-row sm:items-center gap-3 py-0.5">
-      <input value={hdrName} onChange={e => setHdrName(e.target.value)} placeholder="Legal business name" autoFocus
-        className="flex-1 min-w-0 bg-cb-bg border border-cb-border rounded-cb px-3 py-1.5 text-cb-body text-white focus:outline-none focus:ring-2 focus:ring-cb-accent" />
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <button onClick={saveHeaderEdit} disabled={hdrSaving}
-          className="text-cb-body font-semibold bg-cb-accent hover:opacity-90 disabled:opacity-50 text-cb-bg px-3 py-1.5 rounded-cb transition-colors">
-          {hdrSaving ? 'Saving…' : 'Save'}
-        </button>
-        <button onClick={() => setEditingHeader(false)} className="text-cb-body text-gray-400 hover:text-white px-2 py-1.5">Cancel</button>
+  const toggleLegalEdit = () => setLegalEditOpen(o => !o);
+
+  const handleLegalSaveSuccess = (updated) => {
+    if (
+      entityMissingFields(updated).length === 0
+      && String(updated.legalBusinessName || '').trim()
+      && entityLegalAddressComplete(updated)
+    ) {
+      setLegalEditOpen(false);
+    }
+  };
+
+  const summaryCaption = entityDetailsComplete ? entityLegalSummaryCaption(entity) : '';
+
+  const entityHeaderInner = (
+    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+      <div className="flex items-baseline gap-2.5 flex-wrap min-w-0">
+        <p className="font-display text-cb-title text-white truncate">{entity.legalBusinessName || 'Legal entity'}</p>
+        {entity.federalEIN && (
+          <p className="text-cb-caption text-gray-500 font-mono normal-case tracking-normal">EIN {formatEIN(entity.federalEIN)}</p>
+        )}
       </div>
-      {hdrError && <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger">{hdrError}</p>}
-    </div>
-  ) : (
-    <div className="flex-1 min-w-0 flex items-baseline gap-2.5 flex-wrap">
-      <p className="font-display text-cb-title text-white truncate">{entity.legalBusinessName}</p>
-      {entity.federalEIN && (
-        <p className="text-cb-caption text-gray-500 font-mono normal-case tracking-normal">EIN {formatEIN(entity.federalEIN)}</p>
+      {!legalEditOpen && summaryCaption && (
+        <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 truncate">{summaryCaption}</p>
       )}
     </div>
   );
@@ -1825,12 +1822,16 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
         <span className="hidden sm:inline text-cb-caption text-gray-500">{entityLocs.length} location{entityLocs.length !== 1 ? 's' : ''} · {entityMids.length} account{entityMids.length !== 1 ? 's' : ''}</span>
       )}
       {allComplete && entityLocs.length > 0 && <Check className="w-3.5 h-3.5 text-cb-success" />}
-      {!editingHeader && (
-        <button onClick={startHeaderEdit} title="Edit legal entity name"
-          className="p-2 text-gray-600 hover:text-white rounded-cb transition-colors">
-          <Pencil className="w-3.5 h-3.5" />
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={toggleLegalEdit}
+        title="Edit legal entity details"
+        aria-label="Edit legal entity details"
+        aria-expanded={legalEditOpen}
+        className="p-2 text-gray-600 hover:text-white rounded-cb transition-colors"
+      >
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
       {!isOnly && (
         <button onClick={() => onDeleteEntity(entity)} title="Delete legal entity"
           className="p-2 text-gray-600 hover:text-cb-danger rounded-cb transition-colors">
@@ -1886,24 +1887,30 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
     </>
   );
 
-  const legalPanels = (
-    <>
-      <EntityDetailsPanel
-        entity={entity}
-        corporateId={corporateId}
-        onUpdated={onEntityUpdated}
-        onDraftStatus={onEntityDraftStatus}
-        forceExpand={showValidation && !entityDetailsComplete}
-        onApplicantSave={onApplicantSave}
-      />
-      <EntityLegalAndMailingAddresses
-        entity={entity}
-        corporateId={corporateId}
-        onUpdated={onEntityUpdated}
-        locationCount={entityLocs.length}
-        showValidation={showValidation}
-      />
-    </>
+  const legalEditPanel = (
+    <AnimatePresence initial={false}>
+      {legalEditOpen && (
+        <motion.div key="legal-edit" {...accordionProps} className="overflow-hidden">
+          <EntityDetailsPanel
+            entity={entity}
+            corporateId={corporateId}
+            onUpdated={onEntityUpdated}
+            onDraftStatus={onEntityDraftStatus}
+            forceExpand={showValidation && !entityDetailsComplete}
+            onApplicantSave={onApplicantSave}
+            onSaveSuccess={handleLegalSaveSuccess}
+          >
+            <EntityLegalAndMailingAddresses
+              entity={entity}
+              corporateId={corporateId}
+              onUpdated={onEntityUpdated}
+              locationCount={entityLocs.length}
+              showValidation={showValidation}
+            />
+          </EntityDetailsPanel>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 
   // ── 1×1 empty (self-serve, no HubSpot locations): one store card, not
@@ -1934,7 +1941,7 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
     );
   }
 
-  // ── 1×1: store + card processing first; legal entity as required accordion ──
+  // ── 1×1: store first; legal entity row with pencil (not chevron) ──
   if (simpleMode) {
     return (
       <motion.div
@@ -1946,45 +1953,36 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
         {locationsBlock}
 
         <div className="border-t border-cb-border">
-          <button
-            type="button"
-            onClick={() => setLegalOpen(o => !o)}
-            className="flex items-center gap-2.5 w-full text-left px-5 py-3.5 transition-colors hover:bg-cb-bg/40"
-            aria-expanded={legalOpen}
-          >
+          <div className="flex items-center gap-2.5 px-5 py-3.5">
             {entityDetailsComplete
               ? <Check className="w-3.5 h-3.5 flex-shrink-0 text-cb-success" />
               : <span className="w-1.5 h-1.5 rounded-full bg-cb-accent flex-shrink-0" />}
-            <span className="flex-1 min-w-0">
-              <span className="text-white font-medium">Legal entity</span>
-              {entity.legalBusinessName && (
-                <span className="text-gray-500 ml-1.5 truncate">{entity.legalBusinessName}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-2.5 flex-wrap min-w-0">
+                <span className="text-white font-medium">Legal entity</span>
+                {entity.legalBusinessName && (
+                  <span className="text-gray-500 truncate">{entity.legalBusinessName}</span>
+                )}
+              </div>
+              {!legalEditOpen && summaryCaption && (
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 truncate mt-0.5">{summaryCaption}</p>
               )}
-              {entityDetailsComplete && entity.ownershipType && (
-                <span className="text-gray-600 ml-1.5 hidden sm:inline">
-                  · {OWNERSHIP_TYPES.find(o => o.value === entity.ownershipType)?.label || entity.ownershipType}
-                </span>
-              )}
-            </span>
+            </div>
             {!entityDetailsComplete && (
               <span className="text-cb-caption uppercase text-cb-accent flex-shrink-0">Required</span>
             )}
-            {legalOpen
-              ? <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-              : <ChevronRight className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />}
-          </button>
-
-          <AnimatePresence initial={false}>
-            {legalOpen && (
-              <motion.div key="simple-legal" {...accordionProps} className="overflow-hidden">
-                <div className="flex items-center gap-3 px-5 py-3 border-t border-cb-border">
-                  {entityHeaderInner}
-                  {entityHeaderActions}
-                </div>
-                {legalPanels}
-              </motion.div>
-            )}
-          </AnimatePresence>
+            <button
+              type="button"
+              onClick={toggleLegalEdit}
+              title="Edit legal entity details"
+              aria-label="Edit legal entity details"
+              aria-expanded={legalEditOpen}
+              className="p-2 text-gray-600 hover:text-white rounded-cb transition-colors flex-shrink-0"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+          </div>
+          {legalEditPanel}
         </div>
       </motion.div>
     );
@@ -1998,7 +1996,7 @@ function EntitySection({ entity, locations, corporateId, merchantIDs, onDeleteLo
         {entityHeaderInner}
         {entityHeaderActions}
       </div>
-      {legalPanels}
+      {legalEditPanel}
       {locationsBlock}
     </motion.div>
   );
@@ -2425,7 +2423,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
   const businessComplete = entities.length > 0 && entities.every((e) => {
     const draft = entityDrafts[e.entityId];
     if (draft) return draft.missing.length === 0 && !draft.needsSave && entityLegalAddressComplete(e);
-    return entityMissingFields(e).length === 0 && entityLegalAddressComplete(e);
+    return entityMissingFields(e).length === 0
+      && String(e.legalBusinessName || '').trim()
+      && entityLegalAddressComplete(e);
   });
   // Fields are typed but Save Details hasn't been clicked — surface this near
   // Continue so a blocked Continue doesn't read as a broken page.
