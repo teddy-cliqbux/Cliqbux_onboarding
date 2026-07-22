@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, UserPlus, Send, Loader2, ShieldCheck, Mail, CheckCircle2 } from 'lucide-react';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
 import { usePlacesAddressRef } from '@/lib/usePlacesAddressRef';
+import { composeFullAddress } from '@/lib/addressLine';
 
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
@@ -24,7 +25,7 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
     firstName: '', lastName: '', signerEmail: '',
     ownershipPercentage: '', isPrimarySigner: isPrimary,
     dobMonth: '', dobDay: '', dobYear: '', ssn: '',
-    homeStreet: '', homeCity: '', homeState: '', homeZip: '',
+    homeStreet: '', homeStreet2: '', homeCity: '', homeState: '', homeZip: '',
     corporatePhone: '',
   });
   const [addressDisplay, setAddressDisplay] = useState('');
@@ -35,16 +36,23 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  const addrRef = usePlacesAddressRef(({ street, city, state, zip }) => {
-    setForm(p => ({ ...p, homeStreet: street, homeCity: city, homeState: state, homeZip: zip }));
-    setAddressDisplay(`${street}, ${city}, ${state} ${zip}`);
+  const addrRef = usePlacesAddressRef(({ street, street2, city, state, zip }) => {
+    setForm(p => ({
+      ...p,
+      homeStreet: street,
+      homeStreet2: street2 || '',
+      homeCity: city,
+      homeState: state,
+      homeZip: zip,
+    }));
+    setAddressDisplay(composeFullAddress({ street, street2, city, state, zip }));
     setAddressVerified(true);
   });
 
   const clearAddress = () => {
     setAddressVerified(false);
     setAddressDisplay('');
-    setForm(p => ({ ...p, homeStreet: '', homeCity: '', homeState: '', homeZip: '' }));
+    setForm(p => ({ ...p, homeStreet: '', homeStreet2: '', homeCity: '', homeState: '', homeZip: '' }));
     setAddressKey((k) => k + 1);
   };
 
@@ -201,6 +209,25 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
                       className={inputCls}
                     />
                   )}
+                  <input
+                    type="text"
+                    className={`${inputCls} mt-2`}
+                    value={form.homeStreet2}
+                    onChange={e => {
+                      const v = e.target.value;
+                      set('homeStreet2', v);
+                      if (addressVerified && form.homeStreet) {
+                        setAddressDisplay(composeFullAddress({
+                          street: form.homeStreet,
+                          street2: v,
+                          city: form.homeCity,
+                          state: form.homeState,
+                          zip: form.homeZip,
+                        }));
+                      }
+                    }}
+                    placeholder="Apt / Suite / Unit (optional)"
+                  />
                 </div>
                 <div>
                   <label className={labelCls}>Phone Number</label>

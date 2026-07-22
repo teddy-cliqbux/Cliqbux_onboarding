@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     // Allowed fields to update (also accept nested `fields` from portal callers)
     const ALLOWED = [
       'firstName', 'lastName', 'dobYear', 'dobMonth', 'dobDay',
-      'ssn', 'homeStreet', 'homeCity', 'homeState', 'homeZip',
+      'ssn', 'homeStreet', 'homeStreet2', 'homeCity', 'homeState', 'homeZip',
       'taxId', 'isManualMode', 'applicationStatus',
       'corporatePhone', 'ownershipPercentage',
       'legalName', 'ownershipType', 'taxClassType', 'titleType',

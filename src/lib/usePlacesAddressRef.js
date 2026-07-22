@@ -36,10 +36,11 @@ export function usePlacesAddressRef(onParsed) {
       const getS = (types) =>
         (place.address_components.find((c) => types.some((t) => c.types.includes(t))) || {}).short_name || '';
       const street = (get(['street_number']) ? `${get(['street_number'])} ` : '') + get(['route']);
+      const street2 = get(['subpremise']);
       const city = get(['locality', 'sublocality']);
       const state = getS(['administrative_area_level_1']);
       const zip = get(['postal_code']);
-      onParsedRef.current?.({ street, city, state, zip });
+      onParsedRef.current?.({ street, street2, city, state, zip });
     });
     acRef.current = ac;
   }, []);

@@ -26,6 +26,7 @@ import {
   liquorComplianceBannerText,
 } from '@/lib/liquorCompliance';
 import { usePlacesAddressRef } from '@/lib/usePlacesAddressRef';
+import { composeStreet, composeFullAddress } from '@/lib/addressLine';
 import {
   normalizeBusinessWebsite,
   businessWebsiteError,
@@ -249,10 +250,12 @@ function parsePlaceResult(place, onParsed) {
   const get = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).long_name || '';
   const getS = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).short_name || '';
   const street = (get(['street_number']) ? `${get(['street_number'])} ` : '') + get(['route']);
+  const street2 = get(['subpremise']);
   const city = get(['locality', 'sublocality']);
   const state = getS(['administrative_area_level_1']);
   const zip = get(['postal_code']);
-  onParsed({ street, city, state, zip, display: `${street}, ${city}, ${state} ${zip}` });
+  const streetLine = street2 ? `${street}, ${street2}` : street;
+  onParsed({ street, street2, city, state, zip, display: `${streetLine}, ${city}, ${state} ${zip}` });
 }
 
 // Returns a callback ref — attaches a fresh Autocomplete every time the input mounts
@@ -760,14 +763,14 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
     .map(l => ({ id: l.id, label: l.dbaName || l.businessAddress || 'Location' }));
   // Quick inline edit for the (often prefilled) name + address — 2026-07-10
   const [editingLoc, setEditingLoc] = useState(false);
-  const [locForm, setLocForm] = useState({ dbaName: '', street: '', city: '', state: '', zip: '' });
+  const [locForm, setLocForm] = useState({ dbaName: '', street: '', street2: '', city: '', state: '', zip: '' });
   const [locSaving, setLocSaving] = useState(false);
   const [locEditError, setLocEditError] = useState('');
   // Google Places verification — selecting a suggestion fills + verifies the
   // address; manual typing un-verifies it (soft check, save still allowed)
   const [locVerified, setLocVerified] = useState(false);
-  const editPlacesRef = usePlacesCallbackRef(({ street, city, state, zip }) => {
-    setLocForm(f => ({ ...f, street, city, state, zip }));
+  const editPlacesRef = usePlacesCallbackRef(({ street, street2, city, state, zip }) => {
+    setLocForm(f => ({ ...f, street, street2: street2 || '', city, state, zip }));
     setLocVerified(true);
   });
   const startLocEdit = () => {
@@ -778,6 +781,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
     setLocForm({
       dbaName: location.dbaName || '',
       street: location.businessStreet || flat?.[1]?.trim() || (location.businessAddress || '').split(',')[0]?.trim() || '',
+      street2: location.businessStreet2 || '',
       city: location.businessCity || flat?.[2]?.trim() || '',
       state: location.businessState || flat?.[3]?.toUpperCase() || '',
       zip: location.businessZip || flat?.[4]?.trim() || '',
@@ -798,6 +802,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
         locationId: location.id,
         dbaName: locForm.dbaName.trim(),
         businessStreet: locForm.street.trim(),
+        businessStreet2: locForm.street2.trim(),
         businessCity: locForm.city.trim(),
         businessState: locForm.state.trim(),
         businessZip: locForm.zip.trim(),
@@ -843,6 +848,8 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
                 <input ref={editPlacesRef} value={locForm.street}
                   onChange={e => { setLocForm(f => ({ ...f, street: e.target.value })); setLocVerified(false); }}
                   placeholder="Start typing your address…" className={inputCls} />
+                <input value={locForm.street2} onChange={e => setLocForm(f => ({ ...f, street2: e.target.value }))}
+                  placeholder="Apt / Suite / Unit (optional)" className={inputCls} />
                 <input value={locForm.city} onChange={e => setLocForm(f => ({ ...f, city: e.target.value }))} placeholder="City" className={inputCls} />
                 <div className="grid grid-cols-2 gap-3">
                   <input value={locForm.state} onChange={e => setLocForm(f => ({ ...f, state: e.target.value }))} placeholder="State" maxLength={2} className={inputCls} />
@@ -1389,7 +1396,13 @@ function entityLegalSummaryCaption(entity) {
     : !(entity.mailingStreet && entity.mailingCity && entity.mailingState);
   if (same) parts.push('Legal address same as store');
   else if (entity.mailingStreet && entity.mailingCity) {
-    parts.push(`${entity.mailingStreet}, ${entity.mailingCity}`);
+    parts.push(composeFullAddress({
+      street: entity.mailingStreet,
+      street2: entity.mailingStreet2,
+      city: entity.mailingCity,
+      state: entity.mailingState,
+      zip: entity.mailingZip,
+    }));
   }
   return parts.join(' · ');
 }
@@ -1402,6 +1415,7 @@ function normalizeEntityRecord(e) {
   return {
     ...e,
     mailingStreet,
+    mailingStreet2: e.mailingStreet2 || '',
     mailingCity,
     mailingState,
     mailingZip,
@@ -1409,6 +1423,7 @@ function normalizeEntityRecord(e) {
       ? Boolean(e.legalAddressSameAsStore)
       : !(mailingStreet && mailingCity && mailingState),
     correspondenceStreet: e.correspondenceStreet || '',
+    correspondenceStreet2: e.correspondenceStreet2 || '',
     correspondenceCity: e.correspondenceCity || '',
     correspondenceState: e.correspondenceState || '',
     correspondenceZip: e.correspondenceZip || '',
@@ -1428,26 +1443,34 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
   );
   const [legalDisplay, setLegalDisplay] = useState(
     hasLegalOverride
-      ? `${entity.mailingStreet}, ${entity.mailingCity}, ${entity.mailingState} ${entity.mailingZip || ''}`.trim()
+      ? composeFullAddress({
+        street: entity.mailingStreet, street2: entity.mailingStreet2,
+        city: entity.mailingCity, state: entity.mailingState, zip: entity.mailingZip,
+      })
       : ''
   );
   const [legalParsed, setLegalParsed] = useState(hasLegalOverride ? {
-    street: entity.mailingStreet, city: entity.mailingCity,
-    state: entity.mailingState, zip: entity.mailingZip || '',
+    street: entity.mailingStreet, street2: entity.mailingStreet2 || '',
+    city: entity.mailingCity, state: entity.mailingState, zip: entity.mailingZip || '',
   } : null);
+  const [legalStreet2, setLegalStreet2] = useState(entity.mailingStreet2 || '');
   const [mailExpanded, setMailExpanded] = useState(
     !!(entity.correspondenceStreet && entity.correspondenceCity && entity.correspondenceState)
   );
   const hasCorrespondence = !!(entity.correspondenceStreet && entity.correspondenceCity && entity.correspondenceState);
   const [mailDisplay, setMailDisplay] = useState(
     hasCorrespondence
-      ? `${entity.correspondenceStreet}, ${entity.correspondenceCity}, ${entity.correspondenceState} ${entity.correspondenceZip || ''}`.trim()
+      ? composeFullAddress({
+        street: entity.correspondenceStreet, street2: entity.correspondenceStreet2,
+        city: entity.correspondenceCity, state: entity.correspondenceState, zip: entity.correspondenceZip,
+      })
       : ''
   );
   const [mailParsed, setMailParsed] = useState(hasCorrespondence ? {
-    street: entity.correspondenceStreet, city: entity.correspondenceCity,
-    state: entity.correspondenceState, zip: entity.correspondenceZip || '',
+    street: entity.correspondenceStreet, street2: entity.correspondenceStreet2 || '',
+    city: entity.correspondenceCity, state: entity.correspondenceState, zip: entity.correspondenceZip || '',
   } : null);
+  const [mailStreet2, setMailStreet2] = useState(entity.correspondenceStreet2 || '');
 
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
@@ -1458,11 +1481,13 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
   const legalRef = usePlacesCallbackRef((parsed) => {
     setLegalDisplay(parsed.display);
     setLegalParsed(parsed);
+    setLegalStreet2(parsed.street2 || '');
     pendingLegalRef.current = true;
   });
   const mailRef = usePlacesCallbackRef((parsed) => {
     setMailDisplay(parsed.display);
     setMailParsed(parsed);
+    setMailStreet2(parsed.street2 || '');
     pendingMailRef.current = true;
   });
 
@@ -1479,13 +1504,32 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
         : !has
     );
     if (has) {
-      setLegalDisplay(`${entity.mailingStreet}, ${entity.mailingCity}, ${entity.mailingState} ${entity.mailingZip || ''}`.trim());
+      setLegalDisplay(composeFullAddress({
+        street: entity.mailingStreet, street2: entity.mailingStreet2,
+        city: entity.mailingCity, state: entity.mailingState, zip: entity.mailingZip,
+      }));
       setLegalParsed({
-        street: entity.mailingStreet, city: entity.mailingCity,
-        state: entity.mailingState, zip: entity.mailingZip || '',
+        street: entity.mailingStreet, street2: entity.mailingStreet2 || '',
+        city: entity.mailingCity, state: entity.mailingState, zip: entity.mailingZip || '',
       });
+      setLegalStreet2(entity.mailingStreet2 || '');
     }
-  }, [entity.entityId, entity.mailingStreet, entity.mailingCity, entity.mailingState, entity.mailingZip, entity.legalAddressSameAsStore]);
+  }, [entity.entityId, entity.mailingStreet, entity.mailingStreet2, entity.mailingCity, entity.mailingState, entity.mailingZip, entity.legalAddressSameAsStore]);
+
+  useEffect(() => {
+    const has = !!(entity.correspondenceStreet && entity.correspondenceCity && entity.correspondenceState);
+    if (has) {
+      setMailDisplay(composeFullAddress({
+        street: entity.correspondenceStreet, street2: entity.correspondenceStreet2,
+        city: entity.correspondenceCity, state: entity.correspondenceState, zip: entity.correspondenceZip,
+      }));
+      setMailParsed({
+        street: entity.correspondenceStreet, street2: entity.correspondenceStreet2 || '',
+        city: entity.correspondenceCity, state: entity.correspondenceState, zip: entity.correspondenceZip || '',
+      });
+      setMailStreet2(entity.correspondenceStreet2 || '');
+    }
+  }, [entity.entityId, entity.correspondenceStreet, entity.correspondenceStreet2, entity.correspondenceCity, entity.correspondenceState, entity.correspondenceZip]);
 
   const persist = useCallback(async (patch, nextEntity) => {
     if (formsLocked) {
@@ -1539,8 +1583,8 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
       setLegalDisplay('');
       setLegalParsed(null);
       await persist(
-        { legalAddressSameAsStore: true, mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '' },
-        { ...entity, legalAddressSameAsStore: true, mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '' }
+        { legalAddressSameAsStore: true, mailingStreet: '', mailingStreet2: '', mailingCity: '', mailingState: '', mailingZip: '' },
+        { ...entity, legalAddressSameAsStore: true, mailingStreet: '', mailingStreet2: '', mailingCity: '', mailingState: '', mailingZip: '' }
       );
     } else {
       // Switching to "No" without an address yet — mark preference; Continue will require the fields.
@@ -1558,6 +1602,7 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
         {
           legalAddressSameAsStore: false,
           mailingStreet: legalParsed.street,
+          mailingStreet2: legalParsed.street2 || legalStreet2 || '',
           mailingCity: legalParsed.city,
           mailingState: legalParsed.state,
           mailingZip: legalParsed.zip,
@@ -1566,6 +1611,7 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
           ...entity,
           legalAddressSameAsStore: false,
           mailingStreet: legalParsed.street,
+          mailingStreet2: legalParsed.street2 || legalStreet2 || '',
           mailingCity: legalParsed.city,
           mailingState: legalParsed.state,
           mailingZip: legalParsed.zip,
@@ -1580,6 +1626,7 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
       persist(
         {
           correspondenceStreet: mailParsed.street,
+          correspondenceStreet2: mailParsed.street2 || mailStreet2 || '',
           correspondenceCity: mailParsed.city,
           correspondenceState: mailParsed.state,
           correspondenceZip: mailParsed.zip,
@@ -1587,6 +1634,7 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
         {
           ...entity,
           correspondenceStreet: mailParsed.street,
+          correspondenceStreet2: mailParsed.street2 || mailStreet2 || '',
           correspondenceCity: mailParsed.city,
           correspondenceState: mailParsed.state,
           correspondenceZip: mailParsed.zip,
@@ -1599,8 +1647,8 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
     const prev = { display: mailDisplay, parsed: mailParsed };
     setMailDisplay(''); setMailParsed(null); setSavedAt(null); setSaveError('');
     const ok = await persist(
-      { correspondenceStreet: '', correspondenceCity: '', correspondenceState: '', correspondenceZip: '' },
-      { ...entity, correspondenceStreet: '', correspondenceCity: '', correspondenceState: '', correspondenceZip: '' }
+      { correspondenceStreet: '', correspondenceStreet2: '', correspondenceCity: '', correspondenceState: '', correspondenceZip: '' },
+      { ...entity, correspondenceStreet: '', correspondenceStreet2: '', correspondenceCity: '', correspondenceState: '', correspondenceZip: '' }
     );
     if (!ok) {
       setMailDisplay(prev.display); setMailParsed(prev.parsed);
@@ -1694,6 +1742,24 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
                 className={`${inputCls} ${showLegalError ? 'border-cb-danger' : ''}`}
               />
             )}
+            <input
+              type="text"
+              value={legalStreet2}
+              onChange={e => setLegalStreet2(e.target.value)}
+              onBlur={() => {
+                if (!legalParsed?.street) return;
+                const next2 = legalStreet2.trim();
+                if (next2 === (entity.mailingStreet2 || '')) return;
+                persist(
+                  { mailingStreet2: next2 },
+                  { ...entity, mailingStreet2: next2 }
+                );
+              }}
+              placeholder="Apt / Suite / Unit (optional)"
+              autoComplete="off"
+              disabled={formsLocked}
+              className={inputCls}
+            />
             {showLegalError && (
               <p className="text-cb-caption normal-case tracking-normal font-normal text-cb-danger" role="alert">
                 Legal address is required when it differs from the store.
@@ -1750,6 +1816,24 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
                     className={inputCls}
                   />
                 )}
+                <input
+                  type="text"
+                  value={mailStreet2}
+                  onChange={e => setMailStreet2(e.target.value)}
+                  onBlur={() => {
+                    if (!mailParsed?.street) return;
+                    const next2 = mailStreet2.trim();
+                    if (next2 === (entity.correspondenceStreet2 || '')) return;
+                    persist(
+                      { correspondenceStreet2: next2 },
+                      { ...entity, correspondenceStreet2: next2 }
+                    );
+                  }}
+                  placeholder="Apt / Suite / Unit (optional)"
+                  autoComplete="off"
+                  disabled={formsLocked}
+                  className={inputCls}
+                />
               </div>
             </motion.div>
           )}
@@ -2019,10 +2103,12 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
   const [selectedEntityId, setSelectedEntityId] = useState(defaultEntityId || entities[0]?.entityId || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const addrRef = usePlacesAddressRef(({ street, city, state, zip }) => {
-    const display = `${street}, ${city}, ${state} ${zip}`;
+  const [street2, setStreet2] = useState('');
+  const addrRef = usePlacesAddressRef(({ street, street2: s2, city, state, zip }) => {
+    const display = composeFullAddress({ street, street2: s2, city, state, zip });
     setAddressDisplay(display);
-    setParsedAddress({ street, city, state, zip, display });
+    setParsedAddress({ street, street2: s2 || '', city, state, zip, display });
+    setStreet2(s2 || '');
     setUnverifiedWarning(false);
   });
   // Add Entity inline — entity is created server-side inside addSelfServeLocation
@@ -2035,6 +2121,7 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
   const clearAddress = () => {
     setAddressDisplay('');
     setParsedAddress(null);
+    setStreet2('');
     setUnverifiedWarning(false);
     setAddressKey((k) => k + 1);
   };
@@ -2048,10 +2135,14 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
         setSaving(false);
         return;
       }
-      const businessAddress = addr ? `${addr.street}, ${addr.city}, ${addr.state} ${addr.zip}` : addressDisplay.trim();
+      const line2 = (addr?.street2 ?? street2).trim();
+      const businessAddress = addr
+        ? composeFullAddress({ street: addr.street, street2: line2, city: addr.city, state: addr.state, zip: addr.zip })
+        : addressDisplay.trim();
       const locRes = await invokePortalFunction('addSelfServeLocation', {
         corporateId, dbaName: dbaName.trim(),
-        businessAddress, businessStreet: addr?.street || '', businessCity: addr?.city || '',
+        businessAddress, businessStreet: addr?.street || '', businessStreet2: line2,
+        businessCity: addr?.city || '',
         businessState: addr?.state || '', businessZip: addr?.zip || '',
         entityId: showAddEntity ? undefined : (selectedEntityId || undefined),
         newEntityName: showAddEntity ? newEntityName.trim() : undefined,
@@ -2158,6 +2249,17 @@ function AddLocationForm({ corporateId, profile, entities, defaultEntityId, isFi
         <div>
           <label className={labelCls}>Physical Address *</label>
           {addressField}
+          <input
+            type="text"
+            value={street2}
+            onChange={e => {
+              const v = e.target.value;
+              setStreet2(v);
+              setParsedAddress(p => (p ? { ...p, street2: v } : p));
+            }}
+            placeholder="Apt / Suite / Unit (optional)"
+            className={`${inputCls} mt-2`}
+          />
         </div>
       </div>
 
@@ -2262,6 +2364,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
         id: l.id || l.locationId, entityId: l.entityId || '',
         dbaName: l.dbaName, businessAddress: l.businessAddress,
         businessStreet: l.businessStreet || '',
+        businessStreet2: l.businessStreet2 || '',
         businessCity: l.businessCity || '',
         businessState: l.businessState || '',
         businessZip: l.businessZip || '',

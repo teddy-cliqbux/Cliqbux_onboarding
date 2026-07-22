@@ -14,7 +14,7 @@ export default function ManualEntryForm({ corporateId, onSaved }) {
     firstName: '', lastName: '',
     dobMonth: '', dobDay: '', dobYear: '',
     ssn: '',
-    homeStreet: '', homeCity: '', homeState: '', homeZip: '',
+    homeStreet: '', homeStreet2: '', homeCity: '', homeState: '', homeZip: '',
     taxId: ''
   });
   const [saving, setSaving] = useState(false);
@@ -120,6 +120,8 @@ export default function ManualEntryForm({ corporateId, onSaved }) {
         <div className="flex flex-col gap-3">
           <input value={form.homeStreet} onChange={e => set('homeStreet', e.target.value)}
             placeholder="123 Main St" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <input value={form.homeStreet2} onChange={e => set('homeStreet2', e.target.value)}
+            placeholder="Apt / Suite / Unit (optional)" className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           <div className="grid grid-cols-3 gap-3">
             <div className="col-span-1">
               <input value={form.homeCity} onChange={e => set('homeCity', e.target.value)}

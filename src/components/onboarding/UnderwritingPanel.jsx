@@ -57,6 +57,7 @@ export default function UnderwritingPanel({ profile, onValidChange }) {
     dobYear: p.dobYear || '',
     ssn: '',
     homeStreet: p.homeStreet || '',
+    homeStreet2: p.homeStreet2 || '',
     homeCity: p.homeCity || '',
     homeState: p.homeState || '',
     homeZip: p.homeZip || '',
@@ -71,7 +72,7 @@ export default function UnderwritingPanel({ profile, onValidChange }) {
   const prevProfileRef = useRef(profile);
   useEffect(() => {
     const prev = prevProfileRef.current;
-    const identityFields = ['firstName', 'lastName', 'dobMonth', 'dobDay', 'dobYear', 'homeStreet', 'homeCity', 'homeState', 'homeZip'];
+    const identityFields = ['firstName', 'lastName', 'dobMonth', 'dobDay', 'dobYear', 'homeStreet', 'homeStreet2', 'homeCity', 'homeState', 'homeZip'];
     const changed = identityFields.some(f => profile[f] !== prev[f]);
     if (changed) {
       setForm(profileToForm(profile));
@@ -101,9 +102,11 @@ export default function UnderwritingPanel({ profile, onValidChange }) {
       const getShort = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).short_name || '';
       const streetNumber = get(['street_number']);
       const route = get(['route']);
+      const street2 = get(['subpremise']);
       setForm(prev => ({
         ...prev,
         homeStreet: streetNumber ? `${streetNumber} ${route}` : route,
+        homeStreet2: street2 || '',
         homeCity: get(['locality', 'sublocality']),
         homeState: getShort(['administrative_area_level_1']),
         homeZip: get(['postal_code']),
@@ -282,6 +285,13 @@ export default function UnderwritingPanel({ profile, onValidChange }) {
               placeholder="Start typing residential address..."
               autoComplete="off"
               className={inputClass('homeStreet')}
+            />
+            <input
+              type="text"
+              value={form.homeStreet2 || ''}
+              onChange={(e) => set('homeStreet2', e.target.value)}
+              placeholder="Apt / Suite / Unit (optional)"
+              className={`${inputClass('homeStreet')} mt-2`}
             />
             {form.homeCity && (
               <p className="text-xs text-green-600 font-medium mt-1">

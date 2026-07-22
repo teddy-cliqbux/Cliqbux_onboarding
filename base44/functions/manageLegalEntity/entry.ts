@@ -54,10 +54,10 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const {
       corporateId, action, entityId, legalBusinessName, tradeNameDBA, federalEIN,
-      corporateMailingAddress, mailingStreet, mailingCity, mailingState, mailingZip,
+      corporateMailingAddress, mailingStreet, mailingStreet2, mailingCity, mailingState, mailingZip,
       ownershipType, taxClassType, establishmentYear,
       legalAddressSameAsStore,
-      correspondenceStreet, correspondenceCity, correspondenceState, correspondenceZip,
+      correspondenceStreet, correspondenceStreet2, correspondenceCity, correspondenceState, correspondenceZip,
     } = body;
 
     if (!corporateId || !action) {
@@ -134,6 +134,7 @@ Deno.serve(async (req) => {
         : (existing.legalAddressSameAsStore !== undefined ? Boolean(existing.legalAddressSameAsStore) : !(existing.mailingStreet && existing.mailingCity && existing.mailingState));
 
       let nextMailingStreet = mailingStreet !== undefined ? (mailingStreet || '').trim() : (existing.mailingStreet || '');
+      let nextMailingStreet2 = mailingStreet2 !== undefined ? (mailingStreet2 || '').trim() : (existing.mailingStreet2 || '');
       let nextMailingCity = mailingCity !== undefined ? (mailingCity || '').trim() : (existing.mailingCity || '');
       let nextMailingState = mailingState !== undefined ? (mailingState || '').trim() : (existing.mailingState || '');
       let nextMailingZip = mailingZip !== undefined ? (mailingZip || '').trim() : (existing.mailingZip || '');
@@ -141,6 +142,7 @@ Deno.serve(async (req) => {
       // Same-as-store clears the legal-address override so MSPWare gets has_legal_address: business.
       if (nextSameAsStore) {
         nextMailingStreet = '';
+        nextMailingStreet2 = '';
         nextMailingCity = '';
         nextMailingState = '';
         nextMailingZip = '';
@@ -163,11 +165,13 @@ Deno.serve(async (req) => {
         federalEIN: federalEIN !== undefined ? federalEIN.trim() : (existing.federalEIN || ''),
         corporateMailingAddress: corporateMailingAddress !== undefined ? (corporateMailingAddress || '').trim() : (existing.corporateMailingAddress || ''),
         mailingStreet: nextMailingStreet,
+        mailingStreet2: nextMailingStreet2,
         mailingCity: nextMailingCity,
         mailingState: nextMailingState,
         mailingZip: nextMailingZip,
         legalAddressSameAsStore: nextSameAsStore,
         correspondenceStreet: correspondenceStreet !== undefined ? (correspondenceStreet || '').trim() : (existing.correspondenceStreet || ''),
+        correspondenceStreet2: correspondenceStreet2 !== undefined ? (correspondenceStreet2 || '').trim() : (existing.correspondenceStreet2 || ''),
         correspondenceCity: correspondenceCity !== undefined ? (correspondenceCity || '').trim() : (existing.correspondenceCity || ''),
         correspondenceState: correspondenceState !== undefined ? (correspondenceState || '').trim() : (existing.correspondenceState || ''),
         correspondenceZip: correspondenceZip !== undefined ? (correspondenceZip || '').trim() : (existing.correspondenceZip || ''),
@@ -187,6 +191,7 @@ Deno.serve(async (req) => {
           federalEIN: e.federalEIN,
           corporateMailingAddress: e.corporateMailingAddress || '',
           mailingStreet: e.mailingStreet || '',
+          mailingStreet2: e.mailingStreet2 || '',
           mailingCity: e.mailingCity || '',
           mailingState: e.mailingState || '',
           mailingZip: e.mailingZip || '',
@@ -194,6 +199,7 @@ Deno.serve(async (req) => {
             ? Boolean(e.legalAddressSameAsStore)
             : !(e.mailingStreet && e.mailingCity && e.mailingState),
           correspondenceStreet: e.correspondenceStreet || '',
+          correspondenceStreet2: e.correspondenceStreet2 || '',
           correspondenceCity: e.correspondenceCity || '',
           correspondenceState: e.correspondenceState || '',
           correspondenceZip: e.correspondenceZip || '',

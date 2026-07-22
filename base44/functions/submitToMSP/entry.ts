@@ -1006,6 +1006,15 @@ function resolveLocationAddress(location: Record<string, any>): Record<string, a
   };
 }
 
+/** Apt/suite → MSPWare single street line. Sync with helpers/addressLine.ts + src/lib/addressLine.js */
+function composeStreet(street: string | null | undefined, street2: string | null | undefined): string {
+  const line1 = String(street || '').trim();
+  const line2 = String(street2 || '').trim();
+  if (!line1) return line2;
+  if (!line2) return line1;
+  return `${line1}, ${line2}`;
+}
+
 // MSPWare only accepts the 50 US states — territories (GU, PR, VI, AS, MP) cause data errors
 const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']);
 // Full names (HubSpot company.state, etc.) → 2-letter. Sync with src/lib/usState.js
@@ -1485,7 +1494,7 @@ function buildFormPayload(
     owner_email: s.signerEmail || '',
     owner_country: 'USA',
     owner_address_type: 'PRA',
-    owner_address: s.homeStreet || '',
+    owner_address: composeStreet(s.homeStreet, s.homeStreet2),
     owner_city: s.homeCity || '',
     owner_state_usa: sanitizeState(s.homeState),
     owner_zipcode: s.homeZip || '',
@@ -1518,7 +1527,7 @@ function buildFormPayload(
     customer_service_phone: phone,
     business_email: signer.signerEmail || profile.signerEmail || '',
     business_address_type: 'BSA',
-    business_address: location.businessStreet || location.businessAddress || '',
+    business_address: composeStreet(location.businessStreet, location.businessStreet2) || location.businessAddress || '',
     business_city: location.businessCity || '',
     business_state_usa: sanitizeState(location.businessState || ''),
     business_zipcode: location.businessZip || '',
@@ -1532,7 +1541,7 @@ function buildFormPayload(
       has_legal_address: 'new',
       legal_country: 'USA',
       legal_address_type: 'BSA',
-      legal_address: entityMailing.street,
+      legal_address: composeStreet(entityMailing.street, entityMailing.street2),
       legal_city: entityMailing.city,
       legal_state_usa: sanitizeState(entityMailing.state),
       legal_zipcode: entityMailing.zip,
@@ -1543,7 +1552,7 @@ function buildFormPayload(
     // Distinct from legal_* — only sent when the merchant entered one.
     ...(entityCorrespondence?.street && entityCorrespondence?.city && entityCorrespondence?.state ? {
       mailing_address_type: 'BSA',
-      mailing_address: entityCorrespondence.street,
+      mailing_address: composeStreet(entityCorrespondence.street, entityCorrespondence.street2),
       mailing_city: entityCorrespondence.city,
       mailing_state_usa: sanitizeState(entityCorrespondence.state),
       mailing_zipcode: entityCorrespondence.zip || '',
@@ -1569,7 +1578,7 @@ function buildFormPayload(
         owner_email: signer.signerEmail || profile.signerEmail || '',
         owner_country: 'USA',
         owner_address_type: 'PRA',
-        owner_address: signer.homeStreet || profile.homeStreet || '',
+        owner_address: composeStreet(signer.homeStreet || profile.homeStreet, signer.homeStreet2 || profile.homeStreet2),
         owner_city: signer.homeCity || profile.homeCity || '',
         owner_state_usa: sanitizeState(signer.homeState || profile.homeState || '') || sanitizeState(location.businessState || ''),
         owner_zipcode: signer.homeZip || profile.homeZip || '',
@@ -1832,11 +1841,12 @@ Deno.serve(async (req) => {
     }
     for (const ent of (Array.isArray(legalEntitiesRaw) ? legalEntitiesRaw : [])) {
       if (ent.entityId && ent.mailingStreet && ent.mailingCity && ent.mailingState) {
-        entityMailingMap[ent.entityId] = { street: ent.mailingStreet, city: ent.mailingCity, state: ent.mailingState, zip: ent.mailingZip || '' };
+        entityMailingMap[ent.entityId] = { street: ent.mailingStreet, street2: ent.mailingStreet2 || '', city: ent.mailingCity, state: ent.mailingState, zip: ent.mailingZip || '' };
       }
       if (ent.entityId && ent.correspondenceStreet && ent.correspondenceCity && ent.correspondenceState) {
         entityCorrespondenceMap[ent.entityId] = {
           street: ent.correspondenceStreet,
+          street2: ent.correspondenceStreet2 || '',
           city: ent.correspondenceCity,
           state: ent.correspondenceState,
           zip: ent.correspondenceZip || '',

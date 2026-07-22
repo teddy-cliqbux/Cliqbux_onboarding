@@ -25,6 +25,10 @@
       "type": "string",
       "description": "Street number + name e.g. 7301 Chapman Hwy"
     },
+    "businessStreet2": {
+      "type": "string",
+      "description": "Optional apt / suite / unit (Address Line 2). Composed into MSPWare business_address with businessStreet."
+    },
     "businessCity": {
       "type": "string",
       "description": "City name"

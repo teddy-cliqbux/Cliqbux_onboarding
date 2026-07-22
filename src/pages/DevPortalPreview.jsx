@@ -18,12 +18,12 @@ const ENTITIES = [
   {
     entityId: 'ent-1', legalBusinessName: 'Bad Bakers LLC', federalEIN: '821234567',
     ownershipType: 'LIMITED_COMPANY', taxClassType: 'LLC_CORPORATION', establishmentYear: '2018',
-    mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '',
+    mailingStreet: '', mailingStreet2: '', mailingCity: '', mailingState: '', mailingZip: '',
   },
   {
     entityId: 'ent-2', legalBusinessName: 'Northside Hospitality Inc', federalEIN: '839876543',
     ownershipType: '', taxClassType: '', establishmentYear: '',
-    mailingStreet: '', mailingCity: '', mailingState: '', mailingZip: '',
+    mailingStreet: '', mailingStreet2: '', mailingCity: '', mailingState: '', mailingZip: '',
   },
 ];
 
@@ -31,20 +31,20 @@ const LOCATIONS = [
   {
     id: 'loc-1', locationId: 'loc-1', entityId: 'ent-1', dbaName: 'Main Street Cafe',
     businessAddress: '123 Main St, Union City, CA 94587', businessStreet: '123 Main St',
-    businessCity: 'Union City', businessState: 'CA', businessZip: '94587',
+    businessStreet2: '', businessCity: 'Union City', businessState: 'CA', businessZip: '94587',
     applicationStepStatus: 'Ready to Submit',
     bankDetails: { routingNumber: '021000021', accountNumber: '000123456789', authMethod: 'Plaid', accountNumberMasked: '••••6789', accountType: 'checking' },
   },
   {
     id: 'loc-2', locationId: 'loc-2', entityId: 'ent-1', dbaName: 'Bad Bakers – Santa Ana',
     businessAddress: '456 Bristol St, Santa Ana, CA 92704', businessStreet: '456 Bristol St',
-    businessCity: 'Santa Ana', businessState: 'CA', businessZip: '92704',
+    businessStreet2: '', businessCity: 'Santa Ana', businessState: 'CA', businessZip: '92704',
     applicationStepStatus: 'In Review',
   },
   {
     id: 'loc-3', locationId: 'loc-3', entityId: 'ent-2', dbaName: 'Northside Deli',
     businessAddress: '789 Oak Ave, Fremont, CA 94536', businessStreet: '789 Oak Ave',
-    businessCity: 'Fremont', businessState: 'CA', businessZip: '94536',
+    businessStreet2: '', businessCity: 'Fremont', businessState: 'CA', businessZip: '94536',
     applicationStepStatus: 'In Review',
   },
 ];
@@ -85,6 +85,7 @@ const SIGNERS = [
   {
     id: 'sig-1', firstName: 'Jane', lastName: 'Baker', signerEmail: 'owner@badbakers.com',
     ownershipPercentage: 100, isPrimarySigner: true, identityStatus: 'Pending Invitation',
+    homeStreet: '', homeStreet2: '', homeCity: '', homeState: '', homeZip: '',
   },
 ];
 

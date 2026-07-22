@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
     const {
-      locationId, dbaName, businessStreet, businessCity, businessState, businessZip,
+      locationId, dbaName, businessStreet, businessStreet2, businessCity, businessState, businessZip,
       liquorLicenseDocUrl, liquorLicenseFileName, liquorLicenseUploadedAt,
     } = body;
 
@@ -91,9 +91,10 @@ Deno.serve(async (req) => {
 
     // Address: apply any provided parts on top of the existing ones, then
     // recompute the display string so the two never drift apart.
-    const addressTouched = [businessStreet, businessCity, businessState, businessZip].some(v => v !== undefined);
+    const addressTouched = [businessStreet, businessStreet2, businessCity, businessState, businessZip].some(v => v !== undefined);
     if (addressTouched) {
       const street = businessStreet !== undefined ? String(businessStreet).trim() : (loc.businessStreet || '');
+      const street2 = businessStreet2 !== undefined ? String(businessStreet2).trim() : (loc.businessStreet2 || '');
       const city   = businessCity   !== undefined ? String(businessCity).trim()   : (loc.businessCity || '');
       const state  = businessState  !== undefined ? String(businessState).trim().toUpperCase() : (loc.businessState || '');
       const zip    = businessZip    !== undefined ? String(businessZip).trim()    : (loc.businessZip || '');
@@ -106,11 +107,13 @@ Deno.serve(async (req) => {
       if (!city || !state || !zip) {
         return Response.json({ error: 'City, state, and ZIP are required to save an address' }, { status: 400 });
       }
+      const streetLine = street2 ? `${street}, ${street2}` : street;
       update.businessStreet = street;
+      update.businessStreet2 = street2;
       update.businessCity = city;
       update.businessState = state;
       update.businessZip = zip;
-      update.businessAddress = [street, city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+      update.businessAddress = [streetLine, city, [state, zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
     }
 
     // Post-sign liquor license upload (CA/NY + 5813). Does not gate application signing.

@@ -69,6 +69,7 @@ function toSafeSigner(s: any) {
     dobDay: s.dobDay || '',
     ssn: s.ssn || '',
     homeStreet: s.homeStreet || '',
+    homeStreet2: s.homeStreet2 || '',
     homeCity: s.homeCity || '',
     homeState: s.homeState || '',
     homeZip: s.homeZip || '',
@@ -305,6 +306,7 @@ Deno.serve(async (req) => {
       const dobDay = signerData?.dobDay || '';
       const ssn = (signerData?.ssn || '').replace(/\D/g, '');
       const homeStreet = signerData?.homeStreet || '';
+      const homeStreet2 = signerData?.homeStreet2 || '';
       const homeCity = signerData?.homeCity || '';
       const homeState = signerData?.homeState || '';
       const homeZip = signerData?.homeZip || '';
@@ -321,7 +323,7 @@ Deno.serve(async (req) => {
 
       const update: Record<string, any> = {
         dobYear, dobMonth, dobDay, ssn,
-        homeStreet, homeCity, homeState, homeZip,
+        homeStreet, homeStreet2: String(homeStreet2).trim(), homeCity, homeState, homeZip,
         identityStatus: 'verified',
       };
       if (signerData?.firstName) update.firstName = signerData.firstName;

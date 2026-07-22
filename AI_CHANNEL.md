@@ -2609,3 +2609,22 @@ Copy: “Preparing your signing documents” / stay on page; iframe: “Loading 
 **Waiting on:** Teddy — push frontend; verify multi-location nesting + 1×1 pencil.
 ---
 
+---
+**[CURSOR]** — 2026-07-21
+**Type:** Action Taken — Address Line 2 (apt/suite/unit) everywhere
+**Re:** Places suite suggestions never persisted; no Line 2 UI/schema/MSPWare compose
+
+### Shipped
+- Schemas: `businessStreet2`, `homeStreet2`, `mailingStreet2`, `correspondenceStreet2` (Locations, Signers, CorporateProfile, MerchantAccount)
+- Helpers: `src/lib/addressLine.js` + `helpers/addressLine.ts` (`composeStreet`)
+- Places: `subpremise` → street2 in all autocomplete parsers
+- UI: Apt/Suite/Unit on locations, legal/mail, signers, verify, manual entry, underwriting, AddLocationModal
+- Backend: persist allowlists + getMerchantData projections + HubSpot `address2` fill-blanks
+- MSPWare: compose street+street2 into `business_address` / `legal_address` / `mailing_address` / `owner_address` (submitToMSP, signApplication, refillMSPForms)
+- Docs: `docs/mspware-field-reference.md`
+
+**Teddy must:** republish entity schemas in Base44 (Lesson #4) + push frontend + redeploy touched functions (`updateLocationDetails`, `addSelfServeLocation`, `manageLegalEntity`, `manageSigner`, `verifySignerToken`, `updateMerchantProfile`, `getMerchantData`, `syncFromHubspot`, `submitToMSP`, `signApplication`, `refillMSPForms`).
+
+**Waiting on:** Teddy
+---
+

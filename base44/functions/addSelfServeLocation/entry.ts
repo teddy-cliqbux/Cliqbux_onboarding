@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const body = await req.json();
-    const { corporateId, dbaName, businessAddress, entityId, businessStreet, businessCity, businessState, businessZip,
+    const { corporateId, dbaName, businessAddress, entityId, businessStreet, businessStreet2, businessCity, businessState, businessZip,
             newEntityName, newEntityEIN } = body;
 
     if (!corporateId || !dbaName) {
@@ -118,6 +118,7 @@ Deno.serve(async (req) => {
     // If structured fields are missing but we have a flat address, try to parse it
     // Format expected: "123 Main St, City, ST 12345" or "123 Main St, City ST 12345"
     let parsedStreet = businessStreet || '';
+    let parsedStreet2 = businessStreet2 || '';
     let parsedCity = businessCity || '';
     let parsedState = businessState || '';
     let parsedZip = businessZip || '';
@@ -142,6 +143,7 @@ Deno.serve(async (req) => {
 
     if (resolvedEntityId) locationFields.entityId = resolvedEntityId;
     if (parsedStreet) locationFields.businessStreet = parsedStreet;
+    if (parsedStreet2) locationFields.businessStreet2 = String(parsedStreet2).trim();
     if (parsedCity)   locationFields.businessCity   = parsedCity;
     if (parsedState)  locationFields.businessState  = parsedState;
     if (parsedZip)    locationFields.businessZip    = parsedZip;

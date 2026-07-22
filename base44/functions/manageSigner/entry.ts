@@ -393,6 +393,7 @@ Deno.serve(async (req) => {
               dobDay: prior.dobDay || '',
               ssn: prior.ssn || '',
               homeStreet: prior.homeStreet || '',
+              homeStreet2: prior.homeStreet2 || '',
               homeCity: prior.homeCity || '',
               homeState: prior.homeState || '',
               homeZip: prior.homeZip || '',
@@ -426,6 +427,7 @@ Deno.serve(async (req) => {
           dobDay: signerData.dobDay || kycFromAccount.dobDay || '',
           ssn: signerData.ssn || kycFromAccount.ssn || '',
           homeStreet: signerData.homeStreet || kycFromAccount.homeStreet || '',
+          homeStreet2: signerData.homeStreet2 || kycFromAccount.homeStreet2 || '',
           homeCity: signerData.homeCity || kycFromAccount.homeCity || '',
           homeState: signerData.homeState || kycFromAccount.homeState || '',
           homeZip: signerData.homeZip || kycFromAccount.homeZip || '',
@@ -484,7 +486,7 @@ Deno.serve(async (req) => {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
       const ALLOWED = ['firstName','lastName','signerEmail','ownershipPercentage','isPrimarySigner',
         'isAuthorizedSigner','isBeneficialOwner','isPortalAdmin','needsGatewayUserProvisioning',
-        'identityStatus','dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl','titleType',
+        'identityStatus','dobYear','dobMonth','dobDay','ssn','homeStreet','homeStreet2','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl','titleType',
         'invitedAt','openedAt','signedAt','verifyToken','verifyTokenSentAt'];
       const update: Record<string, any> = {};
       for (const key of ALLOWED) {
@@ -765,7 +767,7 @@ Deno.serve(async (req) => {
     // --- INLINE VERIFY ---
     if (action === 'inlineVerify') {
       if (!signerId) return Response.json({ error: 'signerId required' }, { status: 400 });
-      const ALLOWED = ['dobYear','dobMonth','dobDay','ssn','homeStreet','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl','titleType'];
+      const ALLOWED = ['dobYear','dobMonth','dobDay','ssn','homeStreet','homeStreet2','homeCity','homeState','homeZip','corporatePhone','idDocumentUrl','titleType'];
       const update: Record<string, any> = { identityStatus: 'verified' };
       for (const key of ALLOWED) {
         if (signerData && signerData[key] !== undefined) update[key] = signerData[key];
@@ -806,6 +808,7 @@ Deno.serve(async (req) => {
           dobYear: prior.dobYear || '',
           ssn: prior.ssn || '',
           homeStreet: prior.homeStreet || '',
+          homeStreet2: prior.homeStreet2 || '',
           homeCity: prior.homeCity || '',
           homeState: prior.homeState || '',
           homeZip: prior.homeZip || '',

@@ -175,3 +175,18 @@ curl -s -X POST https://cliqbux-onboard-prime.base44.app/functions/submitToMSP \
 ```
 
 Read `results[].validationErrors` and `results[].percentComplete` in the response — these are the authoritative source of what's still missing, NOT the MSPWare UI's sidebar section checkmarks (which can be misleading if fields are populated in a template but never actually reach the created application, as happened with equipment on template #154).
+
+---
+
+## Address Line 2 (apt / suite / unit) — 2026-07-21
+
+MSPWare has **one** street string per role (`business_address`, `legal_address`, `mailing_address`, `owner_address`). Cliqbux stores Line 2 separately and **composes** it into those wire fields:
+
+| Base44 | MSPWare wire |
+|---|---|
+| `businessStreet` + `businessStreet2` | `business_address` |
+| `mailingStreet` + `mailingStreet2` (legal override) | `legal_address` |
+| `correspondenceStreet` + `correspondenceStreet2` | `mailing_address` |
+| `homeStreet` + `homeStreet2` | `owner_address` |
+
+Compose rule (`composeStreet`): trim; if line 2 present → `"${street}, ${street2}"`; else street only. Implemented in `src/lib/addressLine.js`, `helpers/addressLine.ts`, and inlined in `submitToMSP` / `signApplication` / `refillMSPForms`. Google Places `subpremise` maps to Street2. **Do not invent** MSPWare `*_address_2` keys.

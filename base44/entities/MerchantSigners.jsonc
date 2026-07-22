@@ -78,6 +78,10 @@
     "homeStreet": {
       "type": "string"
     },
+    "homeStreet2": {
+      "type": "string",
+      "description": "Optional apt / suite / unit (Address Line 2). Composed into MSPWare owner_address with homeStreet."
+    },
     "homeCity": {
       "type": "string"
     },

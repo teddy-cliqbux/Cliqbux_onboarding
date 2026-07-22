@@ -46,7 +46,7 @@ export default function VerifyIdentity() {
 
   const [form, setForm] = useState({
     firstName: '', lastName: '', dobMonth: '', dobDay: '', dobYear: '',
-    ssn: '', homeStreet: '', homeCity: '', homeState: '', homeZip: '', corporatePhone: ''
+    ssn: '', homeStreet: '', homeStreet2: '', homeCity: '', homeState: '', homeZip: '', corporatePhone: ''
   });
 
   useEffect(() => {
@@ -136,6 +136,7 @@ export default function VerifyIdentity() {
         dobYear: s.dobYear || '',
         ssn: s.ssn || '',
         homeStreet: s.homeStreet || '',
+        homeStreet2: s.homeStreet2 || '',
         homeCity: s.homeCity || '',
         homeState: s.homeState || '',
         homeZip: s.homeZip || '',
@@ -349,6 +350,7 @@ export default function VerifyIdentity() {
               <div>
                 <label className={labelCls}>Home Address</label>
                 <input className={inputCls} value={form.homeStreet} onChange={e => set('homeStreet', e.target.value)} placeholder="123 Main St" />
+                <input className={`${inputCls} mt-2`} value={form.homeStreet2} onChange={e => set('homeStreet2', e.target.value)} placeholder="Apt / Suite / Unit (optional)" />
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <input className={`${inputCls} col-span-1`} value={form.homeCity} onChange={e => set('homeCity', e.target.value)} placeholder="City" />

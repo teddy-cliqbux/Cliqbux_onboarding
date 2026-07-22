@@ -92,6 +92,7 @@ Deno.serve(async (req) => {
         taxClassType: e.taxClassType || '',
         establishmentYear: e.establishmentYear || '',
         mailingStreet: e.mailingStreet || '',
+        mailingStreet2: e.mailingStreet2 || '',
         mailingCity: e.mailingCity || '',
         mailingState: e.mailingState || '',
         mailingZip: e.mailingZip || '',
@@ -99,6 +100,7 @@ Deno.serve(async (req) => {
           ? Boolean(e.legalAddressSameAsStore)
           : !(e.mailingStreet && e.mailingCity && e.mailingState),
         correspondenceStreet: e.correspondenceStreet || '',
+        correspondenceStreet2: e.correspondenceStreet2 || '',
         correspondenceCity: e.correspondenceCity || '',
         correspondenceState: e.correspondenceState || '',
         correspondenceZip: e.correspondenceZip || '',
@@ -115,6 +117,7 @@ Deno.serve(async (req) => {
       dbaName: loc.dbaName,
       businessAddress: loc.businessAddress,
       businessStreet: loc.businessStreet || '',
+      businessStreet2: loc.businessStreet2 || '',
       businessCity: loc.businessCity || '',
       businessState: loc.businessState || '',
       businessZip: loc.businessZip || '',

@@ -37,6 +37,10 @@
           "mailingStreet": {
             "type": "string"
           },
+          "mailingStreet2": {
+            "type": "string",
+            "description": "Optional apt / suite / unit for legal address"
+          },
           "mailingCity": {
             "type": "string"
           },
@@ -51,6 +55,10 @@
           },
           "correspondenceStreet": {
             "type": "string"
+          },
+          "correspondenceStreet2": {
+            "type": "string",
+            "description": "Optional apt / suite / unit for correspondence address"
           },
           "correspondenceCity": {
             "type": "string"

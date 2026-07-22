@@ -115,7 +115,7 @@ const TIER_TO_METHOD: Record<string, string> = {
 // Update these constants to match your actual HubSpot property internal names.
 const HS_PROPS = {
   company: [
-    'name', 'address', 'city', 'state', 'zip', 'phone', 'industry',
+    'name', 'address', 'address2', 'city', 'state', 'zip', 'phone', 'industry',
     'website', 'numberofemployees', 'hs_parent_company_id',
     // Custom properties — define these in HubSpot Settings → Properties
     'ein',                  // Federal EIN / TIN (9 digits)
@@ -584,6 +584,7 @@ Deno.serve(async (req) => {
         if (profileData.ownershipType)     entity.ownershipType     = profileData.ownershipType;
         if (profileData.establishmentYear) entity.establishmentYear = String(profileData.establishmentYear);
         if (pc.address) entity.mailingStreet = pc.address;
+        if (pc.address2) entity.mailingStreet2 = pc.address2;
         if (pc.city)    entity.mailingCity   = pc.city;
         if (pc.state)   entity.mailingState  = pc.state;
         if (pc.zip)     entity.mailingZip    = pc.zip;
@@ -643,6 +644,7 @@ Deno.serve(async (req) => {
 
         const dbaName    = lc.dba_name || lc.name || legalName;
         const street     = lc.address || '';
+        const street2    = lc.address2 || '';
         const city       = lc.city    || '';
         // HubSpot often stores "California"; MSPWare needs "CA"
         const state      = sanitizeState(lc.state || '');
@@ -661,26 +663,32 @@ Deno.serve(async (req) => {
           // FILL-BLANKS for address; always normalize state to 2-letter so a prior
           // HubSpot full-name ("California") does not keep poisoning MSPWare PUTs.
           const nextState = sanitizeState(existingLocs[0].businessState || state || '');
+          const nextStreet = existingLocs[0].businessStreet || street;
+          const nextStreet2 = existingLocs[0].businessStreet2 || street2;
+          const streetLine = nextStreet2 ? `${nextStreet}, ${nextStreet2}` : nextStreet;
           await base44.asServiceRole.entities.MerchantLocations.update(existingLocs[0].id, {
-            businessStreet:  existingLocs[0].businessStreet || street,
+            businessStreet:  nextStreet,
+            businessStreet2: nextStreet2,
             businessCity:    existingLocs[0].businessCity   || city,
             businessState:   nextState || existingLocs[0].businessState || state,
             businessZip:     existingLocs[0].businessZip    || zip,
-            businessAddress: existingLocs[0].businessAddress || [street, city, nextState || state, zip].filter(Boolean).join(', '),
+            businessAddress: existingLocs[0].businessAddress || [streetLine, city, nextState || state, zip].filter(Boolean).join(', '),
             ...(resolvedQuoteId ? { hubspotQuoteId: resolvedQuoteId } : {}),
           });
           locationId = existingLocs[0].id;
           result.locations.push({ dbaName, action: 'updated', locationId });
         } else {
+          const streetLine = street2 ? `${street}, ${street2}` : street;
           const newLoc = await base44.asServiceRole.entities.MerchantLocations.create({
             corporateId,
             entityId: seededEntityId || undefined,
             dbaName,
             businessStreet:  street,
+            businessStreet2: street2,
             businessCity:    city,
             businessState:   state,
             businessZip:     zip,
-            businessAddress: [street, city, state, zip].filter(Boolean).join(', '),
+            businessAddress: [streetLine, city, state, zip].filter(Boolean).join(', '),
             applicationStepStatus: 'In Review',
             ...(resolvedQuoteId ? { hubspotQuoteId: resolvedQuoteId } : {}),
           });

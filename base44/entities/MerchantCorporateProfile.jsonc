@@ -41,6 +41,10 @@
     "homeStreet": {
       "type": "string"
     },
+    "homeStreet2": {
+      "type": "string",
+      "description": "Optional apt / suite / unit for principal home address (legacy profile field)."
+    },
     "homeCity": {
       "type": "string"
     },
@@ -299,6 +303,10 @@
             "type": "string",
             "description": "Legal entity street when different from the store/DBA address. Maps to MSPWare legal_* when set. Despite the name, this is the LEGAL address override — not the optional correspondence mailing address."
           },
+          "mailingStreet2": {
+            "type": "string",
+            "description": "Optional apt / suite / unit for legal address. Composed into MSPWare legal_address with mailingStreet."
+          },
           "mailingCity": {
             "type": "string"
           },
@@ -316,6 +324,10 @@
           "correspondenceStreet": {
             "type": "string",
             "description": "Optional mail-only / correspondence address (MSPWare mailing_*). Lesser-used; distinct from legal address."
+          },
+          "correspondenceStreet2": {
+            "type": "string",
+            "description": "Optional apt / suite / unit for correspondence address. Composed into MSPWare mailing_address with correspondenceStreet."
           },
           "correspondenceCity": {
             "type": "string"

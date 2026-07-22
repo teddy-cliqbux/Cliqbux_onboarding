@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, MapPin, Loader2, Plus, CheckCircle2, AlertTriangle, Pencil, ChevronDown, ChevronRight } from 'lucide-react';
 import EINValidator from '@/components/onboarding/EINValidator';
 import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+import { composeFullAddress } from '@/lib/addressLine';
 
 export default function AddLocationModal({
   corporateId,
@@ -54,7 +55,12 @@ export default function AddLocationModal({
       if (!place?.address_components) return;
       const get = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).long_name || '';
       const getS = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).short_name || '';
-      const addr = `${get(['street_number']) ? `${get(['street_number'])} ` : ''}${get(['route'])}, ${get(['locality', 'sublocality'])}, ${getS(['administrative_area_level_1'])} ${get(['postal_code'])}`;
+      const street = (get(['street_number']) ? `${get(['street_number'])} ` : '') + get(['route']);
+      const street2 = get(['subpremise']);
+      const city = get(['locality', 'sublocality']);
+      const state = getS(['administrative_area_level_1']);
+      const zip = get(['postal_code']);
+      const addr = composeFullAddress({ street, street2, city, state, zip });
       setter(addr);
     });
     return () => { if (ac) window.google.maps.event.clearInstanceListeners(ac); };
@@ -71,11 +77,12 @@ export default function AddLocationModal({
       const get = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).long_name || '';
       const getS = (types) => (place.address_components.find(c => types.some(t => c.types.includes(t))) || {}).short_name || '';
       const street = (get(['street_number']) ? `${get(['street_number'])} ` : '') + get(['route']);
+      const street2 = get(['subpremise']);
       const city = get(['locality', 'sublocality']);
       const state = getS(['administrative_area_level_1']);
       const postcode = get(['postal_code']);
-      setParsedAddress({ streetName: street, city, state, postcode });
-      const formatted = `${street}, ${city}, ${state} ${postcode}`;
+      setParsedAddress({ streetName: street, street2: street2 || '', city, state, postcode });
+      const formatted = composeFullAddress({ street, street2, city, state, zip: postcode });
       setAddressDisplay(formatted);
       setUnverifiedWarning(false);
       // Pre-fill corporate mailing address on first location if not yet edited
@@ -151,6 +158,7 @@ export default function AddLocationModal({
         dbaName: dbaName.trim(),
         businessAddress: businessAddressStr,
         businessStreet: addressToUse?.streetName || '',
+        businessStreet2: addressToUse?.street2 || '',
         businessCity: addressToUse?.city || '',
         businessState: addressToUse?.state || '',
         businessZip: addressToUse?.postcode || '',
@@ -180,7 +188,13 @@ export default function AddLocationModal({
       if (!isValidRawEIN()) { setError('A valid 9-digit Federal EIN is required.'); return; }
     }
     if (!parsedAddress) { setUnverifiedWarning(true); return; }
-    const busAddr = `${parsedAddress.streetName}, ${parsedAddress.city}, ${parsedAddress.state} ${parsedAddress.postcode}`;
+    const busAddr = composeFullAddress({
+      street: parsedAddress.streetName,
+      street2: parsedAddress.street2,
+      city: parsedAddress.city,
+      state: parsedAddress.state,
+      zip: parsedAddress.postcode,
+    });
     await doSave(parsedAddress, busAddr);
   };
 
@@ -327,7 +341,15 @@ export default function AddLocationModal({
                         <span className="flex items-center gap-1.5 text-xs font-semibold text-green-700"><CheckCircle2 className="w-3.5 h-3.5" /> Address Verified</span>
                         <button type="button" onClick={clearAddress} className="flex items-center gap-1 text-[10px] text-gray-500 border border-gray-300 rounded px-2 py-1 hover:text-blue-600"><Pencil className="w-3 h-3" /> Change</button>
                       </div>
-                      <p className="text-sm text-gray-700 mt-1.5">{parsedAddress.streetName}, {parsedAddress.city}, {parsedAddress.state} {parsedAddress.postcode}</p>
+                      <p className="text-sm text-gray-700 mt-1.5">
+                        {composeFullAddress({
+                          street: parsedAddress.streetName,
+                          street2: parsedAddress.street2,
+                          city: parsedAddress.city,
+                          state: parsedAddress.state,
+                          zip: parsedAddress.postcode,
+                        })}
+                      </p>
                     </div>
                   ) : (
                     <>
@@ -338,6 +360,27 @@ export default function AddLocationModal({
                       <p className="text-[10px] text-gray-400 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" /> Select from the dropdown to verify</p>
                     </>
                   )}
+                  <input
+                    type="text"
+                    value={parsedAddress?.street2 || ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (parsedAddress) {
+                        const next = { ...parsedAddress, street2: v };
+                        setParsedAddress(next);
+                        setAddressDisplay(composeFullAddress({
+                          street: next.streetName,
+                          street2: v,
+                          city: next.city,
+                          state: next.state,
+                          zip: next.postcode,
+                        }));
+                      }
+                    }}
+                    placeholder="Apt / Suite / Unit (optional)"
+                    disabled={!validAddr}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 mt-2 disabled:bg-gray-50 disabled:text-gray-400"
+                  />
                   {unverifiedWarning && !validAddr && (
                     <div className="mt-2 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-start gap-2">
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-600 mt-0.5 flex-shrink-0" />

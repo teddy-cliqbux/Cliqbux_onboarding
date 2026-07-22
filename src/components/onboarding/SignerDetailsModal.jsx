@@ -12,6 +12,7 @@ import {
   normalizePersonRoleFlags,
 } from '@/lib/signerRules';
 import { usePlacesAddressRef } from '@/lib/usePlacesAddressRef';
+import { composeFullAddress } from '@/lib/addressLine';
 
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
@@ -67,6 +68,7 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
     dobYear: signer.dobYear || '',
     ssn: signer.ssn || '',
     homeStreet: signer.homeStreet || '',
+    homeStreet2: signer.homeStreet2 || '',
     homeCity: signer.homeCity || '',
     homeState: signer.homeState || '',
     homeZip: signer.homeZip || '',
@@ -79,7 +81,13 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
 
   const [addressDisplay, setAddressDisplay] = useState(
     signer.homeStreet
-      ? `${signer.homeStreet}${signer.homeCity ? ', ' + signer.homeCity : ''}${signer.homeState ? ', ' + signer.homeState : ''}${signer.homeZip ? ' ' + signer.homeZip : ''}`
+      ? composeFullAddress({
+        street: signer.homeStreet,
+        street2: signer.homeStreet2,
+        city: signer.homeCity,
+        state: signer.homeState,
+        zip: signer.homeZip,
+      })
       : ''
   );
   const [addressVerified, setAddressVerified] = useState(!!signer.homeStreet);
@@ -92,16 +100,23 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
-  const addrRef = usePlacesAddressRef(({ street, city, state, zip }) => {
-    setForm(p => ({ ...p, homeStreet: street, homeCity: city, homeState: state, homeZip: zip }));
-    setAddressDisplay(`${street}, ${city}, ${state} ${zip}`);
+  const addrRef = usePlacesAddressRef(({ street, street2, city, state, zip }) => {
+    setForm(p => ({
+      ...p,
+      homeStreet: street,
+      homeStreet2: street2 || '',
+      homeCity: city,
+      homeState: state,
+      homeZip: zip,
+    }));
+    setAddressDisplay(composeFullAddress({ street, street2, city, state, zip }));
     setAddressVerified(true);
   });
 
   const clearAddress = () => {
     setAddressVerified(false);
     setAddressDisplay('');
-    setForm(p => ({ ...p, homeStreet: '', homeCity: '', homeState: '', homeZip: '' }));
+    setForm(p => ({ ...p, homeStreet: '', homeStreet2: '', homeCity: '', homeState: '', homeZip: '' }));
     setAddressKey((k) => k + 1);
   };
 
@@ -134,13 +149,20 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
       dobYear: data.dobYear || p.dobYear,
       ssn: data.ssn || p.ssn,
       homeStreet: data.homeStreet || p.homeStreet,
+      homeStreet2: data.homeStreet2 || p.homeStreet2,
       homeCity: data.homeCity || p.homeCity,
       homeState: data.homeState || p.homeState,
       homeZip: data.homeZip || p.homeZip,
       corporatePhone: data.corporatePhone || p.corporatePhone,
     }));
     if (data.homeStreet) {
-      setAddressDisplay(`${data.homeStreet}${data.homeCity ? ', ' + data.homeCity : ''}${data.homeState ? ', ' + data.homeState : ''}${data.homeZip ? ' ' + data.homeZip : ''}`);
+      setAddressDisplay(composeFullAddress({
+        street: data.homeStreet,
+        street2: data.homeStreet2,
+        city: data.homeCity,
+        state: data.homeState,
+        zip: data.homeZip,
+      }));
       setAddressVerified(true);
     }
     setPriorData(null);
@@ -190,6 +212,7 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
           dobYear: form.dobYear,
           ssn: rawSSN(form.ssn),
           homeStreet: form.homeStreet,
+          homeStreet2: form.homeStreet2 || '',
           homeCity: form.homeCity,
           homeState: form.homeState,
           homeZip: form.homeZip,
@@ -415,6 +438,25 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
                     onKeyDown={e => e.key === 'Enter' && e.preventDefault()}
                     placeholder="Start typing to search…" autoComplete="off" className={inputCls} />
                 )}
+                <input
+                  type="text"
+                  className={`${inputCls} mt-2`}
+                  value={form.homeStreet2}
+                  onChange={e => {
+                    const v = e.target.value;
+                    set('homeStreet2', v);
+                    if (addressVerified && form.homeStreet) {
+                      setAddressDisplay(composeFullAddress({
+                        street: form.homeStreet,
+                        street2: v,
+                        city: form.homeCity,
+                        state: form.homeState,
+                        zip: form.homeZip,
+                      }));
+                    }
+                  }}
+                  placeholder="Apt / Suite / Unit (optional)"
+                />
               </div>
 
               {/* Title — hidden if already set via Business Details panel */}

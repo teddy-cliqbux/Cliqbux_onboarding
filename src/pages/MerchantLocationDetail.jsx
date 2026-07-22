@@ -6,6 +6,7 @@ import MerchantBeforeInstall from '@/components/merchant-center/MerchantBeforeIn
 import { getSession } from '@/lib/merchantCenterAuth';
 import { invokePortalFunction, setMerchantToken } from '@/lib/merchantAuthFetch';
 import { primaryMidForLocation, deriveLocationStatus, locationStatusLabel } from '@/lib/locationStatus';
+import { composeFullAddress } from '@/lib/addressLine';
 
 /**
  * Live location detail — business info, MID/boarding summary, statements link, go-live tools.
@@ -116,9 +117,14 @@ export default function MerchantLocationDetail() {
             </h1>
             <p className="text-cb-body text-gray-400 mt-1">
               {location.businessAddress ||
-                [location.businessStreet, location.businessCity, location.businessState, location.businessZip]
-                  .filter(Boolean)
-                  .join(', ')}
+                composeFullAddress({
+                  street: location.businessStreet,
+                  street2: location.businessStreet2,
+                  city: location.businessCity,
+                  state: location.businessState,
+                  zip: location.businessZip,
+                }) ||
+                '—'}
             </p>
           </div>
 
@@ -132,7 +138,15 @@ export default function MerchantLocationDetail() {
               <div>
                 <dt className="text-gray-500">Address</dt>
                 <dd className="text-white text-cb-body mt-0.5">
-                  {location.businessAddress || '—'}
+                  {location.businessAddress ||
+                    composeFullAddress({
+                      street: location.businessStreet,
+                      street2: location.businessStreet2,
+                      city: location.businessCity,
+                      state: location.businessState,
+                      zip: location.businessZip,
+                    }) ||
+                    '—'}
                 </dd>
               </div>
             </dl>
