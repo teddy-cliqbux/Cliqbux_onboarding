@@ -497,7 +497,9 @@ Deno.serve(async (req) => {
       const resolvedTier = pricingLocked ? null : resolvePricingTier(existing.pricingTier);
       effectivePricingTier = resolvedTier || existing.pricingTier || undefined;
       const safeUpdate: Record<string, any> = {
-        legalName,
+        // Deal display name: fill-blanks only — reps fix HubSpot typos in Applications;
+        // Sync must not re-poison legalName (KK vs KKS, 2026-07-23).
+        ...(force || !existing.legalName ? { legalName } : {}),
         hubspotQuoteUrl: profileData.hubspotQuoteUrl || existing.hubspotQuoteUrl,
         // Signature detection — only ever upgrades Incomplete/Pricing Selected, never regresses
         ...(quoteEsignStatus === 'SIGNED' &&
@@ -556,7 +558,9 @@ Deno.serve(async (req) => {
     }
 
     result.profile = {
-      legalName,
+      legalName: (existingProfiles?.length && existingProfiles[0].legalName && !force)
+        ? existingProfiles[0].legalName
+        : legalName,
       industryClass,
       mccCode,
       pricingTier: effectivePricingTier || null,

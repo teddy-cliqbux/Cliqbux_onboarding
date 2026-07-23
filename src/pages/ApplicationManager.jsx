@@ -1237,7 +1237,7 @@ function SendModal({ stage, corporateId, prefillEmail, publicUrl, merchantName, 
 }
 
 // ── Application Row ───────────────────────────────────────────────────────────
-function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onDeleteMerchant, onModeChange, onRequestSend }) {
+function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminStages, publicUrl, onEdit, onDeleteMerchant, onModeChange, onRequestSend, onMerchantNameSaved }) {
   const [expanded, setExpanded]         = useState(false);
   const [mids, setMids]                 = useState([]);
   const [locations, setLocations]       = useState([]);
@@ -1256,7 +1256,52 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const [nudgeMsg, setNudgeMsg]         = useState('');
   const [nudgeMenuPos, setNudgeMenuPos] = useState(null);
   const [rowActionError, setRowActionError] = useState('');
+  const [editingName, setEditingName]   = useState(false);
+  const [nameDraft, setNameDraft]       = useState(merchantName || '');
+  const [savingName, setSavingName]     = useState(false);
+  const [nameError, setNameError]       = useState('');
   const nudgeWrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!editingName) setNameDraft(merchantName || '');
+  }, [merchantName, editingName]);
+
+  const startNameEdit = (e) => {
+    e?.stopPropagation?.();
+    setNameDraft(merchantName || profile?.legalName || '');
+    setNameError('');
+    setEditingName(true);
+  };
+
+  const cancelNameEdit = (e) => {
+    e?.stopPropagation?.();
+    setEditingName(false);
+    setNameError('');
+    setNameDraft(merchantName || '');
+  };
+
+  const saveMerchantName = async (e) => {
+    e?.stopPropagation?.();
+    const next = String(nameDraft || '').trim();
+    if (!next) { setNameError('Deal name is required'); return; }
+    if (next === (merchantName || '').trim()) { setEditingName(false); return; }
+    setSavingName(true);
+    setNameError('');
+    try {
+      const res = await base44.functions.invoke('updateMerchantProfile', {
+        corporateId,
+        legalName: next,
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      onMerchantNameSaved?.(corporateId, next);
+      setEditingName(false);
+    } catch (err) {
+      console.error('[ApplicationRow.saveMerchantName]', err);
+      setNameError(err?.message || 'Could not save name');
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   const loadRowHealth = useCallback(async () => {
     setLoadingDetail(true);
@@ -1596,24 +1641,68 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
         >
           {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
         </button>
+        <div className="flex flex-1 min-w-0 items-center gap-3">
         <button
           type="button"
-          className="flex flex-1 min-w-0 items-center gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-cb-accent rounded-cb"
+          className={`w-7 h-7 rounded-cb flex items-center justify-center flex-shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-cb-accent ${isSubmitted ? 'bg-cb-success/15' : totalErrors > 0 || isStuck ? 'bg-cb-danger/15' : 'bg-cb-accent-muted'}`}
           onClick={toggleExpand}
           aria-expanded={expanded}
+          aria-label={expanded ? 'Collapse merchant details' : 'Expand merchant details'}
+          disabled={editingName}
         >
-        <div className={`w-7 h-7 rounded-cb flex items-center justify-center flex-shrink-0 ${isSubmitted ? 'bg-cb-success/15' : totalErrors > 0 || isStuck ? 'bg-cb-danger/15' : 'bg-cb-accent-muted'}`}>
           <Building2 className={`w-3.5 h-3.5 ${isSubmitted ? 'text-cb-success' : totalErrors > 0 || isStuck ? 'text-cb-danger' : 'text-cb-accent'}`} />
-        </div>
+        </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-cb-body font-semibold text-white truncate">{merchantName || corporateId}</p>
-            <span className="text-cb-caption font-mono text-gray-600">{corporateId}</span>
-            {profile?.legalName && profile.legalName !== merchantName && (
-              <span className="text-cb-caption text-gray-600 truncate max-w-[12rem]" title={profile.legalName}>
-                {profile.legalName}
-              </span>
+            {editingName ? (
+              <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
+                <input
+                  value={nameDraft}
+                  onChange={e => setNameDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); saveMerchantName(e); }
+                    if (e.key === 'Escape') cancelNameEdit(e);
+                  }}
+                  autoFocus
+                  disabled={savingName}
+                  aria-label="Deal display name"
+                  className="flex-1 min-w-[12rem] max-w-md bg-cb-bg border border-cb-border rounded-cb px-2.5 py-1 text-cb-body text-white focus:outline-none focus:ring-2 focus:ring-cb-accent"
+                />
+                <button
+                  type="button"
+                  onClick={saveMerchantName}
+                  disabled={savingName}
+                  className="text-cb-caption font-semibold bg-cb-accent text-cb-bg px-2.5 py-1 rounded-cb hover:opacity-90 disabled:opacity-50"
+                >
+                  {savingName ? 'Saving…' : 'Save'}
+                </button>
+                <button type="button" onClick={cancelNameEdit} disabled={savingName} className="text-cb-caption text-gray-400 hover:text-white px-1">
+                  Cancel
+                </button>
+                {nameError && <span className="text-cb-caption text-cb-danger w-full">{nameError}</span>}
+              </div>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  className="text-left min-w-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-cb-accent rounded-cb"
+                  onClick={toggleExpand}
+                  aria-expanded={expanded}
+                >
+                  <p className="text-cb-body font-semibold text-white truncate">{merchantName || corporateId}</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={startNameEdit}
+                  title="Edit deal name (HubSpot typos — Base44 copy only)"
+                  aria-label="Edit deal name"
+                  className="p-1 text-gray-600 hover:text-white rounded-cb transition-colors flex-shrink-0"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </>
             )}
+            <span className="text-cb-caption font-mono text-gray-600">{corporateId}</span>
             {rowMode.mode === 'stuck' && (
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${modeDotClass('stuck')}`} />
@@ -1656,11 +1745,20 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               </span>
             )}
           </div>
-          <p className="text-cb-caption text-gray-500 truncate mt-0.5" title={rowMode.blocker || rowMode.reason}>
-            {rowMode.blocker || rowMode.reason}
-          </p>
+          {!editingName && (
+            <button
+              type="button"
+              className="text-left w-full focus:outline-none"
+              onClick={toggleExpand}
+              aria-expanded={expanded}
+            >
+              <p className="text-cb-caption text-gray-500 truncate mt-0.5" title={rowMode.blocker || rowMode.reason}>
+                {rowMode.blocker || rowMode.reason}
+              </p>
+            </button>
+          )}
         </div>
-        </button>
+        </div>
 
         {/* Mode-driven primary + quiet utilities */}
         <div className="flex items-center gap-1.5 flex-shrink-0 ml-1" onClick={e => e.stopPropagation()}>
@@ -2124,6 +2222,14 @@ export default function ApplicationManager() {
     setEditing(null);
   };
 
+  const handleMerchantNameSaved = (corporateId, legalName) => {
+    const cid = String(corporateId);
+    setMerchantNames(prev => ({ ...prev, [cid]: legalName }));
+    setProfiles(prev => prev.map(p => (
+      String(p.corporateId) === cid ? { ...p, legalName } : p
+    )));
+  };
+
   const handlePricingSaved = (profileOrPricing) => {
     if (!editing?.corporateId || !profileOrPricing) return;
     const cid = String(editing.corporateId);
@@ -2339,6 +2445,7 @@ export default function ApplicationManager() {
                     onEdit={(corpId, name, stage) => setEditing({ corporateId: corpId, merchantName: name, stage: stage || null })}
                     onDeleteMerchant={(info) => { setDeleteMerchantConfirm(info); setDeleteMerchantTyped(''); setDeleteMerchantError(''); }}
                     onRequestSend={(payload) => setSending(payload)}
+                    onMerchantNameSaved={handleMerchantNameSaved}
                   />
                 ))}
               </div>

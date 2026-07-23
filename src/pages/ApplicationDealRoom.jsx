@@ -8,7 +8,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
   ArrowLeft, Loader2, Plus, Check, Trash2, Eye, LayoutDashboard,
-  Building2, Users, CreditCard, FileText, AlertCircle, Mail, RefreshCw, Send,
+  Building2, Users, CreditCard, FileText, AlertCircle, Mail, RefreshCw, Send, Pencil,
 } from 'lucide-react';
 import { lifecycleLabel, lifecycleDotClass } from '@/lib/signerLifecycle';
 import { TIER_LABELS } from '@/lib/pricingPresets';
@@ -68,6 +68,10 @@ export default function ApplicationDealRoom() {
   const [requestingStatus, setRequestingStatus] = useState(false);
   const [syncingMail, setSyncingMail] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [nameError, setNameError] = useState('');
 
   const load = useCallback(async () => {
     if (!corporateId) return;
@@ -109,6 +113,42 @@ export default function ApplicationDealRoom() {
   const midMessages = selectedMidId
     ? uwMessages.filter((m) => m.midId === selectedMidId)
     : [];
+
+  const startNameEdit = () => {
+    setNameDraft(profile?.legalName || title || '');
+    setNameError('');
+    setEditingName(true);
+  };
+
+  const cancelNameEdit = () => {
+    setEditingName(false);
+    setNameError('');
+    setNameDraft(profile?.legalName || '');
+  };
+
+  const saveMerchantName = async () => {
+    const next = String(nameDraft || '').trim();
+    if (!next) { setNameError('Deal name is required'); return; }
+    if (next === String(profile?.legalName || '').trim()) { setEditingName(false); return; }
+    setSavingName(true);
+    setNameError('');
+    try {
+      const res = await base44.functions.invoke('updateMerchantProfile', {
+        corporateId,
+        legalName: next,
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      setData((prev) => (prev?.profile
+        ? { ...prev, profile: { ...prev.profile, legalName: next } }
+        : prev));
+      setEditingName(false);
+    } catch (err) {
+      console.error('[DealRoom.saveMerchantName]', err);
+      setNameError(err?.message || 'Could not save name');
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   const openPortal = async (destination = 'portal') => {
     setImpersonating(true);
@@ -405,7 +445,49 @@ export default function ApplicationDealRoom() {
           </button>
           <div className="flex-1 min-w-0">
             <p className="text-cb-caption text-gray-500 mb-0.5">Deal room</p>
-            <h1 className="font-display text-cb-display text-white truncate">{title}</h1>
+            {editingName ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <input
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); saveMerchantName(); }
+                    if (e.key === 'Escape') cancelNameEdit();
+                  }}
+                  autoFocus
+                  disabled={savingName}
+                  aria-label="Deal display name"
+                  className="flex-1 min-w-[12rem] max-w-xl bg-cb-bg border border-cb-border rounded-cb px-2.5 py-1.5 font-display text-cb-title text-white focus:outline-none focus:ring-2 focus:ring-cb-accent"
+                />
+                <button
+                  type="button"
+                  onClick={saveMerchantName}
+                  disabled={savingName}
+                  className="text-cb-caption font-semibold bg-cb-accent text-cb-bg px-2.5 py-1.5 rounded-cb hover:opacity-90 disabled:opacity-50"
+                >
+                  {savingName ? 'Saving…' : 'Save'}
+                </button>
+                <button type="button" onClick={cancelNameEdit} disabled={savingName} className="text-cb-caption text-gray-400 hover:text-white px-1">
+                  Cancel
+                </button>
+                {nameError && <span className="text-cb-caption text-cb-danger w-full">{nameError}</span>}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 min-w-0">
+                <h1 className="font-display text-cb-display text-white truncate">{title}</h1>
+                {profile && (
+                  <button
+                    type="button"
+                    onClick={startNameEdit}
+                    title="Edit deal name (HubSpot typos — Base44 copy only)"
+                    aria-label="Edit deal name"
+                    className="p-1.5 text-gray-600 hover:text-white rounded-cb transition-colors flex-shrink-0"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            )}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-cb-caption text-gray-500">
               <span className="font-mono">{corporateId}</span>
               {account?.name && (

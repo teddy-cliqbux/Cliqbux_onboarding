@@ -2647,3 +2647,20 @@ Copy: “Preparing your signing documents” / stay on page; iframe: “Loading 
 **Waiting on:** Teddy
 ---
 
+---
+**[CURSOR]** — 2026-07-23
+**Type:** Feature — Editable deal display name (legalName) for HubSpot typos
+**Re:** Applications header showed "KKS House…" while MID DBA was "KK House…" — HubSpot typo stuck in Base44
+
+### Shipped
+- Applications row: pencil next to deal title → edits `MerchantCorporateProfile.legalName` via `updateMerchantProfile`; list refreshes in place
+- Deal Room: same pencil on the title
+- `syncFromHubspot`: `legalName` is **fill-blanks only** (unless `force: true`) so HubSpot Sync does not re-poison a rep fix
+
+Does **not** rewrite HubSpot deal name — Base44 display only. Location/MID DBAs stay separate.
+
+**Teddy:** Push frontend + redeploy `syncFromHubspot` (and `updateMerchantProfile` if not already live). On KK deal 337553383838: pencil → fix to "KK House of Lechon and BBQ" → Save.
+
+**Waiting on:** Teddy
+---
+
