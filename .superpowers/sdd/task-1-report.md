@@ -116,4 +116,4 @@ npm run test:msp-import
 ℹ fail 0
 ```
 
-**Commit:** (see SHA below after commit)
+**Commit:** `7f990ce` — fix: align preview MCC with 5999 clear + test
