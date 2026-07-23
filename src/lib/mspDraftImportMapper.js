@@ -37,7 +37,12 @@ function cleanDigits(s) {
 }
 
 function parseDob(dobString) {
-  const parts = String(dobString || '').split('-');
+  const raw = String(dobString || '').trim();
+  // MSPWare may send YYYY-MM-DD or compact YYYYMMDD (e.g. 19610421)
+  if (/^\d{8}$/.test(raw)) {
+    return { dobYear: raw.slice(0, 4), dobMonth: raw.slice(4, 6), dobDay: raw.slice(6, 8) };
+  }
+  const parts = raw.split('-');
   return { dobYear: parts[0] || '', dobMonth: parts[1] || '', dobDay: parts[2] || '' };
 }
 
@@ -97,7 +102,10 @@ export function mapMspFormToPortal(form, opts = {}) {
     const lastName = String(o.owner_lastname || '').trim();
     const email = String(o.owner_email || f.business_email || '').trim().toLowerCase();
     const emailMatch = cpEmail && email === cpEmail;
-    const nameMatch = firstName.toLowerCase() === cpFirst;
+    const fnLower = firstName.toLowerCase();
+    // Match "Kate" to "Kathleen" etc. (prefix) or exact
+    const nameMatch =
+      Boolean(cpFirst) && (fnLower === cpFirst || fnLower.startsWith(cpFirst));
     const isControl =
       emailMatch || nameMatch || (owners.length === 1 && idx === 0);
     const dob = parseDob(o.owner_dob);
@@ -108,7 +116,9 @@ export function mapMspFormToPortal(form, opts = {}) {
       firstName,
       lastName,
       signerEmail: email,
-      ownershipPercentage: parseFloat(String(o.owner_ownership || '0')) || 0,
+      // MSPWare uses ownership_percent; older dumps used owner_ownership
+      ownershipPercentage:
+        parseFloat(String(o.ownership_percent ?? o.owner_ownership ?? '0')) || 0,
       titleType: TITLE_FROM_MSP[o.owner_title] || 'MANAGING_MEMBER',
       ...dob,
       homeStreet: String(o.owner_address || '').trim(),
