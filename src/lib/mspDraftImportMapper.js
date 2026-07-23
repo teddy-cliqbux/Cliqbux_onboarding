@@ -69,6 +69,7 @@ export function mapMspFormToPortal(form, opts = {}) {
   const hasBank = Boolean(routing && account);
 
   const mccCode = String(f.mcc || '').trim();
+  const midMccCode = mccCode === '5999' ? '' : mccCode;
   // Never invent 5999
   const gaps = [];
   if (!mccCode) gaps.push('MCC is missing — agent must set a real MCC before signing');
@@ -178,7 +179,7 @@ export function mapMspFormToPortal(form, opts = {}) {
     mid: {
       merchantName: dba || legalName,
       dbaName: dba || legalName,
-      mccCode: mccCode === '5999' ? '' : mccCode,
+      mccCode: midMccCode,
       industryType: String(f.industry_type || 'RE'),
       pricingCategory: String(f.pricing_category || '1'),
       pricingMethod: 'TIERD',
@@ -199,7 +200,7 @@ export function mapMspFormToPortal(form, opts = {}) {
       legalName,
       dba: dba || legalName,
       tinLast4: tin ? tin.slice(-4) : null,
-      mcc: mccCode || null,
+      mcc: midMccCode || null,
       ownerNames: signers.map((s) => `${s.firstName} ${s.lastName}`.trim()),
       hasBank,
       cardSplit: { cardPresentPct: cp, internetPct, motoPct },

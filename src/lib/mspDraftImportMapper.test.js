@@ -91,4 +91,12 @@ describe('mapMspFormToPortal', () => {
     assert.equal(m.mid.mccCode, '');
     assert.ok(m.gaps.some((g) => /mcc/i.test(g)));
   });
+
+  it('clears 5999 from MID and preview and records invalid-MCC gap', () => {
+    const m = mapMspFormToPortal({ ...SAMPLE_FORM, mcc: '5999' });
+    assert.equal(m.mid.mccCode, '');
+    assert.notEqual(m.preview.mcc, '5999');
+    assert.equal(m.preview.mcc, null);
+    assert.ok(m.gaps.some((g) => /5999|invalid/i.test(g)));
+  });
 });
