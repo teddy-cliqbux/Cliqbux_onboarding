@@ -1,13 +1,14 @@
 /**
  * Compose street + optional apt/suite/unit for display and MSPWare single-line streets.
- * Empty line 2 is omitted (same as street-only today).
+ * Join with a space (not a comma) — MSPWare Address Line 1 rejects special characters
+ * including commas (live 2026-07-23: Suite 8 on KK House of Lechon).
  */
 export function composeStreet(street, street2) {
   const line1 = String(street || '').trim();
   const line2 = String(street2 || '').trim();
   if (!line1) return line2;
   if (!line2) return line1;
-  return `${line1}, ${line2}`;
+  return `${line1} ${line2}`;
 }
 
 /**

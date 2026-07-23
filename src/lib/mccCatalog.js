@@ -963,7 +963,7 @@ export const MCC_PRODUCTS_OR_SERVICES = {
   "5451": "Cheese Shops",
   "5462": "Bagel Shops",
   "5499": "Coffee Shops",
-  "5611": "Men's & Boy's Clothing & Accessories",
+  "5611": "Men's & Boy's Clothing &",
   "5621": "Bridal Shops",
   "5631": "Costume Jewelry",
   "5641": "Children & Infant Clothes",
@@ -975,12 +975,12 @@ export const MCC_PRODUCTS_OR_SERVICES = {
   "5697": "Custom Made Clothing",
   "5698": "Wig & Toupee Stores",
   "5699": "Clothing - Formal Wear",
-  "5712": "Furniture, Home Furnishing & Equipment Stores (Except Appliances)",
+  "5712": "Furniture, Home Furnishing &",
   "5732": "Electronic Sales",
-  "5734": "Computer Software Sales Transformation",
+  "5734": "Computer Software Sales",
   "5811": "Caterers",
-  "5812": "Eating Places & Restaurants (Non Fast Food)",
-  "5813": "Bars, Saloons, Pubs, Taverns, Lounges, Breweries",
+  "5812": "Eating Places & Restaurants (Non",
+  "5813": "Bars, Saloons, Pubs, Taverns,",
   "5814": "Restaurants - Fast Food",
   "5921": "Bottled Beer, Wine & Liquor Sales",
   "5932": "Antique Shops",
@@ -1003,14 +1003,14 @@ export const MCC_PRODUCTS_OR_SERVICES = {
   "5621B": "Maternity Stores",
   "5611A": "Men's Hat Shops",
   "5611B": "Men's Tie Shops",
-  "5699A": "Miscellaneous Apparel & Accessory Shops - Not Elsewhere Classified",
+  "5699A": "Miscellaneous Apparel &",
   "7230D": "Nail Salon",
   "5697C": "Sewing Shops",
   "5661B": "Shoe Stores",
   "5655B": "Sports & Riding Apparel Stores",
   "5699B": "Swim Wear Shop",
   "5699C": "T-Shirt Shop",
-  "5697D": "Tailors, Seamstresses, Mending & Alterations",
+  "5697D": "Tailors, Seamstresses, Mending &",
   "5661C": "Western Boot Shops",
   "5631C": "Women's Clothing Accessories",
   "5621C": "Women's Coat Stores",
@@ -1038,7 +1038,7 @@ export const MCC_PRODUCTS_OR_SERVICES = {
   "5499D": "Gourmet Food Stores",
   "5499E": "Health Food Stores",
   "5499F": "Ice Cream Shops",
-  "5921F": "Internet Bottled Beer, Wine, and Liquor Sales",
+  "5921F": "Internet Bottled Beer, Wine, and",
   "5921E": "Internet Liquor Stores",
   "5921D": "Internet Package Alcohol Sales",
   "5921A": "Liquor Stores",
@@ -1084,13 +1084,13 @@ export const MCC_PRODUCTS_OR_SERVICES = {
   "5712B": "Mattress Stores",
   "5712C": "Outdoor Furnishing",
   "7011A": "Central Reservations Service",
-  "8099A": "Chemical Dependency Treatment Centers",
+  "8099A": "Chemical Dependency Treatment",
   "8099B": "Fertility Clinics",
   "8099C": "Hair Replacement Centers",
   "8099D": "Hearing Testing Services",
-  "7011B": "Lodging - Not Elsewhere Classified",
+  "7011B": "Lodging - Not Elsewhere",
   "8099K": "Medical Massage Therapists",
-  "8099E": "Medical Services & Health Practitioners - Not Elsewhere Classified",
+  "8099E": "Medical Services & Health",
   "8099F": "Mental Health Practitioners",
   "8099G": "Physical Therapists",
   "7941A": "Professional Sports Clubs",
@@ -1145,14 +1145,33 @@ export function mccToIndustry(mcc) {
   return 'RE';
 }
 
-/** MCC → products_or_services for MSPWare when profile.productDescription is blank. */
+/** MCC → products_or_services for MSPWare when profile.productDescription is blank.
+ *  MSPWare rejects values longer than 33 characters (live 2026-07-23).
+ */
+export const MSP_PRODUCTS_OR_SERVICES_MAX = 33;
+
+export function clampProductsOrServices(s) {
+  let t = String(s || '').trim().replace(/\s+/g, ' ');
+  if (!t) return 'Retail goods and services'.slice(0, MSP_PRODUCTS_OR_SERVICES_MAX);
+  if (t.length <= MSP_PRODUCTS_OR_SERVICES_MAX) return t;
+  const cut = t.slice(0, MSP_PRODUCTS_OR_SERVICES_MAX);
+  const sp = cut.lastIndexOf(' ');
+  return (sp >= 12 ? cut.slice(0, sp) : cut).trim();
+}
+
 export function mccToProductsOrServices(mcc) {
   const raw = String(mcc || '').trim().toUpperCase();
-  if (!raw) return 'Retail goods and services';
-  if (MCC_PRODUCTS_OR_SERVICES[raw]) return MCC_PRODUCTS_OR_SERVICES[raw];
-  const b = mccBase(raw);
-  if (MCC_PRODUCTS_OR_SERVICES[b]) return MCC_PRODUCTS_OR_SERVICES[b];
-  const opt = MCC_OPTIONS.find((o) => o.value === raw || mccBase(o.value) === b);
-  if (opt?.label) return opt.label;
-  return 'Retail goods and services';
+  let out = 'Retail goods and services';
+  if (raw) {
+    if (MCC_PRODUCTS_OR_SERVICES[raw]) out = MCC_PRODUCTS_OR_SERVICES[raw];
+    else {
+      const b = mccBase(raw);
+      if (MCC_PRODUCTS_OR_SERVICES[b]) out = MCC_PRODUCTS_OR_SERVICES[b];
+      else {
+        const opt = MCC_OPTIONS.find((o) => o.value === raw || mccBase(o.value) === b);
+        if (opt?.label) out = opt.label;
+      }
+    }
+  }
+  return clampProductsOrServices(out);
 }

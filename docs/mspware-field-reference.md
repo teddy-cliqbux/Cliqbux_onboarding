@@ -189,4 +189,8 @@ MSPWare has **one** street string per role (`business_address`, `legal_address`,
 | `correspondenceStreet` + `correspondenceStreet2` | `mailing_address` |
 | `homeStreet` + `homeStreet2` | `owner_address` |
 
-Compose rule (`composeStreet`): trim; if line 2 present → `"${street}, ${street2}"`; else street only. Implemented in `src/lib/addressLine.js`, `helpers/addressLine.ts`, and inlined in `submitToMSP` / `signApplication` / `refillMSPForms`. Google Places `subpremise` maps to Street2. **Do not invent** MSPWare `*_address_2` keys.
+Compose rule (`composeStreet`): trim; if line 2 present → `"${street} ${street2}"` (space, **not** comma — MSPWare Address Line 1 rejects commas/special characters; live reject 2026-07-23 on KK House of Lechon Suite 8). Else street only. Implemented in `src/lib/addressLine.js`, `helpers/addressLine.ts`, and inlined in `submitToMSP` / `signApplication` / `refillMSPForms`. Google Places `subpremise` maps to Street2. **Do not invent** MSPWare `*_address_2` keys.
+
+### `products_or_services` max length 33 (2026-07-23)
+
+MSPWare rejects: `"Value cannot be longer than 33 characters."` for `products_or_services`. Elavon MCC labels (e.g. `"Eating Places & Restaurants (Non Fast Food)"`) exceed this. Cliqbux clamps every value via `clampProductsOrServices` (word-boundary truncate) in `resolveProductsOrServices` / `mccToProductsOrServices`, including manual `profile.productDescription`. Catalog map entries are pre-clamped by `scripts/gen-mcc-catalog.mjs`. Re-sync boarding inlines with `node scripts/_sync-mcc-snippet.mjs` after regenerating.

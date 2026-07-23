@@ -1,5 +1,3 @@
-// Canonical copy — boarding functions inline this (Base44 isolates each entry.ts).
-// Regenerate: node scripts/gen-mcc-catalog.mjs
 // ─── MCC → industry_type + products_or_services (inlined from mccCatalog) ───
 // Regenerate via: node scripts/gen-mcc-catalog.mjs
 // MSPWare products_or_services max length 33 (rejected live 2026-07-23 KK House of Lechon).
@@ -208,4 +206,3 @@ function resolveProductsOrServices(profile: any, mcc: string): string {
   if (manual) return clampProductsOrServices(manual);
   return mccToProductsOrServices(mcc);
 }
-

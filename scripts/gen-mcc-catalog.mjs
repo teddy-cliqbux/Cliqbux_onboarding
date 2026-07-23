@@ -48,11 +48,22 @@ function label(desc) {
   return desc.replace(/\s+/g, ' ').trim().replace(/\bAnd\b/g, '&');
 }
 
-/** Plain products/services text for MSPWare products_or_services field. */
+/** Plain products/services text for MSPWare products_or_services field.
+ *  MSPWare max length is 33 (rejected live 2026-07-23 on KK House of Lechon).
+ */
+const MSP_PRODUCTS_OR_SERVICES_MAX = 33;
+
+function clampProductsOrServices(s) {
+  let t = String(s || '').trim().replace(/\s+/g, ' ');
+  if (!t) return 'Retail goods and services'.slice(0, MSP_PRODUCTS_OR_SERVICES_MAX);
+  if (t.length <= MSP_PRODUCTS_OR_SERVICES_MAX) return t;
+  const cut = t.slice(0, MSP_PRODUCTS_OR_SERVICES_MAX);
+  const sp = cut.lastIndexOf(' ');
+  return (sp >= 12 ? cut.slice(0, sp) : cut).trim();
+}
+
 function productsDesc(desc) {
-  const cleaned = label(desc);
-  // Prefer Elavon's own wording — matches how MSPWare MCC pickers describe the business.
-  return cleaned;
+  return clampProductsOrServices(label(desc));
 }
 
 const picked = [];
@@ -131,16 +142,35 @@ export function mccToIndustry(mcc) {
   return 'RE';
 }
 
-/** MCC → products_or_services for MSPWare when profile.productDescription is blank. */
+/** MCC → products_or_services for MSPWare when profile.productDescription is blank.
+ *  MSPWare rejects values longer than 33 characters (live 2026-07-23).
+ */
+export const MSP_PRODUCTS_OR_SERVICES_MAX = 33;
+
+export function clampProductsOrServices(s) {
+  let t = String(s || '').trim().replace(/\\s+/g, ' ');
+  if (!t) return 'Retail goods and services'.slice(0, MSP_PRODUCTS_OR_SERVICES_MAX);
+  if (t.length <= MSP_PRODUCTS_OR_SERVICES_MAX) return t;
+  const cut = t.slice(0, MSP_PRODUCTS_OR_SERVICES_MAX);
+  const sp = cut.lastIndexOf(' ');
+  return (sp >= 12 ? cut.slice(0, sp) : cut).trim();
+}
+
 export function mccToProductsOrServices(mcc) {
   const raw = String(mcc || '').trim().toUpperCase();
-  if (!raw) return 'Retail goods and services';
-  if (MCC_PRODUCTS_OR_SERVICES[raw]) return MCC_PRODUCTS_OR_SERVICES[raw];
-  const b = mccBase(raw);
-  if (MCC_PRODUCTS_OR_SERVICES[b]) return MCC_PRODUCTS_OR_SERVICES[b];
-  const opt = MCC_OPTIONS.find((o) => o.value === raw || mccBase(o.value) === b);
-  if (opt?.label) return opt.label;
-  return 'Retail goods and services';
+  let out = 'Retail goods and services';
+  if (raw) {
+    if (MCC_PRODUCTS_OR_SERVICES[raw]) out = MCC_PRODUCTS_OR_SERVICES[raw];
+    else {
+      const b = mccBase(raw);
+      if (MCC_PRODUCTS_OR_SERVICES[b]) out = MCC_PRODUCTS_OR_SERVICES[b];
+      else {
+        const opt = MCC_OPTIONS.find((o) => o.value === raw || mccBase(o.value) === b);
+        if (opt?.label) out = opt.label;
+      }
+    }
+  }
+  return clampProductsOrServices(out);
 }
 `;
 
@@ -150,6 +180,16 @@ console.log('wrote src/lib/mccCatalog.js');
 // Deno-inlinable snippet for boarding functions (Base44 cannot import shared modules).
 const denoSnippet = `// ─── MCC → industry_type + products_or_services (inlined from mccCatalog) ───
 // Regenerate via: node scripts/gen-mcc-catalog.mjs
+// MSPWare products_or_services max length 33 (rejected live 2026-07-23 KK House of Lechon).
+const MSP_PRODUCTS_OR_SERVICES_MAX = 33;
+function clampProductsOrServices(s: string): string {
+  let t = String(s || '').trim().replace(/\\s+/g, ' ');
+  if (!t) return 'Retail goods and services'.slice(0, MSP_PRODUCTS_OR_SERVICES_MAX);
+  if (t.length <= MSP_PRODUCTS_OR_SERVICES_MAX) return t;
+  const cut = t.slice(0, MSP_PRODUCTS_OR_SERVICES_MAX);
+  const sp = cut.lastIndexOf(' ');
+  return (sp >= 12 ? cut.slice(0, sp) : cut).trim();
+}
 const MCC_PRODUCTS_OR_SERVICES: Record<string, string> = ${JSON.stringify(productsMap, null, 2)};
 function mccBaseCode(mcc: string): string {
   return String(mcc || '').trim().replace(/[A-Z]+$/i, '');
@@ -170,18 +210,22 @@ function mccToIndustryCode(mcc: string): string {
 }
 function mccToProductsOrServices(mcc: string): string {
   const raw = String(mcc || '').trim().toUpperCase();
-  if (!raw) return 'Retail goods and services';
-  if (MCC_PRODUCTS_OR_SERVICES[raw]) return MCC_PRODUCTS_OR_SERVICES[raw];
-  const b = mccBaseCode(raw);
-  if (MCC_PRODUCTS_OR_SERVICES[b]) return MCC_PRODUCTS_OR_SERVICES[b];
-  return 'Retail goods and services';
+  let out = 'Retail goods and services';
+  if (raw) {
+    if (MCC_PRODUCTS_OR_SERVICES[raw]) out = MCC_PRODUCTS_OR_SERVICES[raw];
+    else {
+      const b = mccBaseCode(raw);
+      if (MCC_PRODUCTS_OR_SERVICES[b]) out = MCC_PRODUCTS_OR_SERVICES[b];
+    }
+  }
+  return clampProductsOrServices(out);
 }
 function resolveIndustryType(merchantMID: any, mcc: string, pricingCategory: any, mapIndustryTypeFn: (c: any) => string): string {
   return merchantMID.industryType || mccToIndustryCode(mcc) || mapIndustryTypeFn(pricingCategory) || 'RE';
 }
 function resolveProductsOrServices(profile: any, mcc: string): string {
   const manual = String(profile?.productDescription || '').trim();
-  if (manual) return manual;
+  if (manual) return clampProductsOrServices(manual);
   return mccToProductsOrServices(mcc);
 }
 `;

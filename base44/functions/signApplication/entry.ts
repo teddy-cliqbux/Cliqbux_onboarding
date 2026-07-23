@@ -1009,7 +1009,7 @@ function composeStreet(street: string | null | undefined, street2: string | null
   const line2 = String(street2 || '').trim();
   if (!line1) return line2;
   if (!line2) return line1;
-  return `${line1}, ${line2}`;
+  return `${line1} ${line2}`;
 }
 
 const US_STATES = new Set(['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY','DC']);
@@ -1102,6 +1102,16 @@ function formatDob(year: string, month: string, day: string): string {
 
 // ─── MCC → industry_type + products_or_services (inlined from mccCatalog) ───
 // Regenerate via: node scripts/gen-mcc-catalog.mjs
+// MSPWare products_or_services max length 33 (rejected live 2026-07-23 KK House of Lechon).
+const MSP_PRODUCTS_OR_SERVICES_MAX = 33;
+function clampProductsOrServices(s: string): string {
+  let t = String(s || '').trim().replace(/\s+/g, ' ');
+  if (!t) return 'Retail goods and services'.slice(0, MSP_PRODUCTS_OR_SERVICES_MAX);
+  if (t.length <= MSP_PRODUCTS_OR_SERVICES_MAX) return t;
+  const cut = t.slice(0, MSP_PRODUCTS_OR_SERVICES_MAX);
+  const sp = cut.lastIndexOf(' ');
+  return (sp >= 12 ? cut.slice(0, sp) : cut).trim();
+}
 const MCC_PRODUCTS_OR_SERVICES: Record<string, string> = {
   "4900": "Electricity Providers",
   "5211": "Building Materials",
@@ -1114,7 +1124,7 @@ const MCC_PRODUCTS_OR_SERVICES: Record<string, string> = {
   "5451": "Cheese Shops",
   "5462": "Bagel Shops",
   "5499": "Coffee Shops",
-  "5611": "Men's & Boy's Clothing & Accessories",
+  "5611": "Men's & Boy's Clothing &",
   "5621": "Bridal Shops",
   "5631": "Costume Jewelry",
   "5641": "Children & Infant Clothes",
@@ -1126,12 +1136,12 @@ const MCC_PRODUCTS_OR_SERVICES: Record<string, string> = {
   "5697": "Custom Made Clothing",
   "5698": "Wig & Toupee Stores",
   "5699": "Clothing - Formal Wear",
-  "5712": "Furniture, Home Furnishing & Equipment Stores (Except Appliances)",
+  "5712": "Furniture, Home Furnishing &",
   "5732": "Electronic Sales",
-  "5734": "Computer Software Sales Transformation",
+  "5734": "Computer Software Sales",
   "5811": "Caterers",
-  "5812": "Eating Places & Restaurants (Non Fast Food)",
-  "5813": "Bars, Saloons, Pubs, Taverns, Lounges, Breweries",
+  "5812": "Eating Places & Restaurants (Non",
+  "5813": "Bars, Saloons, Pubs, Taverns,",
   "5814": "Restaurants - Fast Food",
   "5921": "Bottled Beer, Wine & Liquor Sales",
   "5932": "Antique Shops",
@@ -1154,14 +1164,14 @@ const MCC_PRODUCTS_OR_SERVICES: Record<string, string> = {
   "5621B": "Maternity Stores",
   "5611A": "Men's Hat Shops",
   "5611B": "Men's Tie Shops",
-  "5699A": "Miscellaneous Apparel & Accessory Shops - Not Elsewhere Classified",
+  "5699A": "Miscellaneous Apparel &",
   "7230D": "Nail Salon",
   "5697C": "Sewing Shops",
   "5661B": "Shoe Stores",
   "5655B": "Sports & Riding Apparel Stores",
   "5699B": "Swim Wear Shop",
   "5699C": "T-Shirt Shop",
-  "5697D": "Tailors, Seamstresses, Mending & Alterations",
+  "5697D": "Tailors, Seamstresses, Mending &",
   "5661C": "Western Boot Shops",
   "5631C": "Women's Clothing Accessories",
   "5621C": "Women's Coat Stores",
@@ -1189,7 +1199,7 @@ const MCC_PRODUCTS_OR_SERVICES: Record<string, string> = {
   "5499D": "Gourmet Food Stores",
   "5499E": "Health Food Stores",
   "5499F": "Ice Cream Shops",
-  "5921F": "Internet Bottled Beer, Wine, and Liquor Sales",
+  "5921F": "Internet Bottled Beer, Wine, and",
   "5921E": "Internet Liquor Stores",
   "5921D": "Internet Package Alcohol Sales",
   "5921A": "Liquor Stores",
@@ -1235,13 +1245,13 @@ const MCC_PRODUCTS_OR_SERVICES: Record<string, string> = {
   "5712B": "Mattress Stores",
   "5712C": "Outdoor Furnishing",
   "7011A": "Central Reservations Service",
-  "8099A": "Chemical Dependency Treatment Centers",
+  "8099A": "Chemical Dependency Treatment",
   "8099B": "Fertility Clinics",
   "8099C": "Hair Replacement Centers",
   "8099D": "Hearing Testing Services",
-  "7011B": "Lodging - Not Elsewhere Classified",
+  "7011B": "Lodging - Not Elsewhere",
   "8099K": "Medical Massage Therapists",
-  "8099E": "Medical Services & Health Practitioners - Not Elsewhere Classified",
+  "8099E": "Medical Services & Health",
   "8099F": "Mental Health Practitioners",
   "8099G": "Physical Therapists",
   "7941A": "Professional Sports Clubs",
@@ -1280,18 +1290,22 @@ function mccToIndustryCode(mcc: string): string {
 }
 function mccToProductsOrServices(mcc: string): string {
   const raw = String(mcc || '').trim().toUpperCase();
-  if (!raw) return 'Retail goods and services';
-  if (MCC_PRODUCTS_OR_SERVICES[raw]) return MCC_PRODUCTS_OR_SERVICES[raw];
-  const b = mccBaseCode(raw);
-  if (MCC_PRODUCTS_OR_SERVICES[b]) return MCC_PRODUCTS_OR_SERVICES[b];
-  return 'Retail goods and services';
+  let out = 'Retail goods and services';
+  if (raw) {
+    if (MCC_PRODUCTS_OR_SERVICES[raw]) out = MCC_PRODUCTS_OR_SERVICES[raw];
+    else {
+      const b = mccBaseCode(raw);
+      if (MCC_PRODUCTS_OR_SERVICES[b]) out = MCC_PRODUCTS_OR_SERVICES[b];
+    }
+  }
+  return clampProductsOrServices(out);
 }
 function resolveIndustryType(merchantMID: any, mcc: string, pricingCategory: any, mapIndustryTypeFn: (c: any) => string): string {
   return merchantMID.industryType || mccToIndustryCode(mcc) || mapIndustryTypeFn(pricingCategory) || 'RE';
 }
 function resolveProductsOrServices(profile: any, mcc: string): string {
   const manual = String(profile?.productDescription || '').trim();
-  if (manual) return manual;
+  if (manual) return clampProductsOrServices(manual);
   return mccToProductsOrServices(mcc);
 }
 

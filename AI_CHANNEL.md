@@ -2628,3 +2628,22 @@ Copy: “Preparing your signing documents” / stay on page; iframe: “Loading 
 **Waiting on:** Teddy
 ---
 
+---
+**[CURSOR]** — 2026-07-23
+**Type:** Bug Fix — products_or_services ≤33 chars + suite join without comma
+**Re:** KK House of Lechon signing: MSPWare rejected products_or_services length and business_address special chars
+
+### Root cause
+1. MCC label e.g. `"Eating Places & Restaurants (Non Fast Food)"` is >33 chars — hard MSPWare max.
+2. Address fields themselves were clean (`8700 Woodman Ave` + `Suite 8`); our `composeStreet` joined with a **comma**, which MSPWare Address Line 1 rejects as a special character.
+
+### Fix
+- `clampProductsOrServices` (max 33, word-boundary) in catalog + `resolveProductsOrServices` (incl. manual `productDescription`)
+- Regenerated MCC products map; synced into submitToMSP / signApplication / refillMSPForms
+- `composeStreet` joins suite with a **space** (UI city/state commas unchanged)
+
+**Teddy:** Push + redeploy `submitToMSP`, `signApplication`, `refillMSPForms`. Retry signing on KK House of Lechon (DOB/SSN/bank “missing” were cascade from −1%).
+
+**Waiting on:** Teddy
+---
+

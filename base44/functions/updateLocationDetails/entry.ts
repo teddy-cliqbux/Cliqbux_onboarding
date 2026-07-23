@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
       if (!city || !state || !zip) {
         return Response.json({ error: 'City, state, and ZIP are required to save an address' }, { status: 400 });
       }
-      const streetLine = street2 ? `${street}, ${street2}` : street;
+      const streetLine = street2 ? `${street} ${street2}` : street;
       update.businessStreet = street;
       update.businessStreet2 = street2;
       update.businessCity = city;
