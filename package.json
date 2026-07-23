@@ -10,6 +10,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
     "preview": "vite preview",
+    "test:msp-import": "node --test src/lib/mspDraftImportMapper.test.js",
     "test:mcc": "node --test src/lib/mccToIndustry.test.js",
     "test:state": "node --test src/lib/usState.test.js",
     "test:website": "node --test src/lib/businessWebsite.test.js",
