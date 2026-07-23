@@ -2,7 +2,7 @@
 
 **Status:** Complete  
 **Branch:** `feat/kk-lechon-msp-oneoff`  
-**Commit:** (see git log after commit) — `feat: live HubSpot+Base44 path for KK Lechon one-off import`
+**Commit:** `18e1d0a` — `feat: live HubSpot+Base44 path for KK Lechon one-off import`
 
 ## Deliverable
 
