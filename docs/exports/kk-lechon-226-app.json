@@ -1,0 +1,22 @@
+﻿{
+    "merchantapplicationno":  "226",
+    "dba":  "KK House of Lechon and BBQ",
+    "application_status":  "New",
+    "success":  true,
+    "processor":  "Elavon",
+    "last_updated":  "2026-07-22 23:43:41",
+    "salesperson":  {
+                        "link":  "/users/76563",
+                        "salespersonid":  76563
+                    },
+    "merchant_status":  null,
+    "mid":  "",
+    "merchantapplicationtypeno":  24,
+    "documents":  [
+
+                  ],
+    "merchantapplicationstatusno":  51,
+    "status":  "New",
+    "created_on":  "2026-07-22 23:43:41",
+    "apptype":  "Elavon US Application"
+}
