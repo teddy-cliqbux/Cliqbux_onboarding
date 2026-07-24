@@ -110,7 +110,9 @@ export default function MerchantLocationsHome() {
     load();
   }, [load]);
 
-  const corporateId = profile?.corporateId;
+  const paramsCorp = searchParams.get('dealId') || searchParams.get('corporateId');
+  const sessionCorpId = getSession()?.corporateId;
+  const corporateId = profile?.corporateId || sessionCorpId || paramsCorp;
   const quoteMissing =
     profile?.applicationStatus === 'Submitted' && !profile?.hubspotQuoteUrl && !profile?.equipmentPaidAt;
 
@@ -135,7 +137,12 @@ export default function MerchantLocationsHome() {
 
   if (loading) {
     return (
-      <MerchantCenterShell title="Loading…" subtitle="Merchant account">
+      <MerchantCenterShell
+        title="Loading…"
+        subtitle="Merchant account"
+        corporateId={corporateId}
+        showDealLink={!!corporateId}
+      >
         <div className="space-y-3" aria-busy="true">
           <div className="skeleton h-8 w-48 !rounded-cb" />
           <div className="skeleton h-16 w-full !rounded-cb" />
