@@ -19,7 +19,7 @@ function __b64uDecode(str: string): Uint8Array {
   return bytes;
 }
 
-async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merchant' | 'admin'; corporateId?: string } | null> {
+async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merchant' | 'admin'; corporateId?: string; imp?: boolean } | null> {
   try {
     const m = (req.headers.get('Authorization') || '').match(/^Bearer\s+(.+)$/i);
     const parts = m ? m[1].split('.') : [];
@@ -30,7 +30,11 @@ async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merc
       if (ok) {
         const payload = JSON.parse(new TextDecoder().decode(__b64uDecode(parts[1])));
         if (payload.corporateId && typeof payload.exp === 'number' && Date.now() < payload.exp * 1000) {
-          return { actor: 'merchant', corporateId: String(payload.corporateId) };
+          return {
+            actor: 'merchant',
+            corporateId: String(payload.corporateId),
+            imp: payload.imp === true,
+          };
         }
       }
     }
@@ -1753,11 +1757,16 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Elavon processor submit is agent/admin only (2026-07-23). Plain merchants
+    // may still create/fill drafts via this function when called by other flows,
+    // but PUT /applications/{no}/submit requires workspace admin or imp JWT.
+    const canSubmitToProcessor = actor.actor === 'admin' || actor.imp === true;
+
     const mspBase = (Deno.env.get('MSP_BASE_URL') || 'https://api.msppulsepoint.com/v2').replace(/\/$/, '');
     const apiKey  = Deno.env.get('MSP_APP_KEY') || '';
     const appId   = Deno.env.get('MSP_APP_ID') || 'cliqbux';
     const salespersonId = parseInt(Deno.env.get('MSP_SALESPERSON_ID') || '0', 10);
-    const submitEnabled = Deno.env.get('MSP_SUBMIT_ENABLED') === 'true';
+    const submitEnabled = Deno.env.get('MSP_SUBMIT_ENABLED') === 'true' && canSubmitToProcessor;
 
     if (!apiKey) return Response.json({ error: 'MSP_APP_KEY env var not set' }, { status: 500 });
 
@@ -2059,8 +2068,11 @@ Deno.serve(async (req) => {
           console.log(`[submitToMSP] Form fill ${mspApplicationNo}: ${percentComplete ?? '?'}% complete, canSave=${formData?.canSave}, errors=${validationErrors.length}`);
         }
 
-        // ── Step 3: Submit (only if MSP_SUBMIT_ENABLED=true) ──────────────────
+        // ── Step 3: Submit (MSP_SUBMIT_ENABLED + agent/admin only) ────────────
         if (!submitEnabled) {
+          const note = Deno.env.get('MSP_SUBMIT_ENABLED') !== 'true'
+            ? 'Set MSP_SUBMIT_ENABLED=true to submit to Elavon'
+            : 'Processor submit is agent/admin only — merchant tokens cannot submit to Elavon';
           results.push({
             midId: merchantMID.id,
             locationId: merchantMID.locationId,
@@ -2070,7 +2082,7 @@ Deno.serve(async (req) => {
             percentComplete,
             validationErrors,
             mspMessages, // TEMP DIAGNOSTIC — see comment above
-            note: 'Set MSP_SUBMIT_ENABLED=true to submit to Elavon',
+            note,
           });
           continue;
         }
@@ -2147,6 +2159,7 @@ Deno.serve(async (req) => {
       success: allSuccessful,
       allSubmitted: allSuccessful && results.every(r => ['submitted', 'skipped', 'draft_created'].includes(r.status)),
       submitEnabled,
+      canSubmitToProcessor,
       corporateId,
       merchantMIDsAutoCreated: merchantMIDsCreatedAuto,
       results,

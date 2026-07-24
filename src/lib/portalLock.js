@@ -52,6 +52,24 @@ export const FORMS_LOCKED_MESSAGE =
 export const FORMS_LOCKED_MESSAGE_AGENT =
   'Forms locked — Unlock & Modify Details retracts live signing packages so you can edit, then Prepare form and Sign again.';
 
+export const FORMS_LOCKED_MESSAGE_ALL_SIGNED =
+  'Agreement signed. Forms stay locked while Cliqbux reviews and submits to the processor. Contact Cliqbux if something needs to change.';
+
+export const FORMS_LOCKED_MESSAGE_ALL_SIGNED_AGENT =
+  'Agreement signed. Submit to the processor from Sign & Submit (or Applications). Unlock only if details must change before submit.';
+
+/** Banner body copy keyed off lock / Submitted. */
+export function formsLockedBannerMessage(profile, { canUnlock = false } = {}) {
+  if (!profile) return canUnlock ? FORMS_LOCKED_MESSAGE_AGENT : FORMS_LOCKED_MESSAGE;
+  if (profile.applicationStatus === 'Submitted') {
+    return canUnlock ? FORMS_LOCKED_MESSAGE_ALL_SIGNED_AGENT : FORMS_LOCKED_MESSAGE_ALL_SIGNED;
+  }
+  const lock = String(profile.portalLockStatus || '').toLowerCase();
+  if (lock === PORTAL_LOCK_ALL_SIGNED) {
+    return canUnlock ? FORMS_LOCKED_MESSAGE_ALL_SIGNED_AGENT : FORMS_LOCKED_MESSAGE_ALL_SIGNED;
+  }
+  return canUnlock ? FORMS_LOCKED_MESSAGE_AGENT : FORMS_LOCKED_MESSAGE;
+}
 /** Backend 423 / manageLegalEntity (etc.) error copy — match for inline unlock CTAs. */
 export const FORMS_LOCKED_API_MESSAGE =
   'Forms are locked while the merchant agreement is in signing. Unlock from Deal Room (Applications → Deal room → Unlock & Modify), then edit.';

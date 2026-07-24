@@ -89,6 +89,8 @@ export default function PostSubmissionDashboard() {
   const [loading, setLoading] = useState(true);
   const [showShipping, setShowShipping] = useState(false);
   const [agentPreview, setAgentPreview] = useState(false);
+  /** Workspace / impersonation — unlock stays agent-only; merchants never see it here. */
+  const [isAgentViewer, setIsAgentViewer] = useState(false);
   /** QuoteSignModal open — drives 10s pull poll (HubSpot tier has no workflow webhooks). */
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
@@ -153,6 +155,7 @@ export default function PostSubmissionDashboard() {
           return;
         }
         setAgentPreview(isAgent && !submitted);
+        setIsAgentViewer(isAgent);
         if (submitted && !isAgent) {
           fireSubmissionCelebration(corporateId);
         }
@@ -331,10 +334,12 @@ export default function PostSubmissionDashboard() {
             </p>
           </motion.div>
 
-          {isPortalFormsLocked(profile) && (
+          {/* Unlock is agent/admin only — merchants never unlock from Merchant Center. */}
+          {isAgentViewer && isPortalFormsLocked(profile) && (
             <FormsLockedBanner
               profile={profile}
               unlocking={unlocking}
+              canUnlock
               onUnlock={async () => {
                 if (!profile?.corporateId || unlocking) return;
                 setUnlocking(true);

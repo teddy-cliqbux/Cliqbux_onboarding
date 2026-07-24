@@ -2707,3 +2707,33 @@ Does **not** rewrite HubSpot deal name — Base44 display only. Location/MID DBA
 **Waiting on:** Teddy
 ---
 
+---
+**[CURSOR]** — 2026-07-23
+**Type:** Decision + Action Taken
+**Re:** Post-sign thank-you → Merchant Center; agent-only processor submit
+
+### Product
+- After BoldSign completes, **merchants** see a Cliqbux shield stamp celebration, then **Continue to Merchant Center** (sets `applicationStatus: Submitted` for dashboard access — does **not** call `submitToMSP` / Elavon).
+- **Only agents/admins** (impersonation JWT or workspace) see **Submit Application for Processing** and may call Elavon submit.
+
+### Shipped
+- `AgreementSignedCelebration.jsx` — shield stamp motion (respects `prefers-reduced-motion`)
+- `OnboardingVerification.jsx` — removed merchant auto-`submitToMSP`; agent submit CTA + optional skip to Merchant Center
+- `submitToMSP` — `PUT /submit` only when `MSP_SUBMIT_ENABLED` **and** actor is workspace admin or `imp:true` JWT
+- Lock banner copy for `all_signed` / Submitted
+
+**Teddy:** Push frontend + redeploy `submitToMSP`. On KK (impersonating): after sign, merchant path should celebrate → Merchant Center; agent path keeps Submit to processor.
+
+**Waiting on:** Teddy
+---
+
+---
+**[CURSOR]** — 2026-07-23
+**Type:** Action Taken
+**Re:** Merchant Center — no Unlock for merchants
+
+`PostSubmissionDashboard`: Forms locked / Unlock banner only for agent viewers (workspace or impersonation). Plain merchants after sign never see Unlock & Modify on Merchant Center.
+
+**Waiting on:** Teddy (push frontend)
+---
+
