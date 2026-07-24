@@ -506,9 +506,19 @@ function QuickLocalStageModal({ initialName, onCreated, onClose }) {
         },
       });
       if (res.data?.error) throw new Error(res.data.error);
+      if (!res.data?.success && !res.data?.corporateId) {
+        throw new Error(res.data?.error || 'Create did not return a deal id');
+      }
       onCreated?.(res.data);
     } catch (err) {
-      setError(err?.response?.data?.error || err.message || 'Couldn’t create merchant. Check the parent company name and email, then try again.');
+      const data = err?.response?.data;
+      const dealHint = data?.dealId
+        ? ` HubSpot deal ${data.dealId} may already exist — paste that deal ID into Quick Stage to open it.`
+        : '';
+      setError(
+        (data?.error || err.message || 'Couldn’t create merchant. Check the parent company name and email, then try again.')
+        + dealHint
+      );
     } finally {
       setSaving(false);
     }

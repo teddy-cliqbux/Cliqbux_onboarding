@@ -481,16 +481,19 @@ Deno.serve(async (req) => {
         }, { status: 409 });
       }
 
-      // 4. Find or create MerchantAccount for this HubSpot company
+      // 4. Find or create MerchantAccount for this HubSpot company (best-effort).
+      // Same pattern as createHubspotDeal — do NOT abort after HubSpot deal exists
+      // if MerchantAccount is unpublished or create fails (orphan-deal UX bug 2026-07-24).
       let account: any = null;
+      let merchantAccountWarning: string | null = null;
       try {
         const byHs = await base44.asServiceRole.entities.MerchantAccount.filter(
           { hubspotCompanyId }, '-created_date', 1
         );
         account = byHs?.[0] || null;
       } catch (e: any) {
-        // Entity may not be published yet in Base44
         console.warn('[createLocalStage] MerchantAccount filter failed:', e?.message);
+        merchantAccountWarning = e?.message || 'MerchantAccount filter failed';
       }
       if (!account) {
         try {
@@ -501,13 +504,10 @@ Deno.serve(async (req) => {
             legalEntities: [],
           });
         } catch (e: any) {
-          console.error('[createLocalStage] MerchantAccount.create failed:', e?.message);
-          return Response.json({
-            error: 'MerchantAccount entity missing or create failed — republish MerchantAccount schema in Base44, then retry.',
-            detail: e?.message,
-            hubspotCompanyId,
-            dealId,
-          }, { status: 503 });
+          console.warn('[createLocalStage] MerchantAccount.create skipped:', e?.message);
+          merchantAccountWarning = e?.message
+            || 'MerchantAccount create failed — republish MerchantAccount schema in Base44 when convenient';
+          account = null;
         }
       }
 
@@ -515,16 +515,18 @@ Deno.serve(async (req) => {
       const firstName = nameParts[0] || signerName;
       const lastName = nameParts.slice(1).join(' ') || '';
 
-      const profile = await base44.asServiceRole.entities.MerchantCorporateProfile.create({
+      const profileFields: Record<string, unknown> = {
         corporateId,
-        merchantAccountId: account.id,
         hubspotCompanyId,
         legalName: parentCompanyName,
         signerEmail,
         firstName,
         lastName,
         applicationStatus: 'Incomplete',
-      });
+      };
+      if (account?.id) profileFields.merchantAccountId = account.id;
+
+      const profile = await base44.asServiceRole.entities.MerchantCorporateProfile.create(profileFields);
 
       const location = await base44.asServiceRole.entities.MerchantLocations.create({
         corporateId,
@@ -534,9 +536,8 @@ Deno.serve(async (req) => {
       });
 
       const verifyToken = generateToken();
-      const signer = await base44.asServiceRole.entities.MerchantSigners.create({
+      const signerFields: Record<string, unknown> = {
         corporateId,
-        merchantAccountId: account.id,
         firstName,
         lastName,
         signerEmail,
@@ -544,7 +545,9 @@ Deno.serve(async (req) => {
         isPrimarySigner: true,
         identityStatus: 'Pending Invitation',
         verifyToken,
-      });
+      };
+      if (account?.id) signerFields.merchantAccountId = account.id;
+      const signer = await base44.asServiceRole.entities.MerchantSigners.create(signerFields);
 
       const accessToken = generateToken();
       const stage = await base44.asServiceRole.entities.StagedApplication.create({
@@ -560,7 +563,7 @@ Deno.serve(async (req) => {
           signerEmail,
           source: 'quick_stage_hubspot',
           hubspotCompanyId,
-          merchantAccountId: account.id,
+          ...(account?.id ? { merchantAccountId: account.id } : {}),
         },
         accessToken,
         sentToEmail: signerEmail,
@@ -574,7 +577,7 @@ Deno.serve(async (req) => {
         currentStep: 'locations',
         source: 'quick_stage_hubspot',
         hubspotCompanyId,
-        merchantAccountId: account.id,
+        ...(account?.id ? { merchantAccountId: account.id } : {}),
       }).catch(() => null);
 
       return Response.json({
@@ -583,7 +586,8 @@ Deno.serve(async (req) => {
         corporateId,
         dealId,
         hubspotCompanyId,
-        merchantAccountId: account.id,
+        merchantAccountId: account?.id || null,
+        merchantAccountWarning,
         parentCompanyName,
         businessName,
         profile,

@@ -2805,7 +2805,21 @@ Code checklist verified (sidebar active classes, `xl:grid-cols-4`, `lg:grid-cols
 - Sign step (merchant + agent impersonation): after BoldSign, only **Proceed to Onboarding Center** (celebration stamp). No Submit to processor / Skip.
 - Agents submit to Elavon from **Applications** (`Submit to processor`) and **Deal Room** header.
 
-**Teddy:** Push frontend (no new function redeploy for this UX move; `submitToMSP` already agent-gated).
+**Waiting on:** Teddy
+---
+
+---
+**[CURSOR]** — 2026-07-24
+**Type:** Bug Fix
+**Re:** Quick Stage — HubSpot deal created but UI said MerchantAccount failed
+
+### Cause
+`createLocalStage` created HubSpot company+deal first, then **hard-failed 503** if `MerchantAccount.create` failed (schema not published / etc.). Self-serve `createHubspotDeal` already soft-skipped MerchantAccount.
+
+### Fix
+Soft-skip MerchantAccount; still create Profile / Location / Signer / Stage with `corporateId = dealId`. Optional `merchantAccountWarning` in response. UI surfaces dealId hint on failure.
+
+**Teddy:** Redeploy `manageStagedApplication`. For **Trisha Mobile Test** already in HubSpot: paste the deal ID into Applications Quick Stage (numeric) to open it — don’t recreate. Then republish `MerchantAccount` schema in Base44 when you can.
 
 **Waiting on:** Teddy
 ---
