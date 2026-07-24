@@ -68,4 +68,23 @@ describe('resolveApplicationRowMode — signing vs form incomplete', () => {
     });
     assert.equal(r.mode, 'stuck');
   });
+
+  it('CP application signed while lock still signing → submit nudge, not Remind', () => {
+    const r = resolveApplicationRowMode({
+      profile: { applicationStatus: 'Incomplete', portalLockStatus: 'signing' },
+      track: { prefilledData: { activity: { merchantOpens: 1 } } },
+      pipeline: {
+        currentStep: 'verification',
+        completedSteps: { locations: true, banking: true },
+        appStatus: 'Incomplete',
+      },
+      mspErrorCount: 0,
+      formIncomplete: false,
+      detailLoaded: true,
+      agreementSigned: true,
+    });
+    assert.equal(r.mode, 'nudge');
+    assert.equal(r.agreementSigned, true);
+    assert.match(String(r.reason), /signed|submit/i);
+  });
 });

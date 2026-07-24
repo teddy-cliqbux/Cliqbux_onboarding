@@ -14,6 +14,7 @@ import {
   isVerifiedOrHigher,
   isApplicationSigned,
 } from '@/lib/signerLifecycle';
+import { isEffectivelyRequiredSigner } from '@/lib/signerRules';
 import PricingEditorPanel from '@/components/pricing/PricingEditorPanel';
 import { isPricingComplete, TIER_LABELS } from '@/lib/pricingPresets';
 import {
@@ -1314,8 +1315,25 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       ]);
       const loadedMids = midRes.data?.merchantIDs || [];
       setMids(loadedMids);
-      setSigners(sigRes.data?.signers || []);
+      const loadedSigners = sigRes.data?.signers || [];
+      setSigners(loadedSigners);
       setLocations(locRes.data?.locations || []);
+
+      // Heal portalLockStatus when CP is already application signed but lock
+      // still says signing (BoldSign completed outside a clean Base44 poll).
+      try {
+        const required = loadedSigners.filter((s) => isEffectivelyRequiredSigner(s, loadedSigners));
+        for (const s of required) {
+          if (!isApplicationSigned(s.identityStatus)) continue;
+          await base44.functions.invoke('manageSigner', {
+            action: 'markSigned',
+            corporateId,
+            signerId: s.id,
+          });
+        }
+      } catch (healErr) {
+        console.warn('[ApplicationRow] signing lock heal skipped:', healErr?.message || healErr);
+      }
 
       const midsWithApp = loadedMids.filter(m => m.mspApplicationNo);
       if (midsWithApp.length > 0) {
@@ -1441,6 +1459,10 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const formIncomplete = healthReady && healthSummary.incomplete;
   const totalErrors = mspErrCount + (healthReady && formIncomplete ? localErrCount : 0);
 
+  const agreementSigned = (signers || []).some((s) =>
+    isEffectivelyRequiredSigner(s, signers) && isApplicationSigned(s.identityStatus)
+  ) || String(profile?.portalLockStatus || '').toLowerCase() === 'all_signed';
+
   const rowMode = resolveApplicationRowMode({
     profile,
     track: trackStage,
@@ -1448,8 +1470,10 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     mspErrorCount: totalErrors,
     formIncomplete,
     detailLoaded: healthReady,
+    agreementSigned,
   });
   const isStuck = rowMode.mode === 'stuck';
+  const needsSubmitAfterSign = !!rowMode.agreementSigned && !isSubmitted;
 
   useEffect(() => {
     onModeChange?.(corporateId, rowMode.mode);
@@ -1741,7 +1765,11 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             {rowMode.mode === 'nudge' && (
               <span className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 whitespace-nowrap">
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${modeDotClass('nudge')}`} />
-                {currentStep === 'banking' ? 'Waiting on bank' : 'Waiting on sign'}
+                {needsSubmitAfterSign
+                  ? 'Signed — submit next'
+                  : currentStep === 'banking'
+                    ? 'Waiting on bank'
+                    : 'Waiting on sign'}
               </span>
             )}
           </div>
@@ -1821,7 +1849,20 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             </button>
           )}
 
-          {rowMode.mode === 'nudge' && (
+          {rowMode.mode === 'nudge' && needsSubmitAfterSign && (
+            <button
+              type="button"
+              onClick={openMerchantView}
+              disabled={impersonating || openingDashboard}
+              title={rowMode.reason}
+              className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
+            >
+              {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+              Open to submit
+            </button>
+          )}
+
+          {rowMode.mode === 'nudge' && !needsSubmitAfterSign && (
             <div className="relative flex items-stretch" ref={nudgeWrapRef}>
               <button
                 type="button"

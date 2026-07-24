@@ -618,23 +618,29 @@ Deno.serve(async (req) => {
       const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
       const signer = signers.find((s: any) => s.id === signerId);
       if (!signer) return Response.json({ error: 'Signer not found' }, { status: 404 });
-      if (signer.identityStatus === 'Signed' || signer.identityStatus === 'application signed') {
-        return Response.json({ success: true, signer });
-      }
-      const st = String(signer.identityStatus || '');
-      if (st !== 'Verified' && st !== 'verified') {
-        return Response.json({
-          error: 'Identity must be verified before marking application signed.',
-          identityStatus: signer.identityStatus,
-        }, { status: 409 });
-      }
-      const signedAt = new Date().toISOString();
-      const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, {
-        identityStatus: 'application signed',
-        signedAt,
-      });
 
-      // Promote portal lock to all_signed when every required owner has signed
+      let updated = signer;
+      const alreadySigned = signer.identityStatus === 'Signed'
+        || signer.identityStatus === 'application signed';
+      if (!alreadySigned) {
+        const st = String(signer.identityStatus || '');
+        if (st !== 'Verified' && st !== 'verified') {
+          return Response.json({
+            error: 'Identity must be verified before marking application signed.',
+            identityStatus: signer.identityStatus,
+          }, { status: 409 });
+        }
+        const signedAt = new Date().toISOString();
+        updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, {
+          identityStatus: 'application signed',
+          signedAt,
+        });
+      }
+
+      // Always reconcile portal lock when Control Person(s) are signed — even on
+      // idempotent re-entry (KK Lechon 2026-07-23: status said signed but lock
+      // stayed "signing", so Applications kept showing Remind / waiting on sign).
+      let portalLockStatus: string | null = null;
       try {
         const allSigners = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
         const required = (allSigners || []).filter((s: any) => isControlPerson(s));
@@ -645,16 +651,17 @@ Deno.serve(async (req) => {
         if (allDone) {
           const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
           if (profiles?.[0]?.id) {
-            await base44.asServiceRole.entities.MerchantCorporateProfile.update(profiles[0].id, {
+            const next = await base44.asServiceRole.entities.MerchantCorporateProfile.update(profiles[0].id, {
               portalLockStatus: 'all_signed',
             });
+            portalLockStatus = next?.portalLockStatus || 'all_signed';
           }
         }
       } catch (e: any) {
         console.warn('[manageSigner.markSigned] portalLockStatus all_signed update failed:', e?.message);
       }
 
-      return Response.json({ success: true, signer: updated });
+      return Response.json({ success: true, signer: updated, portalLockStatus });
     }
 
     // --- SET LIFECYCLE (admin only — correct false promotions / manual ops) ---
@@ -680,7 +687,32 @@ Deno.serve(async (req) => {
         patch.signedAt = new Date().toISOString();
       }
       const updated = await base44.asServiceRole.entities.MerchantSigners.update(signerId, patch);
-      return Response.json({ success: true, signer: updated });
+
+      // Manual lifecycle repair: keep portal lock in sync when CP is marked signed
+      let portalLockStatus: string | null = null;
+      if (next === 'application signed' || next === 'Signed') {
+        try {
+          const allSigners = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId });
+          const required = (allSigners || []).filter((s: any) => isControlPerson(s));
+          const allDone = required.length > 0 && required.every((s: any) => {
+            const st = String(s.id === signerId ? 'application signed' : (s.identityStatus || ''));
+            return st === 'application signed' || st === 'Signed';
+          });
+          if (allDone) {
+            const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
+            if (profiles?.[0]?.id) {
+              const nextProf = await base44.asServiceRole.entities.MerchantCorporateProfile.update(profiles[0].id, {
+                portalLockStatus: 'all_signed',
+              });
+              portalLockStatus = nextProf?.portalLockStatus || 'all_signed';
+            }
+          }
+        } catch (e: any) {
+          console.warn('[manageSigner.setLifecycleStatus] all_signed update failed:', e?.message);
+        }
+      }
+
+      return Response.json({ success: true, signer: updated, portalLockStatus });
     }
 
     // --- MARK SIGNING FAILED (admin / system) ---

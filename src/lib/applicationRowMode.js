@@ -31,6 +31,7 @@ export function modeSortRank(mode) {
  * @param {number} [args.mspErrorCount]
  * @param {boolean} [args.formIncomplete] — MSP % < 100 / -1 / canSave false (even if error arrays empty)
  * @param {boolean} [args.detailLoaded]
+ * @param {boolean} [args.agreementSigned] — Control Person application signed (or portalLock all_signed)
  * @returns {{ mode: ApplicationRowMode, reason: string, blocker: string|null }}
  */
 export function resolveApplicationRowMode({
@@ -40,6 +41,7 @@ export function resolveApplicationRowMode({
   mspErrorCount = 0,
   formIncomplete = false,
   detailLoaded = false,
+  agreementSigned = false,
 }) {
   const p = track?.prefilledData || {};
   const activity = p.activity || {};
@@ -57,13 +59,24 @@ export function resolveApplicationRowMode({
 
   const merchantTouched = (Number(activity.merchantOpens) || 0) > 0 || !!p.lastSeenAt;
   const lock = String(profile?.portalLockStatus || '').toLowerCase();
+  const signedLocally = !!agreementSigned || lock === 'all_signed';
   const idleStuck = !!(
     p.lastSeenAt
     && (Date.now() - new Date(p.lastSeenAt).getTime()) > STUCK_IDLE_MS
   );
   const hasMspErrors = (Number(mspErrorCount) || 0) > 0;
   const formBlocked = !!formIncomplete || hasMspErrors;
-  const awaitingSignature = ['signing', 'pending_signature'].includes(lock);
+  const awaitingSignature = ['signing', 'pending_signature'].includes(lock) && !signedLocally;
+
+  // Agreement already signed in BoldSign/Base44 but not Submitted yet — do not Remind.
+  if (signedLocally) {
+    return {
+      mode: 'nudge',
+      reason: 'Agreement signed — open portal to submit for underwriting',
+      blocker: null,
+      agreementSigned: true,
+    };
+  }
 
   // Real blockers — incomplete MSP forms / processor rejects are AGENT work.
   // Do NOT treat "forms locked for signature" as ready-to-remind when the form

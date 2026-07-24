@@ -2689,3 +2689,21 @@ Does **not** rewrite HubSpot deal name — Base44 display only. Location/MID DBA
 **Waiting on:** Teddy
 ---
 
+---
+**[CURSOR]** — 2026-07-23
+**Type:** Bug Fix — Applications “Waiting on sign” after BoldSign already signed
+**Re:** KK House of Lechon — owner shows Application signed; row still Remind / waiting on sign (signing happened outside clean Base44 completion)
+
+### Root cause
+`manageSigner` `markSigned` early-returned when already `application signed` and **skipped** promoting `portalLockStatus` → `all_signed`. Row mode only treated `signing`/`pending_signature` as “waiting to sign,” ignoring CP signed.
+
+### Fix
+- `markSigned` / `setLifecycleStatus` always reconcile lock when CP(s) signed
+- Applications expand heals lock via idempotent `markSigned`
+- Row mode: agreement signed → “Open to submit” (not Remind)
+
+**Teddy:** Redeploy `manageSigner` + push frontend. Expand KK row (or refresh Applications) → should show **Signed — submit next** / **Open to submit** → open portal → finish Submit.
+
+**Waiting on:** Teddy
+---
+
