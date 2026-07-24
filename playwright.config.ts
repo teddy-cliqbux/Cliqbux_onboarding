@@ -31,5 +31,9 @@ export default defineConfig({
       name: 'onboarding-stress',
       testMatch: /onboardingStress\.spec\.ts/,
     },
+    {
+      name: 'signing-mobile',
+      testMatch: /signingMobileLayout\.spec\.ts/,
+    },
   ],
 });

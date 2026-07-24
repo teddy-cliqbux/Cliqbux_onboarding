@@ -3,7 +3,8 @@ import { CheckCircle, Loader2, AlertTriangle, PenLine } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
 import { isApplicationSigned, isVerifiedOrHigher } from '@/lib/signerLifecycle';
-import { SigningLoadWait, SigningIframeOverlay } from '@/components/onboarding/SigningLoadWait';
+import { SigningLoadWait } from '@/components/onboarding/SigningLoadWait';
+import SigningDocumentFrame from '@/components/onboarding/SigningDocumentFrame';
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
   { value: '04', label: 'Apr' }, { value: '05', label: 'May' }, { value: '06', label: 'Jun' },
@@ -429,18 +430,14 @@ export default function VerifyIdentity() {
             )}
 
             {iframeUrl && (
-              <div className="rounded-xl border border-gray-200 overflow-hidden relative" style={{ minHeight: 640 }}>
-                <SigningIframeOverlay tone="light" visible={!iframeReady} />
-                <iframe
-                  key={stickyKey || activeApp?.mspApplicationNo}
-                  src={iframeUrl}
-                  title={`Sign — ${activeApp?.merchantName}`}
-                  className="w-full"
-                  style={{ height: 640, border: 'none', display: 'block' }}
-                  allow="same-origin"
-                  onLoad={() => setIframeReady(true)}
-                />
-              </div>
+              <SigningDocumentFrame
+                tone="light"
+                iframeUrl={iframeUrl}
+                iframeKey={stickyKey || activeApp?.mspApplicationNo}
+                title={`Sign — ${activeApp?.merchantName || 'Merchant Processing Agreement'}`}
+                iframeReady={iframeReady}
+                onIframeLoad={() => setIframeReady(true)}
+              />
             )}
 
             {activeApp?.error && !iframeUrl && (

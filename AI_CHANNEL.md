@@ -2824,3 +2824,27 @@ Soft-skip MerchantAccount; still create Profile / Location / Signer / Stage with
 **Waiting on:** Teddy
 ---
 
+
+---
+**[CURSOR]** — 2026-07-24
+**Type:** Bug Fix
+**Re:** Trisha Mobile Test — can't scroll/tap BoldSign on Sign & Submit
+
+### Symptom
+Phone Sign & Submit showed Company Application in iframe + Forms locked banner, but merchant could not scroll to the bottom or tap the document.
+
+### Root cause
+1. Portal shell used portal-card overflow-hidden — nested overflow traps touch scroll inside cross-origin BoldSign iframes on mobile.
+2. Fixed 680px iframe + sticky lock banner ate the viewport; no open-in-new-tab escape hatch.
+
+### Fix (frontend only)
+- overflow-x-hidden on portal card (keep horizontal step clip; don't trap vertical/iframe touch).
+- Hide Forms locked sticky banner on the Sign step (merchant is already signing; unlock stays on Deal Room / other steps).
+- New SigningDocumentFrame with viewport-aware iframe height + gold **Open signing form** (new tab) — wired in OnboardingVerification + VerifyIdentity.
+- Contract helpers + Playwright mobile fixture: `npm run test:signing-layout` / `npm run test:signing-mobile` (both green).
+
+**Teddy:** Push via GitHub Desktop (no Base44 function redeploy). Retest Trisha on phone — if iframe still stubborn, tap **Open signing form**.
+
+**Waiting on:** Teddy
+---
+

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Signing mobile shell fixture</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; background: #0E1319; color: #fff; }
+    .topnav { position: fixed; top: 0; left: 0; right: 0; height: 56px; background: #161C26; z-index: 40;
+      display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .page { padding: 72px 12px 24px; }
+    .lock { position: sticky; top: 56px; z-index: 30; background: #10151C; border: 1px solid rgba(255,255,255,.1);
+      border-radius: 12px; padding: 12px; margin-bottom: 12px; }
+    /* BAD: matches production portal-card overflow-hidden */
+    .portal-card.broken { overflow: hidden; background: #161C26; border-radius: 18px; border: 1px solid rgba(255,255,255,.07); }
+    /* GOOD: clip horizontal step slide only */
+    .portal-card.fixed { overflow-x: hidden; overflow-y: visible; background: #161C26; border-radius: 18px; border: 1px solid rgba(255,255,255,.07); }
+    .frame-wrap.broken { overflow: hidden; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; }
+    .frame-wrap.fixed { overflow: visible; border: 1px solid rgba(255,255,255,.1); border-radius: 12px; }
+    .toolbar { display: flex; gap: 8px; padding: 10px 12px; background: #1A212C; border-bottom: 1px solid rgba(255,255,255,.08); }
+    .toolbar a { color: #FEAC27; font-size: 14px; font-weight: 600; }
+    iframe { width: 100%; border: 0; display: block; background: #fff; }
+    iframe.broken-h { height: 680px; }
+    iframe.fixed-h { height: min(680px, calc(100dvh - 11rem)); }
+  </style>
+</head>
+<body>
+  <div class="topnav">cliqbux · Sign & Submit 4/4</div>
+  <div class="page">
+    <div class="lock" id="lock-banner">Forms locked (ready for signature) — long copy that eats vertical space on phones.</div>
+    <div id="portal-card" class="portal-card broken">
+      <p style="padding:12px;margin:0;opacity:.7;font-size:14px">Trisha Mobile Test — Merced</p>
+      <div id="frame-wrap" class="frame-wrap broken">
+        <div class="toolbar">
+          <a id="open-signing" href="./signing-doc.html" target="_blank" rel="noopener noreferrer" hidden>Open signing form</a>
+        </div>
+        <div style="position:relative">
+          <iframe id="sign-frame" class="broken-h" title="Company Application" src="./signing-doc.html"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const mode = params.get('mode') || 'broken';
+    const card = document.getElementById('portal-card');
+    const wrap = document.getElementById('frame-wrap');
+    const frame = document.getElementById('sign-frame');
+    const open = document.getElementById('open-signing');
+    if (mode === 'fixed') {
+      card.className = 'portal-card fixed';
+      wrap.className = 'frame-wrap fixed';
+      frame.className = 'fixed-h';
+      open.hidden = false;
+    }
+    window.__signingShellMode = mode;
+    window.__getShellMetrics = () => {
+      const cardStyle = getComputedStyle(card);
+      const wrapStyle = getComputedStyle(wrap);
+      const rect = frame.getBoundingClientRect();
+      return {
+        mode,
+        cardOverflow: cardStyle.overflow,
+        cardOverflowX: cardStyle.overflowX,
+        cardOverflowY: cardStyle.overflowY,
+        wrapOverflow: wrapStyle.overflow,
+        frameHeight: rect.height,
+        viewportHeight: window.innerHeight,
+        openVisible: !open.hidden && open.getClientRects().length > 0,
+      };
+    };
+  </script>
+</body>
+</html>

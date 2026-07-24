@@ -1010,7 +1010,11 @@ export default function OnboardingPortal() {
           </div>
         )}
 
-        {formsLocked && (
+        {/* On Sign & Submit the merchant is already in the signing UI — hide the
+            sticky lock banner there so it does not steal viewport / trap scroll
+            under the BoldSign iframe (Trisha Mobile Test 2026-07-24). Agents still
+            unlock from Deal Room / other locked steps. */}
+        {formsLocked && step !== STEP_VERIFICATION && (
           <div className="w-full max-w-4xl mb-4 sticky top-16 z-30">
             <FormsLockedBanner
               profile={profile}
@@ -1021,8 +1025,8 @@ export default function OnboardingPortal() {
           </div>
         )}
 
-        {/* Main card — directional step transitions via framer-motion */}
-        <div className="w-full max-w-4xl portal-card overflow-hidden">
+        {/* overflow-x only — overflow-hidden traps BoldSign iframe touch scroll on mobile */}
+        <div className="w-full max-w-4xl portal-card overflow-x-hidden">
           <AnimatePresence mode="wait" initial={false} custom={stepDir}>
             <motion.div
               key={step}

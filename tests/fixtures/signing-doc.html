@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Company Application</title>
+  <style>
+    body { margin: 0; font-family: Georgia, serif; color: #111; background: #fff; }
+    header { position: sticky; top: 0; background: #f7f7f7; border-bottom: 1px solid #ddd; padding: 10px 12px; display: flex; justify-content: space-between; }
+    main { padding: 16px; }
+    .block { height: 220px; margin-bottom: 16px; border: 1px solid #e5e5e5; border-radius: 8px; padding: 12px; background: #fafafa; }
+    #sign-here { margin: 40px 0 80px; padding: 16px; background: #FEAC27; border: 0; border-radius: 8px; font-size: 18px; font-weight: 700; width: 100%; }
+  </style>
+</head>
+<body>
+  <header><strong>Company Application</strong><span>EN</span></header>
+  <main>
+    <div class="block">Company Information</div>
+    <div class="block">Owner Information</div>
+    <div class="block">Bank Information</div>
+    <div class="block">Additional disclosures</div>
+    <button id="sign-here" type="button">Sign here</button>
+  </main>
+  <script>
+    document.getElementById('sign-here').addEventListener('click', () => {
+      document.body.dataset.signed = '1';
+      window.parent.postMessage({ action: 'onDocumentSigned' }, '*');
+    });
+  </script>
+</body>
+</html>

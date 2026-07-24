@@ -18,7 +18,8 @@ import {
   clearSigningFixStep,
   resolveSigningFixStep,
 } from '@/lib/signingErrorRouting';
-import { SigningLoadWait, SigningIframeOverlay } from '@/components/onboarding/SigningLoadWait';
+import { SigningLoadWait } from '@/components/onboarding/SigningLoadWait';
+import SigningDocumentFrame from '@/components/onboarding/SigningDocumentFrame';
 import AgreementSignedCelebration from '@/components/onboarding/AgreementSignedCelebration';
 // How often to poll MSPWare for signing completion (ms) — ground truth / safety net
 const POLL_INTERVAL_MS = 5000;
@@ -804,49 +805,31 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
           )}
 
           {showSigningChrome && !isComplete && activeApp && !activeApp.error && iframeUrl && selectedSigner && (
-            <div className="border border-cb-border rounded-cb overflow-hidden">
-              {isAgentPreview && (
-                <div className="bg-cb-accent-muted border-b border-cb-border px-5 py-2.5">
-                  <p className="text-cb-caption normal-case tracking-normal text-cb-accent">
-                    Agent preview of the merchant&apos;s BoldSign link — same URL the merchant sees. Confirm it loads; avoid finishing the signature for them.
+            <SigningDocumentFrame
+              iframeUrl={iframeUrl}
+              iframeKey={stickyFrameKey || `${selectedSigner.id}-${activeApp.mspApplicationNo}`}
+              title={activeApp.merchantIDName || activeApp.merchantName}
+              subtitle={`${selectedSigner.firstName} ${selectedSigner.lastName}`}
+              iframeReady={iframeReady}
+              onIframeLoad={() => setIframeReady(true)}
+              agentPreview={isAgentPreview}
+              footer={(
+                <div className="bg-cb-surface-raised border-t border-cb-border px-5 py-3 flex items-center justify-between gap-3">
+                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
+                    On a phone? Use Open signing form if the document won&apos;t scroll. Other owners can sign on their own devices in parallel.
                   </p>
+                  {totalCount > 1 && activeMidIndex < totalCount - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveMidIndex(i => i + 1)}
+                      className="flex-shrink-0 flex items-center gap-1 text-cb-body font-medium text-gray-400 hover:text-white transition-colors"
+                    >
+                      Next <ChevronRight className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               )}
-              <div className="bg-cb-surface-raised border-b border-cb-border px-5 py-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-cb-accent" />
-                  <span className="text-cb-body font-medium text-gray-200">
-                    {activeApp.merchantIDName || activeApp.merchantName}
-                    <span className="text-gray-500 font-normal"> — {selectedSigner.firstName} {selectedSigner.lastName}</span>
-                  </span>
-                </div>
-              </div>
-              <div className="relative" style={{ minHeight: 680 }}>
-                <SigningIframeOverlay visible={!!iframeUrl && !iframeReady} />
-                <iframe
-                  key={stickyFrameKey || `${selectedSigner.id}-${activeApp.mspApplicationNo}`}
-                  src={iframeUrl}
-                  title={`Merchant Processing Agreement — ${activeApp.merchantIDName || activeApp.merchantName}`}
-                  className="w-full"
-                  style={{ height: 680, border: 'none', display: 'block' }}
-                  allow="same-origin"
-                  onLoad={() => setIframeReady(true)}
-                />
-              </div>
-              <div className="bg-cb-surface-raised border-t border-cb-border px-5 py-3 flex items-center justify-between">
-                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
-                  Other owners can sign on their own devices at the same time. Switch who is signing above anytime.
-                </p>
-                {totalCount > 1 && activeMidIndex < totalCount - 1 && (
-                  <button
-                    onClick={() => setActiveMidIndex(i => i + 1)}
-                    className="flex-shrink-0 flex items-center gap-1 text-cb-body font-medium text-gray-400 hover:text-white transition-colors ml-4"
-                  >
-                    Next <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
+            />
           )}
 
           {showSigningChrome && !isComplete && selectedSigner && activeApp && !activeApp.error && !iframeUrl && !activeLink?.signed && (
