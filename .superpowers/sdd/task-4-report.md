@@ -2,7 +2,7 @@
 
 **Status:** DONE  
 **Branch:** `feature/merchant-center-pos-shell`  
-**Commit:** `370d0cf` — feat: compose Setup dashboard grid in PostSubmissionDashboard  
+**Commit:** `8ea97d5` (+ follow-up: showDealLink true) — feat: compose Setup dashboard grid in PostSubmissionDashboard  
 **Date:** 2026-07-24
 
 ---
@@ -35,7 +35,7 @@ Recomposed `PostSubmissionDashboard` into a POS-style Setup layout: compact subm
 
 **Removed:** `ApplicationTracker` (redundant with status cards + `UnderwritingTracker`)
 
-**Shell:** `showDealLink={false}` on Setup page (already on Setup; sidebar/mobile nav shows Locations + Account only)
+**Shell:** `showDealLink` so Setup stays in sidebar/mobile nav (active state while on this page)
 
 ---
 
@@ -84,7 +84,6 @@ No linter errors on `PostSubmissionDashboard.jsx`.
 
 ## Residual risks
 
-- With `showDealLink={false}`, Setup is omitted from sidebar/mobile nav while on this page — intentional; Locations/Account remain reachable.
 - Status card underwriting aggregate is heuristic (worst MID status); may not match every edge case in `UnderwritingTracker` detail rows.
 - Manual smoke not run in this session against live deal data.
 

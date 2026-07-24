@@ -265,7 +265,7 @@ export default function PostSubmissionDashboard() {
 
   if (loading) {
     return (
-      <MerchantCenterShell title="Loading…" subtitle="Merchant Center" showDealLink={false}>
+      <MerchantCenterShell title="Loading…" subtitle="Merchant Center" showDealLink>
         <div className="space-y-4" aria-busy="true" aria-label="Loading Merchant Center">
           <div className="skeleton h-12 w-12 !rounded-full mx-auto" />
           <div className="skeleton h-4 w-40 !rounded-cb mx-auto" />
@@ -315,7 +315,7 @@ export default function PostSubmissionDashboard() {
       subtitle={agentPreview ? 'Setup preview' : 'Setup'}
       corporateId={profile.corporateId}
       openChecklistCount={openChecklistCount}
-      showDealLink={false}
+      showDealLink
     >
       <div className="space-y-6">
         <div className="bg-cb-surface-raised rounded-cb border border-cb-border px-4 py-3">
