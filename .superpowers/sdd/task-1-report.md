@@ -1,119 +1,122 @@
-# Task 1 Report: Pure MSP → portal mapper + unit tests
+# Task 1 Report: Status card helpers (TDD)
 
-**Branch:** `feat/kk-lechon-msp-oneoff`  
-**Date:** 2026-07-23  
-**Status:** DONE
+**Status:** DONE  
+**Branch:** `feature/merchant-center-pos-shell`  
+**Commit:** `13f0f86` — feat: add Merchant Center setup status card helpers  
+**Date:** 2026-07-24
 
-## Deliverables
+---
 
-| File | Action |
+## Summary
+
+Implemented pure JS helpers for Merchant Center setup status cards per the task brief. Followed TDD: failing tests first (RED), implementation from brief (GREEN), commit on feature branch. No deviations from the brief — tests and implementation match verbatim.
+
+---
+
+## Files Created
+
+| File | Purpose |
 |---|---|
-| `src/lib/mspDraftImportMapper.js` | Created — `mapMspFormToPortal` per plan Task 1 Step 3 |
-| `src/lib/mspDraftImportMapper.test.js` | Created — 6 tests per plan Task 1 Step 1 |
-| `package.json` | Added `"test:msp-import"` script |
+| `src/lib/setupStatusCards.js` | `deriveSetupStatusCards()` — maps checklist, MIDs/locations, quote lifecycle, and shipping into four card objects |
+| `src/lib/setupStatusCards.test.js` | Node test suite (3 cases) |
 
-## TDD evidence
+---
 
-### RED (Step 2)
+## Interface
 
-Command:
-
-```text
-node --test src/lib/mspDraftImportMapper.test.js
+```js
+deriveSetupStatusCards({
+  openChecklistCount,
+  merchantIDs,
+  locations,
+  quoteLifecycle,
+  quotePaid,
+  shippingStatus,
+  trackingNumber,
+}) → { attention, underwriting, quote, shipping }
 ```
 
-Result (before `mspDraftImportMapper.js` existed):
+Each card: `{ id, title, value, caption }` (all strings).
 
-```text
-Error [ERR_MODULE_NOT_FOUND]: Cannot find module '...\src\lib\mspDraftImportMapper.js'
+---
+
+## TDD Evidence
+
+### RED — tests before implementation
+
+**Command:**
+```bash
+node --test src/lib/setupStatusCards.test.js
+```
+
+**Output:**
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '...\src\lib\setupStatusCards.js'
+...
 ℹ tests 1
 ℹ pass 0
 ℹ fail 1
 ```
 
-### GREEN (Step 4)
+Expected failure: module not found (implementation file did not exist yet).
 
-Command:
+### GREEN — after implementation
 
-```text
-npm run test:msp-import
+**Command:**
+```bash
+node --test src/lib/setupStatusCards.test.js
 ```
 
-Result:
-
-```text
-▶ mapMspFormToPortal
-  ✔ forces Cash Discount pricing and omits mspApplicationNo
-  ✔ maps Omni split: int→internetPct, cnp→motoPct
-  ✔ maps ownership LL + llc_class C → LIMITED_COMPANY + LLC_CORPORATION
-  ✔ marks Kate as Control Person when first name matches
-  ✔ masks TIN in preview and lists bank when present
-  ✔ never treats 5999 as a valid default MCC when form mcc empty
-ℹ tests 6
-ℹ pass 6
+**Output:**
+```
+▶ deriveSetupStatusCards
+  ✔ maps open checklist count to Needs attention (0.6664ms)
+  ✔ summarizes underwriting from MID elavonMID / applicationStepStatus (0.1671ms)
+  ✔ maps quote lifecycle labels (0.6759ms)
+✔ deriveSetupStatusCards (2.2624ms)
+ℹ tests 3
+ℹ pass 3
 ℹ fail 0
 ```
 
-## Commit
-
-Subject: `feat: add MSP draft→portal mapper for KK Lechon one-off import`  
-Files: mapper, test file, `package.json` script only.
-
-## Self-review
-
-### Plan / brief alignment
-
-- **Cash Discount:** `profile.pricingTier` always `SELF_SERVE_CASH_DISCOUNT`; `mid.pricingMethod` always `TIERD`.
-- **No source app on MID:** `mspApplicationNo` is not set on `mid` (undefined); tests assert this.
-- **Omni reverse (Lesson #18):** `int_percent` → `internetPct`, `cnp_percent` → `motoPct`.
-- **MCC:** Empty MCC stays empty with gap message; `5999` cleared to `''` with gap — never invented as default.
-- **Control Person:** Email match, first-name match (default `Kate`), or sole owner fallback.
-- **Bank:** Routing/account from MSP form → `location.bankDetails` with `authMethod: 'manual'` and masked preview fields via `preview.hasBank` / `preview.tinLast4`.
-
-### Minor doc inconsistency (no code change)
-
-Task brief `MappedImport.preview` lists `percentHints`; plan Step 3 implementation uses `cardSplit: { cardPresentPct, internetPct, motoPct }`. Implementation follows **Step 3 verbatim**. Task 2 inliner should copy the same shape; update design doc later if Teddy wants `percentHints` naming.
-
-### Out of scope (as requested)
-
-- No Deno `importMspDraftOneOff` function.
-- No live MSPWare or HubSpot calls.
-- No `AI_CHANNEL.md` entry (Task 5 ops).
-
-## Global constraints honored in mapper
-
-- Pricing forced to Cash Discount tier (ignores MSP pricing method on source form).
-- Never sets `mspApplicationNo` to `78291` or any value.
-- Never defaults missing MCC to `5999`.
-
-## Next task handoff
-
-Task 2 should inline a verbatim copy of `src/lib/mspDraftImportMapper.js` between sync markers in `importMspDraftOneOff/entry.ts` (Base44 cannot import from `src/`).
+All tests PASS. No brief adjustments required.
 
 ---
 
-## Task 1 review fix (2026-07-23)
+## Self-Review
 
-**Findings addressed:**
+### Correctness
 
-1. **Test gap:** Added 7th test `clears 5999 from MID and preview and records invalid-MCC gap` — asserts `mid.mccCode === ''`, `preview.mcc === null` (not `'5999'`), and gap matches `/5999|invalid/i`.
-2. **preview.mcc inconsistency:** Introduced `midMccCode` (clears `5999`); both `mid.mccCode` and `preview.mcc` use it so preview matches cleared MID.
+- **Attention card:** Open checklist count stringified; title matches `/attention/i`; singular/plural caption logic correct.
+- **Underwriting card:** Prefers `merchantIDs` over `locations` when MIDs present; active count uses `elavonMID` or Active statuses; mixed In Review + Active yields `In review` value (matches `/In Review/i` in test regex); caption `1 of 2 active` would match `/1 of 2/i` if asserted on caption — test only checks `value`, which passes.
+- **Quote card:** `QUOTE_LABELS` maps lifecycle; `quotePaid` forces `paid` lifecycle.
+- **Shipping card:** Locked by default; `ready_to_ship` or `quotePaid` → Ready to ship; tracking in caption when present.
 
-**Test run:**
+### Conventions
 
-```text
-npm run test:msp-import
-▶ mapMspFormToPortal
-  ✔ forces Cash Discount pricing and omits mspApplicationNo
-  ✔ maps Omni split: int→internetPct, cnp→motoPct
-  ✔ maps ownership LL + llc_class C → LIMITED_COMPANY + LLC_CORPORATION
-  ✔ marks Kate as Control Person when first name matches
-  ✔ masks TIN in preview and lists bank when present
-  ✔ never treats 5999 as a valid default MCC when form mcc empty
-  ✔ clears 5999 from MID and preview and records invalid-MCC gap
-ℹ tests 7
-ℹ pass 7
-ℹ fail 0
-```
+- Matches existing lib test pattern (`node:test`, `node:assert/strict`, ESM imports).
+- Pure functions, no React, no side effects — scoped correctly for Task 1.
 
-**Commit:** `7f990ce` — fix: align preview MCC with 5999 clear + test
+### Minor notes (not blockers)
+
+1. Underwriting test regex `/1 of 2|In Review|Active/i` is loose — it passes on `In review` (value) not caption `1 of 2 active`. Acceptable for v1; future tasks may tighten assertions when UI wires up.
+2. `locations` fallback when `merchantIDs` is empty is implemented but not covered by tests yet — brief did not require it.
+3. No `package.json` test script added — brief did not request it; run via `node --test src/lib/setupStatusCards.test.js`.
+
+### Scope compliance
+
+- Only the two specified files created/modified.
+- No unrelated changes committed.
+
+---
+
+## Concerns
+
+None. Implementation matches brief verbatim; all tests green.
+
+---
+
+## Next Steps (out of scope for Task 1)
+
+- Wire `deriveSetupStatusCards` into Merchant Center POS shell UI (later tasks).
+- Optionally add `test:setup-status` npm script and edge-case tests (empty inputs, locations-only fallback).
