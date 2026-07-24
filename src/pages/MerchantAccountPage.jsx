@@ -56,7 +56,9 @@ export default function MerchantAccountPage() {
     load();
   }, [load]);
 
-  const corporateId = profile?.corporateId;
+  const paramsCorp = searchParams.get('dealId') || searchParams.get('corporateId');
+  const sessionCorpId = getSession()?.corporateId;
+  const corporateId = profile?.corporateId || sessionCorpId || paramsCorp;
   const liveMids = (mids || []).filter((m) => m.elavonMID);
   const shown = midFilter
     ? liveMids.filter((m) => String(m.elavonMID) === String(midFilter))

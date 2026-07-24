@@ -67,7 +67,12 @@ export default function MerchantLocationDetail() {
     load();
   }, [load]);
 
-  const corporateId = profile?.corporateId;
+  const paramsCorp = searchParams.get('dealId') || searchParams.get('corporateId');
+  const sessionCorpId = getSession()?.corporateId;
+  const corporateId = profile?.corporateId || sessionCorpId || paramsCorp;
+  const locationsHref = corporateId
+    ? `/locations?dealId=${encodeURIComponent(corporateId)}`
+    : '/locations';
   const primary = location ? primaryMidForLocation(location, mids) : null;
   const status = location
     ? deriveLocationStatus(location, mids, { applicationStatus: profile?.applicationStatus })
@@ -75,7 +80,12 @@ export default function MerchantLocationDetail() {
 
   if (loading) {
     return (
-      <MerchantCenterShell title="Loading…" subtitle="Location" corporateId={corporateId} showDealLink>
+      <MerchantCenterShell
+        title="Loading…"
+        subtitle="Location"
+        corporateId={corporateId}
+        showDealLink={!!corporateId}
+      >
         <div className="space-y-3" aria-busy="true">
           <div className="skeleton h-8 w-56 !rounded-cb" />
           <div className="skeleton h-32 w-full !rounded-cb" />
@@ -93,7 +103,7 @@ export default function MerchantLocationDetail() {
     >
       <p className="mb-4">
         <Link
-          to="/locations"
+          to={locationsHref}
           className="text-cb-caption normal-case tracking-normal text-cb-accent hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent rounded"
         >
           ← Locations
@@ -193,7 +203,11 @@ export default function MerchantLocationDetail() {
               Processor statements will appear here once the data feed is connected.
             </p>
             <Link
-              to={`/account?mid=${encodeURIComponent(primary?.elavonMID || '')}`}
+              to={
+                corporateId
+                  ? `/account?dealId=${encodeURIComponent(corporateId)}&mid=${encodeURIComponent(primary?.elavonMID || '')}`
+                  : `/account?mid=${encodeURIComponent(primary?.elavonMID || '')}`
+              }
               className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent"
             >
               Open account &amp; statements
