@@ -2664,3 +2664,28 @@ Does **not** rewrite HubSpot deal name — Base44 display only. Location/MID DBA
 **Waiting on:** Teddy
 ---
 
+---
+**[CURSOR]** — 2026-07-23
+**Type:** Feature — Lock/unlock tighten + Prepare form → Sign split
+**Re:** Live client: extra location/draft during signing; BoldSign "document edited"; unlock fought auto-staging
+
+### Decisions (grilled with Teddy)
+- Unlock voids MSPWare apps that have a **signature package** only; fail-closed if void fails
+- Merchants never unlock; agents (workspace/imp) before anyone signed; post-sign → `UNLOCK_ADMIN_EMAILS` allowlist (workspace only)
+- Lock still only after BoldSign packages exist
+- **Prepare form** = fill only (no packages/lock); **Sign** only when every MID is 100% + full KYC
+- No auto MSP drafts on MID add/update; Sign step no auto `signApplication` when unlocked
+
+### Shipped
+- `demoteApplication` rewrite (void packaged apps, auth gates, fail-closed)
+- `prepareMSPForms` new function
+- `signApplication`: `statusOnly` restore/poll; refuse without prepare / without 100% forms; no auto-draft create
+- `manageMerchantID`: removed background `submitToMSP`
+- Portal: Prepare form + Sign agreement UI; merchant lock copy (contact Cliqbux); agent unlock on banner/Locations; Deal Room Unlock
+- Env: set `UNLOCK_ADMIN_EMAILS` in Base44 (comma-separated)
+
+**Teddy:** Push + republish/redeploy `demoteApplication`, `prepareMSPForms` (new), `signApplication`, `manageMerchantID`, frontend. Set `UNLOCK_ADMIN_EMAILS`. On KK: Unlock from Deal Room (as allowlisted admin if already signed) → clean orphan KKS draft in MSPWare by hand → Prepare form → Sign.
+
+**Waiting on:** Teddy
+---
+

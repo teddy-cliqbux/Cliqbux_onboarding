@@ -1788,6 +1788,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json();
     const { corporateId } = body;
+    const statusOnly = !!(body.statusOnly || body.restoreOnly);
 
     if (!corporateId) {
       return Response.json({ error: 'corporateId is required' }, { status: 400 });
@@ -1822,6 +1823,107 @@ Deno.serve(async (req) => {
 
     const profile = profiles?.[0];
     if (!profile) return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
+
+    // ── statusOnly / restoreOnly: read existing packages — no fill, no create, no lock mutate ──
+    if (statusOnly) {
+      const DONE = ['Pending MID', 'Active', 'Active (Existing)'];
+      const withApps = (allMerchantMIDs || []).filter((c: any) =>
+        c.mspApplicationNo && !DONE.includes(c.applicationStepStatus)
+      );
+      const applications: any[] = [];
+      for (const merchantMID of withApps) {
+        const mspApplicationNo = String(merchantMID.mspApplicationNo);
+        const merchantName = merchantMID.dbaName || merchantMID.merchantName || `MerchantMID ${mspApplicationNo}`;
+        try {
+          const statusRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/signatures`, {
+            headers: mspHeaders,
+          });
+          const statusData = await statusRes.json().catch(() => ({}));
+          const packageExists = statusRes.ok && (statusData?.signers?.length > 0 || statusData?.success);
+          if (!packageExists) {
+            applications.push({
+              mspApplicationNo,
+              merchantName,
+              merchantIDName: merchantName,
+              midId: merchantMID.id,
+              signers: [],
+              signingUrl: null,
+              allSigned: false,
+              error: statusRes.status === 404 ? null : (statusData?.error || 'No signature package'),
+            });
+            continue;
+          }
+          const isSigSigned = (s: any) => {
+            if (!s) return false;
+            if (s.signed === true) return true;
+            const st = String(s?.localstatus || s?.status || s?.signerStatus || '').toLowerCase().trim();
+            return ['signed', 'complete', 'completed'].includes(st);
+          };
+          const pkgSigners = statusData?.signers || [];
+          const signerLinks: any[] = [];
+          for (const s of pkgSigners) {
+            const email = String(s.emailAddress || s.email || '').toLowerCase().trim();
+            const signed = isSigSigned(s);
+            let signingUrl = null;
+            if (!signed && email) {
+              try {
+                const linkRes = await fetch(
+                  `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(email)}`,
+                  { headers: mspHeaders },
+                );
+                const linkData = await linkRes.json().catch(() => ({}));
+                signingUrl = linkData?.link || linkData?.url || null;
+                if (!signingUrl) {
+                  await new Promise((r) => setTimeout(r, 1000));
+                  const linkRes2 = await fetch(
+                    `${mspBase}/applications/${mspApplicationNo}/signatures/link?emailAddress=${encodeURIComponent(email)}`,
+                    { headers: mspHeaders },
+                  );
+                  const linkData2 = await linkRes2.json().catch(() => ({}));
+                  signingUrl = linkData2?.link || linkData2?.url || null;
+                }
+              } catch { /* keep null */ }
+            }
+            signerLinks.push({ email, signed, signingUrl, status: s.status || s.localstatus });
+          }
+          const primary = signerLinks.find((s) => s.signingUrl) || signerLinks[0];
+          applications.push({
+            mspApplicationNo,
+            merchantName,
+            merchantIDName: merchantName,
+            midId: merchantMID.id,
+            signers: signerLinks,
+            signingUrl: primary?.signingUrl || null,
+            allSigned: pkgSigners.length > 0 && pkgSigners.every(isSigSigned),
+            error: null,
+          });
+        } catch (e: any) {
+          applications.push({
+            mspApplicationNo,
+            merchantName,
+            merchantIDName: merchantName,
+            midId: merchantMID.id,
+            signers: [],
+            signingUrl: null,
+            allSigned: false,
+            error: e?.message || 'Failed to read signatures',
+          });
+        }
+      }
+      const hasUsableSigningPackage = applications.some((a: any) =>
+        a.allSigned || a.signingUrl || (a.signers || []).some((s: any) => s.signingUrl || s.signed)
+      );
+      return Response.json({
+        success: true,
+        statusOnly: true,
+        applications,
+        totalCount: applications.length,
+        totalSigned: applications.filter((a: any) => a.allSigned).length,
+        allSigned: applications.length > 0 && applications.every((a: any) => a.allSigned),
+        hasUsableSigningPackage,
+        portalLockStatus: profile.portalLockStatus || 'unlocked',
+      });
+    }
 
     // ── Early pricing compile guard (canonical mapper) ─────────────────────────
     try {
@@ -1979,114 +2081,33 @@ Deno.serve(async (req) => {
 
     const draftErrors: string[] = [];
     const needsDraft = candidateMerchantMIDs.filter((c: any) => !c.mspApplicationNo);
+    // 2026-07-23: drafts are created only by prepareMSPForms — do not auto-stage here.
     if (needsDraft.length > 0) {
-      console.log(`[signApplication] Auto-creating drafts for ${needsDraft.length} merchantMID(s) missing mspApplicationNo`);
       for (const merchantMID of needsDraft) {
-        let location = locationMap[String(merchantMID.locationId || '')];
-        if (!location && merchantMID.locationId) {
-          location = await base44.asServiceRole.entities.MerchantLocations.get(merchantMID.locationId).catch(() => null);
-          if (location?.id != null) locationMap[String(location.id)] = location;
-        }
-        if (!location) {
-          const msg = `MID "${merchantMID.dbaName || merchantMID.id}" has no matching location (locationId=${merchantMID.locationId || 'missing'}). Re-open Locations & MIDs and re-save the MID.`;
-          console.warn(`[signApplication] ${msg}`);
-          draftErrors.push(msg);
-          continue;
-        }
-
-        // Fail fast on MCC before creating a stranded MSPWare draft
-        const mccPrecheck = String(merchantMID.mccCode || profile.mccCode || '').trim();
-        if (!mccPrecheck) {
-          draftErrors.push(merchantMID.mccHelpRequested
-            ? `The business category for "${merchantMID.dbaName || merchantMID.id}" is still being confirmed by Cliqbux — your specialist will set it shortly.`
-            : `MCC is required on MID "${merchantMID.dbaName || merchantMID.id}" before an MSPWare draft can be created.`);
-          continue;
-        }
-        if (mccPrecheck === '5999') {
-          draftErrors.push(`MCC 5999 is not allowed on MID "${merchantMID.dbaName || merchantMID.id}". Choose a specific retail MCC.`);
-          continue;
-        }
-
-        try {
-          // Pick the template via pricingTier first (canonical); fall back to the
-          // old pricingMethod-based cash-discount detection for any record that
-          // only has pricingMethod set and no pricingTier.
-          const tierKeyForTemplate = (merchantMID.pricingTier || profile.pricingTier || '').toUpperCase();
-          const isCashDiscountByMethod = ['TIERD', 'CLEAR'].includes((merchantMID.pricingMethod || '').toUpperCase());
-          const templateNo = Number(merchantMID.mspTemplateNo || profile.mspTemplateNo)
-            || tierToTemplate(tierKeyForTemplate)
-            || (isCashDiscountByMethod ? resolveCdTemplateNo() : resolveDefaultTemplateNo());
-          const rawDba = merchantMID.dbaName || location.dbaName || profile.legalName || 'Merchant';
-          const createBody = {
-            dba: sanitizeDbaForMspCreate(rawDba),
-            merchantapplicationtypeno: MSP_APP_TYPE,
-            salespersonid: salespersonId,
-            templatemerchantapplicationno: templateNo,
-          };
-          const createRes = await fetch(`${mspBase}/applications`, {
-            method: 'POST', headers: mspHeaders, body: JSON.stringify(createBody),
-          });
-          let createData: any = {};
-          try {
-            createData = await createRes.json();
-          } catch {
-            createData = { error: `MSPWare returned non-JSON (HTTP ${createRes.status})` };
-          }
-          console.log(`[signApplication] POST /applications response ${createRes.status} for "${merchantMID.dbaName}":`, JSON.stringify(createData));
-
-          const appNo = createData.merchantapplicationno ?? createData.MerchantApplicationNo;
-          // Accept app number even when MSP omits success:true (observed variance).
-          const createOk = createRes.ok && appNo != null && appNo !== '' && createData.success !== false;
-          if (!createOk) {
-            const mspErr = createData.error || createData.message || createData.Message
-              || (Array.isArray(createData.errors) ? createData.errors.join('; ') : null)
-              || `HTTP ${createRes.status}`;
-            const tplDiag = await diagnoseMspTemplate(mspBase, mspHeaders, templateNo);
-            const msg =
-              `MSPWare refused draft for "${merchantMID.dbaName || merchantMID.id}" (template ${templateNo}): ${mspErr}. ` +
-              `${tplDiag}. ` +
-              `If template ${templateNo} is broken, set Base44 env MSP_CD_TEMPLATE_NO to a working Cash Discount template number (MSPWare → Templates → check URL), then redeploy is not required — env alone is enough after function restart.`;
-            console.error(`[signApplication] ${msg}`, createData);
-            draftErrors.push(msg);
-            continue;
-          }
-          const mspApplicationNo = String(appNo);
-          await base44.asServiceRole.entities.MerchantMID.update(merchantMID.id, { mspApplicationNo, applicationStepStatus: 'In Review' });
-          merchantMID.mspApplicationNo = mspApplicationNo;
-          // Fill form — non-fatal if this throws; draft number is already saved
-          try {
-            const entityMailing = location.entityId ? (entityMailingMap[location.entityId] || null) : null;
-            const entityCorrespondence = location.entityId ? (entityCorrespondenceMap[location.entityId] || null) : null;
-            const { payload: formPayload, pricingSnapshot } = buildFormPayload(profile, resolveLocationAddress(location), merchantMID, primarySigner, additionalSigners, entityMailing, entityCorrespondence);
-            if (pricingSnapshot) lastPricingSnapshot = pricingSnapshot;
-            const formRes = await fetch(`${mspBase}/applications/${mspApplicationNo}/form`, {
-              method: 'PUT', headers: mspHeaders, body: JSON.stringify(formPayload),
-            });
-            const formData = await formRes.json();
-            console.log(`[signApplication] Form fill ${formRes.status} for ${mspApplicationNo}:`, JSON.stringify(redactSensitive(formData)));
-          } catch (fillErr: any) {
-            console.error(`[signApplication] Form fill failed for ${mspApplicationNo} (draft kept):`, fillErr.message);
-            draftErrors.push(`Draft ${mspApplicationNo} created but form fill failed: ${fillErr.message}`);
-          }
-        } catch (err: any) {
-          const msg = `Exception creating draft for "${merchantMID.dbaName || merchantMID.id}": ${err.message}`;
-          console.error(`[signApplication] ${msg}`);
-          draftErrors.push(msg);
-        }
+        draftErrors.push(
+          `MID "${merchantMID.dbaName || merchantMID.id}" has no MSPWare draft. Click Prepare form first.`,
+        );
       }
+      const portalLockStatus = await healPrematurePortalLock(base44, profile, signers);
+      return Response.json({
+        success: false,
+        error: 'Prepare the merchant form before signing.',
+        code: 'PREPARE_REQUIRED',
+        hint: draftErrors.join(' | '),
+        draftErrors,
+        hasUsableSigningPackage: false,
+        portalLockStatus,
+      }, { status: 422 });
     }
 
     let signable = candidateMerchantMIDs.filter((c: any) => c.mspApplicationNo);
 
     if (signable.length === 0) {
-      const detail = draftErrors.length
-        ? draftErrors.join(' | ')
-        : 'No MSPWare application number on any MID and draft creation did not run.';
       const portalLockStatus = await healPrematurePortalLock(base44, profile, signers);
       return Response.json({
         success: false,
         error: 'Unable to prepare signing documents.',
-        hint: detail,
+        hint: 'No MSPWare application number on any MID. Click Prepare form first.',
         draftErrors,
         midCount: (allMerchantMIDs || []).length,
         candidateCount: candidateMerchantMIDs.length,
@@ -2094,6 +2115,45 @@ Deno.serve(async (req) => {
         hasUsableSigningPackage: false,
         portalLockStatus,
       });
+    }
+
+    // Gate: every signable MID must be 100% before BoldSign packages
+    {
+      const notReady: string[] = [];
+      for (const merchantMID of signable) {
+        const appNo = String(merchantMID.mspApplicationNo);
+        try {
+          const formRes = await fetch(`${mspBase}/applications/${appNo}/form`, { headers: mspHeaders });
+          const formData = await formRes.json().catch(() => ({}));
+          const pct = Number(formData?.percent_complete ?? formData?.percentComplete ?? NaN);
+          const vErr = formData?.validation?.errors || {};
+          const errors = [
+            ...(formData?.completion_errors || []),
+            ...(Array.isArray(vErr.data) ? vErr.data : []),
+          ];
+          const ready = Number.isFinite(pct) && pct >= 100 && errors.length === 0;
+          if (!ready) {
+            notReady.push(
+              `${merchantMID.dbaName || appNo}: ${Number.isFinite(pct) ? pct : '?'}%` +
+              (errors.length ? ` — ${errors.slice(0, 3).map((e: any) => e?.message || e).join('; ')}` : ''),
+            );
+          }
+        } catch (e: any) {
+          notReady.push(`${merchantMID.dbaName || appNo}: could not read form (${e?.message || 'error'})`);
+        }
+      }
+      if (notReady.length > 0) {
+        const portalLockStatus = await healPrematurePortalLock(base44, profile, signers);
+        return Response.json({
+          success: false,
+          error: 'MSPWare forms are not 100% complete. Click Prepare form, fix the listed fields, then Sign.',
+          code: 'FORMS_NOT_READY',
+          hint: notReady.join(' | '),
+          formGaps: notReady,
+          hasUsableSigningPackage: false,
+          portalLockStatus,
+        }, { status: 422 });
+      }
     }
 
     console.log(`[signApplication] corporateId=${corporateId} signable merchantMIDs: ${signable.length}`);

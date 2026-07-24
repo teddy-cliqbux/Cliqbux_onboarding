@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Lock } from 'lucide-react';
-import { FORMS_LOCKED_MESSAGE, DEMOTE_CONFIRM_MESSAGE, portalLockLabel } from '@/lib/portalLock';
+import { FORMS_LOCKED_MESSAGE, FORMS_LOCKED_MESSAGE_AGENT, DEMOTE_CONFIRM_MESSAGE, portalLockLabel } from '@/lib/portalLock';
 
 /**
  * Unlock control with in-place confirm (no window.confirm / alert) — critique 2026-07-15.
@@ -83,6 +83,7 @@ export default function FormsLockedBanner({
   confirmMessage = DEMOTE_CONFIRM_MESSAGE,
 }) {
   const label = portalLockLabel(profile);
+  const message = canUnlock ? FORMS_LOCKED_MESSAGE_AGENT : FORMS_LOCKED_MESSAGE;
 
   return (
     <div className="rounded-cb border border-cb-border bg-cb-bg px-4 py-3 flex flex-col gap-3 shadow-cb-overlay">
@@ -94,7 +95,7 @@ export default function FormsLockedBanner({
           <div className="min-w-0">
             <p className="text-cb-body font-medium text-white">Forms locked ({label})</p>
             <p className="text-cb-caption normal-case tracking-normal text-gray-500 mt-0.5">
-              {FORMS_LOCKED_MESSAGE}
+              {message}
             </p>
           </div>
         </div>

@@ -47,14 +47,17 @@ export function portalLockLabel(profile) {
 }
 
 export const FORMS_LOCKED_MESSAGE =
-  'Forms Locked — Application is ready for signature. Click Unlock & Modify Details to edit.';
+  'Forms Locked — the merchant agreement is out for signature. Contact Cliqbux if you need to change details.';
+
+export const FORMS_LOCKED_MESSAGE_AGENT =
+  'Forms Locked — Unlock & Modify Details retracts live signing packages so you can edit, then Prepare form and Sign again.';
 
 /** Backend 423 / manageLegalEntity (etc.) error copy — match for inline unlock CTAs. */
 export const FORMS_LOCKED_API_MESSAGE =
-  'Forms are locked while the merchant agreement is in signing. Use Unlock & Modify Details first.';
+  'Forms are locked while the merchant agreement is in signing. Contact Cliqbux (or unlock if you are an agent).';
 
 export const DEMOTE_CONFIRM_MESSAGE =
-  'Unlocking this application will instantly invalidate all current signature links. Outstanding signers will need to verify and sign a newly updated agreement. Are you sure you want to continue?';
+  'Unlocking will retract MSPWare applications that are out for signature and invalidate all signing links. The merchant will need Prepare form → Sign again. Continue?';
 
 /**
  * True when an API/UI error is the portal form lock (HTTP 423 FORMS_LOCKED).

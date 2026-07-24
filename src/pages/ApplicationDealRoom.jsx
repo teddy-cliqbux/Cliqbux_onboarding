@@ -72,6 +72,7 @@ export default function ApplicationDealRoom() {
   const [nameDraft, setNameDraft] = useState('');
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
 
   const load = useCallback(async () => {
     if (!corporateId) return;
@@ -147,6 +148,29 @@ export default function ApplicationDealRoom() {
       setNameError(err?.message || 'Could not save name');
     } finally {
       setSavingName(false);
+    }
+  };
+
+  const unlockApplication = async () => {
+    if (!corporateId || unlocking) return;
+    const ok = window.confirm(
+      'Unlocking will retract MSPWare apps that are out for signature and invalidate signing links. Continue?'
+    );
+    if (!ok) return;
+    setUnlocking(true);
+    setError('');
+    try {
+      const res = await base44.functions.invoke('demoteApplication', {
+        corporateId,
+        reason: 'Unlocked from Deal Room',
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      await load();
+      setSyncMsg('Application unlocked. Merchant can edit; next step is Prepare form → Sign.');
+    } catch (err) {
+      setError(err?.response?.data?.error || err.message || 'Could not unlock');
+    } finally {
+      setUnlocking(false);
     }
   };
 
@@ -513,6 +537,17 @@ export default function ApplicationDealRoom() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {profile?.portalLockStatus && profile.portalLockStatus !== 'unlocked' && (
+              <button
+                type="button"
+                onClick={unlockApplication}
+                disabled={unlocking}
+                className="flex items-center gap-1.5 text-cb-caption font-semibold px-3 py-2 rounded-cb bg-cb-accent text-cb-bg hover:opacity-90 disabled:opacity-40"
+              >
+                {unlocking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                Unlock &amp; Modify
+              </button>
+            )}
             <button
               type="button"
               onClick={() => openPortal('portal')}

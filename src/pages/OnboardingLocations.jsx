@@ -1177,7 +1177,7 @@ function entityMissingFields({ ownershipType, taxClassType, establishmentYear, f
 }
 
 function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, forceExpand, onApplicantSave, children, onSaveSuccess }) {
-  const { formsLocked, unlocking, onRequestUnlock } = usePortalLock();
+  const { formsLocked, unlocking, onRequestUnlock, canUnlock } = usePortalLock();
   const [legalName, setLegalName] = useState(entity.legalBusinessName || '');
   const [ownershipType, setOwnershipType] = useState(entity.ownershipType || '');
   const [taxClassType, setTaxClassType]   = useState(entity.taxClassType  || '');
@@ -1354,11 +1354,13 @@ function EntityDetailsPanel({ entity, corporateId, onUpdated, onDraftStatus, for
           ? (
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-0">
               <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">{FORMS_LOCKED_MESSAGE}</p>
-              <UnlockModifyControls
-                onUnlock={onRequestUnlock}
-                unlocking={unlocking}
-                buttonClassName="flex-shrink-0 min-h-10 px-3 py-1.5 rounded-cb bg-cb-accent text-cb-bg text-cb-body font-semibold hover:opacity-90 disabled:opacity-50"
-              />
+              {canUnlock && (
+                <UnlockModifyControls
+                  onUnlock={onRequestUnlock}
+                  unlocking={unlocking}
+                  buttonClassName="flex-shrink-0 min-h-10 px-3 py-1.5 rounded-cb bg-cb-accent text-cb-bg text-cb-body font-semibold hover:opacity-90 disabled:opacity-50"
+                />
+              )}
             </div>
           )
           : !canSave && (
@@ -1434,7 +1436,7 @@ function normalizeEntityRecord(e) {
 }
 
 function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locationCount = 1, showValidation = false }) {
-  const { formsLocked, unlocking, onRequestUnlock, setPortalLockStatus } = usePortalLock();
+  const { formsLocked, unlocking, onRequestUnlock, canUnlock, setPortalLockStatus } = usePortalLock();
   const hasLegalOverride = !!(entity.mailingStreet && entity.mailingCity && entity.mailingState);
   const [sameAsStore, setSameAsStore] = useState(
     entity.legalAddressSameAsStore !== undefined
@@ -1707,10 +1709,12 @@ function EntityLegalAndMailingAddresses({ entity, corporateId, onUpdated, locati
             <p className="text-cb-body text-gray-300">
               {saveError && isFormsLockedError(saveError) ? saveError : FORMS_LOCKED_MESSAGE}
             </p>
-            <UnlockModifyControls
-              onUnlock={onRequestUnlock}
-              unlocking={unlocking}
-            />
+            {canUnlock && (
+              <UnlockModifyControls
+                onUnlock={onRequestUnlock}
+                unlocking={unlocking}
+              />
+            )}
           </div>
         )}
 

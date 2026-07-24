@@ -5,6 +5,7 @@ export const PortalLockContext = createContext({
   formsLocked: false,
   unlocking: false,
   onRequestUnlock: null,
+  canUnlock: false,
   /** Sync local lock when a write returns FORMS_LOCKED but profile state was stale. */
   setPortalLockStatus: null,
 });

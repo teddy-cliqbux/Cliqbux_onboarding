@@ -1,23 +1,21 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ─── demoteApplication ────────────────────────────────────────────────────────
-// Revokes outstanding MSPWare/BoldSign packages and unlocks portal forms so
-// agents (or the merchant) can edit locations/MIDs/banking/signers, then
-// regenerate agreements via signApplication.
+// Unlock portal forms after signing packages exist by fully retracting those
+// MSPWare applications (void draft + clear mspApplicationNo). Draft-only apps
+// without a signature package are left alone.
 //
-// BoldSign is mediated by MSPWare — we do NOT call BoldSign's revoke API
-// directly (no BoldSign API key in this stack). Invalidation path:
-//   DELETE /applications/{no}/signatures  → voids the BoldSign envelope
-// If that fails after anyone has signed, fall back to voiding the MSPWare
-// draft (DELETE /applications/{no}) and clearing mspApplicationNo so a fresh
-// draft can be created. Never clear mspApplicationNo except on explicit 404
-// or intentional void in this demote path.
+// Auth (2026-07-23):
+//   - Plain merchants: never
+//   - Workspace session OR impersonation JWT (imp:true): OK if nobody has signed
+//   - After anyone signed (Base44 roster OR MSPWare package): workspace admin
+//     whose email is in UNLOCK_ADMIN_EMAILS only (impersonation alone is not enough —
+//     imp JWTs carry the merchant email, not the agent’s)
+//
+// Fail-closed: if any packaged app cannot be voided, do not unlock.
 //
 // POST /functions/demoteApplication
 // Body: { corporateId, reason?: string }
-//
-// Auth: getPortalActor — merchant JWT (own corporateId) or admin session.
-// Refuses demotion when any MID is already Pending MID / Active / Active (Existing).
 
 const MSP_BASE = Deno.env.get('MSP_BASE_URL') || 'https://api.msppulsepoint.com/v2';
 const BOARDING_LOCKED = ['Pending MID', 'Active', 'Active (Existing)'];
@@ -32,25 +30,53 @@ function __b64uDecode(str: string): Uint8Array {
   return bytes;
 }
 
-async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merchant' | 'admin'; corporateId?: string } | null> {
+type PortalActor = {
+  actor: 'merchant' | 'admin';
+  corporateId?: string;
+  email?: string;
+  imp?: boolean;
+};
+
+async function getPortalActor(req: Request, base44: any): Promise<PortalActor | null> {
   try {
     const m = (req.headers.get('Authorization') || '').match(/^Bearer\s+(.+)$/i);
     const parts = m ? m[1].split('.') : [];
     const secret = Deno.env.get('MERCHANT_JWT_SECRET');
     if (parts.length === 3 && secret) {
-      const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
-      const ok = await crypto.subtle.verify('HMAC', key, __b64uDecode(parts[2]), new TextEncoder().encode(`${parts[0]}.${parts[1]}`));
+      const key = await crypto.subtle.importKey(
+        'raw',
+        new TextEncoder().encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['verify'],
+      );
+      const ok = await crypto.subtle.verify(
+        'HMAC',
+        key,
+        __b64uDecode(parts[2]),
+        new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+      );
       if (ok) {
         const payload = JSON.parse(new TextDecoder().decode(__b64uDecode(parts[1])));
         if (payload.corporateId && typeof payload.exp === 'number' && Date.now() < payload.exp * 1000) {
-          return { actor: 'merchant', corporateId: String(payload.corporateId) };
+          return {
+            actor: 'merchant',
+            corporateId: String(payload.corporateId),
+            email: payload.email ? String(payload.email) : undefined,
+            imp: payload.imp === true,
+          };
         }
       }
     }
   } catch { /* fall through */ }
   try {
     const user = await base44.auth.me();
-    if (user) return { actor: 'admin' };
+    if (user) {
+      return {
+        actor: 'admin',
+        email: user.email ? String(user.email) : undefined,
+      };
+    }
   } catch { /* no session */ }
   return null;
 }
@@ -65,6 +91,20 @@ function getMspHeaders() {
 function isSigSigned(s: any): boolean {
   const st = String(s?.status || s?.signerstatus || '').toLowerCase();
   return st === 'signed' || st === 'complete' || st === 'completed';
+}
+
+function parseAllowlist(): Set<string> {
+  const raw = Deno.env.get('UNLOCK_ADMIN_EMAILS') || '';
+  return new Set(
+    raw.split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter(Boolean),
+  );
+}
+
+function isAllowlistedAdmin(email?: string): boolean {
+  if (!email) return false;
+  const list = parseAllowlist();
+  if (list.size === 0) return false;
+  return list.has(String(email).trim().toLowerCase());
 }
 
 Deno.serve(async (req) => {
@@ -83,8 +123,16 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Plain merchants never unlock
+    if (actor.actor === 'merchant' && !actor.imp) {
+      return Response.json({
+        error: 'Forms are locked while the merchant agreement is out for signature. Contact Cliqbux to unlock and make changes.',
+        code: 'UNLOCK_MERCHANT_FORBIDDEN',
+      }, { status: 403 });
+    }
+
     const profiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter(
-      { corporateId }, '-created_date', 1
+      { corporateId }, '-created_date', 1,
     );
     const profile = profiles?.[0];
     if (!profile) {
@@ -107,119 +155,195 @@ Deno.serve(async (req) => {
     }
 
     const mspHeaders = getMspHeaders();
-    const midResults: any[] = [];
+    const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }) || [];
+    const rosterAnyoneSigned = signers.some((s: any) => SIGNED_STATUSES.has(String(s.identityStatus || '')));
+
+    // Inspect packages first — also drives post-sign allowlist gate
+    const packageInspect: Array<{
+      mid: any;
+      appNo: string;
+      packageExists: boolean;
+      anyoneSigned: boolean;
+      inspectError?: string;
+    }> = [];
 
     for (const mid of mids) {
       const appNo = mid.mspApplicationNo ? String(mid.mspApplicationNo) : null;
-      const row: Record<string, any> = {
-        midId: mid.id,
-        dbaName: mid.dbaName || mid.merchantName,
-        mspApplicationNo: appNo,
-        signatureRevoke: 'skipped_no_application',
-        draftAction: 'kept',
-      };
+      if (!appNo) continue;
 
-      if (!appNo) {
-        midResults.push(row);
-        continue;
-      }
-
-      // 1) Inspect signature package
-      let anyoneSigned = false;
       let packageExists = false;
+      let anyoneSigned = false;
+      let inspectError: string | undefined;
       try {
         const statusRes = await fetch(`${MSP_BASE}/applications/${appNo}/signatures`, { headers: mspHeaders });
         if (statusRes.status === 404) {
-          row.signatureRevoke = 'no_package';
+          packageExists = false;
         } else if (statusRes.ok) {
           const statusData = await statusRes.json().catch(() => ({}));
-          const signers = statusData?.signers || [];
-          packageExists = !!statusData?.success && signers.length > 0;
-          anyoneSigned = signers.some(isSigSigned);
-          row.packageExists = packageExists;
-          row.anyoneSigned = anyoneSigned;
+          const pkgSigners = statusData?.signers || [];
+          const envelope = String(statusData?.envelopeStatus || statusData?.status || '').toLowerCase();
+          // Live BoldSign package: signers present, or MSP reports an envelope/status
+          packageExists = pkgSigners.length > 0
+            || (statusData?.success === true && !!envelope && envelope !== 'none')
+            || ['new', 'sent', 'out for signature', 'pending', 'inprogress', 'in progress'].includes(envelope);
+          anyoneSigned = pkgSigners.some(isSigSigned);
         } else {
-          row.signatureInspectHttp = statusRes.status;
+          inspectError = `HTTP ${statusRes.status}`;
         }
       } catch (e: any) {
-        row.signatureInspectError = e?.message || String(e);
+        inspectError = e?.message || String(e);
       }
 
-      // 2) Revoke BoldSign package via MSPWare (invalidates signer links)
-      if (packageExists || row.signatureRevoke !== 'no_package') {
-        try {
-          const delRes = await fetch(`${MSP_BASE}/applications/${appNo}/signatures`, {
-            method: 'DELETE',
-            headers: mspHeaders,
-            // MSPWare may ignore body; reason is logged for audit + returned to caller
-            body: JSON.stringify({ reason }),
-          });
-          if (delRes.ok || delRes.status === 404) {
-            row.signatureRevoke = delRes.status === 404 ? 'already_gone' : 'revoked';
-            row.signatureRevokeHttp = delRes.status;
-          } else {
-            const txt = await delRes.text().catch(() => '');
-            row.signatureRevoke = 'failed';
-            row.signatureRevokeHttp = delRes.status;
-            row.signatureRevokeBody = txt.slice(0, 200);
-          }
-        } catch (e: any) {
-          row.signatureRevoke = 'unreachable';
-          row.signatureRevokeError = e?.message || String(e);
-        }
-      }
-
-      // 3) If anyone had signed and revoke failed, void the MSPWare draft so
-      //    signApplication can create a clean package (Critical Lesson #5: only
-      //    clear mspApplicationNo on intentional void / 404 — this is intentional).
-      const revokeFailed = row.signatureRevoke === 'failed' || row.signatureRevoke === 'unreachable';
-      if (anyoneSigned && revokeFailed) {
-        try {
-          const voidRes = await fetch(`${MSP_BASE}/applications/${appNo}`, {
-            method: 'DELETE',
-            headers: mspHeaders,
-          });
-          if (voidRes.ok || voidRes.status === 404) {
-            await base44.asServiceRole.entities.MerchantMID.update(mid.id, {
-              mspApplicationNo: null,
-              applicationStepStatus: 'Ready to Submit',
-            });
-            row.draftAction = voidRes.status === 404 ? 'cleared_404' : 'voided_and_cleared';
-            row.mspApplicationNo = null;
-          } else {
-            // Fallback PATCH Cancelled — still clear local number so we don't reuse a stuck package
-            const cancelRes = await fetch(`${MSP_BASE}/applications/${appNo}`, {
-              method: 'PATCH',
-              headers: mspHeaders,
-              body: JSON.stringify({ status: 'Cancelled' }),
-            });
-            await base44.asServiceRole.entities.MerchantMID.update(mid.id, {
-              mspApplicationNo: null,
-              applicationStepStatus: 'Ready to Submit',
-            });
-            row.draftAction = cancelRes.ok ? 'cancelled_and_cleared' : 'cleared_local_only';
-            row.mspApplicationNo = null;
-          }
-        } catch (e: any) {
-          // Still unlock locally — merchant can edit; next sign may need admin retract
-          await base44.asServiceRole.entities.MerchantMID.update(mid.id, {
-            mspApplicationNo: null,
-            applicationStepStatus: 'Ready to Submit',
-          });
-          row.draftAction = 'cleared_local_msp_unreachable';
-          row.draftError = e?.message || String(e);
-          row.mspApplicationNo = null;
-        }
-      } else if (mid.applicationStepStatus === 'Error') {
-        // Leave draft number; form can be refilled after unlock
-        row.draftAction = 'kept_error_status';
-      }
-
-      midResults.push(row);
+      packageInspect.push({ mid, appNo, packageExists, anyoneSigned, inspectError });
     }
 
-    // 4) Reset signers who completed agreement signing → verified (KYC preserved)
-    const signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }) || [];
+    const mspAnyoneSigned = packageInspect.some((r) => r.anyoneSigned);
+    const anyoneSigned = rosterAnyoneSigned || mspAnyoneSigned;
+
+    if (anyoneSigned) {
+      // Post-sign: workspace allowlist only (not impersonation)
+      if (actor.actor !== 'admin' || !isAllowlistedAdmin(actor.email)) {
+        return Response.json({
+          error: anyoneSigned && actor.imp
+            ? 'Someone has already signed. Only a Cliqbux admin can unlock — use Applications / Deal Room while logged into the workspace (UNLOCK_ADMIN_EMAILS).'
+            : 'Someone has already signed. Only an allowlisted Cliqbux admin can unlock this application.',
+          code: 'UNLOCK_ADMIN_REQUIRED',
+          anyoneSigned: true,
+          rosterAnyoneSigned,
+          mspAnyoneSigned,
+        }, { status: 403 });
+      }
+    }
+
+    // Fail-closed if we could not inspect a MID that has an app number
+    const hardInspectFail = packageInspect.filter((r) => r.inspectError);
+    if (hardInspectFail.length) {
+      // Retry: if GET signatures failed, try GET application — if 404, treat as no package
+      for (const row of hardInspectFail) {
+        try {
+          const appRes = await fetch(`${MSP_BASE}/applications/${row.appNo}`, { headers: mspHeaders });
+          if (appRes.status === 404) {
+            row.packageExists = false;
+            row.inspectError = undefined;
+          }
+        } catch { /* keep error */ }
+      }
+      const stillBad = packageInspect.filter((r) => r.inspectError);
+      if (stillBad.length) {
+        return Response.json({
+          error: 'Could not verify MSPWare signature packages. Unlock aborted so live signing links are not left active. Retry or void the app in MSPWare.',
+          code: 'MSP_INSPECT_FAILED',
+          mids: stillBad.map((r) => ({
+            midId: r.mid.id,
+            mspApplicationNo: r.appNo,
+            error: r.inspectError,
+          })),
+        }, { status: 502 });
+      }
+    }
+
+    const toVoid = packageInspect.filter((r) => r.packageExists);
+    const midResults: any[] = [];
+
+    for (const row of toVoid) {
+      const { mid, appNo, anyoneSigned: pkgSigned } = row;
+      const result: Record<string, any> = {
+        midId: mid.id,
+        dbaName: mid.dbaName || mid.merchantName,
+        mspApplicationNo: appNo,
+        packageExists: true,
+        anyoneSigned: pkgSigned,
+        signatureRevoke: 'pending',
+        draftAction: 'pending',
+      };
+
+      // 1) Revoke BoldSign package
+      try {
+        const delRes = await fetch(`${MSP_BASE}/applications/${appNo}/signatures`, {
+          method: 'DELETE',
+          headers: mspHeaders,
+          body: JSON.stringify({ reason }),
+        });
+        if (delRes.ok || delRes.status === 404) {
+          result.signatureRevoke = delRes.status === 404 ? 'already_gone' : 'revoked';
+          result.signatureRevokeHttp = delRes.status;
+        } else {
+          const txt = await delRes.text().catch(() => '');
+          result.signatureRevoke = 'failed';
+          result.signatureRevokeHttp = delRes.status;
+          result.signatureRevokeBody = txt.slice(0, 200);
+        }
+      } catch (e: any) {
+        result.signatureRevoke = 'unreachable';
+        result.signatureRevokeError = e?.message || String(e);
+      }
+
+      // 2) Always void the MSPWare application (decision B + packaged-only scope)
+      let voided = false;
+      try {
+        const voidRes = await fetch(`${MSP_BASE}/applications/${appNo}`, {
+          method: 'DELETE',
+          headers: mspHeaders,
+        });
+        if (voidRes.ok || voidRes.status === 404) {
+          voided = true;
+          result.draftAction = voidRes.status === 404 ? 'cleared_404' : 'voided_and_cleared';
+          result.draftHttp = voidRes.status;
+        } else {
+          const cancelRes = await fetch(`${MSP_BASE}/applications/${appNo}`, {
+            method: 'PATCH',
+            headers: mspHeaders,
+            body: JSON.stringify({ status: 'Cancelled' }),
+          });
+          if (cancelRes.ok || cancelRes.status === 404) {
+            voided = true;
+            result.draftAction = 'cancelled_and_cleared';
+            result.draftHttp = cancelRes.status;
+          } else {
+            const txt = await cancelRes.text().catch(() => '');
+            result.draftAction = 'void_failed';
+            result.draftHttp = cancelRes.status;
+            result.draftBody = txt.slice(0, 200);
+          }
+        }
+      } catch (e: any) {
+        result.draftAction = 'void_unreachable';
+        result.draftError = e?.message || String(e);
+      }
+
+      if (!voided) {
+        midResults.push(result);
+        return Response.json({
+          error: `Could not retract MSPWare application ${appNo} (${mid.dbaName || mid.merchantName || mid.id}). Unlock aborted — forms stay locked.`,
+          code: 'MSP_VOID_FAILED',
+          mids: [...midResults],
+        }, { status: 502 });
+      }
+
+      await base44.asServiceRole.entities.MerchantMID.update(mid.id, {
+        mspApplicationNo: null,
+        applicationStepStatus: 'Ready to Submit',
+      });
+      result.mspApplicationNo = null;
+      midResults.push(result);
+    }
+
+    // Record draft-only MIDs we intentionally kept
+    for (const mid of mids) {
+      const appNo = mid.mspApplicationNo ? String(mid.mspApplicationNo) : null;
+      if (!appNo) continue;
+      if (toVoid.some((r) => r.mid.id === mid.id)) continue;
+      midResults.push({
+        midId: mid.id,
+        dbaName: mid.dbaName || mid.merchantName,
+        mspApplicationNo: appNo,
+        packageExists: false,
+        signatureRevoke: 'skipped_no_package',
+        draftAction: 'kept_draft_only',
+      });
+    }
+
+    // Reset signed → verified (KYC kept)
     const signerResets: any[] = [];
     for (const s of signers) {
       if (!SIGNED_STATUSES.has(String(s.identityStatus || ''))) continue;
@@ -235,12 +359,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // 5) Unlock portal forms + demote Submitted → Incomplete
     const prevStatus = profile.applicationStatus;
     const prevLock = profile.portalLockStatus || 'unlocked';
     const profilePatch: Record<string, any> = {
       portalLockStatus: 'unlocked',
-      // Clear frozen pricing so the next signing cycle re-compiles from live fees
       pricingContractSnapshot: null,
     };
     if (prevStatus === 'Submitted') {
@@ -248,10 +370,9 @@ Deno.serve(async (req) => {
     }
     const updatedProfile = await base44.asServiceRole.entities.MerchantCorporateProfile.update(
       profile.id,
-      profilePatch
+      profilePatch,
     );
 
-    // Best-effort auto-track breadcrumb (non-fatal)
     try {
       const stages = await base44.asServiceRole.entities.StagedApplication.filter({ corporateId });
       const auto = (stages || []).find((st: any) => st.label === '__auto_track__');
@@ -265,6 +386,9 @@ Deno.serve(async (req) => {
           type: 'application_demoted',
           at: new Date().toISOString(),
           actor: actor.actor,
+          imp: !!actor.imp,
+          email: actor.email || null,
+          anyoneSigned,
           reason,
         });
         await base44.asServiceRole.entities.StagedApplication.update(auto.id, {
@@ -281,15 +405,17 @@ Deno.serve(async (req) => {
     }
 
     console.log(
-      `[demoteApplication] corporateId=${corporateId} by ${actor.actor} ` +
-      `lock ${prevLock}→unlocked status ${prevStatus}→${updatedProfile.applicationStatus} ` +
-      `mids=${midResults.length} signerResets=${signerResets.length}`
+      `[demoteApplication] corporateId=${corporateId} by ${actor.actor}` +
+      `${actor.imp ? '(imp)' : ''} email=${actor.email || '-'} ` +
+      `voided=${toVoid.length} keptDrafts=${midResults.filter((r) => r.draftAction === 'kept_draft_only').length} ` +
+      `lock ${prevLock}→unlocked`,
     );
 
     return Response.json({
       success: true,
       hubspotBypass: !/^\d+$/.test(corporateId),
       reason,
+      anyoneSigned,
       previous: { applicationStatus: prevStatus, portalLockStatus: prevLock },
       profile: {
         corporateId,
@@ -298,7 +424,7 @@ Deno.serve(async (req) => {
       },
       mids: midResults,
       signerResets,
-      message: 'Application unlocked. Signature links are invalid. Re-save any edits, then prepare signing again.',
+      message: 'Application unlocked. Packaged MSPWare apps were retracted. Run Prepare form, then Sign again.',
     });
   } catch (error: any) {
     console.error('[demoteApplication]', error);

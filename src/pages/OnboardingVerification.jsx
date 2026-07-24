@@ -55,6 +55,8 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
   const [loadingSigning, setLoadingSigning] = useState(false);
   const [signingError, setSigningError]     = useState('');
   const [applications, setApplications]     = useState([]);
+  const [prepareReport, setPrepareReport]   = useState(null); // { allReady, mids }
+  const [preparing, setPreparing]           = useState(false);
   const pollRef = useRef(null);
   // Sticky BoldSign URLs per signer+MID — poll refreshes often return a new link
   // token; if we swap iframe src/key, the frame remounts and wipes in-progress signing.
@@ -127,75 +129,29 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
     (a.missingSignerEmails || []).length > 0
   );
 
-  // Do NOT auto-create packages when the roster first becomes valid (merchant
-  // still needs time to fix ownership after unlock). DO restore existing
-  // packages when we already have MSP drafts / a signing lock — otherwise every
-  // refresh dumps them back on "Prepare Signing Documents" even though BoldSign
-  // links are live. (healPrematurePortalLock used to clear the lock while waiting
-  // for signature, which made lock-only restore unreliable.)
+  // Do NOT auto-create packages. Restore existing packages only when already locked
+  // for signing (read-only statusOnly). Unlocked deals stay quiet until Prepare / Sign.
   const restoreAttemptedRef = useRef(false);
-  const [midsHaveDrafts, setMidsHaveDrafts] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!profile?.corporateId) return;
-      try {
-        const res = await invokePortalFunction('manageMerchantID', {
-          action: 'list',
-          corporateId: profile.corporateId,
-        });
-        if (cancelled) return;
-        const mids = res.data?.merchantIDs || res.data?.mids || res.data?.items || [];
-        const hasDraft = (Array.isArray(mids) ? mids : []).some(
-          (m) => m?.mspApplicationNo != null && String(m.mspApplicationNo).trim() !== ''
-        );
-        // Also check locations legacy field
-        const locDraft = (locations || []).some(
-          (l) => l?.mspApplicationNo != null && String(l.mspApplicationNo).trim() !== ''
-        );
-        setMidsHaveDrafts(hasDraft || locDraft);
-      } catch {
-        const locDraft = (locations || []).some(
-          (l) => l?.mspApplicationNo != null && String(l.mspApplicationNo).trim() !== ''
-        );
-        if (!cancelled) setMidsHaveDrafts(locDraft);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [profile?.corporateId, locations]);
 
   useEffect(() => {
     if (restoreAttemptedRef.current) return;
-    if (!allVerified || loadingSigning || applications.length > 0) return;
+    if (loadingSigning || applications.length > 0) return;
     const lock = String(profile?.portalLockStatus || '').toLowerCase();
     const shouldRestore = isPortalFormsLocked(profile)
-      || ['signing', 'pending_signature', 'all_signed'].includes(lock)
-      || midsHaveDrafts
-      || (typeof sessionStorage !== 'undefined'
-        && profile?.corporateId
-        && sessionStorage.getItem(`signing_prepared_${profile.corporateId}`) === '1');
+      || ['signing', 'pending_signature', 'all_signed'].includes(lock);
     if (!shouldRestore) return;
     restoreAttemptedRef.current = true;
     fetchSigningState({ restoreOnly: true });
-  }, [allVerified, loadingSigning, applications.length, profile?.portalLockStatus, profile?.applicationStatus, profile?.corporateId, midsHaveDrafts]);
+  }, [loadingSigning, applications.length, profile?.portalLockStatus, profile?.applicationStatus, profile?.corporateId]);
 
-  // Stuck lock while waiting on remote KYC — unlock so Locations/Banking stay editable.
-  // signApplication returns KYC_INCOMPLETE and heals portalLockStatus=unlocked.
+  // Stuck lock while waiting on remote KYC — unlock UI locally (never call signApplication to "heal").
   const kycHealAttemptedRef = useRef(false);
   useEffect(() => {
     if (kycHealAttemptedRef.current) return;
     if (allVerified || !profile?.corporateId) return;
     if (!isPortalFormsLocked(profile)) return;
     kycHealAttemptedRef.current = true;
-    (async () => {
-      try {
-        const res = await invokePortalFunction('signApplication', { corporateId: profile.corporateId });
-        applyPortalLockFromSigningResponse(res.data || { portalLockStatus: 'unlocked' }, setPortalLockStatus);
-      } catch {
-        setPortalLockStatus('unlocked');
-      }
-    })();
+    setPortalLockStatus('unlocked');
   }, [allVerified, profile?.portalLockStatus, profile?.applicationStatus, profile?.corporateId]);
 
   // When packages exist and are usable, enter signing phase
@@ -329,35 +285,71 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
     }
   };
 
-  const fetchSigningState = async ({ restoreOnly = false } = {}) => {
-    // Never stage packages while KYC is outstanding — that locks forms un-editable.
-    if (!allVerified) {
-      if (!restoreOnly) {
-        setSigningError('Finish identity verification for every Beneficial Owner and the Control Person before preparing signing documents.');
+  const prepareForm = async () => {
+    if (!profile?.corporateId || preparing) return;
+    // Merchants need KYC; agents may prepare anytime
+    if (!allVerified && !isAgentPreview) {
+      setSigningError('Finish identity verification for every Beneficial Owner and the Control Person before preparing the form.');
+      return;
+    }
+    setPreparing(true);
+    setSigningError('');
+    try {
+      const res = await invokePortalFunction('prepareMSPForms', { corporateId: profile.corporateId });
+      const data = res.data;
+      if (data?.error && !data?.mids) {
+        setSigningError(data.error || 'Prepare form failed.');
+        setPrepareReport(null);
+        return;
       }
+      setPrepareReport({
+        allReady: !!data?.allReady,
+        mids: data?.mids || [],
+        message: data?.message || null,
+      });
+      if (!data?.allReady) {
+        const gaps = (data?.mids || [])
+          .filter((m) => !m.ready)
+          .map((m) => `${m.dbaName || m.mspApplicationNo || m.midId}: ${m.percentComplete ?? '?'}% — ${(m.errors || []).slice(0, 3).join('; ') || 'incomplete'}`)
+          .join(' | ');
+        setSigningError(gaps || data?.error || 'Form is not 100% yet. Fix the listed fields and Prepare again.');
+        rememberSigningFixStep(profile.corporateId, resolveSigningFixStep([], [gaps, data?.error].filter(Boolean)));
+      } else {
+        setSigningError('');
+        clearSigningFixStep(profile.corporateId);
+      }
+    } catch (err) {
+      setSigningError(err.message || 'Prepare form failed.');
+      setPrepareReport(null);
+    } finally {
+      setPreparing(false);
+    }
+  };
+
+  const fetchSigningState = async ({ restoreOnly = false } = {}) => {
+    // Full Sign (packages) requires KYC. Restore/statusOnly can run when locked without re-KYC.
+    if (!restoreOnly && !allVerified) {
+      setSigningError('Finish identity verification for every Beneficial Owner and the Control Person before signing.');
       return;
     }
     setLoadingSigning(true);
     setSigningError('');
-    // Keep sticky URLs on restore so a remount after refresh doesn't thrash the iframe
     if (!restoreOnly) stickySigningUrlsRef.current = {};
     try {
-      const res  = await invokePortalFunction('signApplication', { corporateId: profile.corporateId });
+      const res = await invokePortalFunction('signApplication', {
+        corporateId: profile.corporateId,
+        ...(restoreOnly ? { statusOnly: true, restoreOnly: true } : {}),
+      });
       const data = res.data;
 
       if (!data?.success) {
         const parts = [data?.hint, data?.error].filter(Boolean);
-        // On restore, prefer leaving the Prepare button if packages are somehow
-        // unreadable — don't scare the agent with a hard error when drafts exist.
         if (!restoreOnly) {
-          setSigningError(parts[0] || 'Unable to prepare signing documents.');
+          setSigningError(parts[0] || 'Unable to start signing.');
         }
-        // KYC incomplete: apply unlock from server so forms stay editable
-        if (data?.code === 'KYC_INCOMPLETE' || data?.portalLockStatus === 'unlocked') {
+        if (data?.code === 'KYC_INCOMPLETE' || data?.code === 'PREPARE_REQUIRED' || data?.code === 'FORMS_NOT_READY') {
           applyPortalLockFromSigningResponse(data || {}, setPortalLockStatus);
         } else if (!restoreOnly) {
-          // Never unlock local lock state on a failed restore — that was wiping
-          // "Forms locked / Resume Signing" and bouncing back to Prepare.
           applyPortalLockFromSigningResponse(data || {}, setPortalLockStatus);
         }
         rememberSigningFixStep(
@@ -373,7 +365,11 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
         merchantIDName: a.merchantIDName || a.merchantName,
       }));
       setApplications(apps);
-      applyPortalLockFromSigningResponse(data, setPortalLockStatus);
+      if (!restoreOnly) {
+        applyPortalLockFromSigningResponse(data, setPortalLockStatus);
+      } else if (data?.hasUsableSigningPackage) {
+        applyPortalLockFromSigningResponse(data, setPortalLockStatus);
+      }
 
       const failed = apps.filter(a => a.error);
       const usable = apps.some(a =>
@@ -392,7 +388,7 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
       setActiveMidIndex(0);
     } catch (err) {
       if (!restoreOnly) {
-        setSigningError(err.message || 'Failed to prepare signing documents.');
+        setSigningError(err.message || 'Failed to start signing.');
         applyPortalLockFromSigningResponse({}, setPortalLockStatus);
       }
       rememberSigningFixStep(profile.corporateId, 'verify');
@@ -403,7 +399,11 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
 
   const pollSigningStatus = async () => {
     try {
-      const res  = await invokePortalFunction('signApplication', { corporateId: profile.corporateId });
+      const res  = await invokePortalFunction('signApplication', {
+        corporateId: profile.corporateId,
+        statusOnly: true,
+        restoreOnly: true,
+      });
       const data = res.data;
       if (!data?.applications) return;
 
@@ -521,12 +521,13 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
 
   const showSigningChrome = allVerified && !loadingSigning && applications.length > 0 && !applications.every(a => a.error);
   const isComplete = phase === 'complete' || allRequiredSigned || packagesAllSigned;
+  const formsReady = !!prepareReport?.allReady;
   const packagesLikelyExist = isPortalFormsLocked(profile)
     || ['signing', 'pending_signature', 'all_signed'].includes(String(profile?.portalLockStatus || '').toLowerCase())
-    || midsHaveDrafts
     || (typeof sessionStorage !== 'undefined'
       && profile?.corporateId
       && sessionStorage.getItem(`signing_prepared_${profile.corporateId}`) === '1');
+  const canSign = allVerified && formsReady && !packagesLikelyExist && applications.length === 0;
 
   // After BoldSign completes, merchants land in Merchant Center (agents stay to preview).
   useEffect(() => {
@@ -630,66 +631,91 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
             </div>
           </div>
 
-          {!allVerified && (
+          {!allVerified && !isAgentPreview && (
             <div className="border border-cb-border rounded-cb flex flex-col items-center justify-center py-10 gap-3 bg-cb-surface-raised px-5">
               <div className="w-12 h-12 rounded-full bg-cb-bg border border-cb-border flex items-center justify-center">
                 <Lock className="w-6 h-6 text-gray-500" />
               </div>
               <p className="text-cb-body font-semibold text-gray-300">Signing not ready yet</p>
               <p className="text-cb-body text-gray-500 text-center max-w-sm">
-                Prepare Signing unlocks after the roster shows Ready to sign. Use People &amp; KYC to invite remotes or verify on this device.
+                Prepare form unlocks after the roster shows Ready to sign. Use People &amp; KYC to invite remotes or verify on this device.
               </p>
-              {isAgentPreview && (
-                <p className="text-cb-caption normal-case tracking-normal text-cb-accent text-center max-w-md mt-1">
-                  Agent tip: do not prepare signing while KYC is outstanding — packaging locks forms.
-                </p>
-              )}
             </div>
           )}
 
-          {allVerified && loadingSigning && (
+          {(allVerified || isAgentPreview) && (preparing || loadingSigning) && (
             <SigningLoadWait />
           )}
 
-          {allVerified && !loadingSigning && applications.length === 0 && !signingError && (
+          {(allVerified || isAgentPreview) && !loadingSigning && !preparing && applications.length === 0 && (
             <div className="border border-cb-border rounded-cb bg-cb-surface-raised px-5 py-6 flex flex-col items-center gap-3 text-center">
               {isAgentPreview && (
                 <p className="text-cb-caption normal-case tracking-normal text-cb-accent max-w-md">
-                  Agent preview — these are the same signing links the merchant uses. Open them to confirm they&apos;re live; do not complete the signature unless the merchant asked you to.
+                  {allVerified
+                    ? 'Agent preview — Prepare form fills MSPWare (no packages). Sign creates BoldSign links and locks forms.'
+                    : 'Agent tip: you can Prepare form before all KYC is done to see missing MSP fields. Sign still requires full KYC.'}
                 </p>
               )}
-              <p className="text-cb-body text-gray-300 max-w-md">
-                {packagesLikelyExist
-                  ? (isAgentPreview
-                    ? 'Signing packages already exist for this merchant. Load them to preview the live BoldSign links.'
-                    : 'Your signing documents are ready. Click below to open them and continue where you left off.')
-                  : (isAgentPreview
-                    ? 'Control Person is verified. Load the merchant agreement to confirm BoldSign URLs are working.'
-                    : 'Owners are ready. When you\'ve finished reviewing signer details, prepare the merchant agreement for signing.')}
-              </p>
-              <button
-                type="button"
-                onClick={() => fetchSigningState()}
-                className="flex items-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 px-5 py-2.5 rounded-cb transition-opacity"
-              >
-                <PenLine className="w-4 h-4" />
-                {packagesLikelyExist
-                  ? (isAgentPreview ? 'Load Signing Documents' : 'Resume Signing')
-                  : (isAgentPreview ? 'Preview Signing Documents' : 'Prepare Signing Documents')}
-              </button>
-            </div>
-          )}
-
-          {allVerified && !loadingSigning && signingError && (
-            <div className="border border-cb-border border-l-2 border-l-cb-danger bg-cb-surface-raised rounded-cb flex items-start gap-3 px-5 py-4">
-              <AlertCircle className="w-5 h-5 text-cb-danger flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-cb-body font-semibold text-white">Unable to Load Signing Documents</p>
-                <p className="text-cb-body text-gray-400 mt-1">{signingError}</p>
-                <button onClick={() => fetchSigningState()} className="mt-2 text-cb-body font-medium text-cb-accent hover:opacity-80 transition-opacity">
-                  Try again
-                </button>
-              </div>
+              {packagesLikelyExist ? (
+                <>
+                  <p className="text-cb-body text-gray-300 max-w-md">
+                    Signing packages already exist. Load them to continue or preview the live BoldSign links.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => fetchSigningState({ restoreOnly: true })}
+                    className="flex items-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 px-5 py-2.5 rounded-cb transition-opacity"
+                  >
+                    <PenLine className="w-4 h-4" />
+                    {isAgentPreview ? 'Load Signing Documents' : 'Resume Signing'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-cb-body text-gray-300 max-w-md">
+                    {formsReady
+                      ? 'MSPWare forms are 100% complete. Sign to create the BoldSign package and lock edits.'
+                      : 'Prepare form fills MSPWare and lists any missing fields. Sign only appears when every MID is 100%.'}
+                  </p>
+                  {prepareReport?.mids?.length > 0 && (
+                    <ul className="text-left w-full max-w-md space-y-1 text-cb-caption normal-case tracking-normal text-gray-500">
+                      {prepareReport.mids.map((m) => (
+                        <li key={m.midId || m.mspApplicationNo}>
+                          <span className={m.ready ? 'text-cb-success' : 'text-cb-danger'}>
+                            {m.ready ? '✓' : '•'}
+                          </span>{' '}
+                          {m.dbaName || m.mspApplicationNo}: {m.percentComplete ?? '?'}%
+                          {!m.ready && m.errors?.length ? ` — ${m.errors[0]}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      onClick={prepareForm}
+                      disabled={preparing}
+                      className="flex items-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 px-5 py-2.5 rounded-cb transition-opacity disabled:opacity-50"
+                    >
+                      {preparing ? 'Preparing…' : 'Prepare form'}
+                    </button>
+                    {canSign && (
+                      <button
+                        type="button"
+                        onClick={() => fetchSigningState()}
+                        disabled={loadingSigning}
+                        className="flex items-center gap-2 text-cb-body font-semibold text-white border border-cb-border hover:border-cb-accent px-5 py-2.5 rounded-cb transition-colors disabled:opacity-50"
+                      >
+                        <PenLine className="w-4 h-4" />
+                        Sign agreement
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+              {signingError && !preparing && applications.length === 0 && (
+                <p className="text-cb-body text-cb-danger max-w-lg mt-1" role="alert">{signingError}</p>
+              )}
             </div>
           )}
 

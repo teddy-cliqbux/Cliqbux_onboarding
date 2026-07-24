@@ -921,6 +921,7 @@ export default function OnboardingPortal() {
       formsLocked,
       unlocking,
       onRequestUnlock: handleRequestUnlock,
+      canUnlock: isImpersonating || merchantTokenHasImp(),
       setPortalLockStatus: (status) => setProfile((prev) => (prev ? { ...prev, portalLockStatus: status } : prev)),
     }}>
     <div className="portal-bg font-body">
@@ -1015,6 +1016,7 @@ export default function OnboardingPortal() {
               profile={profile}
               onUnlock={handleRequestUnlock}
               unlocking={unlocking}
+              canUnlock={isImpersonating || merchantTokenHasImp()}
             />
           </div>
         )}

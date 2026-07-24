@@ -176,20 +176,9 @@ Deno.serve(async (req) => {
       };
       const merchantMID = await base44.asServiceRole.entities.MerchantMID.create(merchantMIDData);
 
-      // Only auto-create the MSPWare draft once an MCC is present. Creating a
-      // draft with an empty MCC used to silently fall back to 5999 (restricted /
-      // rejected in CA/CO/NY) and poison the form. Draft is created on the first
-      // MID update that includes a real MCC (see action === 'update' below).
-      const hasMcc = Boolean(String(merchantMIDData.mccCode || '').trim()) && merchantMIDData.mccCode !== '5999';
-      if (hasMcc) {
-        try {
-          await base44.functions.invoke('submitToMSP', { corporateId, midIds: [merchantMID.id] });
-        } catch (e) {
-          console.warn('[manageMerchantID] submitToMSP draft creation failed (non-fatal):', e.message);
-        }
-      } else {
-        console.log('[manageMerchantID] Skipping submitToMSP on add — MCC not set yet (will create draft on MCC save)');
-      }
+      // 2026-07-23: do NOT auto-create MSPWare drafts here. Drafts are created
+      // only when someone clicks Prepare form (prepareMSPForms → submitToMSP).
+      // Background drafts caused orphan MSP rows and fought Unlock.
 
       return Response.json({ merchantID: merchantMID });
     }
@@ -288,24 +277,7 @@ Deno.serve(async (req) => {
 
       const updated = await base44.asServiceRole.entities.MerchantMID.update(merchantIDId, updateFields);
 
-      // Create or re-fill the MSPWare draft when boarding-relevant fields change.
-      // Critical for: first MCC save after add (draft deferred), and MCC/volume
-      // corrections after a draft already exists with stale/wrong values.
-      const boardingKeys = ['mccCode', 'industryType', 'monthlyCardSales', 'avgSaleAmount',
-        'highestTicketAmount', 'cardPresentPct', 'internetPct', 'motoPct', 'businessWebsite', 'merchantName', 'dbaName'];
-      const touchedBoarding = boardingKeys.some((k) => d[k] !== undefined);
-      // ?? not || — an explicitly-cleared MCC ('' via the "my business isn't
-      // listed" help path) must not fall back to the stale stored code.
-      const effectiveMcc = String((updated?.mccCode ?? existing?.mccCode) || '').trim();
-      const corpId = String(existing?.corporateId || corporateId || '');
-      if (touchedBoarding && effectiveMcc && effectiveMcc !== '5999' && corpId
-          && !LOCKED.includes(updated?.applicationStepStatus || existing?.applicationStepStatus || '')) {
-        try {
-          await base44.functions.invoke('submitToMSP', { corporateId: corpId, midIds: [merchantIDId] });
-        } catch (e) {
-          console.warn('[manageMerchantID] submitToMSP after update failed (non-fatal):', e.message);
-        }
-      }
+      // 2026-07-23: no auto submitToMSP on update — Prepare form owns MSP fills.
 
       return Response.json({ updatedMerchantID: updated, merchantID: updated });
     }
