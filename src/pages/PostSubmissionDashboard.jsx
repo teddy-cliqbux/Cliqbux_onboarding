@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, Link, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Check } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ClipboardList, Shield, FileSignature, Truck } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import UnderwritingTracker from '@/components/onboarding/UnderwritingTracker';
-import ApplicationTracker from '@/components/onboarding/ApplicationTracker';
 import EquipmentShippingModal from '@/components/onboarding/EquipmentShippingModal';
 import EquipmentOrderPanel from '@/components/onboarding/EquipmentOrderPanel';
 import InventoryUpload from '@/components/onboarding/InventoryUpload';
@@ -14,6 +12,8 @@ import SetupGate from '@/components/onboarding/SetupGate';
 import MerchantCenterShell from '@/components/merchant-center/MerchantCenterShell';
 import MerchantChecklist from '@/components/merchant-center/MerchantChecklist';
 import MerchantBeforeInstall from '@/components/merchant-center/MerchantBeforeInstall';
+import SetupStatusCard from '@/components/merchant-center/SetupStatusCard';
+import { deriveSetupStatusCards } from '@/lib/setupStatusCards';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
 import { base44 } from '@/api/base44Client';
 import {
@@ -265,7 +265,7 @@ export default function PostSubmissionDashboard() {
 
   if (loading) {
     return (
-      <MerchantCenterShell title="Loading…" subtitle="Merchant Center" showDealLink>
+      <MerchantCenterShell title="Loading…" subtitle="Merchant Center" showDealLink={false}>
         <div className="space-y-4" aria-busy="true" aria-label="Loading Merchant Center">
           <div className="skeleton h-12 w-12 !rounded-full mx-auto" />
           <div className="skeleton h-4 w-40 !rounded-cb mx-auto" />
@@ -292,163 +292,181 @@ export default function PostSubmissionDashboard() {
   }
 
   const shippingTrack = locations.find((l) => l.shippingTrackingNumber);
+  const statusCards = deriveSetupStatusCards({
+    openChecklistCount,
+    merchantIDs,
+    locations,
+    quoteLifecycle: lifecycle,
+    quotePaid,
+    shippingStatus: profile.equipmentShippingStatus || (quotePaid ? 'ready_to_ship' : 'hold'),
+    trackingNumber: shippingTrack?.shippingTrackingNumber || null,
+  });
+
+  const STATUS_CARD_ICONS = {
+    attention: ClipboardList,
+    underwriting: Shield,
+    quote: FileSignature,
+    shipping: Truck,
+  };
 
   return (
     <MerchantCenterShell
       title={accountName || profile.legalName || 'Merchant'}
-      subtitle={agentPreview ? 'Setup preview' : 'Merchant Center'}
+      subtitle={agentPreview ? 'Setup preview' : 'Setup'}
       corporateId={profile.corporateId}
       openChecklistCount={openChecklistCount}
-      showDealLink
+      showDealLink={false}
     >
-      <div className="space-y-8">
-          <motion.div
-            className="text-center"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ type: 'spring', stiffness: 150, damping: 20 }}
-          >
-            <span className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-cb-success/15 mb-4">
-              <Check className="w-6 h-6 text-cb-success" strokeWidth={2.5} />
-            </span>
-            <p className="text-cb-caption uppercase text-gray-500 mb-2">
-              {agentPreview ? 'Agent preview' : 'Application submitted'}
-            </p>
-            <h1 className="font-display text-cb-display text-white">
-              {agentPreview ? 'Setup preview' : 'Your Merchant Center'}
+      <div className="space-y-6">
+        <div className="bg-cb-surface-raised rounded-cb border border-cb-border px-4 py-3">
+          <p className="text-cb-caption uppercase text-gray-500">
+            {agentPreview ? 'Setup preview' : 'Application submitted'}
+          </p>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mt-0.5">
+            <h1 className="font-display text-cb-title text-white">
+              {profile.legalName || accountName}
             </h1>
-            <p className="text-cb-body-lg text-gray-400 mt-2 max-w-md mx-auto">
-              {agentPreview
-                ? 'Review quote, checklist, shipping, and storefront setup before the merchant finishes signing.'
-                : 'Track underwriting, sign and pay your quote, and clear anything that needs your attention — all in one place.'}
-            </p>
-            <p className="mt-3">
-              <Link
-                to={profile?.corporateId
-                  ? `/locations?dealId=${encodeURIComponent(profile.corporateId)}`
-                  : '/locations'}
-                className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent"
-              >
-                View locations
-              </Link>
-            </p>
-          </motion.div>
+            {agentPreview && (
+              <p className="text-cb-caption normal-case tracking-normal text-gray-400">
+                Agent preview — merchant has not submitted yet
+              </p>
+            )}
+          </div>
+        </div>
 
-          {/* Unlock is agent/admin only — merchants never unlock from Merchant Center. */}
-          {isAgentViewer && isPortalFormsLocked(profile) && (
-            <FormsLockedBanner
-              profile={profile}
-              unlocking={unlocking}
-              canUnlock
-              onUnlock={async () => {
-                if (!profile?.corporateId || unlocking) return;
-                setUnlocking(true);
-                try {
-                  const res = await invokePortalFunction('demoteApplication', {
-                    corporateId: profile.corporateId,
-                    reason: 'Application demoted for modifications',
-                  });
-                  if (res.data?.error) {
-                    throw new Error(res.data.error);
-                  }
-                  navigate(`/?dealId=${encodeURIComponent(profile.corporateId)}`, { replace: true });
-                } catch (err) {
-                  throw err instanceof Error
-                    ? err
-                    : new Error(err?.message || 'Could not unlock the application.');
-                } finally {
-                  setUnlocking(false);
+        {/* Unlock is agent/admin only — merchants never unlock from Merchant Center. */}
+        {isAgentViewer && isPortalFormsLocked(profile) && (
+          <FormsLockedBanner
+            profile={profile}
+            unlocking={unlocking}
+            canUnlock
+            onUnlock={async () => {
+              if (!profile?.corporateId || unlocking) return;
+              setUnlocking(true);
+              try {
+                const res = await invokePortalFunction('demoteApplication', {
+                  corporateId: profile.corporateId,
+                  reason: 'Application demoted for modifications',
+                });
+                if (res.data?.error) {
+                  throw new Error(res.data.error);
                 }
-              }}
-            />
-          )}
-
-          <MerchantChecklist
-            corporateId={profile.corporateId}
-            onOpenCountChange={onOpenCountChange}
+                navigate(`/?dealId=${encodeURIComponent(profile.corporateId)}`, { replace: true });
+              } catch (err) {
+                throw err instanceof Error
+                  ? err
+                  : new Error(err?.message || 'Could not unlock the application.');
+              } finally {
+                setUnlocking(false);
+              }
+            }}
           />
+        )}
 
-          {locations[0]?.id && (
-            <MerchantBeforeInstall
-              corporateId={profile.corporateId}
-              locationId={locations[0].id}
-            />
-          )}
-
-          {merchantIDs.length > 0 && <UnderwritingTracker locations={locations} merchantIDs={merchantIDs} />}
-
-          <ApplicationTracker currentStatus="SUBMITTED" />
-
-          <div>
-            <h2 className="text-cb-caption uppercase text-gray-400 mb-4">Equipment &amp; storefront</h2>
-            <div className="flex flex-col gap-4">
-              <EquipmentOrderPanel
-                corporateId={profile.corporateId}
-                onModalOpenChange={setQuoteModalOpen}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+          {Object.values(statusCards).map((card) => {
+            const Icon = STATUS_CARD_ICONS[card.id];
+            return (
+              <SetupStatusCard
+                key={card.id}
+                title={card.title}
+                value={card.value}
+                caption={card.caption}
+                icon={Icon ? <Icon className="w-4 h-4" strokeWidth={2} /> : null}
               />
+            );
+          })}
+        </div>
 
-              <SetupGate
-                state={quotePaid ? 'unlocked' : quoteSigned ? 'hold' : 'locked'}
-                title={quotePaid ? null : quoteSigned ? 'Shipping Hold' : 'Shipping locked'}
-                holdMessage="Shipping Hold — Terminals will ship once invoice payment is fully cleared."
-                lockedMessage="Available after your quote is signed and paid."
-              >
-                <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-5">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="text-cb-body font-semibold text-white">
-                      {quotePaid ? 'Ready to Ship' : 'Equipment Shipping'}
-                    </h3>
-                    {quotePaid && (
-                      <button
-                        type="button"
-                        onClick={() => setShowShipping(true)}
-                        className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent hover:opacity-90 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent"
-                      >
-                        Route
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
-                    {quotePaid
-                      ? 'Tell us where to ship your payment terminals — storefront, corporate mailing, or a staging warehouse.'
-                      : 'Terminal shipping unlocks after your invoice is paid in full.'}
-                  </p>
-                  {shippingTrack?.shippingTrackingNumber && (
-                    <p className="mt-3 text-cb-caption normal-case tracking-normal text-gray-300">
-                      Tracking{shippingTrack.shippingCarrier ? ` (${shippingTrack.shippingCarrier})` : ''}:{' '}
-                      <span className="font-mono text-white">{shippingTrack.shippingTrackingNumber}</span>
-                    </p>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div className="lg:col-span-7 flex flex-col gap-4">
+            <MerchantChecklist
+              corporateId={profile.corporateId}
+              onOpenCountChange={onOpenCountChange}
+            />
+
+            {locations[0]?.id && (
+              <MerchantBeforeInstall
+                corporateId={profile.corporateId}
+                locationId={locations[0].id}
+              />
+            )}
+          </div>
+
+          <div className="lg:col-span-5 flex flex-col gap-4">
+            <EquipmentOrderPanel
+              corporateId={profile.corporateId}
+              onModalOpenChange={setQuoteModalOpen}
+            />
+
+            <SetupGate
+              state={quotePaid ? 'unlocked' : quoteSigned ? 'hold' : 'locked'}
+              title={quotePaid ? null : quoteSigned ? 'Shipping Hold' : 'Shipping locked'}
+              holdMessage="Shipping Hold — Terminals will ship once invoice payment is fully cleared."
+              lockedMessage="Available after your quote is signed and paid."
+            >
+              <div className="bg-cb-surface-raised rounded-cb border border-cb-border p-5">
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-cb-body font-semibold text-white">
+                    {quotePaid ? 'Ready to Ship' : 'Equipment Shipping'}
+                  </h3>
+                  {quotePaid && (
+                    <button
+                      type="button"
+                      onClick={() => setShowShipping(true)}
+                      className="text-cb-caption normal-case tracking-normal font-medium text-cb-accent hover:opacity-90 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent"
+                    >
+                      Route
+                    </button>
                   )}
                 </div>
-              </SetupGate>
-
-              <SetupGate
-                state={quoteSigned ? 'unlocked' : 'locked'}
-                title="Menu & inventory locked"
-                lockedMessage="Available after your quote is signed."
-              >
-                <InventoryUpload
-                  corporateId={profile.corporateId}
-                  locations={locations}
-                  merchantIDs={merchantIDs}
-                />
-              </SetupGate>
-
-              <SetupGate
-                state={quoteSigned ? 'unlocked' : 'locked'}
-                title="Legacy POS locked"
-                lockedMessage="Available after your quote is signed."
-              >
-                <ConnectLegacyPOS corporateId={profile.corporateId} />
-              </SetupGate>
-            </div>
+                <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500">
+                  {quotePaid
+                    ? 'Tell us where to ship your payment terminals — storefront, corporate mailing, or a staging warehouse.'
+                    : 'Terminal shipping unlocks after your invoice is paid in full.'}
+                </p>
+                {shippingTrack?.shippingTrackingNumber && (
+                  <p className="mt-3 text-cb-caption normal-case tracking-normal text-gray-300">
+                    Tracking{shippingTrack.shippingCarrier ? ` (${shippingTrack.shippingCarrier})` : ''}:{' '}
+                    <span className="font-mono text-white">{shippingTrack.shippingTrackingNumber}</span>
+                  </p>
+                )}
+              </div>
+            </SetupGate>
           </div>
+        </div>
 
-          <div className="text-center pt-4 pb-6">
-            <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">
-              Secured by <span className="text-cb-accent font-medium">Cliqbux</span> &nbsp;·&nbsp; Merchant Center &nbsp;·&nbsp; {new Date().getFullYear()}
-            </p>
-          </div>
+        {merchantIDs.length > 0 && (
+          <UnderwritingTracker locations={locations} merchantIDs={merchantIDs} />
+        )}
+
+        <div className="flex flex-col gap-4">
+          <SetupGate
+            state={quoteSigned ? 'unlocked' : 'locked'}
+            title="Menu & inventory locked"
+            lockedMessage="Available after your quote is signed."
+          >
+            <InventoryUpload
+              corporateId={profile.corporateId}
+              locations={locations}
+              merchantIDs={merchantIDs}
+            />
+          </SetupGate>
+
+          <SetupGate
+            state={quoteSigned ? 'unlocked' : 'locked'}
+            title="Legacy POS locked"
+            lockedMessage="Available after your quote is signed."
+          >
+            <ConnectLegacyPOS corporateId={profile.corporateId} />
+          </SetupGate>
+        </div>
+
+        <div className="text-center pt-2 pb-4">
+          <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-600">
+            Secured by <span className="text-cb-accent font-medium">Cliqbux</span> &nbsp;·&nbsp; Merchant Center &nbsp;·&nbsp; {new Date().getFullYear()}
+          </p>
+        </div>
       </div>
 
       {showShipping && (
