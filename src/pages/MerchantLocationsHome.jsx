@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus } from 'lucide-react';
+import { Plus, Trash2, Loader2 } from 'lucide-react';
 import MerchantCenterShell from '@/components/merchant-center/MerchantCenterShell';
 import { getSession, requireAuth } from '@/lib/merchantCenterAuth';
-import { invokePortalFunction, setMerchantToken } from '@/lib/merchantAuthFetch';
+import { invokePortalFunction, setMerchantToken, merchantTokenHasImp } from '@/lib/merchantAuthFetch';
+import { base44 } from '@/api/base44Client';
 import {
   deriveLocationStatus,
   locationStatusLabel,
@@ -28,6 +29,17 @@ function StatusDot({ status }) {
   );
 }
 
+async function resolveAgentAccess(corporateId) {
+  if (merchantTokenHasImp()) return true;
+  if (sessionStorage.getItem('portal_impersonating') === String(corporateId)) return true;
+  try {
+    await base44.auth.me();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Merchant Center account home — storefront list with scannable status.
  * Stage 1 auth: deal-scoped magic-link JWT (corporateId from session or ?dealId=).
@@ -42,9 +54,13 @@ export default function MerchantLocationsHome() {
   const [merchantIDs, setMerchantIDs] = useState([]);
   const [openChecklistCount, setOpenChecklistCount] = useState(0);
   const [accountName, setAccountName] = useState('');
+  const [isAgentViewer, setIsAgentViewer] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
+  const [actionError, setActionError] = useState('');
 
   const load = useCallback(async () => {
     setError('');
+    setActionError('');
     const paramsCorp = searchParams.get('dealId') || searchParams.get('corporateId');
     const imp = searchParams.get('impersonateToken');
     if (imp && paramsCorp) {
@@ -59,7 +75,6 @@ export default function MerchantLocationsHome() {
     try {
       session = getSession();
       if (!session && paramsCorp) {
-        // Allow landing with dealId when token already in session from portal
         session = { corporateId: paramsCorp, kind: 'url' };
       }
       if (!session) {
@@ -79,6 +94,9 @@ export default function MerchantLocationsHome() {
     }
 
     try {
+      const isAgent = await resolveAgentAccess(corporateId);
+      setIsAgentViewer(isAgent);
+
       const res = await invokePortalFunction('getMerchantData', { corporateId });
       if (res.data?.error) throw new Error(res.data.error);
       setProfile(res.data.profile);
@@ -121,16 +139,39 @@ export default function MerchantLocationsHome() {
       quoteMissing,
     });
     const mid = primaryMidForLocation(loc, merchantIDs);
-    return { loc, status, mid };
+    const boarded = ['Pending MID', 'Active', 'Active (Existing)'].includes(mid?.applicationStepStatus);
+    const canAgentDelete = isAgentViewer && !boarded;
+    return { loc, status, mid, canAgentDelete };
   });
 
-  // Sort: action_needed first, then in_review, submitted, draft, live last
   const order = { action_needed: 0, in_review: 1, submitted: 2, draft: 3, live: 4 };
   rows.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
 
   const addLocation = () => {
     if (!corporateId) return;
     navigate(`/?dealId=${encodeURIComponent(corporateId)}&step=locations`);
+  };
+
+  const deleteDraftLocation = async (loc) => {
+    if (!loc?.id || deletingId) return;
+    const label = loc.dbaName || 'this location';
+    const ok = window.confirm(
+      `Delete draft "${label}"?\n\nVoids any MSPWare draft MIDs and removes this storefront from Merchant Center, onboarding, Applications, and Deal Room.\n\nCannot delete after processor boarding.`
+    );
+    if (!ok) return;
+    setDeletingId(loc.id);
+    setActionError('');
+    try {
+      const res = await invokePortalFunction('removeSelfServeLocation', { locationId: loc.id });
+      if (res.data?.error) throw new Error(res.data.error);
+      setLocations((prev) => prev.filter((l) => l.id !== loc.id));
+      setMerchantIDs((prev) => prev.filter((m) => m.locationId !== loc.id));
+    } catch (err) {
+      console.error('[MerchantLocationsHome.delete]', err);
+      setActionError(err?.message || 'Could not delete location');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   if (loading) {
@@ -178,6 +219,13 @@ export default function MerchantLocationsHome() {
         </div>
       )}
 
+      {actionError && (
+        <div className="mb-6 rounded-cb border border-cb-border border-l-2 border-l-cb-danger bg-cb-surface-raised p-4" role="alert">
+          <p className="text-cb-body text-white font-medium">Could not delete</p>
+          <p className="text-cb-caption normal-case tracking-normal text-gray-400 mt-1">{actionError}</p>
+        </div>
+      )}
+
       {!error && rows.length === 0 && (
         <div className="rounded-cb border border-cb-border bg-cb-surface-raised p-8 text-center">
           <p className="font-display text-cb-title text-white mb-2">No locations yet</p>
@@ -197,16 +245,16 @@ export default function MerchantLocationsHome() {
 
       {rows.length > 0 && (
         <ul className="rounded-cb border border-cb-border bg-cb-surface overflow-hidden divide-y divide-cb-border">
-          {rows.map(({ loc, status, mid }) => {
+          {rows.map(({ loc, status, mid, canAgentDelete }) => {
             const isLive = status === 'live' && mid?.elavonMID;
             const href = isLive
               ? `/locations/${encodeURIComponent(loc.id)}`
               : `/?dealId=${encodeURIComponent(corporateId)}`;
             return (
-              <li key={loc.id}>
+              <li key={loc.id} className="flex items-stretch">
                 <Link
                   to={href}
-                  className="flex items-center justify-between gap-4 px-4 sm:px-5 py-4 hover:bg-cb-surface-raised transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-cb-accent"
+                  className="flex flex-1 min-w-0 items-center justify-between gap-4 px-4 sm:px-5 py-4 hover:bg-cb-surface-raised transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-cb-accent"
                 >
                   <div className="min-w-0">
                     <p className="text-cb-body text-white font-medium truncate">
@@ -227,6 +275,20 @@ export default function MerchantLocationsHome() {
                     )}
                   </div>
                 </Link>
+                {canAgentDelete && (
+                  <button
+                    type="button"
+                    onClick={() => deleteDraftLocation(loc)}
+                    disabled={deletingId === loc.id}
+                    title="Delete draft location (agent)"
+                    aria-label={`Delete draft ${loc.dbaName || loc.id}`}
+                    className="flex-shrink-0 px-3 border-l border-cb-border text-gray-600 hover:text-cb-danger hover:bg-cb-surface-raised transition-colors disabled:opacity-40"
+                  >
+                    {deletingId === loc.id
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Trash2 className="w-4 h-4" />}
+                  </button>
+                )}
               </li>
             );
           })}

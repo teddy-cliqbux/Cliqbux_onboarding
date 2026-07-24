@@ -2754,3 +2754,20 @@ Does **not** rewrite HubSpot deal name — Base44 display only. Location/MID DBA
 **Waiting on:** Teddy
 ---
 
+---
+**[CURSOR]** — 2026-07-24
+**Type:** Bug Fix
+**Re:** KK LLC draft location keeps resurrecting
+
+### Root cause
+`syncFromHubspot` (runs on Merchant Center + portal load) treats HubSpot **parent company** as a location source when there are no child companies. Parent name = legal **"KK House of Lechon and BBQ LLC"**; portal already has DBA **"KK House of Lechon and BBQ"** with the real address. Upsert key is exact `dbaName` → sync **re-creates** the LLC orphan after every delete.
+
+### Fix
+- `syncFromHubspot`: if `_useParent` and the deal already has any location, **skip create** (`skipped_parent_duplicate`) — attach to existing storefront instead.
+- Merchant Center Locations: agent trash on non-boarded rows → `removeSelfServeLocation`.
+
+**Teddy:** Push + **redeploy `syncFromHubspot`** (critical) and `removeSelfServeLocation` if not already. Then (as agent) on Locations → trash **"KK House of Lechon and BBQ LLC"** (Address not set). It should stay gone after refresh / HubSpot Sync.
+
+**Waiting on:** Teddy
+---
+

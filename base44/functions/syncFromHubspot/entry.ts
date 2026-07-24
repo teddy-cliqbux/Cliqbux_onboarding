@@ -681,6 +681,41 @@ Deno.serve(async (req) => {
           });
           locationId = existingLocs[0].id;
           result.locations.push({ dbaName, action: 'updated', locationId });
+        } else if (assoc._useParent) {
+          // Parent-only HubSpot deals: Tier-1 company name is often the LEGAL name
+          // (e.g. "… LLC") while the portal already has a real DBA storefront.
+          // Creating another location here re-spawns orphans after every delete
+          // (KK House of Lechon — sync on Merchant Center / portal mount).
+          const anyLocs = await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }) || [];
+          if (anyLocs.length > 0) {
+            const withAddress = anyLocs.find((l: any) =>
+              String(l.businessAddress || l.businessStreet || '').trim()
+            );
+            locationId = (withAddress || anyLocs[0]).id;
+            result.locations.push({
+              dbaName,
+              action: 'skipped_parent_duplicate',
+              locationId,
+              note: 'Portal already has storefront(s); will not recreate from HubSpot parent company name',
+            });
+          } else {
+            const streetLine = street2 ? `${street}, ${street2}` : street;
+            const newLoc = await base44.asServiceRole.entities.MerchantLocations.create({
+              corporateId,
+              entityId: seededEntityId || undefined,
+              dbaName,
+              businessStreet:  street,
+              businessStreet2: street2,
+              businessCity:    city,
+              businessState:   state,
+              businessZip:     zip,
+              businessAddress: [streetLine, city, state, zip].filter(Boolean).join(', '),
+              applicationStepStatus: 'In Review',
+              ...(resolvedQuoteId ? { hubspotQuoteId: resolvedQuoteId } : {}),
+            });
+            locationId = newLoc.id;
+            result.locations.push({ dbaName, action: 'created', locationId });
+          }
         } else {
           const streetLine = street2 ? `${street}, ${street2}` : street;
           const newLoc = await base44.asServiceRole.entities.MerchantLocations.create({
