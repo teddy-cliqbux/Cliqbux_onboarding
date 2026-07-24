@@ -47,14 +47,14 @@ export function portalLockLabel(profile) {
 }
 
 export const FORMS_LOCKED_MESSAGE =
-  'Forms Locked — the merchant agreement is out for signature. Contact Cliqbux if you need to change details.';
+  'Forms are locked — the merchant agreement is out for signature (or already signed). Contact Cliqbux to unlock, or open Deal Room → Unlock & Modify if you are an agent.';
 
 export const FORMS_LOCKED_MESSAGE_AGENT =
-  'Forms Locked — Unlock & Modify Details retracts live signing packages so you can edit, then Prepare form and Sign again.';
+  'Forms locked — Unlock & Modify Details retracts live signing packages so you can edit, then Prepare form and Sign again.';
 
 /** Backend 423 / manageLegalEntity (etc.) error copy — match for inline unlock CTAs. */
 export const FORMS_LOCKED_API_MESSAGE =
-  'Forms are locked while the merchant agreement is in signing. Contact Cliqbux (or unlock if you are an agent).';
+  'Forms are locked while the merchant agreement is in signing. Unlock from Deal Room (Applications → Deal room → Unlock & Modify), then edit.';
 
 export const DEMOTE_CONFIRM_MESSAGE =
   'Unlocking will retract MSPWare applications that are out for signature and invalidate all signing links. The merchant will need Prepare form → Sign again. Continue?';

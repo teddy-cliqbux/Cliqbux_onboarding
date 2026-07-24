@@ -1261,6 +1261,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const [nameDraft, setNameDraft]       = useState(merchantName || '');
   const [savingName, setSavingName]     = useState(false);
   const [nameError, setNameError]       = useState('');
+  const [unlockingDeal, setUnlockingDeal] = useState(false);
   const nudgeWrapRef = useRef(null);
 
   useEffect(() => {
@@ -1301,6 +1302,30 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       setNameError(err?.message || 'Could not save name');
     } finally {
       setSavingName(false);
+    }
+  };
+
+  const unlockFromApplications = async (e) => {
+    e?.stopPropagation?.();
+    if (unlockingDeal) return;
+    const ok = window.confirm(
+      'Unlocking will retract MSPWare apps that are out for signature and invalidate signing links. You can then trash the extra location and fix names. Continue?'
+    );
+    if (!ok) return;
+    setUnlockingDeal(true);
+    setRowActionError('');
+    try {
+      const res = await base44.functions.invoke('demoteApplication', {
+        corporateId,
+        reason: 'Unlocked from Applications to edit locations/MIDs',
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      window.location.reload();
+    } catch (err) {
+      console.error('[ApplicationRow.unlock]', err);
+      setRowActionError(err?.response?.data?.error || err.message || 'Could not unlock');
+    } finally {
+      setUnlockingDeal(false);
     }
   };
 
@@ -1935,6 +1960,21 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             <FolderOpen className="w-3 h-3" />
             <span className="hidden sm:inline">Deal room</span>
           </Link>
+
+          {['signing', 'pending_signature', 'all_signed'].includes(
+            String(profile?.portalLockStatus || '').toLowerCase()
+          ) && (
+            <button
+              type="button"
+              onClick={unlockFromApplications}
+              disabled={unlockingDeal}
+              title="Unlock forms so you can edit locations, MIDs, and names"
+              className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
+            >
+              {unlockingDeal ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wrench className="w-3 h-3" />}
+              Unlock
+            </button>
+          )}
 
           {/* Quiet utilities — Dashboard only when not already primary */}
           {rowMode.mode === 'underwriting' ? null : (

@@ -103,7 +103,11 @@ function parseAllowlist(): Set<string> {
 function isAllowlistedAdmin(email?: string): boolean {
   if (!email) return false;
   const list = parseAllowlist();
-  if (list.size === 0) return false;
+  // Empty allowlist = any workspace admin (until UNLOCK_ADMIN_EMAILS is configured).
+  if (list.size === 0) {
+    console.warn('[demoteApplication] UNLOCK_ADMIN_EMAILS unset — allowing any workspace admin for post-sign unlock');
+    return true;
+  }
   return list.has(String(email).trim().toLowerCase());
 }
 
