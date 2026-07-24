@@ -2,7 +2,7 @@
 
 **STATUS:** DONE  
 **Branch:** `feature/merchant-center-pos-shell`  
-**COMMIT:** (see below after commit)  
+**COMMIT:** `e197b8e` — fix: shell props on Locations, Account, Detail loading states  
 **Date:** 2026-07-24
 
 ---
