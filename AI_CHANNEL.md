@@ -2737,3 +2737,20 @@ Does **not** rewrite HubSpot deal name — Base44 display only. Location/MID DBA
 **Waiting on:** Teddy (push frontend)
 ---
 
+---
+**[CURSOR]** — 2026-07-23
+**Type:** Decision + Action Taken
+**Re:** Draft MID delete — void MSP + cascade everywhere
+
+### Rules
+- Agents/admins: delete **draft-only** MIDs from Applications expand (trash on each MID row). Hidden when boarded (`Pending MID` / `Active` / `Active (Existing)`). Backend refuses if BoldSign already **signed** (`MID_SIGNED`).
+- After deal is `Submitted` / `all_signed`, whole-merchant trash on the Applications row is hidden (use per-MID draft delete instead).
+- Delete voids MSPWare draft (signatures DELETE → app DELETE / Cancelled), cascades UW messages, checklist (mid+location), onboarding facts, call transcripts, installer chat, staged `included*Ids`, then deletes MID; if last MID on location → deletes location too.
+- Same cascade in `manageMerchantID` delete (merchant portal) and `removeSelfServeLocation`.
+- Agents may delete draft MIDs while forms are locked; plain merchants still need unlock.
+
+**Teddy:** Push + redeploy `manageMerchantID`, `removeSelfServeLocation`. On KK: expand row → trash the orphan draft MID (not the signed one).
+
+**Waiting on:** Teddy
+---
+

@@ -342,7 +342,7 @@ function modeDotClass(mode) {
 }
 
 // ── MID Row with MSP progress bar ─────────────────────────────────────────────
-function MidRow({ mid, mspStatus, isLoadingMsp }) {
+function MidRow({ mid, mspStatus, isLoadingMsp, onDelete, deleting }) {
   const [open, setOpen] = useState(false);
 
   const pct = mspStatus?.percent_complete != null ? Math.round(parseFloat(String(mspStatus.percent_complete))) : null;
@@ -359,6 +359,8 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
   const isDone = ['Active', 'Active (Existing)', 'Pending MID'].includes(mid.applicationStepStatus);
   const hasIssues = allErrors.length > 0 || (pct !== null && pct < 100 && !isDone);
   const canExpand = !!(mid.mspApplicationNo || allErrors.length > 0);
+  // Draft-only: hide once boarded. Backend also refuses if BoldSign already signed.
+  const canDelete = !isDone && typeof onDelete === 'function';
 
   const toggleOpen = () => { if (canExpand) setOpen((o) => !o); };
   const onKey = (e) => {
@@ -375,48 +377,65 @@ function MidRow({ mid, mspStatus, isLoadingMsp }) {
       hasIssues ? 'border-cb-danger/30 bg-cb-surface-raised' :
       'border-cb-border bg-cb-surface-raised'
     }`}>
-      <button
-        type="button"
-        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-cb-accent focus-visible:ring-inset"
-        onClick={toggleOpen}
-        onKeyDown={onKey}
-        aria-expanded={canExpand ? open : undefined}
-        aria-label={canExpand ? (open ? `Collapse ${mid.dbaName || 'MID'} details` : `Expand ${mid.dbaName || 'MID'} details`) : undefined}
-        disabled={!canExpand}
-      >
-        <CreditCard className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-cb-body font-semibold text-white truncate">{mid.dbaName || '—'}</p>
-            <MidStatusBadge status={mid.applicationStepStatus} />
-          </div>
-          {pct !== null && !isDone && (
-            <div className="flex items-center gap-2 mt-1">
-              <ProgressBar pct={pct} />
-              <span className="text-cb-caption text-gray-500 flex-shrink-0 w-8">{pct}%</span>
+      <div className="flex items-stretch gap-0">
+        <button
+          type="button"
+          className="flex flex-1 min-w-0 items-center gap-2.5 px-3 py-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-cb-accent focus-visible:ring-inset"
+          onClick={toggleOpen}
+          onKeyDown={onKey}
+          aria-expanded={canExpand ? open : undefined}
+          aria-label={canExpand ? (open ? `Collapse ${mid.dbaName || 'MID'} details` : `Expand ${mid.dbaName || 'MID'} details`) : undefined}
+          disabled={!canExpand}
+        >
+          <CreditCard className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <p className="text-cb-body font-semibold text-white truncate">{mid.dbaName || '—'}</p>
+              <MidStatusBadge status={mid.applicationStepStatus} />
             </div>
-          )}
-          {pct === null && !isDone && (
-            <p className="text-cb-caption text-gray-600 mt-0.5">{mid.mccCode ? `MCC ${mid.mccCode}` : 'No MCC'}{mid.monthlyCardSales ? ` · $${Number(mid.monthlyCardSales).toLocaleString()}/mo` : ''}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {isLoadingMsp && <Loader2 className="w-3 h-3 text-gray-500 animate-spin" />}
-          {!isLoadingMsp && pct !== null && !isDone && <HealthBadge score={pct} />}
-          {mid.elavonMID && <p className="text-cb-caption font-mono text-cb-success">{mid.elavonMID}</p>}
-          {allErrors.length > 0 && (
-            <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-danger" />
-              {allErrors.length} issue{allErrors.length !== 1 ? 's' : ''}
-            </span>
-          )}
-          {canExpand && (
-            <span className="text-gray-600" aria-hidden>
-              {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-            </span>
-          )}
-        </div>
-      </button>
+            {pct !== null && !isDone && (
+              <div className="flex items-center gap-2 mt-1">
+                <ProgressBar pct={pct} />
+                <span className="text-cb-caption text-gray-500 flex-shrink-0 w-8">{pct}%</span>
+              </div>
+            )}
+            {pct === null && !isDone && (
+              <p className="text-cb-caption text-gray-600 mt-0.5">{mid.mccCode ? `MCC ${mid.mccCode}` : 'No MCC'}{mid.monthlyCardSales ? ` · $${Number(mid.monthlyCardSales).toLocaleString()}/mo` : ''}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {isLoadingMsp && <Loader2 className="w-3 h-3 text-gray-500 animate-spin" />}
+            {!isLoadingMsp && pct !== null && !isDone && <HealthBadge score={pct} />}
+            {mid.elavonMID && <p className="text-cb-caption font-mono text-cb-success">{mid.elavonMID}</p>}
+            {allErrors.length > 0 && (
+              <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cb-danger" />
+                {allErrors.length} issue{allErrors.length !== 1 ? 's' : ''}
+              </span>
+            )}
+            {canExpand && (
+              <span className="text-gray-600" aria-hidden>
+                {open ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+              </span>
+            )}
+          </div>
+        </button>
+        {canDelete && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(mid);
+            }}
+            disabled={deleting}
+            title="Delete draft MID (voids MSPWare draft; not available after signing)"
+            aria-label={`Delete draft MID ${mid.dbaName || mid.id}`}
+            className="flex-shrink-0 px-2.5 border-l border-cb-border text-gray-600 hover:text-cb-danger hover:bg-cb-bg transition-colors disabled:opacity-40"
+          >
+            {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+          </button>
+        )}
+      </div>
 
       {open && canExpand && (
         <div className="border-t border-cb-border px-3 py-3 space-y-2 bg-cb-bg/40">
@@ -1262,6 +1281,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const [savingName, setSavingName]     = useState(false);
   const [nameError, setNameError]       = useState('');
   const [unlockingDeal, setUnlockingDeal] = useState(false);
+  const [deletingMidId, setDeletingMidId] = useState(null);
   const nudgeWrapRef = useRef(null);
 
   useEffect(() => {
@@ -1326,6 +1346,41 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       setRowActionError(err?.response?.data?.error || err.message || 'Could not unlock');
     } finally {
       setUnlockingDeal(false);
+    }
+  };
+
+  const deleteDraftMid = async (mid) => {
+    if (!mid?.id || deletingMidId) return;
+    const label = mid.dbaName || mid.merchantName || 'this MID';
+    const ok = window.confirm(
+      `Delete draft "${label}"?\n\nThis voids the MSPWare draft (if any) and removes the MID from Merchant Center, Deal Room, and Applications. If it was the only MID on that storefront, the location is removed too.\n\nCannot delete after signing or processor boarding.`
+    );
+    if (!ok) return;
+    setDeletingMidId(mid.id);
+    setRowActionError('');
+    try {
+      const res = await base44.functions.invoke('manageMerchantID', {
+        action: 'delete',
+        corporateId,
+        merchantIDId: mid.id,
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      setMids((prev) => prev.filter((m) => m.id !== mid.id));
+      if (res.data?.locationDeleted && res.data?.locationId) {
+        setLocations((prev) => prev.filter((l) => (l.id || l.locationId) !== res.data.locationId));
+      }
+      if (mid.mspApplicationNo) {
+        setMspStatuses((prev) => {
+          const next = { ...prev };
+          delete next[mid.mspApplicationNo];
+          return next;
+        });
+      }
+    } catch (err) {
+      console.error('[ApplicationRow.deleteDraftMid]', err);
+      setRowActionError(err?.response?.data?.error || err.message || 'Could not delete MID');
+    } finally {
+      setDeletingMidId(null);
     }
   };
 
@@ -1998,15 +2053,18 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
-          <button
-            type="button"
-            onClick={() => onDeleteMerchant({ corporateId, merchantName })}
-            title="Permanently delete this merchant from Cliqbux"
-            aria-label={`Delete ${merchantName || corporateId}`}
-            className="p-1.5 text-gray-600 hover:text-cb-danger rounded-cb transition-colors"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
+          {profile?.applicationStatus !== 'Submitted'
+            && String(profile?.portalLockStatus || '').toLowerCase() !== 'all_signed' && (
+            <button
+              type="button"
+              onClick={() => onDeleteMerchant({ corporateId, merchantName })}
+              title="Permanently delete this merchant from Cliqbux (draft deals only)"
+              aria-label={`Delete ${merchantName || corporateId}`}
+              className="p-1.5 text-gray-600 hover:text-cb-danger rounded-cb transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -2083,6 +2141,8 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                         mid={mid}
                         isLoadingMsp={loadingMsp && !!mid.mspApplicationNo && !mspStatuses[mid.mspApplicationNo]}
                         mspStatus={mid.mspApplicationNo ? mspStatuses[mid.mspApplicationNo] : null}
+                        onDelete={deleteDraftMid}
+                        deleting={deletingMidId === mid.id}
                       />
                     ))}
                   </div>

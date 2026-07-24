@@ -96,6 +96,167 @@ const TIER_TO_METHOD: Record<string, string> = {
   'CASH_DISCOUNT': 'TIERD', 'SELF_CASH_DISCOUNT': 'TIERD',
 };
 
+const BOARDING_LOCKED_STATUSES = ['Pending MID', 'Active', 'Active (Existing)'];
+
+function isSigSigned(s: any): boolean {
+  const st = String(s?.status || s?.signerStatus || s?.envelopeStatus || '').toLowerCase();
+  return ['signed', 'completed', 'complete', 'finished', 'done'].includes(st) || s?.signed === true;
+}
+
+async function deleteEntityRows(base44: any, entityName: string, rows: any[]) {
+  for (const row of rows || []) {
+    if (!row?.id) continue;
+    try {
+      await base44.asServiceRole.entities[entityName].delete(row.id);
+    } catch (e: any) {
+      console.warn(`[manageMerchantID] ${entityName}.delete failed:`, e?.message || e);
+    }
+  }
+}
+
+async function stripStagedIds(base44: any, corporateId: string, opts: { midId?: string; locationId?: string }) {
+  try {
+    const stages = await base44.asServiceRole.entities.StagedApplication.filter({ corporateId }) || [];
+    for (const stage of stages) {
+      const midIds = Array.isArray(stage.includedMidIds) ? stage.includedMidIds.map(String) : [];
+      const locIds = Array.isArray(stage.includedLocationIds) ? stage.includedLocationIds.map(String) : [];
+      let nextMids = midIds;
+      let nextLocs = locIds;
+      let changed = false;
+      if (opts.midId) {
+        nextMids = midIds.filter((id: string) => id !== String(opts.midId));
+        if (nextMids.length !== midIds.length) changed = true;
+      }
+      if (opts.locationId) {
+        nextLocs = locIds.filter((id: string) => id !== String(opts.locationId));
+        if (nextLocs.length !== locIds.length) changed = true;
+      }
+      if (changed) {
+        await base44.asServiceRole.entities.StagedApplication.update(stage.id, {
+          includedMidIds: nextMids,
+          includedLocationIds: nextLocs,
+        });
+      }
+    }
+  } catch (e: any) {
+    console.warn('[manageMerchantID] stripStagedIds:', e?.message || e);
+  }
+}
+
+async function voidMspDraft(appNo: string, mspHeaders: Record<string, string>, reason: string) {
+  const mspBase = (Deno.env.get('MSP_BASE_URL') || 'https://api.msppulsepoint.com/v2').replace(/\/$/, '');
+  const result: Record<string, any> = { appNo, signatureRevoke: 'skipped', draftAction: 'pending' };
+  try {
+    const delSig = await fetch(`${mspBase}/applications/${appNo}/signatures`, {
+      method: 'DELETE',
+      headers: mspHeaders,
+      body: JSON.stringify({ reason }),
+    });
+    result.signatureRevoke = delSig.ok || delSig.status === 404
+      ? (delSig.status === 404 ? 'already_gone' : 'revoked')
+      : 'failed';
+    result.signatureRevokeHttp = delSig.status;
+  } catch (e: any) {
+    result.signatureRevoke = 'unreachable';
+    result.signatureRevokeError = e?.message || String(e);
+  }
+
+  try {
+    const voidRes = await fetch(`${mspBase}/applications/${appNo}`, {
+      method: 'DELETE',
+      headers: mspHeaders,
+    });
+    if (voidRes.ok || voidRes.status === 404) {
+      result.draftAction = voidRes.status === 404 ? 'cleared_404' : 'voided';
+      result.voided = true;
+      return result;
+    }
+    const cancelRes = await fetch(`${mspBase}/applications/${appNo}`, {
+      method: 'PATCH',
+      headers: mspHeaders,
+      body: JSON.stringify({ status: 'Cancelled' }),
+    });
+    if (cancelRes.ok || cancelRes.status === 404) {
+      result.draftAction = 'cancelled';
+      result.voided = true;
+      return result;
+    }
+    result.draftAction = 'void_failed';
+    result.voided = false;
+    result.draftHttp = cancelRes.status;
+  } catch (e: any) {
+    result.draftAction = 'void_unreachable';
+    result.voided = false;
+    result.draftError = e?.message || String(e);
+  }
+  return result;
+}
+
+async function inspectMidSignatures(appNo: string, mspHeaders: Record<string, string>) {
+  const mspBase = (Deno.env.get('MSP_BASE_URL') || 'https://api.msppulsepoint.com/v2').replace(/\/$/, '');
+  try {
+    const statusRes = await fetch(`${mspBase}/applications/${appNo}/signatures`, { headers: mspHeaders });
+    if (statusRes.status === 404) return { packageExists: false, anyoneSigned: false };
+    if (!statusRes.ok) return { packageExists: false, anyoneSigned: false, inspectError: `HTTP ${statusRes.status}` };
+    const statusData = await statusRes.json().catch(() => ({}));
+    const pkgSigners = statusData?.signers || [];
+    const envelope = String(statusData?.envelopeStatus || statusData?.status || '').toLowerCase();
+    const packageExists = pkgSigners.length > 0
+      || (statusData?.success === true && !!envelope && envelope !== 'none')
+      || ['new', 'sent', 'out for signature', 'pending', 'inprogress', 'in progress'].includes(envelope);
+    const anyoneSigned = pkgSigners.some(isSigSigned);
+    return { packageExists, anyoneSigned };
+  } catch (e: any) {
+    return { packageExists: false, anyoneSigned: false, inspectError: e?.message || String(e) };
+  }
+}
+
+async function cascadeDeleteMidRecords(base44: any, mid: any) {
+  const midId = mid.id;
+  const corporateId = mid.corporateId;
+  try {
+    const uw = await base44.asServiceRole.entities.UnderwritingMessage.filter({ midId }) || [];
+    await deleteEntityRows(base44, 'UnderwritingMessage', uw);
+  } catch (e: any) {
+    console.warn('[manageMerchantID] UW cascade:', e?.message || e);
+  }
+  try {
+    const items = await base44.asServiceRole.entities.MerchantChecklistItem.filter({ midId }) || [];
+    await deleteEntityRows(base44, 'MerchantChecklistItem', items);
+  } catch (e: any) {
+    console.warn('[manageMerchantID] checklist mid cascade:', e?.message || e);
+  }
+  if (corporateId) await stripStagedIds(base44, String(corporateId), { midId: String(midId) });
+}
+
+async function cascadeDeleteLocationRecords(base44: any, locationId: string, corporateId: string) {
+  try {
+    const items = await base44.asServiceRole.entities.MerchantChecklistItem.filter({ locationId }) || [];
+    await deleteEntityRows(base44, 'MerchantChecklistItem', items);
+  } catch (e: any) {
+    console.warn('[manageMerchantID] checklist loc cascade:', e?.message || e);
+  }
+  try {
+    const facts = await base44.asServiceRole.entities.MerchantOnboardingFact.filter({ locationId }) || [];
+    await deleteEntityRows(base44, 'MerchantOnboardingFact', facts);
+  } catch (e: any) {
+    console.warn('[manageMerchantID] facts cascade:', e?.message || e);
+  }
+  try {
+    const transcripts = await base44.asServiceRole.entities.CallTranscript.filter({ locationId }) || [];
+    await deleteEntityRows(base44, 'CallTranscript', transcripts);
+  } catch (e: any) {
+    console.warn('[manageMerchantID] transcripts cascade:', e?.message || e);
+  }
+  try {
+    const msgs = await base44.asServiceRole.entities.MerchantInstallerMessage.filter({ locationId }) || [];
+    await deleteEntityRows(base44, 'MerchantInstallerMessage', msgs);
+  } catch (e: any) {
+    console.warn('[manageMerchantID] installer cascade:', e?.message || e);
+  }
+  if (corporateId) await stripStagedIds(base44, String(corporateId), { locationId: String(locationId) });
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -117,8 +278,9 @@ Deno.serve(async (req) => {
       return Response.json({ merchantIDs: merchantMIDs || [] });
     }
 
-    // Portal form lock — block add/update/delete while signing packages are live
-    {
+    // Portal form lock — block add/update while signing packages are live.
+    // Delete has its own rules (agents may remove draft-only MIDs while locked).
+    if (action !== 'delete') {
       const lockProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
       const lockProfile = lockProfiles?.[0];
       const lock = String(lockProfile?.portalLockStatus || 'unlocked').toLowerCase();
@@ -283,15 +445,99 @@ Deno.serve(async (req) => {
     }
 
     // — DELETE —
+    // Draft-only MIDs: void MSPWare app (if any), cascade related records, delete MID.
+    // If this was the last MID on the location, remove the location too.
+    // Signed / boarded MIDs cannot be deleted.
     if (action === 'delete') {
       if (!merchantIDId) return Response.json({ error: 'merchantIDId is required for delete' }, { status: 400 });
-      const toDelete = await base44.asServiceRole.entities.MerchantMID.get(merchantIDId);
-      const LOCKED = ['Pending MID', 'Active', 'Active (Existing)'];
-      if (toDelete && LOCKED.includes(toDelete.applicationStepStatus)) {
-        return Response.json({ error: 'Cannot delete: Application is in a locked status' }, { status: 403 });
+      const toDelete = await base44.asServiceRole.entities.MerchantMID.get(merchantIDId).catch(() => null);
+      if (!toDelete) return Response.json({ error: 'MerchantMID not found' }, { status: 404 });
+      if (String(toDelete.corporateId) !== String(corporateId)) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
       }
+
+      if (BOARDING_LOCKED_STATUSES.includes(toDelete.applicationStepStatus)) {
+        return Response.json({
+          error: 'Cannot delete: this MID is already with the processor (Pending MID / Active).',
+          code: 'MID_BOARDED',
+        }, { status: 403 });
+      }
+
+      const lockProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId });
+      const lockProfile = lockProfiles?.[0];
+      const lock = String(lockProfile?.portalLockStatus || 'unlocked').toLowerCase();
+      const formsLocked = lockProfile?.applicationStatus === 'Submitted'
+        || lock === 'signing' || lock === 'pending_signature' || lock === 'all_signed';
+      const isAgent = actor.actor === 'admin';
+
+      // Merchants may only delete while forms are unlocked.
+      if (formsLocked && !isAgent) {
+        return Response.json({
+          error: 'Forms are locked while the merchant agreement is in signing. Contact Cliqbux to unlock.',
+          code: 'FORMS_LOCKED',
+        }, { status: 423 });
+      }
+
+      const apiKey = Deno.env.get('MSP_APP_KEY') || '';
+      const appId = Deno.env.get('MSP_APP_ID') || 'cliqbux';
+      const mspHeaders = {
+        'X-API-KEY': apiKey,
+        'X-App-ID': appId,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+
+      let mspVoid: any = null;
+      const appNo = toDelete.mspApplicationNo ? String(toDelete.mspApplicationNo) : null;
+      if (appNo && apiKey) {
+        const inspect = await inspectMidSignatures(appNo, mspHeaders);
+        if (inspect.anyoneSigned) {
+          return Response.json({
+            error: 'Cannot delete: this application has already been signed. Unlock the deal only if you must change details, then recreate — do not delete a signed MID.',
+            code: 'MID_SIGNED',
+          }, { status: 403 });
+        }
+        // Unsigned package or draft-only — revoke package (if any) and void the MSP app.
+        mspVoid = await voidMspDraft(appNo, mspHeaders, 'MID deleted from Cliqbux onboarding');
+        if (!mspVoid.voided) {
+          return Response.json({
+            error: `Could not void MSPWare draft ${appNo}. Fix or cancel it in MSPWare, then retry delete.`,
+            code: 'MSP_VOID_FAILED',
+            mspVoid,
+          }, { status: 502 });
+        }
+      } else if (appNo && !apiKey) {
+        return Response.json({
+          error: 'MSP_APP_KEY not set — cannot void the MSPWare draft before delete.',
+          code: 'MSP_ENV_MISSING',
+        }, { status: 500 });
+      }
+
+      await cascadeDeleteMidRecords(base44, toDelete);
       await base44.asServiceRole.entities.MerchantMID.delete(merchantIDId);
-      return Response.json({ success: true });
+
+      let locationDeleted = false;
+      const locId = toDelete.locationId ? String(toDelete.locationId) : null;
+      if (locId) {
+        const remaining = await base44.asServiceRole.entities.MerchantMID.filter({ locationId: locId }) || [];
+        if (remaining.length === 0) {
+          await cascadeDeleteLocationRecords(base44, locId, String(corporateId));
+          try {
+            await base44.asServiceRole.entities.MerchantLocations.delete(locId);
+            locationDeleted = true;
+          } catch (e: any) {
+            console.warn('[manageMerchantID] location delete:', e?.message || e);
+          }
+        }
+      }
+
+      return Response.json({
+        success: true,
+        deletedMidId: merchantIDId,
+        locationDeleted,
+        locationId: locId,
+        mspVoid,
+      });
     }
 
     return Response.json({ error: 'Unknown action. Use list, add, update, or delete.' }, { status: 400 });

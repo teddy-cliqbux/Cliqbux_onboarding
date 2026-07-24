@@ -2447,6 +2447,9 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
       const res = await invokePortalFunction('manageMerchantID', { action: 'delete', corporateId: profile.corporateId, merchantIDId: mid.id });
       if (res.data?.error) throw new Error(res.data.error);
       setMerchantIDs(prev => prev.filter(c => c.id !== mid.id));
+      if (res.data?.locationDeleted && res.data?.locationId) {
+        setLocations(prev => prev.filter(l => (l.id || l.locationId) !== res.data.locationId));
+      }
     } catch (err) {
       console.error('[handleDeleteMid]', err);
       setActionError(`Could not remove the processing account: ${err.message || 'unknown error'}`);
@@ -2851,7 +2854,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
               <div className="w-10 h-10 rounded-full bg-cb-surface border border-cb-border flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-cb-danger" /></div>
               <div>
                 <h3 className="text-cb-body-lg font-semibold text-white">Remove Location?</h3>
-                <p className="text-cb-body text-gray-400 mt-0.5">"{deleteConfirm.dbaName}" and all its processing accounts will be deleted.</p>
+                <p className="text-cb-body text-gray-400 mt-0.5">"{deleteConfirm.dbaName}" and all its processing accounts will be deleted. MSPWare drafts are voided and removed from Merchant Center and Deal Room views.</p>
               </div>
             </div>
             <div className="flex gap-3">
@@ -2870,7 +2873,7 @@ export default function OnboardingLocations({ profile, onContinue, onBack }) {
               <div className="w-10 h-10 rounded-full bg-cb-surface border border-cb-border flex items-center justify-center flex-shrink-0"><AlertTriangle className="w-5 h-5 text-cb-danger" /></div>
               <div>
                 <h3 className="text-cb-body-lg font-semibold text-white">Remove Processing Account?</h3>
-                <p className="text-cb-body text-gray-400 mt-0.5">"{deleteMidConfirm.merchantName || deleteMidConfirm.dbaName}" will be permanently deleted.</p>
+                <p className="text-cb-body text-gray-400 mt-0.5">"{deleteMidConfirm.merchantName || deleteMidConfirm.dbaName}" will be permanently deleted. Any MSPWare draft is voided, and related checklist / Deal Room threads for this MID are removed. If it is the only MID on that storefront, the location is removed too.</p>
               </div>
             </div>
             <div className="flex gap-3">
