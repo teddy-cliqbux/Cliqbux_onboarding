@@ -2756,6 +2756,33 @@ Does **not** rewrite HubSpot deal name — Base44 display only. Location/MID DBA
 
 ---
 **[CURSOR]** — 2026-07-24
+**Type:** Action Taken
+**Re:** Merchant Center POS-shell Setup dashboard (feature/merchant-center-pos-shell)
+
+### Product
+Merchant Center chrome now matches dashboard.cliqbux.com family: left sidebar + top bar + wide main canvas. Content stays onboarding → go-live (status cards, checklist, quote, underwriting table, setup gates) — not POS sales metrics. No ⌘K search in v1.
+
+### Shipped (layout/chrome only — fetch/auth/Save/gate rules unchanged)
+- `MerchantCenterShell` — fixed `w-56` sidebar (Setup / Locations / Account), sticky top bar, `max-w-[1400px]` main, mobile bottom nav + checklist badge
+- `deriveSetupStatusCards` + `SetupStatusCard` — Needs attention / Underwriting / Equipment quote / Shipping
+- `PostSubmissionDashboard` — compact submitted banner, status row, `lg` two-column checklist|quote+shipping, full-width underwriting + menu/legacy gates; celebration confetti kept
+- `UnderwritingTracker` — full width + Account/Status/MID table
+- Locations / Account / Detail — `showDealLink` + `corporateId` on loading + loaded shells; `dealId` preserved on detail links
+
+### Spec / plan
+- `docs/superpowers/specs/2026-07-23-merchant-center-pos-shell-design.md`
+- `docs/superpowers/plans/2026-07-23-merchant-center-pos-shell.md`
+
+### QA notes
+Code checklist verified (sidebar active classes, `xl:grid-cols-4`, `lg:grid-cols-12`, UW `w-full` table, quote iframe still `bg-white` in `QuoteSignModal`, agent-only unlock banner). Live browser smoke with merchant JWT / impersonation still recommended after push.
+
+**Teddy:** Push branch `feature/merchant-center-pos-shell` (or merge to main) via GitHub Desktop; no new Base44 function redeploys required (frontend-only). Smoke Setup / Locations / Account on desktop + phone.
+
+**Waiting on:** Teddy
+---
+
+---
+**[CURSOR]** — 2026-07-24
 **Type:** Bug Fix
 **Re:** KK LLC draft location keeps resurrecting
 
