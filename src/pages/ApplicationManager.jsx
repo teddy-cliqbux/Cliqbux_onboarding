@@ -5,7 +5,7 @@ import {
   Pencil, Loader2, Send, Trash2, Check, X, Copy, ExternalLink,
   Clock, Store, Users, FileText, Search, Building2, CreditCard,
   CheckCircle2, AlertCircle, Eye, Zap, LayoutDashboard,
-  ChevronDown, ChevronRight, XCircle, RefreshCw, Percent, Wrench, FolderOpen
+  ChevronDown, ChevronRight, XCircle, RefreshCw, Percent, Wrench, FolderOpen, ShieldCheck
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
@@ -1282,6 +1282,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const [nameError, setNameError]       = useState('');
   const [unlockingDeal, setUnlockingDeal] = useState(false);
   const [deletingMidId, setDeletingMidId] = useState(null);
+  const [submittingProcessor, setSubmittingProcessor] = useState(false);
   const nudgeWrapRef = useRef(null);
 
   useEffect(() => {
@@ -1381,6 +1382,34 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
       setRowActionError(err?.response?.data?.error || err.message || 'Could not delete MID');
     } finally {
       setDeletingMidId(null);
+    }
+  };
+
+  const submitToProcessor = async (e) => {
+    e?.stopPropagation?.();
+    if (submittingProcessor) return;
+    const ok = window.confirm(
+      'Submit signed application(s) to Elavon via MSPWare?\n\nRequires MSP_SUBMIT_ENABLED=true in Base44. Drafts will be filled/submitted for MIDs that are not already Pending MID or Active.'
+    );
+    if (!ok) return;
+    setSubmittingProcessor(true);
+    setRowActionError('');
+    try {
+      const res = await base44.functions.invoke('submitToMSP', { corporateId });
+      if (res.data?.error) throw new Error(res.data.error);
+      if (!res.data?.success && !res.data?.allSubmitted) {
+        throw new Error(res.data?.hint || 'Processor submit reported errors — check MSP form status.');
+      }
+      setNudgeMsg(res.data?.submitEnabled
+        ? 'Submitted to processor'
+        : 'MSP drafts updated (live Elavon submit off — set MSP_SUBMIT_ENABLED)');
+      if (!expanded) toggleExpand();
+      else await loadRowHealth();
+    } catch (err) {
+      console.error('[ApplicationRow.submitToProcessor]', err);
+      setRowActionError(err?.response?.data?.error || err.message || 'Could not submit to processor');
+    } finally {
+      setSubmittingProcessor(false);
     }
   };
 
@@ -1554,6 +1583,11 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   });
   const isStuck = rowMode.mode === 'stuck';
   const needsSubmitAfterSign = !!rowMode.agreementSigned && !isSubmitted;
+  const BOARDING_DONE = ['Pending MID', 'Active', 'Active (Existing)'];
+  const midsNeedProcessor = !healthReady
+    || mids.length === 0
+    || mids.some((m) => !BOARDING_DONE.includes(m.applicationStepStatus));
+  const showProcessorSubmit = (needsSubmitAfterSign || isSubmitted || agreementSigned) && midsNeedProcessor;
 
   useEffect(() => {
     onModeChange?.(corporateId, rowMode.mode);
@@ -1932,13 +1966,26 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           {rowMode.mode === 'nudge' && needsSubmitAfterSign && (
             <button
               type="button"
-              onClick={openMerchantView}
-              disabled={impersonating || openingDashboard}
+              onClick={submitToProcessor}
+              disabled={submittingProcessor}
               title={rowMode.reason}
               className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
             >
-              {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
-              Open to submit
+              {submittingProcessor ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
+              Submit to processor
+            </button>
+          )}
+
+          {rowMode.mode === 'underwriting' && showProcessorSubmit && (
+            <button
+              type="button"
+              onClick={submitToProcessor}
+              disabled={submittingProcessor}
+              title="Send signed MSPWare applications to Elavon (MSP_SUBMIT_ENABLED)"
+              className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
+            >
+              {submittingProcessor ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
+              Submit to processor
             </button>
           )}
 

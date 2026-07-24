@@ -8,7 +8,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import {
   ArrowLeft, Loader2, Plus, Check, Trash2, Eye, LayoutDashboard,
-  Building2, Users, CreditCard, FileText, AlertCircle, Mail, RefreshCw, Send, Pencil,
+  Building2, Users, CreditCard, FileText, AlertCircle, Mail, RefreshCw, Send, Pencil, ShieldCheck,
 } from 'lucide-react';
 import { lifecycleLabel, lifecycleDotClass } from '@/lib/signerLifecycle';
 import { TIER_LABELS } from '@/lib/pricingPresets';
@@ -73,6 +73,7 @@ export default function ApplicationDealRoom() {
   const [savingName, setSavingName] = useState(false);
   const [nameError, setNameError] = useState('');
   const [unlocking, setUnlocking] = useState(false);
+  const [submittingProcessor, setSubmittingProcessor] = useState(false);
 
   const load = useCallback(async () => {
     if (!corporateId) return;
@@ -171,6 +172,33 @@ export default function ApplicationDealRoom() {
       setError(err?.response?.data?.error || err.message || 'Could not unlock');
     } finally {
       setUnlocking(false);
+    }
+  };
+
+  const submitToProcessor = async () => {
+    if (!corporateId || submittingProcessor) return;
+    const ok = window.confirm(
+      'Submit signed application(s) to Elavon via MSPWare?\n\nRequires MSP_SUBMIT_ENABLED=true in Base44.'
+    );
+    if (!ok) return;
+    setSubmittingProcessor(true);
+    setError('');
+    setSyncMsg('');
+    try {
+      const res = await base44.functions.invoke('submitToMSP', { corporateId });
+      if (res.data?.error) throw new Error(res.data.error);
+      if (!res.data?.success && !res.data?.allSubmitted) {
+        throw new Error(res.data?.hint || 'Processor submit reported errors — check MSP form status.');
+      }
+      await load();
+      setSyncMsg(res.data?.submitEnabled
+        ? 'Submitted to processor (Elavon).'
+        : 'MSP drafts updated. Live Elavon submit is off — set MSP_SUBMIT_ENABLED=true to board.');
+    } catch (err) {
+      console.error('[DealRoom.submitToProcessor]', err);
+      setError(err?.response?.data?.error || err.message || 'Could not submit to processor');
+    } finally {
+      setSubmittingProcessor(false);
     }
   };
 
@@ -537,12 +565,36 @@ export default function ApplicationDealRoom() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {(() => {
+              const BOARDING_DONE = ['Pending MID', 'Active', 'Active (Existing)'];
+              const mids = data?.mids || [];
+              const lock = String(profile?.portalLockStatus || '').toLowerCase();
+              const signed =
+                lock === 'all_signed'
+                || profile?.applicationStatus === 'Submitted';
+              const needsBoard = mids.length === 0
+                || mids.some((m) => !BOARDING_DONE.includes(m.applicationStepStatus));
+              if (!signed || !needsBoard) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={submitToProcessor}
+                  disabled={submittingProcessor}
+                  className="flex items-center gap-1.5 text-cb-caption font-semibold px-3 py-2 rounded-cb bg-cb-accent text-cb-bg hover:opacity-90 disabled:opacity-40"
+                >
+                  {submittingProcessor
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <ShieldCheck className="w-3.5 h-3.5" />}
+                  Submit to processor
+                </button>
+              );
+            })()}
             {profile?.portalLockStatus && profile.portalLockStatus !== 'unlocked' && (
               <button
                 type="button"
                 onClick={unlockApplication}
                 disabled={unlocking}
-                className="flex items-center gap-1.5 text-cb-caption font-semibold px-3 py-2 rounded-cb bg-cb-accent text-cb-bg hover:opacity-90 disabled:opacity-40"
+                className="flex items-center gap-1.5 text-cb-caption font-semibold px-3 py-2 rounded-cb border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong disabled:opacity-40"
               >
                 {unlocking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                 Unlock &amp; Modify

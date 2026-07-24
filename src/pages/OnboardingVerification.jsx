@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { ArrowLeft, Lock, Loader2, CheckCircle2, AlertCircle, ShieldCheck, PenLine, ChevronRight, Users } from 'lucide-react';
+import { ArrowLeft, Lock, Loader2, CheckCircle2, AlertCircle, PenLine, ChevronRight, Users } from 'lucide-react';
 import SignerRoster from '@/components/onboarding/SignerRoster';
 import KycActivityStrip from '@/components/onboarding/KycActivityStrip';
 import SigningErrorGuide from '@/components/onboarding/SigningErrorGuide';
@@ -489,36 +489,7 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
     }
   };
 
-  /** Agent/admin only — send signed apps to Elavon via MSPWare. */
-  const handleSubmitToProcessor = async () => {
-    if (submitting || !isAgentPreview) return;
-    setSubmitting(true);
-    setSubmitError('');
-    try {
-      for (const s of requiredSigners) {
-        if (!isApplicationSigned(s.identityStatus)) {
-          await markSignerSignedLocally(s);
-        }
-      }
-      const res = await invokePortalFunction('submitToMSP', { corporateId: profile.corporateId });
-      const data = res.data;
-      if (data?.allSubmitted || data?.success) {
-        onComplete();
-      } else {
-        setSubmitError(
-          data?.error
-          || data?.hint
-          || 'Submission encountered errors. Check MSP form status, then try again.'
-        );
-      }
-    } catch (err) {
-      setSubmitError(err.message || 'Submission failed. Please contact support.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  /** Merchant path after BoldSign — Merchant Center only (no processor submit). */
+  /** After BoldSign — Merchant Center / Onboarding Center (no processor submit here). */
   const handleContinueToMerchantCenter = async () => {
     if (submitting) return;
     setSubmitting(true);
@@ -531,7 +502,7 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
       }
       onComplete();
     } catch (err) {
-      setSubmitError(err.message || 'Could not open Merchant Center. Please try again.');
+      setSubmitError(err.message || 'Could not open Onboarding Center. Please try again.');
       setSubmitting(false);
     }
   };
@@ -564,13 +535,11 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="font-display text-cb-display text-white mb-2">
-              {isComplete && !isAgentPreview ? 'You\'re signed' : 'Sign Merchant Agreement'}
+              {isComplete ? 'You\'re signed' : 'Sign Merchant Agreement'}
             </h2>
             <p className="text-cb-body-lg text-gray-400 max-w-xl">
-              {isComplete && !isAgentPreview
-                ? 'Your agreement is complete. Continue to Merchant Center for equipment, setup, and go-live.'
-                : isComplete && isAgentPreview
-                ? 'Agreement signed. Submit to Elavon when ready — merchants never send applications to the processor.'
+              {isComplete
+                ? 'Your agreement is complete. Proceed to Onboarding Center for equipment, setup, and go-live.'
                 : 'Once every Beneficial Owner and the Control Person have finished identity verification, the Control Person signs the Merchant Processing Agreement.'}
             </p>
           </div>
@@ -585,11 +554,11 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
       </div>
 
       <div className="px-8 py-8 flex flex-col gap-8">
-        {!(isComplete && !isAgentPreview) && (
+        {!isComplete && (
           <KycActivityStrip signers={rosterSigners} />
         )}
 
-        {!(isComplete && !isAgentPreview) && !allVerified && (
+        {!isComplete && !allVerified && (
           <div className="border border-cb-border rounded-cb bg-cb-surface-raised border-l-2 border-l-cb-accent px-5 py-5 flex flex-col gap-3">
             <p className="text-cb-body font-semibold text-white">Waiting on identity verification</p>
             <p className="text-cb-body text-gray-400">
@@ -629,7 +598,7 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
           </div>
         )}
 
-        {!(isComplete && !isAgentPreview) && (
+        {!isComplete && (
           <SignerRoster
             profile={profile}
             mode="signing"
@@ -640,7 +609,7 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
           />
         )}
 
-        {!(isComplete && !isAgentPreview) && (
+        {!isComplete && (
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2.5">
             <PenLine className={`w-4 h-4 ${allVerified ? 'text-cb-accent' : 'text-gray-500'}`} />
@@ -795,7 +764,7 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
             </div>
           )}
 
-          {showSigningChrome && (phase === 'signing' || (isComplete && isAgentPreview)) && (
+          {showSigningChrome && (phase === 'signing') && (
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2 flex-wrap">
                 {applications.map((app, i) => {
@@ -904,53 +873,10 @@ export default function OnboardingSigning({ profile, locations, initialSignersVe
               onRetry={() => fetchSigningState()}
             />
           ))}
-
-          {showSigningChrome && isComplete && isAgentPreview && (
-            <div className="flex flex-col gap-3">
-              <div className="border border-cb-border border-l-2 border-l-cb-success bg-cb-surface-raised rounded-cb flex items-start gap-3 px-5 py-4">
-                <CheckCircle2 className="w-5 h-5 text-cb-success flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-cb-body font-semibold text-white">All agreements signed</p>
-                  <p className="text-cb-body text-gray-400 mt-1">
-                    Merchant path goes to Merchant Center without processor submit. Agents submit to Elavon below when ready.
-                  </p>
-                </div>
-              </div>
-              {submitError && (
-                <div className="flex items-start gap-3 bg-cb-surface-raised border border-cb-border border-l-2 border-l-cb-danger rounded-cb px-5 py-4">
-                  <AlertCircle className="w-4 h-4 text-cb-danger flex-shrink-0 mt-0.5" />
-                  <p className="text-cb-body text-gray-300">{submitError}</p>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={handleSubmitToProcessor}
-                disabled={submitting}
-                className="w-full flex items-center justify-center gap-2 text-cb-body-lg font-semibold text-cb-bg bg-cb-accent hover:opacity-90 disabled:bg-cb-surface-raised disabled:border disabled:border-cb-border disabled:text-gray-500 py-3.5 rounded-cb transition-colors"
-              >
-                {submitting ? (
-                  <><Loader2 className="w-4 h-4 animate-spin" /> Submitting to processor…</>
-                ) : (
-                  <><ShieldCheck className="w-4 h-4" /> Submit Application for Processing</>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={handleContinueToMerchantCenter}
-                disabled={submitting}
-                className="w-full min-h-11 px-4 py-2 rounded-cb border border-cb-border text-cb-body text-gray-300 hover:text-white hover:border-cb-border-strong transition-colors disabled:opacity-50"
-              >
-                Skip submit — open Merchant Center
-              </button>
-              <p className="text-center text-cb-body text-gray-500">
-                Submits signed application{totalCount > 1 ? 's' : ''} to Elavon for underwriting (requires MSP_SUBMIT_ENABLED).
-              </p>
-            </div>
-          )}
         </div>
         )}
 
-        {isComplete && !isAgentPreview && (
+        {isComplete && (
           <div className="flex flex-col gap-4">
             <AgreementSignedCelebration
               merchantName={

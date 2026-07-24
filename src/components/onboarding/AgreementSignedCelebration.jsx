@@ -6,13 +6,15 @@ const SPRING = { type: 'spring', stiffness: 150, damping: 20 };
 
 /**
  * Signature moment after BoldSign completes — Cliqbux shield "stamps" the
- * agreement, then the merchant continues to Merchant Center.
- * Agents do not use this path for Elavon submit (that's a separate CTA).
+ * agreement, then everyone proceeds to Merchant Center (Onboarding Center).
+ * Processor submit lives on Applications / Deal Room only.
  */
 export default function AgreementSignedCelebration({
   merchantName,
   onContinue,
   continuing = false,
+  continueLabel = 'Proceed to Onboarding Center',
+  continuingLabel = 'Opening Onboarding Center…',
 }) {
   const reduceMotion = useReducedMotion();
   const [stamped, setStamped] = useState(!!reduceMotion);
@@ -105,9 +107,9 @@ export default function AgreementSignedCelebration({
           animate={{ opacity: stamped ? 1 : 0.4, y: 0 }}
           transition={{ ...SPRING, delay: reduceMotion ? 0 : 0.5 }}
         >
-          {continuing ? 'Opening Merchant Center…' : (
+          {continuing ? continuingLabel : (
             <>
-              Continue to Merchant Center
+              {continueLabel}
               <ArrowRight className="w-4 h-4" />
             </>
           )}

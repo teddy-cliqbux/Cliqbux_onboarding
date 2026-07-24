@@ -53,10 +53,10 @@ export const FORMS_LOCKED_MESSAGE_AGENT =
   'Forms locked — Unlock & Modify Details retracts live signing packages so you can edit, then Prepare form and Sign again.';
 
 export const FORMS_LOCKED_MESSAGE_ALL_SIGNED =
-  'Agreement signed. Forms stay locked while Cliqbux reviews and submits to the processor. Contact Cliqbux if something needs to change.';
+  'Your agreement is signed. Forms stay locked while Cliqbux reviews and submits to the processor. Contact Cliqbux if something needs to change.';
 
 export const FORMS_LOCKED_MESSAGE_ALL_SIGNED_AGENT =
-  'Agreement signed. Submit to the processor from Sign & Submit (or Applications). Unlock only if details must change before submit.';
+  'Agreement signed. Submit to the processor from Applications or Deal Room. Unlock only if details must change before submit.';
 
 /** Banner body copy keyed off lock / Submitted. */
 export function formsLockedBannerMessage(profile, { canUnlock = false } = {}) {

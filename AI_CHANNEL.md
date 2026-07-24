@@ -2793,7 +2793,19 @@ Code checklist verified (sidebar active classes, `xl:grid-cols-4`, `lg:grid-cols
 - `syncFromHubspot`: if `_useParent` and the deal already has any location, **skip create** (`skipped_parent_duplicate`) — attach to existing storefront instead.
 - Merchant Center Locations: agent trash on non-boarded rows → `removeSelfServeLocation`.
 
-**Teddy:** Push + **redeploy `syncFromHubspot`** (critical) and `removeSelfServeLocation` if not already. Then (as agent) on Locations → trash **"KK House of Lechon and BBQ LLC"** (Address not set). It should stay gone after refresh / HubSpot Sync.
+**Waiting on:** Teddy
+---
+
+---
+**[CURSOR]** — 2026-07-24
+**Type:** Decision + Action Taken
+**Re:** Signing page — single Proceed CTA; processor submit on Applications / Deal Room
+
+### Product
+- Sign step (merchant + agent impersonation): after BoldSign, only **Proceed to Onboarding Center** (celebration stamp). No Submit to processor / Skip.
+- Agents submit to Elavon from **Applications** (`Submit to processor`) and **Deal Room** header.
+
+**Teddy:** Push frontend (no new function redeploy for this UX move; `submitToMSP` already agent-gated).
 
 **Waiting on:** Teddy
 ---

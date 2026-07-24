@@ -72,7 +72,7 @@ export function resolveApplicationRowMode({
   if (signedLocally) {
     return {
       mode: 'nudge',
-      reason: 'Agreement signed — open portal to submit for underwriting',
+      reason: 'Agreement signed — submit to processor from Applications or Deal Room',
       blocker: null,
       agreementSigned: true,
     };
