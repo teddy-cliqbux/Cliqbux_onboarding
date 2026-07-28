@@ -1,10 +1,19 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, UserPlus, Send, Loader2, ShieldCheck, Mail, CheckCircle2 } from 'lucide-react';
-import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+import { invokePortalFunction, merchantTokenHasImp } from '@/lib/merchantAuthFetch';
 import { usePlacesAddressRef } from '@/lib/usePlacesAddressRef';
 import { composeFullAddress } from '@/lib/addressLine';
+import { rawSSN } from '@/lib/textUtils';
 
+function isAgentPrefillSession(corporateId) {
+  if (merchantTokenHasImp()) return true;
+  if (corporateId && typeof sessionStorage !== 'undefined'
+    && sessionStorage.getItem('portal_impersonating') === String(corporateId)) {
+    return true;
+  }
+  return false;
+}
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
   { value: '04', label: 'Apr' }, { value: '05', label: 'May' }, { value: '06', label: 'Jun' },
@@ -67,26 +76,59 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
       setError('Ownership % must be between 0 and 100.');
       return;
     }
-    if (mode === 'now' && pct >= 25 && (!form.dobMonth || !form.dobDay || !form.dobYear || !form.ssn || !form.homeStreet)) {
+    const agentPrefill = isAgentPrefillSession(corporateId);
+    const needsIdentityNow = mode === 'now' && pct >= 25;
+    const identityComplete = !!(
+      form.dobMonth && form.dobDay && form.dobYear
+      && rawSSN(form.ssn).length === 9
+      && form.homeStreet
+    );
+    if (needsIdentityNow && !agentPrefill && !identityComplete) {
       setError('Please complete all identity fields for Beneficial Owners.');
       return;
+    }
+    if (needsIdentityNow && agentPrefill) {
+      const ssnDigits = rawSSN(form.ssn);
+      if (ssnDigits.length > 0 && ssnDigits.length !== 9) {
+        setError('SSN must be 9 digits, or leave it blank to save progress.');
+        return;
+      }
     }
     setSaving(true);
     setError('');
     try {
+      const ssnDigits = rawSSN(form.ssn);
+      const signerData = {
+        firstName: form.firstName,
+        lastName: form.lastName,
+        signerEmail: form.signerEmail,
+        ownershipPercentage: pct,
+        isPrimarySigner: form.isPrimarySigner === true,
+        isAuthorizedSigner: form.isPrimarySigner === true,
+        isBeneficialOwner: pct >= 25,
+        isPortalAdmin: pct === 0 && form.isPrimarySigner !== true,
+        legalName,
+      };
+      if (needsIdentityNow) {
+        if (form.dobMonth) signerData.dobMonth = form.dobMonth;
+        if (form.dobDay) signerData.dobDay = form.dobDay;
+        if (form.dobYear) signerData.dobYear = form.dobYear;
+        if (ssnDigits.length === 9) signerData.ssn = ssnDigits;
+        if (form.homeStreet) signerData.homeStreet = form.homeStreet;
+        if (form.homeStreet2) signerData.homeStreet2 = form.homeStreet2;
+        if (form.homeCity) signerData.homeCity = form.homeCity;
+        if (form.homeState) signerData.homeState = form.homeState;
+        if (form.homeZip) signerData.homeZip = form.homeZip;
+        if (form.corporatePhone) signerData.corporatePhone = form.corporatePhone;
+        if (identityComplete || !agentPrefill) {
+          signerData.identityStatus = 'verified';
+        }
+      }
       const res = await invokePortalFunction('manageSigner', {
         action: 'create',
         corporateId,
         sendInvite: mode === 'invite',
-        signerData: {
-          ...form,
-          legalName,
-          ownershipPercentage: pct,
-          isPrimarySigner: form.isPrimarySigner === true,
-          isAuthorizedSigner: form.isPrimarySigner === true,
-          isBeneficialOwner: pct >= 25,
-          isPortalAdmin: pct === 0 && form.isPrimarySigner !== true,
-        }
+        signerData,
       });
       if (res.data?.error) throw new Error(res.data.error);
       onSaved(res.data.signer);

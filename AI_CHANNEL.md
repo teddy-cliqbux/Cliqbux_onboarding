@@ -2848,3 +2848,25 @@ Phone Sign & Submit showed Company Application in iframe + Forms locked banner, 
 **Waiting on:** Teddy
 ---
 
+
+---
+**[CURSOR]** — 2026-07-28
+**Type:** Bug Fix
+**Re:** Agent impersonation — partial prefill on signer KYC modal
+
+### Problem
+Agents prefilling People/KYC (impersonation JWT) were blocked by merchant completeness rules — e.g. "A valid 9-digit SSN is required" on Save & Verify even when address/phone/DOB were already filled.
+
+### Fix (frontend only)
+SignerDetailsModal + SignerModal: when merchantTokenHasImp() or portal_impersonating matches corporateId:
+- Skip hard KYC completeness gates (SSN/DOB/address/title)
+- Save whatever fields are filled; blank SSN OK; partial SSN still rejected
+- Set identityStatus verified only when KYC is fully complete (merchants unchanged)
+- Button: Save progress for incomplete agent saves; Save & Verify when complete
+
+Merchant signing readiness / signApplication KYC_INCOMPLETE gate unchanged.
+
+**Teddy:** Push via GitHub Desktop (no function redeploy). Retest Luna modal under View as merchant — save address without SSN, confirm it sticks; merchant self-serve still requires full KYC.
+
+**Waiting on:** Teddy
+---

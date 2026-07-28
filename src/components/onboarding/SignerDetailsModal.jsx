@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ShieldCheck, CheckCircle2, Loader2, Eye, EyeOff, Sparkles, Save, Lock } from 'lucide-react';
-import { invokePortalFunction } from '@/lib/merchantAuthFetch';
+import { invokePortalFunction, merchantTokenHasImp } from '@/lib/merchantAuthFetch';
 import { usePortalLock } from '@/lib/PortalLockContext';
 import { FORMS_LOCKED_MESSAGE } from '@/lib/portalLock';
 import { formatSSN, rawSSN, formatPhone, rawPhone } from '@/lib/textUtils';
@@ -14,6 +14,23 @@ import {
 import { usePlacesAddressRef } from '@/lib/usePlacesAddressRef';
 import { composeFullAddress } from '@/lib/addressLine';
 
+function isAgentPrefillSession(corporateId) {
+  if (merchantTokenHasImp()) return true;
+  if (corporateId && typeof sessionStorage !== 'undefined'
+    && sessionStorage.getItem('portal_impersonating') === String(corporateId)) {
+    return true;
+  }
+  return false;
+}
+
+function isKycFormComplete(form) {
+  return !!(
+    form.dobMonth && form.dobDay && form.dobYear
+    && rawSSN(form.ssn).length === 9
+    && form.homeStreet && form.homeCity && form.homeState && form.homeZip
+    && form.titleType
+  );
+}
 const MONTHS = [
   { value: '01', label: 'Jan' }, { value: '02', label: 'Feb' }, { value: '03', label: 'Mar' },
   { value: '04', label: 'Apr' }, { value: '05', label: 'May' }, { value: '06', label: 'Jun' },
@@ -56,6 +73,8 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
     ownershipPercentage: rolePortalAdmin ? 0 : signer.ownershipPercentage,
   };
   const showKyc = (personNeedsKyc(draftPerson) || allowInlineKyc === true) && !rolePortalAdmin;
+  const agentPrefill = isAgentPrefillSession(corporateId);
+  const kycReadyToVerify = showKyc && isKycFormComplete(form);
   const inheritedTitle = signer.titleType || profile?.titleType || '';
 
   const [form, setForm] = useState({
@@ -182,11 +201,23 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
     if (!rolePortalAdmin && !roleControl && pct > 0 && pct < 25) {
       setError('Under 25% owners are not Beneficial Owners. Set 0% + Portal Admin, or ≥25%, or mark Control Person.'); return;
     }
-    if (showKyc) {
+
+    const agentPrefill = isAgentPrefillSession(corporateId);
+    const kycComplete = showKyc && isKycFormComplete(form);
+
+    if (showKyc && !agentPrefill) {
       if (!form.dobMonth || !form.dobDay || !form.dobYear) { setError('Date of birth is required.'); return; }
       if (!form.ssn || rawSSN(form.ssn).length !== 9) { setError('A valid 9-digit SSN is required.'); return; }
       if (!form.homeStreet || !form.homeCity || !form.homeState || !form.homeZip) { setError('Home address is required.'); return; }
       if (!form.titleType) { setError('Please select your title / role.'); return; }
+    }
+
+    // Agents may leave SSN blank, but a partial SSN is never valid.
+    if (showKyc && agentPrefill) {
+      const ssnDigits = rawSSN(form.ssn);
+      if (ssnDigits.length > 0 && ssnDigits.length !== 9) {
+        setError('SSN must be 9 digits, or leave it blank to save progress.'); return;
+      }
     }
 
     setSaving(true);
@@ -206,20 +237,24 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
         ...roles,
       };
       if (showKyc) {
-        Object.assign(signerData, {
-          dobMonth: form.dobMonth,
-          dobDay: form.dobDay,
-          dobYear: form.dobYear,
-          ssn: rawSSN(form.ssn),
-          homeStreet: form.homeStreet,
-          homeStreet2: form.homeStreet2 || '',
-          homeCity: form.homeCity,
-          homeState: form.homeState,
-          homeZip: form.homeZip,
-          corporatePhone: rawPhone(form.corporatePhone),
-          titleType: form.titleType,
-          identityStatus: 'verified',
-        });
+        const kycPatch = {};
+        if (form.dobMonth) kycPatch.dobMonth = form.dobMonth;
+        if (form.dobDay) kycPatch.dobDay = form.dobDay;
+        if (form.dobYear) kycPatch.dobYear = form.dobYear;
+        const ssnDigits = rawSSN(form.ssn);
+        if (ssnDigits.length === 9) kycPatch.ssn = ssnDigits;
+        if (form.homeStreet) kycPatch.homeStreet = form.homeStreet;
+        if (form.homeStreet2 !== undefined) kycPatch.homeStreet2 = form.homeStreet2 || '';
+        if (form.homeCity) kycPatch.homeCity = form.homeCity;
+        if (form.homeState) kycPatch.homeState = form.homeState;
+        if (form.homeZip) kycPatch.homeZip = form.homeZip;
+        if (rawPhone(form.corporatePhone)) kycPatch.corporatePhone = rawPhone(form.corporatePhone);
+        if (form.titleType) kycPatch.titleType = form.titleType;
+        // Merchants always verify when saving KYC; agents only when fields are complete.
+        if (kycComplete || !agentPrefill) {
+          kycPatch.identityStatus = 'verified';
+        }
+        Object.assign(signerData, kycPatch);
       }
       const res = await invokePortalFunction('manageSigner', {
         action: 'update',
@@ -487,8 +522,14 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={handleSave} disabled={saving || formsLocked}
               className="flex-1 flex items-center justify-center gap-2 text-cb-body font-semibold text-cb-bg bg-cb-accent hover:opacity-90 disabled:bg-cb-surface disabled:text-gray-600 px-5 py-3 rounded-cb transition-all">
-              {formsLocked ? <Lock className="w-4 h-4" /> : saving ? <Loader2 className="w-4 h-4 animate-spin" /> : (showKyc ? <ShieldCheck className="w-4 h-4" /> : <Save className="w-4 h-4" />)}
-              {formsLocked ? 'Forms Locked' : saving ? 'Saving...' : (showKyc ? 'Save & Verify' : 'Save')}
+              {formsLocked ? <Lock className="w-4 h-4" /> : saving ? <Loader2 className="w-4 h-4 animate-spin" /> : ((showKyc && (!agentPrefill || kycReadyToVerify)) ? <ShieldCheck className="w-4 h-4" /> : <Save className="w-4 h-4" />)}
+              {formsLocked
+                ? 'Forms Locked'
+                : saving
+                  ? 'Saving...'
+                  : (showKyc
+                    ? (agentPrefill && !kycReadyToVerify ? 'Save progress' : 'Save & Verify')
+                    : 'Save')}
             </button>
             {formsLocked && (
               <p className="text-cb-caption normal-case tracking-normal text-gray-500 mt-2 text-center col-span-full">
