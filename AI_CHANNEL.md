@@ -2870,3 +2870,27 @@ Merchant signing readiness / signApplication KYC_INCOMPLETE gate unchanged.
 
 **Waiting on:** Teddy
 ---
+
+---
+**[CURSOR]** — 2026-07-28
+**Type:** Bug Fix
+**Re:** Estorya Coffee — Open to prep / phantom MID / People Complete false positive
+
+### 1. Open to prep
+Expanding a row flipped mode prep?nudge (Waiting on bank) and hid Open to prep. Now Open to prep stays visible for prep+nudge until Submitted (stuck still uses Open to fix).
+
+### 2. Phantom / deselected locations
+- getMerchantData, listLocations, manageMerchantID list (merchant actor): filter by StagedApplication.includedLocationIds
+- Applications expanded MIDs: same filter client-side
+- syncFromHubspot: when selection is set, skip creating new HubSpot child locations and skip updating deselected ones
+- StageEditor Save mirrors selection onto __auto_track__
+
+**Ops for Estorya:** Applications ? pencil ? Locations ? uncheck Imas Kusina Union City ? Save. Then redeploy getMerchantData, listLocations, manageMerchantID, syncFromHubspot.
+
+### 3. People Complete
+Welcome hub no longer marks People Complete from roster-only. Uses same field gaps as Applications (DOB/SSN/address/title). Shows attention list + Finish identity when gaps remain.
+
+**Teddy:** Push frontend + redeploy the four functions above. Re-save StageEditor selection for Estorya if Union City still appears.
+
+**Waiting on:** Teddy
+---

@@ -274,8 +274,21 @@ Deno.serve(async (req) => {
 
     // — LIST —
     if (action === 'list') {
-      const merchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId });
-      return Response.json({ merchantIDs: merchantMIDs || [] });
+      let merchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId }) || [];
+      // Merchants only see MIDs for agent-selected locations. Admins need the full
+      // list in StageEditor / Applications so deselected sites can be re-included.
+      if (actor.actor === 'merchant') {
+        try {
+          const stages = await base44.asServiceRole.entities.StagedApplication.filter({ corporateId }) || [];
+          const withSel = stages.filter((s: any) => Array.isArray(s.includedLocationIds) && s.includedLocationIds.length > 0);
+          if (withSel.length) {
+            const preferred = withSel.find((s: any) => s.label && s.label !== '__auto_track__') || withSel[0];
+            const ids = new Set(preferred.includedLocationIds.map(String));
+            merchantMIDs = merchantMIDs.filter((m: any) => ids.has(String(m.locationId)));
+          }
+        } catch { /* optional */ }
+      }
+      return Response.json({ merchantIDs: merchantMIDs });
     }
 
     // Portal form lock — block add/update while signing packages are live.

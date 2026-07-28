@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-07-28 — skip creating HubSpot child locations when agent includedLocationIds selection is set
 // redeployed 2026-07-10i — location address updates are FILL-BLANKS-ONLY (merchant-owned once present, stops HubSpot reverting merchant edits on every portal load)
 // redeployed 2026-07-10f — keep hubspotQuoteUrl in profile diagnostic; revert raw deal-key dump
 // redeployed 2026-07-10b — signer sync rewrite (multi-contact, contactSource/contactsFound/contactErrors diagnostics) + cardPresentPct string fix
@@ -633,6 +634,19 @@ Deno.serve(async (req) => {
     const childCompanyAssocs = parentCompany.associations?.companies?.results || [];
     console.log(`[syncFromHubspot] Found ${childCompanyAssocs.length} child company associations for parent ${primaryCompanyId}`);
 
+    // Agent StageEditor selection: when set, do NOT create new locations/MIDs from
+    // HubSpot children outside that selection (deselected sites board later).
+    let dealIncludedLocationIds: string[] | null = null;
+    try {
+      const stages = await base44.asServiceRole.entities.StagedApplication.filter({ corporateId }) || [];
+      const withSel = stages.filter((s: any) => Array.isArray(s.includedLocationIds) && s.includedLocationIds.length > 0);
+      if (withSel.length) {
+        const preferred = withSel.find((s: any) => s.label && s.label !== '__auto_track__') || withSel[0];
+        dealIncludedLocationIds = preferred.includedLocationIds.map(String);
+      }
+    } catch { /* optional */ }
+    const selectionLocksCreates = !!(dealIncludedLocationIds && dealIncludedLocationIds.length > 0);
+
     // If no child companies, create one location from the parent company's address
     const locationSources = childCompanyAssocs.length > 0
       ? childCompanyAssocs
@@ -666,6 +680,16 @@ Deno.serve(async (req) => {
         if (existingLocs?.length) {
           // FILL-BLANKS for address; always normalize state to 2-letter so a prior
           // HubSpot full-name ("California") does not keep poisoning MSPWare PUTs.
+          // When a deal selection is locked, only refresh locations already selected.
+          if (selectionLocksCreates && !dealIncludedLocationIds!.includes(String(existingLocs[0].id))) {
+            result.locations.push({
+              dbaName,
+              action: 'skipped_deselected',
+              locationId: existingLocs[0].id,
+              note: 'Location exists but is not in agent StageEditor selection for this deal',
+            });
+            continue;
+          }
           const nextState = sanitizeState(existingLocs[0].businessState || state || '');
           const nextStreet = existingLocs[0].businessStreet || street;
           const nextStreet2 = existingLocs[0].businessStreet2 || street2;
@@ -681,6 +705,15 @@ Deno.serve(async (req) => {
           });
           locationId = existingLocs[0].id;
           result.locations.push({ dbaName, action: 'updated', locationId });
+        } else if (selectionLocksCreates) {
+          // Do not invent new storefronts from HubSpot when the agent already chose
+          // which locations are in this boarding wave.
+          result.locations.push({
+            dbaName,
+            action: 'skipped_not_in_deal_selection',
+            note: 'Agent includedLocationIds is set — will not create additional HubSpot child locations',
+          });
+          continue;
         } else if (assoc._useParent) {
           // Parent-only HubSpot deals: Tier-1 company name is often the LEGAL name
           // (e.g. "… LLC") while the portal already has a real DBA storefront.

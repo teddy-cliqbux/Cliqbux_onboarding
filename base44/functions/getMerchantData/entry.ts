@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-07-28 — filter locations/MIDs by StagedApplication.includedLocationIds (agent boarding wave)
 // redeployed 2026-07-10 — readiness report (per-record missing-field lists) + legalEntities fields restored to safeProfile (ownershipType/taxClassType/establishmentYear/mailing)
 
 // ─── Portal auth (inlined) ─────────────────────────────────────────────────────────────────────
@@ -107,7 +108,22 @@ Deno.serve(async (req) => {
       }))
     };
 
-    const locations = await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId });
+    const locationsAll = await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId });
+
+    // Agent StageEditor selection — only return locations selected for this boarding wave.
+    let includedLocationIds: string[] | null = null;
+    try {
+      const stages = await base44.asServiceRole.entities.StagedApplication.filter({ corporateId }) || [];
+      const withSel = stages.filter((s: any) => Array.isArray(s.includedLocationIds) && s.includedLocationIds.length > 0);
+      if (withSel.length) {
+        const preferred = withSel.find((s: any) => s.label && s.label !== '__auto_track__') || withSel[0];
+        includedLocationIds = preferred.includedLocationIds.map(String);
+      }
+    } catch { /* selection is optional */ }
+
+    const locations = includedLocationIds
+      ? (locationsAll || []).filter((l: any) => includedLocationIds!.includes(String(l.id)))
+      : (locationsAll || []);
 
     const safeLocations = (locations || []).map(loc => ({
       id: loc.id,
@@ -137,7 +153,10 @@ Deno.serve(async (req) => {
       liquorLicenseUploadedAt: loc.liquorLicenseUploadedAt || null,
     }));
 
-    const merchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId });
+    const merchantMIDsAll = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId });
+    const merchantMIDs = includedLocationIds
+      ? (merchantMIDsAll || []).filter((c: any) => includedLocationIds!.includes(String(c.locationId)))
+      : (merchantMIDsAll || []);
 
     const safeMerchantMIDs = (merchantMIDs || []).map(c => ({
       id: c.id,

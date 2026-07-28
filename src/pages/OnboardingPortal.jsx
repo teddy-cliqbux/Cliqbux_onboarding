@@ -22,6 +22,11 @@ import { PortalLockContext } from '@/lib/PortalLockContext';
 import { isPortalFormsLocked } from '@/lib/portalLock';
 import { readSigningFixStep } from '@/lib/signingErrorRouting';
 import { isRosterConfiguredForPeopleStep, isRosterReadyForSigning } from '@/lib/signerRules';
+import {
+  peopleAttentionItems,
+  peopleIdentityFieldsComplete,
+} from '@/lib/signerMissingFields';
+import { filterByIncludedLocationIds } from '@/lib/dealLocationSelection';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
 // 2026-07-06: fixed a real bug here — this array checked for 'Self_CashDiscount'
@@ -418,7 +423,8 @@ export default function OnboardingPortal() {
         }
         return;
       }
-      // Apply staged application filters if present
+      // Apply staged application filters if present (server also filters via
+      // includedLocationIds on any stage — keep client filter for invite-token path).
       let mergedProfile = data.profile;
       let filteredLocations = data.locations || [];
       const stage = stagedAppRef.current;
@@ -427,7 +433,10 @@ export default function OnboardingPortal() {
           mergedProfile = { ...mergedProfile, ...stage.prefilledData };
         }
         if (stage.includedLocationIds?.length > 0) {
-          filteredLocations = filteredLocations.filter(l => stage.includedLocationIds.includes(l.id || l.locationId));
+          filteredLocations = filterByIncludedLocationIds(
+            filteredLocations,
+            stage.includedLocationIds.map(String),
+          );
         }
       }
       setProfile(mergedProfile);
@@ -731,17 +740,19 @@ export default function OnboardingPortal() {
       // new tab via a resume link) re-locks milestones the merchant already
       // finished, even though the data is safely on the server.
       const hasLocations = (locations?.length ?? 0) > 0;
-      // People "done" = Continue clicked OR roster has exactly one Control Person
-      // (live signers), OR legacy all-KYC-ready. Locations alone do NOT mark People done.
+      // People "Complete" = roster configured AND identity fields filled for every
+      // principal — matching Applications "N missing" (not Continuable-only).
       const rosterPeopleDone = isRosterConfiguredForPeopleStep(portalSigners);
-      const hasPeople = !!allCompletedSteps.people || signersVerified || rosterPeopleDone;
+      const peopleFieldsDone = peopleIdentityFieldsComplete(portalSigners);
+      const peopleAttention = peopleAttentionItems(portalSigners);
+      const mPeopleDone = rosterPeopleDone && peopleFieldsDone;
+      const mPeopleAttention = rosterPeopleDone && !peopleFieldsDone && peopleAttention.length > 0;
       const hasBanking = hasLocations && locations.every(l => l.bankDetails?.routingNumber);
       // "Complete" means the data can actually build a valid application — the
       // backend readiness check covers entity, location, and MID required fields.
       // HubSpot prefill creates partially-filled records, so records merely
       // existing is NOT completion (Teddy, 2026-07-10).
       const dataReady = readiness ? readiness.complete : hasLocations;
-      const mPeopleDone = hasPeople;
       const m1Done = hasLocations && dataReady;
       const m1Attention = hasLocations && !dataReady;
       const attentionItems = readiness ? [
@@ -751,7 +762,7 @@ export default function OnboardingPortal() {
       ] : [];
       const m2Done = !!allCompletedSteps.banking || hasBanking;
       const m3Done = applicationStatus === 'Submitted';
-      const mLocUnlocked = mPeopleDone || hasLocations;
+      const mLocUnlocked = mPeopleDone || hasLocations || rosterPeopleDone;
       const m2Unlocked = hasLocations;
       const m3Unlocked = m1Done && m2Done;
 
@@ -769,10 +780,14 @@ export default function OnboardingPortal() {
             <MilestoneCard
               index={1}
               title="People & KYC"
-              description="Name the Control Person (who signs) and Beneficial Owners. Invite anyone who isn't here — they can finish identity checks remotely."
+              description={mPeopleAttention
+                ? 'We have the roster started — identity details still needed before signing:'
+                : 'Name the Control Person (who signs) and Beneficial Owners. Invite anyone who isn\'t here — they can finish identity checks remotely.'}
               done={mPeopleDone}
+              attention={mPeopleAttention}
+              attentionItems={peopleAttention}
               unlocked={true}
-              ctaLabel={mPeopleDone ? 'Review people' : 'Set up people'}
+              ctaLabel={mPeopleDone ? 'Review' : mPeopleAttention ? 'Finish identity' : 'Set up people'}
               onCta={() => goToStep(STEP_PEOPLE)}
             />
             <MilestoneCard

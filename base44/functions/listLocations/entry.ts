@@ -54,7 +54,23 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const locations = await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId });
+    const locationsAll = await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }) || [];
+
+    // Merchants only see agent-selected locations for this boarding wave.
+    // Admins (StageEditor) still see the full set so they can re-include sites.
+    let locations = locationsAll;
+    if (actor.actor === 'merchant') {
+      try {
+        const stages = await base44.asServiceRole.entities.StagedApplication.filter({ corporateId }) || [];
+        const withSel = stages.filter((s: any) => Array.isArray(s.includedLocationIds) && s.includedLocationIds.length > 0);
+        if (withSel.length) {
+          const preferred = withSel.find((s: any) => s.label && s.label !== '__auto_track__') || withSel[0];
+          const ids = new Set(preferred.includedLocationIds.map(String));
+          locations = locationsAll.filter((l: any) => ids.has(String(l.id)));
+        }
+      } catch { /* optional */ }
+    }
+
     return Response.json({ locations });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });

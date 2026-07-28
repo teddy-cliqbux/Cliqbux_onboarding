@@ -15,6 +15,11 @@ import {
   isApplicationSigned,
 } from '@/lib/signerLifecycle';
 import { isEffectivelyRequiredSigner } from '@/lib/signerRules';
+import { signerMissingFields } from '@/lib/signerMissingFields';
+import {
+  resolveIncludedLocationIdsFromStages,
+  filterByIncludedLocationIds,
+} from '@/lib/dealLocationSelection';
 import PricingEditorPanel from '@/components/pricing/PricingEditorPanel';
 import { isPricingComplete, TIER_LABELS } from '@/lib/pricingPresets';
 import {
@@ -194,26 +199,6 @@ function humanizeMspError(err) {
   return raw;
 }
 
-function signerMissingFields(s) {
-  const miss = [];
-  if (!s.firstName || !s.lastName) miss.push('Name');
-  if (!s.signerEmail) miss.push('Email');
-  if (s.ownershipPercentage == null || s.ownershipPercentage === '') miss.push('Ownership %');
-  if (s.isPrimarySigner) {
-    if (!s.dobYear || !s.dobMonth || !s.dobDay) miss.push('DOB');
-    const ssnDigits = String(s.ssn || '').replace(/\D/g, '');
-    if (ssnDigits.length < 9) miss.push('SSN');
-    if (!s.homeStreet) miss.push('Home street');
-    if (!s.homeCity) miss.push('Home city');
-    if (!s.homeState) miss.push('Home state');
-    if (!s.homeZip) miss.push('Home ZIP');
-    if (!s.titleType && !s.title) miss.push('Title');
-    // corporatePhone is collected but not required for identityStatus Verified
-  }
-  return miss;
-}
-
-// ── Shared Badges ─────────────────────────────────────────────────────────────
 function MidStatusBadge({ status }) {
   const dot = {
     'Active':            'bg-cb-success',
@@ -869,6 +854,31 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
         ? await base44.functions.invoke('manageStagedApplication', { action: 'update', stageId: stage.id, data: payload })
         : await base44.functions.invoke('manageStagedApplication', { action: 'create', corporateId, data: payload });
       if (res.data?.error) throw new Error(res.data.error);
+
+      // Mirror selection onto __auto_track__ so portal / HubSpot sync / Applications
+      // honor deselected locations even when the invite stage isn't in session.
+      try {
+        const listRes = await base44.functions.invoke('manageStagedApplication', {
+          action: 'list',
+          corporateId,
+        });
+        const stages = listRes.data?.stages || [];
+        const auto = stages.find((s) => s.label === '__auto_track__');
+        if (auto?.id && auto.id !== res.data?.stage?.id) {
+          await base44.functions.invoke('manageStagedApplication', {
+            action: 'update',
+            stageId: auto.id,
+            data: {
+              includedLocationIds: [...selLocs],
+              includedMidIds: [...selMids],
+              includedSignerIds: [...selSigners],
+            },
+          });
+        }
+      } catch (mirrorErr) {
+        console.warn('[StageEditor] auto_track selection mirror skipped:', mirrorErr?.message || mirrorErr);
+      }
+
       onSaved(res.data.stage);
     } catch (err) { setError(err.message || 'Save failed'); }
     finally { setSaving(false); }
@@ -1556,23 +1566,35 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     || adminStages[0]
     || null;
 
+  // Agent deal selection — only show MIDs/locations the rep included for this wave
+  const includedLocIds = resolveIncludedLocationIdsFromStages([
+    ...(adminStages || []),
+    ...(trackStage ? [trackStage] : []),
+  ]);
+  const visibleLocations = filterByIncludedLocationIds(locations, includedLocIds);
+  const visibleMids = includedLocIds?.length
+    ? (mids || []).filter((m) => includedLocIds.includes(String(m.locationId)))
+    : mids;
+
   const pipeline = resolvePipelineProgress({
     profile,
     track: trackStage,
-    locations,
+    locations: visibleLocations,
     signers,
   });
   const { currentStep, completedSteps, appStatus } = pipeline;
 
   const isSubmitted = appStatus === 'Submitted' || currentStep === 'submitted';
 
-  const mspValues = Object.values(mspStatuses);
+  const mspValues = visibleMids
+    .map((m) => (m.mspApplicationNo ? mspStatuses[m.mspApplicationNo] : null))
+    .filter((v) => v != null);
   const healthSummary = summarizeMspHealth(mspValues);
   const avgMspPct = healthSummary.worstPct != null
     ? Math.round(healthSummary.worstPct)
     : null;
   const mspErrCount = healthSummary.errorCount;
-  const localErrCount = mids.reduce((s, m) => s + countLocalMidIssues(m), 0);
+  const localErrCount = visibleMids.reduce((s, m) => s + countLocalMidIssues(m), 0);
   // Once MSP form is 100% with no processor errors, local MID field gaps must not
   // override Remind → stuck (those gaps are often already on the wire form).
   const formIncomplete = healthReady && healthSummary.incomplete;
@@ -1595,8 +1617,8 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   const needsSubmitAfterSign = !!rowMode.agreementSigned && !isSubmitted;
   const BOARDING_DONE = ['Pending MID', 'Active', 'Active (Existing)'];
   const midsNeedProcessor = !healthReady
-    || mids.length === 0
-    || mids.some((m) => !BOARDING_DONE.includes(m.applicationStepStatus));
+    || visibleMids.length === 0
+    || visibleMids.some((m) => !BOARDING_DONE.includes(m.applicationStepStatus));
   const showProcessorSubmit = (needsSubmitAfterSign || isSubmitted || agreementSigned) && midsNeedProcessor;
 
   useEffect(() => {
@@ -1925,39 +1947,42 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             <span className="text-cb-caption text-cb-success max-w-[10rem] truncate" title={nudgeMsg}>{nudgeMsg}</span>
           )}
 
-          {/* Mode primary CTA — prep first; blank send always allowed */}
-          {rowMode.mode === 'prep' && (
-            <>
-              <button
-                type="button"
-                onClick={openMerchantView}
-                disabled={impersonating || openingDashboard}
-                title={rowMode.reason}
-                className="flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90 disabled:opacity-40"
-              >
-                {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
-                Open to prep
-              </button>
-              {onRequestSend && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRequestSend({
-                      stage: linkStage,
-                      corporateId,
-                      prefillEmail: profile?.signerEmail || '',
-                      merchantName,
-                    });
-                  }}
-                  title="Email a portal link now — merchant can fill a blank application (prep optional)"
-                  className="flex items-center gap-1 text-cb-caption font-medium px-2.5 py-1 rounded-cb border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong transition-all"
-                >
-                  <Send className="w-3 h-3" />
-                  Send application
-                </button>
-              )}
-            </>
+          {/* Open to prep stays visible in prep + nudge (expand must not replace it with Remind only). Stuck uses Open to fix. */}
+          {!isSubmitted && rowMode.mode !== 'underwriting' && rowMode.mode !== 'stuck' && (
+            <button
+              type="button"
+              onClick={openMerchantView}
+              disabled={impersonating || openingDashboard}
+              title="Open the merchant application to prep or edit details"
+              className={`flex items-center gap-1 text-cb-caption font-semibold px-2.5 py-1 rounded-cb border transition-all disabled:opacity-40 ${
+                rowMode.mode === 'prep'
+                  ? 'bg-cb-accent text-cb-bg border-cb-accent hover:opacity-90'
+                  : 'border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong'
+              }`}
+            >
+              {impersonating ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+              Open to prep
+            </button>
+          )}
+
+          {rowMode.mode === 'prep' && onRequestSend && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRequestSend({
+                  stage: linkStage,
+                  corporateId,
+                  prefillEmail: profile?.signerEmail || '',
+                  merchantName,
+                });
+              }}
+              title="Email a portal link now — merchant can fill a blank application (prep optional)"
+              className="flex items-center gap-1 text-cb-caption font-medium px-2.5 py-1 rounded-cb border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong transition-all"
+            >
+              <Send className="w-3 h-3" />
+              Send application
+            </button>
           )}
 
           {rowMode.mode === 'stuck' && (
@@ -2177,12 +2202,16 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
               </div>
               <PortalActivityPanel activity={p.activity} />
 
-              {/* MIDs */}
-              {mids.length > 0 && (
+              {/* MIDs — filtered to agent-selected locations when StageEditor selection exists */}
+              {visibleMids.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-cb-caption text-gray-500">
-                      MIDs ({mids.length}) {loadingMsp && <Loader2 className="inline w-3 h-3 animate-spin ml-1" />}
+                      MIDs ({visibleMids.length})
+                      {includedLocIds?.length ? (
+                        <span className="text-gray-600"> · selected for this deal</span>
+                      ) : null}
+                      {' '}{loadingMsp && <Loader2 className="inline w-3 h-3 animate-spin ml-1" />}
                     </p>
                     {avgMspPct !== null && (
                       <div className="flex items-center gap-2">
@@ -2192,7 +2221,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                     )}
                   </div>
                   <div className="space-y-2">
-                    {mids.map(mid => (
+                    {visibleMids.map(mid => (
                       <MidRow
                         key={mid.id}
                         mid={mid}
