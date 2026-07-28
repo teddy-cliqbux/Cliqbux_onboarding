@@ -74,7 +74,6 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
   };
   const showKyc = (personNeedsKyc(draftPerson) || allowInlineKyc === true) && !rolePortalAdmin;
   const agentPrefill = isAgentPrefillSession(corporateId);
-  const kycReadyToVerify = showKyc && isKycFormComplete(form);
   const inheritedTitle = signer.titleType || profile?.titleType || '';
 
   const [form, setForm] = useState({
@@ -94,6 +93,7 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
     corporatePhone: signer.corporatePhone || '',
     titleType: inheritedTitle,
   });
+  const kycReadyToVerify = showKyc && isKycFormComplete(form);
   const [showSsn, setShowSsn] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
