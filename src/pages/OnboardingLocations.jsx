@@ -305,14 +305,22 @@ function StatusBadge({ status }) {
 // combined=true: flat fields for the 1-location × 1-account case — no nested
 // card chrome, no duplicate DBA title, no drag/move/delete. Same save path.
 
-function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, onUpdated, onDelete, moveTargets = [], onMove, combined = false, onApplicantSave }) {
+function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, onUpdated, onDelete, moveTargets = [], onMove, combined = false, onApplicantSave, combinedEditOpen, onCombinedEditChange }) {
   const { formsLocked } = usePortalLock();
   const locked = getMidLocked(mid) || formsLocked;
   const imported = getMidImported(mid);
-  // Nested list: summary only until Edit. Combined 1×1 still auto-opens when incomplete.
-  const [editing, setEditing] = useState(
-    combined ? (!mid.mccCode && !mid.mccHelpRequested && !locked) : false
+  // Nested list: summary only until Edit. Combined 1×1: parent LocationCard owns
+  // the single pencil (GitHub #13); fall back to local state if uncontrolled.
+  const combinedControlled = combined && typeof combinedEditOpen === 'boolean';
+  const [editingInternal, setEditingInternal] = useState(
+    combined && !combinedControlled ? (!mid.mccCode && !mid.mccHelpRequested && !locked) : false
   );
+  const editing = combinedControlled ? combinedEditOpen : editingInternal;
+  const setEditing = (next) => {
+    const value = typeof next === 'function' ? next(editing) : next;
+    if (combinedControlled) onCombinedEditChange?.(value);
+    else setEditingInternal(value);
+  };
   const [form, setForm] = useState({
     merchantName: mid.merchantName || mid.dbaName || dbaName || '',
     mccCode: mid.mccCode || '',
@@ -601,6 +609,7 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
   );
 
   // ── Combined 1×1: flat fields under the store header (no nested card) ──
+  // Edit pencil lives on the LocationCard header only (GitHub #13).
   if (combined) {
     return (
       <div className={locked ? 'opacity-60' : ''}>
@@ -630,12 +639,6 @@ function MidCard({ mid, locationId, corporateId, dbaName, businessState, index, 
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
-              )}
-              {!locked && (
-                <button onClick={() => setEditing(true)} aria-label="Edit processing details"
-                  className="p-2 text-gray-500 hover:text-white transition-colors">
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
               )}
             </motion.div>
           ) : (
@@ -809,7 +812,9 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
       });
       if (res.data?.error) throw new Error(res.data.error);
       onLocationUpdated?.({ id: location.id, ...res.data.location });
-      setEditingLoc(false);
+      // 1-MID combined store: keep the unified edit panel open so processing
+      // fields stay reachable after saving the address (GitHub #13).
+      if (locMids.length !== 1) setEditingLoc(false);
       onApplicantSave?.();
     } catch (err) { setLocEditError(err.message || 'Save failed'); }
     finally { setLocSaving(false); }
@@ -822,6 +827,23 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
   const locationError = showValidation && !allMidsComplete;
   const locNeedsLiquorDocs = locMids.some(m => requiresLiquorCompliance(location.businessState, m.mccCode));
 
+  // 1-MID store: auto-expand the single edit panel when processing is incomplete
+  // so merchants aren't hunting for a second pencil (GitHub #13).
+  const storeAutoOpenRef = useRef(false);
+  useEffect(() => {
+    if (storeAutoOpenRef.current || locMids.length !== 1 || formsLocked || editingLoc) return;
+    if (!isMidComplete(locMids[0], location.businessState)) {
+      storeAutoOpenRef.current = true;
+      startLocEdit();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- open once when incomplete MID is present
+  }, [location.id, locMids[0]?.id, formsLocked]);
+
+  const toggleStoreEdit = () => {
+    if (formsLocked) return;
+    if (editingLoc) setEditingLoc(false);
+    else startLocEdit();
+  };
   const handleAddMid = async () => {
     setAddMidSaving(true);
     setAddMidError('');
@@ -896,7 +918,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
 
   // ── Combined panel: exactly 1 processing account at this location ──
   // One store card — name, address, and processing fields. No nested "same name" MID box.
-  // Gate is per-location MID count (not full-app simpleMode) — see GitHub #12.
+  // One header pencil opens address + processing together (GitHub #12 / #13).
   if (locMids.length === 1) {
     const mid = locMids[0];
     return (
@@ -925,8 +947,10 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
                 {allMidsComplete && <Check className="w-3.5 h-3.5 text-cb-success" />}
                 <StatusBadge status={mid.applicationStepStatus || 'In Review'} />
                 <button
-                  onClick={() => { if (!formsLocked) startLocEdit(); }}
-                  title={formsLocked ? FORMS_LOCKED_MESSAGE : 'Edit store name / address'}
+                  onClick={toggleStoreEdit}
+                  title={formsLocked ? FORMS_LOCKED_MESSAGE : 'Edit store details'}
+                  aria-label={formsLocked ? FORMS_LOCKED_MESSAGE : 'Edit store details'}
+                  aria-expanded={editingLoc}
                   disabled={formsLocked}
                   className="p-2 text-gray-600 hover:text-white rounded-cb transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -953,6 +977,11 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
 
             <MidCard
               combined
+              combinedEditOpen={editingLoc}
+              onCombinedEditChange={(open) => {
+                if (open) startLocEdit();
+                else setEditingLoc(false);
+              }}
               mid={mid}
               index={0}
               locationId={location.id}
