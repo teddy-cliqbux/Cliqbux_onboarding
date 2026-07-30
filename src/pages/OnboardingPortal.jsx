@@ -27,6 +27,7 @@ import {
   peopleIdentityFieldsComplete,
 } from '@/lib/signerMissingFields';
 import { filterByIncludedLocationIds } from '@/lib/dealLocationSelection';
+import { tryClaimBase44OauthToken } from '@/lib/consumeBase44OauthToken';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
 // 2026-07-06: fixed a real bug here — this array checked for 'Self_CashDiscount'
@@ -253,10 +254,26 @@ export default function OnboardingPortal() {
 
     if (stageId && token) { validateStageToken(stageId, token); }
     else if (id)          { handleDirectAccess(id); }
-    else if (token)       { validateResumeToken(token); }
+    else if (token)       { handleBareToken(token); }
     else                  { setMode('entry'); setLoading(false); }
   }, []);
 
+  // Google/OAuth returns `?token=` on the redirect URL. Merchant magic links also
+  // use `?token=`. Probe Base44 auth.me() first; only then treat as resume link.
+  const handleBareToken = async (token) => {
+    setLoading(true);
+    const claim = await tryClaimBase44OauthToken(token);
+    if (claim.kind === 'oauth') {
+      if (claim.user?.role === 'admin') {
+        window.location.replace('/admin/center');
+        return;
+      }
+      setMode('entry');
+      setLoading(false);
+      return;
+    }
+    await validateResumeToken(token);
+  };
   // A dealId/corporateId in the URL with no merchant token could be a legitimate
   // sales-rep/agent link, or someone guessing/copying another merchant's id.
   // Gate on an existing merchant session first, then fall back to checking for

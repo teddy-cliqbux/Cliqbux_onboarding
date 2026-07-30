@@ -325,6 +325,7 @@ Post-signing is the **Merchant Center** start; onboarding is the **entrance**. L
 - Preferred app visibility: **Private** so only invited people can open the live app.
 - Merchants do **not** use Base44 User accounts — they use magic-link JWTs. Do not wait on RDS to invite staff; RDS/dashboard login is a later cutover.
 - `/admin/*` is gated by `AdminProtectedRoute` (`role === 'admin'`); logged-out visitors go to `/login?from_url=…`.
+- **Google OAuth `?token=` collision (fixed 2026-07-30):** Base44 redirects with `?token=<session>` after Google login. That must not be treated as a merchant resume token. `tryClaimBase44OauthToken` probes `auth.me()` first; staff Login defaults to `/admin/center`.
 
 Auth Stage 1: magic-link JWT via `src/lib/merchantCenterAuth.js` (swap-friendly). Checklist: `manageMerchantChecklist` + `MerchantChecklistItem` (republish entity). Agent **Request document** lives in Deal Room. Quotes never block application signing. Do not call POS dashboard APIs; join later on `elavonMID`.
 

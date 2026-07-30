@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { appParams } from '@/lib/app-params';
 import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
+import { tryClaimBase44OauthToken } from '@/lib/consumeBase44OauthToken';
 
 const AuthContext = createContext();
 
@@ -22,6 +23,30 @@ export const AuthProvider = ({ children }) => {
     try {
       setIsLoadingPublicSettings(true);
       setAuthError(null);
+
+      // Google/OAuth may return `?token=` (not `access_token`). Claim it before
+      // public-settings so admin routes see a real session. Do not claim on `/`
+      // here — OnboardingPortal probes OAuth vs merchant magic-link itself.
+      let oauthClaimed = false;
+      const path = typeof window !== 'undefined' ? window.location.pathname : '';
+      const urlToken =
+        typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search).get('access_token') ||
+            new URLSearchParams(window.location.search).get('token')
+          : null;
+      const onStaffPath =
+        path.startsWith('/admin') || path === '/login' || path === '/register';
+      if (urlToken && onStaffPath) {
+        const claim = await tryClaimBase44OauthToken(urlToken);
+        if (claim.kind === 'oauth') {
+          setUser(claim.user);
+          setIsAuthenticated(true);
+          setAuthError(null);
+          setAuthChecked(true);
+          setIsLoadingAuth(false);
+          oauthClaimed = true;
+        }
+      }
       
       // First, check app public settings (with token if available)
       // This will tell us if auth is required, user not registered, etc.
@@ -37,14 +62,29 @@ export const AuthProvider = ({ children }) => {
       try {
         const publicSettings = await appClient.get(`/prod/public-settings/by-id/${appParams.appId}`);
         setAppPublicSettings(publicSettings);
-        
-        // If we got the app public settings successfully, check if user is authenticated
-        if (appParams.token) {
-          await checkUserAuth();
-        } else {
+
+        if (oauthClaimed) {
+          setIsLoadingPublicSettings(false);
+          return;
+        }
+
+        // Session may already exist in localStorage even when appParams.token was
+        // empty at module import (e.g. OAuth wrote storage on a prior hop).
+        try {
+          const currentUser = await base44.auth.me();
+          setUser(currentUser);
+          setIsAuthenticated(true);
+          setAuthError(null);
           setIsLoadingAuth(false);
-          setIsAuthenticated(false);
           setAuthChecked(true);
+        } catch {
+          if (appParams.token) {
+            await checkUserAuth();
+          } else {
+            setIsLoadingAuth(false);
+            setIsAuthenticated(false);
+            setAuthChecked(true);
+          }
         }
         setIsLoadingPublicSettings(false);
       } catch (appError) {

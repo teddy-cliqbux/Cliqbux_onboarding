@@ -8,15 +8,17 @@ import { LogIn, Mail, Lock, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 
-/** Only allow same-origin relative paths or our own app origin (open-redirect safe). */
+/** Only allow same-origin relative paths or our own app origin (open-redirect safe).
+ *  Staff Login defaults to Merchant Center when no return URL is provided — avoids
+ *  Google OAuth landing on `/?token=` which the merchant portal used to misread. */
 function safeReturnUrl(raw) {
-  if (!raw || typeof raw !== "string") return "/";
+  if (!raw || typeof raw !== "string") return "/admin/center";
   try {
     if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
     const u = new URL(raw);
     if (u.origin === window.location.origin) return u.pathname + u.search + u.hash;
   } catch { /* ignore */ }
-  return "/";
+  return "/admin/center";
 }
 
 export default function Login() {
