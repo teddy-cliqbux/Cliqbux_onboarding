@@ -118,6 +118,8 @@ async function createGithubIssue(opts: {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'Content-Type': 'application/json',
+      // GitHub rejects requests without User-Agent (403 administrative rules)
+      'User-Agent': 'Cliqbux-Onboarding-Feedback',
     },
     body: JSON.stringify({
       title: opts.title.slice(0, 200),
@@ -253,11 +255,18 @@ Deno.serve(async (req) => {
       }, { status: queued ? 200 : 503 });
     }
 
-    const created = await createGithubIssue({
-      title: issueTitle,
-      body: issueBody,
-      labels: [type === 'bug' ? 'bug' : 'enhancement', 'needs-triage'],
-    });
+    let created: { number: number; html_url: string } | null = null;
+    let githubError = '';
+    try {
+      created = await createGithubIssue({
+        title: issueTitle,
+        body: issueBody,
+        labels: [type === 'bug' ? 'bug' : 'enhancement', 'needs-triage'],
+      });
+    } catch (e: any) {
+      githubError = e?.message || 'GitHub issue create failed';
+      console.error('[submitProductFeedback]', githubError);
+    }
 
     if (!created) {
       const queued = await persistQueued();
@@ -266,12 +275,13 @@ Deno.serve(async (req) => {
         queued: true,
         error: queued
           ? undefined
-          : 'Failed to create GitHub issue and could not queue locally',
+          : (githubError || 'Failed to create GitHub issue and could not queue locally'),
         message: queued
-          ? 'GitHub issue create failed; your feedback was saved for the daily digest.'
+          ? 'Could not open a GitHub issue right now; your feedback was saved for the daily digest. Redeploy if you just fixed User-Agent / token settings.'
           : undefined,
         issueUrl: queued ? 'queued://operational-event (GitHub create failed)' : undefined,
         screenshotAttached: Boolean(screenshotUrl),
+        hint: githubError || undefined,
       }, { status: queued ? 200 : 502 });
     }
 

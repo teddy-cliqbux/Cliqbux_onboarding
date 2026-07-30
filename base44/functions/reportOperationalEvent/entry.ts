@@ -99,6 +99,7 @@ async function createGithubIssue(opts: {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
       'Content-Type': 'application/json',
+      'User-Agent': 'Cliqbux-Onboarding-Feedback',
     },
     body: JSON.stringify({
       title: opts.title.slice(0, 200),
