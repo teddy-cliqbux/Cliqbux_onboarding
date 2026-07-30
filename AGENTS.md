@@ -313,9 +313,18 @@ Post-signing is the **Merchant Center** start; onboarding is the **entrance**. L
 | `/admin/center/attention` | Needs-attention accounts |
 | `/admin/center/unlinked` | Unlinked deals bucket |
 | `/admin/center/installations` | Light installations launch panel → Merchants / Applications / Deal Room runbook |
-| `/admin/center/accounts/:merchantAccountId` | Account home — deals (label **Deal ID** = HubSpot deal / `corporateId`), legal entities, MID snapshot, impersonate / Deal Room |
+| `/admin/center/sync-msp` | Sync MSPWare portfolio → MerchantAccount (dry run + confirm live; no HubSpot) |
+| `/admin/center/team` | Invite Cliqbux staff as app **Admin** (live app only — not Base44 editor) |
+| `/admin/center/accounts/:merchantAccountId` | Account home — deals (label **Deal ID** = HubSpot deal / `corporateId`, or **MSP ref** for `msp-*` imports), legal entities, MID snapshot, impersonate / Deal Room |
 
-**Hub vs desk (2026-07-30):** `/admin/center` is the company-first hub with admin shell (sidebar + search). `/admin/applications` remains the deal desk (not wrapped in the shell yet). Do not treat `corporateId` as the Merchant Account id. Excel import of accounts is deferred. API: `manageMerchantAccount` (`list` / `get` / `listUnlinkedDeals`) — admin only. Spec: `docs/superpowers/specs/2026-07-30-admin-merchant-center-shell-design.md`.
+**Hub vs desk (2026-07-30):** `/admin/center` is the company-first hub with admin shell (sidebar + search). `/admin/applications` remains the deal desk (not wrapped in the shell yet). Do not treat `corporateId` as the Merchant Account id. Prefer MSPWare API sync (`/admin/center/sync-msp` → `importMSPPortfolio`) over Excel for filling Live accounts. API: `manageMerchantAccount` (`list` / `get` / `listUnlinkedDeals`) — admin only. Specs: `docs/superpowers/specs/2026-07-30-admin-merchant-center-shell-design.md`, `docs/superpowers/specs/2026-07-30-msp-portfolio-account-sync-design.md`.
+
+**Staff app accounts (2026-07-30) — not Base44 builders:**
+- Cliqbux staff log into the **published app** at `/login` as Base44 **app Users** with role `admin`. They use `/admin/applications` and `/admin/center`.
+- **Do not** invite staff as Base44 **collaborators** (that opens the app editor). Invite as **Admin** only: Dashboard → Overview → Send Invites / Users → Invite User, or in-app `/admin/center/team` (`base44.auth.inviteUser(email, 'admin')`).
+- Preferred app visibility: **Private** so only invited people can open the live app.
+- Merchants do **not** use Base44 User accounts — they use magic-link JWTs. Do not wait on RDS to invite staff; RDS/dashboard login is a later cutover.
+- `/admin/*` is gated by `AdminProtectedRoute` (`role === 'admin'`); logged-out visitors go to `/login?from_url=…`.
 
 Auth Stage 1: magic-link JWT via `src/lib/merchantCenterAuth.js` (swap-friendly). Checklist: `manageMerchantChecklist` + `MerchantChecklistItem` (republish entity). Agent **Request document** lives in Deal Room. Quotes never block application signing. Do not call POS dashboard APIs; join later on `elavonMID`.
 
@@ -447,7 +456,7 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 | `refillMSPForms` | Standalone re-fill of existing drafts by corporateId. Useful for patching stuck forms. |
 | `pollMSPStatus` | Polls MSPWare status for all Pending MID records (both Locations and MerchantMIDs) |
 | `importExistingMIDs` | TIN-matches MSPWare approved apps to a corporateId; creates MerchantMID records |
-| `importMSPPortfolio` | Bulk-imports entire MSPWare portfolio — creates Profile + Locations + MerchantMIDs for all approved merchants. Groups by TIN. Admin-only, dryRun supported. |
+| `importMSPPortfolio` | Pulls MSPWare approved apps with MIDs → **MerchantAccount** + Profile + Locations + MerchantMIDs (`Active (Existing)`). Groups by TIN. Stable `corporateId` `msp-{tin}` / `msp-app-{no}` (not HubSpot). Admin-only. `{ dryRun: true }` preview; live requires `{ confirmLive: true }`. No HubSpot writes. UI: `/admin/center/sync-msp`. |
 | `migrateToMerchantMIDs` | One-time migration: copies any records left in the legacy MerchantProcessingConcept table into MerchantMID, and derives MerchantMID records from MerchantLocations boarding data for locations that still don't have one |
 | `manageMSPTemplate` | Reads/fills MSPWare templates. Actions: `read`, `fill_icpls`, `fill_cd`, `create_cd`. Template #6 = ICPLS, Template #154 = Cash Discount (pricing_method: `"CLEAR"`). |
 | `uploadSignerIDsToMSP` | Uploads signer ID document files to all pending MSPWare applications for a corporateId. Call after signers upload their IDs via the portal. |

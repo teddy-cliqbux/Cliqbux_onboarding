@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Building2, ChevronLeft, ChevronRight, ClipboardList,
-  FolderKanban, LayoutDashboard, Link2, Loader2, Search, Users,
+  FolderKanban, LayoutDashboard, Link2, Loader2, RefreshCw, Search, UserPlus, Users,
   Wrench,
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -24,6 +24,8 @@ const PORTFOLIO_NAV = [
 
 const WORK_NAV = [
   { to: '/admin/center/installations', label: 'Installations', icon: Wrench },
+  { to: '/admin/center/sync-msp', label: 'Sync MSPWare', icon: RefreshCw },
+  { to: '/admin/center/team', label: 'Team', icon: UserPlus },
 ];
 
 function navClass({ isActive }, collapsed) {

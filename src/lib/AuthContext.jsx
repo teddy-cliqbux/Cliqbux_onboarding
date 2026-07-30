@@ -77,6 +77,7 @@ export const AuthProvider = ({ children }) => {
         }
         setIsLoadingPublicSettings(false);
         setIsLoadingAuth(false);
+        setAuthChecked(true);
       }
     } catch (error) {
       console.error('Unexpected error:', error);
@@ -86,6 +87,7 @@ export const AuthProvider = ({ children }) => {
       });
       setIsLoadingPublicSettings(false);
       setIsLoadingAuth(false);
+      setAuthChecked(true);
     }
   };
 
@@ -96,6 +98,7 @@ export const AuthProvider = ({ children }) => {
       const currentUser = await base44.auth.me();
       setUser(currentUser);
       setIsAuthenticated(true);
+      setAuthError(null);
       setIsLoadingAuth(false);
       setAuthChecked(true);
     } catch (error) {

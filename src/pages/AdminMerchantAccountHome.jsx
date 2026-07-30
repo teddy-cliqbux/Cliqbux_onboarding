@@ -1,6 +1,6 @@
 /**
  * Admin Merchant Account home — /admin/center/accounts/:merchantAccountId
- * Company parent view: deals (Deal ID = HubSpot), legal entities, MID snapshot.
+ * Company parent view: deals (Deal ID = HubSpot, or MSP ref for msp-* imports), legal entities, MID snapshot.
  */
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -29,6 +29,12 @@ function statusChipClass(status) {
     default:
       return 'text-gray-400';
   }
+}
+
+function dealRefLabel(corporateId) {
+  const id = String(corporateId || '');
+  if (id.startsWith('msp-')) return 'MSP ref';
+  return 'Deal ID';
 }
 
 function midStatusDot(status) {
@@ -187,7 +193,8 @@ export default function AdminMerchantAccountHome() {
                       <div className="min-w-0">
                         <p className="text-cb-body font-semibold text-white">{name}</p>
                         <p className="text-cb-caption text-gray-500 mt-0.5">
-                          Deal ID <span className="font-mono text-gray-400">{dealId}</span>
+                          {dealRefLabel(dealId)}{' '}
+                          <span className="font-mono text-gray-400">{dealId}</span>
                           {d.applicationStatus ? ` · ${d.applicationStatus}` : ''}
                           {handoff ? ` · ${handoff}` : ''}
                           {d.pricingTier ? ` · ${d.pricingTier}` : ''}
@@ -288,7 +295,7 @@ export default function AdminMerchantAccountHome() {
                       {m.elavonMID ? ` · Elavon ${m.elavonMID}` : ''}
                     </p>
                     <p className="text-cb-caption font-mono text-gray-600 mt-0.5">
-                      Deal ID {m.corporateId}
+                      {dealRefLabel(m.corporateId)} {m.corporateId}
                     </p>
                   </div>
                 </li>

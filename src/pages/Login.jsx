@@ -22,6 +22,7 @@ function safeReturnUrl(raw) {
 export default function Login() {
   const [searchParams] = useSearchParams();
   const returnTo = safeReturnUrl(searchParams.get("from_url") || searchParams.get("returnTo"));
+  const isAdminReturn = returnTo === "/admin" || returnTo.startsWith("/admin/");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -49,14 +50,20 @@ export default function Login() {
     <AuthLayout
       icon={LogIn}
       title="Welcome back"
-      subtitle="Log in to your account"
+      subtitle={isAdminReturn ? "Log in to Cliqbux staff tools" : "Log in to your account"}
       footer={
-        <>
-          Don't have an account?{" "}
-          <Link to="/register" className="text-primary font-medium hover:underline">
-            Create one
-          </Link>
-        </>
+        isAdminReturn ? (
+          <span className="text-muted-foreground">
+            Need access? Ask a Cliqbux admin to invite you — do not self-register for staff tools.
+          </span>
+        ) : (
+          <>
+            Don't have an account?{" "}
+            <Link to="/register" className="text-primary font-medium hover:underline">
+              Create one
+            </Link>
+          </>
+        )
       }
     >
       <Button

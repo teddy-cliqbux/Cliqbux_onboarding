@@ -2526,7 +2526,7 @@ Built admin explorer so Teddy/agents can open every POV without hitting bare `/c
 
 ---
 **[CURSOR]** ? 2026-07-20
-**Type:** UI Fix ? Self-serve empty Locations first landing matches 1�1 store UI
+**Type:** UI Fix ? Self-serve empty Locations first landing matches 1?1 store UI
 
 **Problem:** No HubSpot locations ? page showed Legal address Yes/No + separate "New Location" card before any store existed (old/disjointed). After save, snapped into the proper "Your store" UI.
 
@@ -2575,7 +2575,7 @@ Copy: ?Preparing your signing documents? / stay on page; iframe: ?Loading your s
 
 ### Shipped (OnboardingLocations.jsx only)
 1. Location cards no longer collapse ? chevron/toggle removed; MID list always shown
-2. Nested MidCard starts as summary (edit fields only after pencil); 1�1 combined unchanged
+2. Nested MidCard starts as summary (edit fields only after pencil); 1?1 combined unchanged
 3. `locMids` sorted oldest-first by `created_date` / `createdAt` (then id)
 
 **Waiting on:** Teddy ? push frontend; check multi-location Island Pacific order + no chevron.
@@ -2606,7 +2606,7 @@ Copy: ?Preparing your signing documents? / stay on page; iframe: ?Loading your s
 5. Successful complete Save collapses; validation force-opens when incomplete
 6. No schema / MSPWare / save-path changes beyond wiring existing saves into one surface
 
-**Waiting on:** Teddy ? push frontend; verify multi-location nesting + 1�1 pencil.
+**Waiting on:** Teddy ? push frontend; verify multi-location nesting + 1?1 pencil.
 ---
 
 ---
@@ -2939,19 +2939,59 @@ Welcome hub no longer marks People Complete from roster-only. Uses same field ga
 ---
 
 ---
-**[CURSOR]** — 2026-07-30
+**[CURSOR]** ? 2026-07-30
 **Type:** Feature
 **Re:** Admin Merchant Center shell (layout)
 
 ### Shipped
 1. **Spec:** `docs/superpowers/specs/2026-07-30-admin-merchant-center-shell-design.md`
-2. **Shell:** `AdminMerchantCenterShell` — left sidebar (Portfolio + Work) + top search + Outlet. Dark `cb-*`; no charts.
-3. **Routes:** `/admin/center` = Dashboard; `/merchants` `/prospects` `/attention` `/unlinked` `/installations`; `/accounts/:id` inside shell with Merchants → name breadcrumb.
-4. Onboarding nav → Applications desk (not wrapped). Installations = light launch panel only.
+2. **Shell:** `AdminMerchantCenterShell` ? left sidebar (Portfolio + Work) + top search + Outlet. Dark `cb-*`; no charts.
+3. **Routes:** `/admin/center` = Dashboard; `/merchants` `/prospects` `/attention` `/unlinked` `/installations`; `/accounts/:id` inside shell with Merchants ? name breadcrumb.
+4. Onboarding nav ? Applications desk (not wrapped). Installations = light launch panel only.
 
 ### Teddy ops
 1. Push frontend via GitHub Desktop (no new backend function).
-2. Open `/admin/center` — expect sidebar + dashboard KPIs; Merchants list under Portfolio.
+2. Open `/admin/center` ? expect sidebar + dashboard KPIs; Merchants list under Portfolio.
 
 **Waiting on:** Teddy (push / smoke)
+---
+
+---
+**[CURSOR]** ? 2026-07-30
+**Type:** Feature
+**Re:** App Admin accounts (no Base44 builder access)
+
+### Shipped
+1. `AdminProtectedRoute` gates `/admin/*` ? requires Base44 app User with `role === 'admin'`; else `/login?from_url=?` or Staff-only gate / UserNotRegistered.
+2. `/admin/center/team` ? invite staff via `base44.auth.inviteUser(email, 'admin')` (live app only, not editor). Soft-fails User.list when collaborator-only.
+3. Login footer for admin return URLs: invite-first (no self-register CTA).
+4. `AGENTS.md` ? staff Admin invites vs collaborators vs merchant JWTs; do not wait on RDS.
+
+### Teddy ops (you must do in Base44 UI)
+1. Dashboard ? Overview: set **App Visibility** to **Private** (if not already).
+2. Invite first teammates: **Send Invites** / **Users ? Invite User** ? role **Admin**. Do **not** Add collaborator.
+3. They open the **published** app URL ? `/login` ? `/admin/center` or `/admin/applications`.
+4. Confirm they **cannot** open the Base44 app editor.
+5. Push frontend via GitHub Desktop (no new backend function).
+
+**Waiting on:** Teddy (visibility + first invites + push)
+---
+
+---
+**[CURSOR]** ? 2026-07-30
+**Type:** Feature
+**Re:** MSP Portfolio ? Merchant Center (Approach A)
+
+### Shipped
+1. **Spec:** `docs/superpowers/specs/2026-07-30-msp-portfolio-account-sync-design.md`
+2. **`importMSPPortfolio` upgraded:** creates/links `MerchantAccount` + `merchantAccountId`; stable MSP-local `corporateId` (`msp-{tin}`); MID `Active (Existing)` / `mspware_import`. Live writes require `confirmLive: true`. No HubSpot.
+3. **UI:** `/admin/center/sync-msp` ? dry run ? confirm live; Work nav ?Sync MSPWare?. Account home labels `msp-*` as **MSP ref**.
+
+### Teddy ops
+1. Push via GitHub Desktop.
+2. Redeploy **`importMSPPortfolio`** in Base44.
+3. Open `/admin/center/sync-msp` as admin ? Dry run ? review ? Confirm live sync.
+4. Check `/admin/center/merchants` for Live accounts.
+
+**Waiting on:** Teddy (push + function redeploy + dry/live sync)
 ---

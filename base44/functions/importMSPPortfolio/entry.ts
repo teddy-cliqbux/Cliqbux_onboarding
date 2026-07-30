@@ -1,32 +1,27 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-// ─── importMSPPortfolio ────────────────────────────────────────────────────────
-// Bulk-imports the entire MSPWare/PulsePoint portfolio into Base44.
-//
-// For each approved application (with a MID):
-//   1. Fetches form data from MSPWare to get TIN, address, owner info, pricing
-//   2. Groups apps by TIN (= one corporate entity). Falls back to legal name if no TIN.
-//   3. Creates MerchantCorporateProfile (one per corporate entity)
-//   4. Creates MerchantLocations (one per unique physical address under that entity)
-//   5. Creates MerchantMID (one per MID)
-//
-// Safe to re-run — fully idempotent at all three levels.
-// Admin-only.
-//
-// POST /functions/importMSPPortfolio
-// POST /functions/importMSPPortfolio?dryRun=true
-
-// ─── Reverse mappings (MSPWare codes → Base44 internal values) ────────────────
+/**
+ * importMSPPortfolio — pull MSPWare approved apps with MIDs into Merchant Center.
+ *
+ * Approach A (2026-07-30): creates/links MerchantAccount + profile + location + MID.
+ * No HubSpot writes. Never submits to Elavon (MSP read-only).
+ *
+ * POST { dryRun: true }              — preview only
+ * POST { confirmLive: true }         — write (also accepts dryRun:false + confirmLive)
+ * POST ?dryRun=true                  — query-param dry run (legacy)
+ *
+ * Idempotent: skips MIDs already tracked by mspApplicationNo; links existing profiles by TIN/name.
+ */
 
 function mspOwnershipToInternal(code: string): string {
   const map: Record<string, string> = {
-    'SP': 'SOLE_PROPRIETOR',
-    'LL': 'LIMITED_COMPANY',
-    'CO': 'CORPORATION',
-    'SS': 'CORPORATION',     // S-corp — closest match in our enum
-    'PA': 'GENERAL_PARTNERSHIP',
-    'NP': 'NON_PROFIT',
-    'T':  'CORPORATION',     // Trust — no exact match
+    SP: 'SOLE_PROPRIETOR',
+    LL: 'LIMITED_COMPANY',
+    CO: 'CORPORATION',
+    SS: 'SUB_S_CORP',
+    PA: 'GENERAL_PARTNERSHIP',
+    NP: 'NON_PROFIT',
+    T: 'TRUST',
   };
   return map[code] || 'CORPORATION';
 }
@@ -34,39 +29,38 @@ function mspOwnershipToInternal(code: string): string {
 function mspLlcClassToTaxClass(ownershipCode: string, llcClass: string): string | null {
   if (ownershipCode !== 'LL') return null;
   const map: Record<string, string> = {
-    'D': 'DISREGARDED_ENTITY',
-    'P': 'LLC_PARTNERSHIP',
-    'C': 'LLC_CORPORATION',
+    D: 'DISREGARDED_ENTITY',
+    P: 'LLC_PARTNERSHIP',
+    C: 'LLC_CORPORATION',
   };
   return map[llcClass] || 'DISREGARDED_ENTITY';
 }
 
 function mspTitleToInternal(code: string): string {
   const map: Record<string, string> = {
-    'OP':  'PROPRIETOR_OR_OWNER',
-    'PP':  'PARTNER_OR_PRINCIPAL',
-    'GM':  'GENERAL_MANAGER',
-    'CEO': 'CHIEF_EXECUTIVE_OFFICER',
-    'CFO': 'CHIEF_FINANCIAL_OFFICER',
-    'COO': 'CHIEF_EXECUTIVE_OFFICER',  // no COO in our enum
-    'P':   'PRESIDENT',
-    'VP':  'VICE_PRESIDENT',
-    'MM':  'MANAGING_MEMBER',
-    'D':   'DIRECTOR',
-    'O':   'AUTHORIZED_SIGNER',
-    'T':   'TREASURER',
-    'S':   'SECRETARY',
+    OP: 'PROPRIETOR_OR_OWNER',
+    PP: 'PARTNER_OR_PRINCIPAL',
+    GM: 'GENERAL_MANAGER',
+    CEO: 'CHIEF_EXECUTIVE_OFFICER',
+    CFO: 'CHIEF_FINANCIAL_OFFICER',
+    COO: 'CHIEF_EXECUTIVE_OFFICER',
+    P: 'PRESIDENT',
+    VP: 'VICE_PRESIDENT',
+    MM: 'MANAGING_MEMBER',
+    D: 'DIRECTOR',
+    O: 'AUTHORIZED_SIGNER',
+    T: 'TREASURER',
+    S: 'SECRETARY',
   };
   return map[code] || 'PROPRIETOR_OR_OWNER';
 }
 
 function parseDob(dobString: string): { dobYear: string; dobMonth: string; dobDay: string } {
-  // MSPWare format: YYYY-MM-DD
   const parts = (dobString || '').split('-');
   return {
-    dobYear:  parts[0] || '',
+    dobYear: parts[0] || '',
     dobMonth: parts[1] || '',
-    dobDay:   parts[2] || '',
+    dobDay: parts[2] || '',
   };
 }
 
@@ -74,18 +68,28 @@ function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
 }
 
-function generateCorporateId(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = Math.random() * 16 | 0;
-    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-  });
+function parseEntities(raw: unknown): any[] {
+  let v: any = raw ?? [];
+  if (typeof v === 'string') {
+    try { v = JSON.parse(v); } catch { v = []; }
+  }
+  return Array.isArray(v) ? v : [];
 }
 
-// Run async tasks in parallel with a max concurrency cap
+/** Stable MSP-local corporateId — not a HubSpot deal id. */
+function stableMspCorporateId(tin: string, fallbackAppNo: string): string {
+  if (tin && tin.length >= 4) return `msp-${tin}`;
+  return `msp-app-${String(fallbackAppNo || 'unknown').replace(/\W/g, '')}`;
+}
+
+function newEntityId(): string {
+  return crypto.randomUUID();
+}
+
 async function batchedParallel<T>(
   items: T[],
   concurrency: number,
-  fn: (item: T) => Promise<any>
+  fn: (item: T) => Promise<any>,
 ): Promise<any[]> {
   const results: any[] = [];
   for (let i = 0; i < items.length; i += concurrency) {
@@ -96,31 +100,37 @@ async function batchedParallel<T>(
   return results;
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const url = new URL(req.url);
     const body = req.method === 'POST' ? (await req.json().catch(() => ({}))) || {} : {};
-    const dryRun = url.searchParams.get('dryRun') === 'true' || body?.dryRun === true;
 
-    // Admin-only
+    const dryRunParam = url.searchParams.get('dryRun') === 'true' || body?.dryRun === true;
+    const confirmLive = body?.confirmLive === true;
+    // Live writes only with explicit confirmLive; anything else is dry-run-safe
+    const dryRun = !confirmLive || dryRunParam === true;
+    if (!dryRun && !confirmLive) {
+      return Response.json({
+        error: 'Live sync requires confirmLive: true. Run with dryRun: true first.',
+      }, { status: 400 });
+    }
+
     const user = await base44.auth.me();
     if (!user || user.role !== 'admin') {
       return Response.json({ error: 'Unauthorized — admin role required' }, { status: 403 });
     }
 
     const mspBase = (Deno.env.get('MSP_BASE_URL') || 'https://api.msppulsepoint.com/v2').replace(/\/$/, '');
-    const apiKey  = Deno.env.get('MSP_APP_KEY') || '';
-    const appId   = Deno.env.get('MSP_APP_ID') || 'cliqbux';
-
+    const apiKey = Deno.env.get('MSP_APP_KEY') || '';
+    const appId = Deno.env.get('MSP_APP_ID') || 'cliqbux';
     if (!apiKey) return Response.json({ error: 'MSP_APP_KEY env var not set' }, { status: 500 });
 
-    const mspHeaders = { 'X-API-KEY': apiKey, 'X-App-ID': appId, 'Accept': 'application/json' };
+    const mspHeaders = { 'X-API-KEY': apiKey, 'X-App-ID': appId, Accept: 'application/json' };
 
-    console.log(`[importMSPPortfolio] Starting${dryRun ? ' DRY RUN' : ''}...`);
+    console.log(`[importMSPPortfolio] Starting${dryRun ? ' DRY RUN' : ' LIVE'}...`);
 
-    // ── 1. Pull all approved apps from MSPWare ────────────────────────────────
+    // ── 1. Pull applications ────────────────────────────────────────────────
     let allApps: any[] = [];
     let page = 1;
     while (true) {
@@ -133,74 +143,84 @@ Deno.serve(async (req) => {
       page++;
     }
 
-    const approvedApps = allApps.filter(a =>
+    const approvedApps = allApps.filter((a) =>
       ['Approved', 'Complete'].includes(a.application_status) && a.mid
     );
-
     console.log(`[importMSPPortfolio] ${allApps.length} total apps, ${approvedApps.length} approved with MID`);
 
-    // ── 2. Fetch form data for each app (batched, 8 at a time) ───────────────
-    console.log(`[importMSPPortfolio] Fetching form data for ${approvedApps.length} apps...`);
-
+    // ── 2. Forms ────────────────────────────────────────────────────────────
     const enriched = await batchedParallel(approvedApps, 8, async (app: any) => {
       try {
-        const formRes = await fetch(`${mspBase}/applications/${app.merchantapplicationno}/form`, { headers: mspHeaders });
+        const formRes = await fetch(
+          `${mspBase}/applications/${app.merchantapplicationno}/form`,
+          { headers: mspHeaders },
+        );
         const formData = await formRes.json();
         return { app, form: formData?.form || {} };
       } catch (err: any) {
-        console.warn(`[importMSPPortfolio] Could not fetch form for app ${app.merchantapplicationno}: ${err.message}`);
+        console.warn(`[importMSPPortfolio] form ${app.merchantapplicationno}: ${err.message}`);
         return { app, form: {} };
       }
     });
 
-    // ── 3. Group by TIN (fall back to legal name) ─────────────────────────────
+    // ── 3. Group by TIN / name ──────────────────────────────────────────────
     const groups = new Map<string, typeof enriched>();
-
     for (const item of enriched) {
       const tin = cleanDigits(item.form.tin || item.form.ssn || '');
       const groupKey = tin || (item.form.legal_dba_name || item.app.dba || '').trim().toUpperCase();
-
       if (!groupKey) continue;
-
       if (!groups.has(groupKey)) groups.set(groupKey, []);
       groups.get(groupKey)!.push(item);
     }
+    console.log(`[importMSPPortfolio] ${groups.size} groups`);
 
-    console.log(`[importMSPPortfolio] ${groups.size} distinct corporate entities identified`);
-    // Log groups for review
-    for (const [gk, items] of groups) {
-      const form = items[0].form;
-      const apps = items.map(i => `${i.app.merchantapplicationno}="${i.app.dba}" MID:${i.app.mid}`).join(', ');
-      console.log(`[importMSPPortfolio] GROUP: ${gk} | legal: ${form.legal_dba_name || items[0].app.dba} | owners: ${(form.owners?.[0]?.owner_firstname||'')} ${(form.owners?.[0]?.owner_lastname||'')} | apps: ${apps}`);
-    }
+    // ── 4. Existing Base44 state ────────────────────────────────────────────
+    const [allProfiles, allMerchantMIDs, allAccounts] = await Promise.all([
+      base44.asServiceRole.entities.MerchantCorporateProfile.filter({}),
+      base44.asServiceRole.entities.MerchantMID.filter({}),
+      base44.asServiceRole.entities.MerchantAccount.filter({}).catch(() => []),
+    ]);
 
-    // ── 4. Load existing Base44 data for idempotency ─────────────────────────
-    // Load all profiles so we can match by taxId globally
-    const allProfiles = await base44.asServiceRole.entities.MerchantCorporateProfile.filter({});
     const profileByTin = new Map<string, any>();
     const profileByName = new Map<string, any>();
-    for (const p of (allProfiles || [])) {
+    const profileByCorporateId = new Map<string, any>();
+    for (const p of allProfiles || []) {
       if (p.taxId) profileByTin.set(cleanDigits(p.taxId), p);
-      if (p.legalName) profileByName.set(p.legalName.trim().toUpperCase(), p);
+      if (p.legalName) profileByName.set(String(p.legalName).trim().toUpperCase(), p);
+      if (p.corporateId) profileByCorporateId.set(String(p.corporateId), p);
     }
 
-    // Load all existing merchantMIDs to check mspApplicationNo idempotency
-    const allMerchantMIDs = await base44.asServiceRole.entities.MerchantMID.filter({});
-    const trackedAppNos = new Set((allMerchantMIDs || []).map((c: any) => String(c.mspApplicationNo)).filter(Boolean));
+    const accountByEin = new Map<string, any>();
+    const accountByName = new Map<string, any>();
+    const accountById = new Map<string, any>();
+    for (const a of allAccounts || []) {
+      accountById.set(String(a.id), a);
+      if (a.name) accountByName.set(String(a.name).trim().toUpperCase(), a);
+      for (const le of parseEntities(a.legalEntities)) {
+        const ein = cleanDigits(le.federalEIN || '');
+        if (ein) accountByEin.set(ein, a);
+      }
+    }
 
-    // ── 5. Process each corporate group ──────────────────────────────────────
+    const trackedAppNos = new Set(
+      (allMerchantMIDs || []).map((c: any) => String(c.mspApplicationNo)).filter(Boolean),
+    );
+
     const summary = {
-      corporateEntities: { found: 0, created: 0, skipped: 0 },
-      locations:         { created: 0, skipped: 0 },
-      merchantMIDs:          { created: 0, skipped: 0, errors: 0 },
+      accounts: { created: 0, linked: 0 },
+      corporateEntities: { found: 0, created: 0, skipped: 0, linkedToAccount: 0 },
+      locations: { created: 0, skipped: 0 },
+      merchantMIDs: { created: 0, skipped: 0, errors: 0 },
+      mspAppsScanned: allApps.length,
+      approvedWithMid: approvedApps.length,
+      groups: groups.size,
     };
     const entityResults: any[] = [];
 
+    // ── 5. Process groups ───────────────────────────────────────────────────
     for (const [groupKey, items] of groups) {
-      // Representative record for profile-level fields
       const rep = items[0];
       const form = rep.form;
-
       const tin = cleanDigits(form.tin || form.ssn || '');
       const legalName = (form.legal_dba_name || rep.app.dba || '').trim();
       const ownershipCode = form.ownership_type || 'CO';
@@ -208,71 +228,134 @@ Deno.serve(async (req) => {
       const dob = parseDob(primaryOwner.owner_dob || '');
       const email = primaryOwner.owner_email || form.business_email || form.chargebacks_retrievals_email || '';
       const phone = cleanDigits(form.business_phone || '');
-
       const taxClassType = mspLlcClassToTaxClass(ownershipCode, form.llc_class || '');
+      const firstAppNo = String(rep.app.merchantapplicationno || '');
+      const corporateIdStable = stableMspCorporateId(tin, firstAppNo);
 
-      // ── 5a. Find or create MerchantCorporateProfile ───────────────────────
-      let profile = tin ? profileByTin.get(tin) : profileByName.get(legalName.toUpperCase());
+      // ── MerchantAccount find-or-create ──────────────────────────────────
+      let account =
+        (tin && accountByEin.get(tin))
+        || accountByName.get(legalName.toUpperCase())
+        || null;
+      let accountCreated = false;
+
+      if (account) {
+        summary.accounts.linked++;
+      } else {
+        const entityId = newEntityId();
+        const legalEntities = tin
+          ? [{
+              entityId,
+              legalBusinessName: legalName,
+              federalEIN: tin,
+              ownershipType: mspOwnershipToInternal(ownershipCode),
+              ...(taxClassType ? { taxClassType } : {}),
+              establishmentYear: form.year_business_established || '',
+              mailingStreet: form.legal_address || form.business_address || '',
+              mailingCity: form.legal_city || form.business_city || '',
+              mailingState: form.legal_state_usa || form.business_state_usa || '',
+              mailingZip: form.legal_zipcode || form.business_zipcode || '',
+            }]
+          : [];
+
+        const accountPayload = {
+          name: legalName || `MSP ${groupKey.slice(0, 24)}`,
+          domain: null,
+          hubspotCompanyId: null,
+          legalEntities,
+        };
+
+        if (!dryRun) {
+          account = await base44.asServiceRole.entities.MerchantAccount.create(accountPayload);
+          accountById.set(String(account.id), account);
+          if (tin) accountByEin.set(tin, account);
+          accountByName.set(legalName.toUpperCase(), account);
+        } else {
+          account = { id: `[dry-run-account:${legalName}]`, ...accountPayload };
+        }
+        accountCreated = true;
+        summary.accounts.created++;
+      }
+
+      const merchantAccountId = account.id;
+
+      // ── Profile find-or-create ──────────────────────────────────────────
+      let profile =
+        (tin && profileByTin.get(tin))
+        || profileByName.get(legalName.toUpperCase())
+        || profileByCorporateId.get(corporateIdStable)
+        || null;
       let profileCreated = false;
 
       if (profile) {
         summary.corporateEntities.skipped++;
+        // Backfill merchantAccountId if missing
+        if (!profile.merchantAccountId && !dryRun) {
+          profile = await base44.asServiceRole.entities.MerchantCorporateProfile.update(profile.id, {
+            merchantAccountId,
+          });
+          summary.corporateEntities.linkedToAccount++;
+        } else if (!profile.merchantAccountId && dryRun) {
+          summary.corporateEntities.linkedToAccount++;
+        } else if (profile.merchantAccountId) {
+          summary.corporateEntities.linkedToAccount++;
+        }
       } else {
         summary.corporateEntities.found++;
-
-        const corporateIdNew = generateCorporateId();
-
-        const profilePayload = {
-          corporateId:      corporateIdNew,
+        const profilePayload: Record<string, unknown> = {
+          corporateId: corporateIdStable,
+          merchantAccountId,
           legalName,
-          signerEmail:      email || `import+${groupKey.slice(0, 8).toLowerCase().replace(/\s/g, '')}@cliqbux.com`,
-          taxId:            tin || null,
-          ownershipType:    mspOwnershipToInternal(ownershipCode),
+          dbaName: form.full_dba_name || rep.app.dba || legalName,
+          signerEmail: email || `import+msp-${(tin || groupKey).slice(0, 8).toLowerCase()}@cliqbux.com`,
+          taxId: tin || null,
+          ownershipType: mspOwnershipToInternal(ownershipCode),
           ...(taxClassType ? { taxClassType } : {}),
-          firstName:             primaryOwner.owner_firstname || '',
-          lastName:              primaryOwner.owner_lastname  || '',
-          corporatePhone:        phone,
-          titleType:             mspTitleToInternal(primaryOwner.owner_title || ''),
+          firstName: primaryOwner.owner_firstname || '',
+          lastName: primaryOwner.owner_lastname || '',
+          corporatePhone: phone,
+          titleType: mspTitleToInternal(primaryOwner.owner_title || ''),
           ...dob,
-          homeStreet:            primaryOwner.owner_address   || '',
-          homeCity:              primaryOwner.owner_city      || '',
-          homeState:             primaryOwner.owner_state_usa || '',
-          homeZip:               primaryOwner.owner_zipcode   || '',
-          productDescription:    form.products_or_services    || '',
-          establishmentYear:     form.year_business_established || '',
-          monthlyCardSales:      form.monthly_sales   || '',
-          avgSaleAmount:         form.average_sales   || '',
-          highestTicketAmount:   form.highest_ticket  || '',
-          cardPresentPct:        form.cp_percent      || '100',
-          mccCode:               form.mcc             || '',
-          applicationStatus:     'Submitted',          // these are already-live merchants
+          homeStreet: primaryOwner.owner_address || '',
+          homeCity: primaryOwner.owner_city || '',
+          homeState: primaryOwner.owner_state_usa || '',
+          homeZip: primaryOwner.owner_zipcode || '',
+          productDescription: form.products_or_services || '',
+          establishmentYear: form.year_business_established || '',
+          monthlyCardSales: form.monthly_sales || '',
+          avgSaleAmount: form.average_sales || '',
+          highestTicketAmount: form.highest_ticket || '',
+          cardPresentPct: form.cp_percent || '100',
+          mccCode: form.mcc || '',
+          applicationStatus: 'Submitted',
+          handoffStage: 'support',
+          portalLockStatus: 'unlocked',
         };
 
         if (!dryRun) {
           profile = await base44.asServiceRole.entities.MerchantCorporateProfile.create(profilePayload);
-          profileByTin.set(tin, profile);
+          if (tin) profileByTin.set(tin, profile);
           profileByName.set(legalName.toUpperCase(), profile);
-          profileCreated = true;
+          profileByCorporateId.set(corporateIdStable, profile);
         } else {
-          profile = { id: `[dry-run:${legalName}]`, corporateId: corporateIdNew, ...profilePayload };
-          profileCreated = true;
+          profile = { id: `[dry-run:${legalName}]`, ...profilePayload };
         }
+        profileCreated = true;
         summary.corporateEntities.created++;
+        summary.corporateEntities.linkedToAccount++;
       }
 
-      const corporateId = profile.corporateId || profile.id;
+      const corporateId = String(profile.corporateId || corporateIdStable);
 
-      // Load existing locations for this corporateId (skip on dry run)
-      const existingLocations: any[] = dryRun ? [] :
-        await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId });
+      const existingLocations: any[] = dryRun
+        ? []
+        : await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId });
 
-      // ── 5b–c. Location + MerchantMID per app ─────────────────────────────────
       const appResults: any[] = [];
 
       for (const { app, form: f } of items) {
         const appNo = String(app.merchantapplicationno);
 
-        // MerchantMID idempotency
         if (trackedAppNos.has(appNo)) {
           summary.merchantMIDs.skipped++;
           appResults.push({ appNo, dba: app.dba, mid: app.mid, result: 'mid_already_tracked' });
@@ -280,57 +363,53 @@ Deno.serve(async (req) => {
         }
 
         const street = (f.business_address || '').trim().toLowerCase();
-        const zip    = cleanDigits(f.business_zipcode || '');
+        const zip = cleanDigits(f.business_zipcode || '');
 
-        // Find or create location
         let location = existingLocations.find((l: any) => {
           const ls = (l.businessStreet || l.businessAddress || '').trim().toLowerCase();
           const lz = cleanDigits(l.businessZip || '');
           return ls === street && lz === zip;
         });
 
-        let locationCreated = false;
         if (!location) {
           const locationPayload = {
             corporateId,
-            dbaName:         f.full_dba_name || app.dba,
-            businessStreet:  f.business_address  || '',
-            businessCity:    f.business_city      || '',
-            businessState:   f.business_state_usa || '',
-            businessZip:     f.business_zipcode   || '',
-            businessAddress: [f.business_address, f.business_city, f.business_state_usa, f.business_zipcode].filter(Boolean).join(', '),
+            dbaName: f.full_dba_name || app.dba,
+            businessStreet: f.business_address || '',
+            businessCity: f.business_city || '',
+            businessState: f.business_state_usa || '',
+            businessZip: f.business_zipcode || '',
+            businessAddress: [f.business_address, f.business_city, f.business_state_usa, f.business_zipcode]
+              .filter(Boolean).join(', '),
             applicationStepStatus: 'Active',
           };
-
           if (!dryRun) {
             location = await base44.asServiceRole.entities.MerchantLocations.create(locationPayload);
             existingLocations.push(location);
           } else {
-            location = { id: `[dry-run:${street}]`, ...locationPayload };
+            location = { id: `[dry-run-loc:${street}]`, ...locationPayload };
           }
-          locationCreated = true;
           summary.locations.created++;
         } else {
           summary.locations.skipped++;
         }
 
-        // Create merchantMID
         const merchantMIDPayload = {
-          locationId:            location.id,
+          locationId: location.id,
           corporateId,
-          merchantName:           f.full_dba_name || app.dba,
-          dbaName:               f.full_dba_name || app.dba,
-          mccCode:               f.mcc           || '',
-          industryType:          f.industry_type  || 'RE',
-          pricingCategory:       f.pricing_category || '1',
-          pricingMethod:         f.pricing_method   || 'ICPLS',
-          monthlyCardSales:      f.monthly_sales  ? parseFloat(f.monthly_sales)  : null,
-          avgSaleAmount:         f.average_sales  ? parseFloat(f.average_sales)  : null,
-          highestTicketAmount:   f.highest_ticket ? parseFloat(f.highest_ticket) : null,
-          cardPresentPct:        f.cp_percent     ? parseFloat(f.cp_percent)     : 100,
-          mspApplicationNo:      appNo,
-          elavonMID:             String(app.mid || ''),
-          isExistingAccount:     true,
+          merchantName: f.full_dba_name || app.dba,
+          dbaName: f.full_dba_name || app.dba,
+          mccCode: f.mcc || '',
+          industryType: f.industry_type || 'RE',
+          pricingCategory: f.pricing_category || '1',
+          pricingMethod: f.pricing_method || 'ICPLS',
+          monthlyCardSales: f.monthly_sales ? parseFloat(f.monthly_sales) : null,
+          avgSaleAmount: f.average_sales ? parseFloat(f.average_sales) : null,
+          highestTicketAmount: f.highest_ticket ? parseFloat(f.highest_ticket) : null,
+          cardPresentPct: f.cp_percent ? parseFloat(f.cp_percent) : 100,
+          mspApplicationNo: appNo,
+          elavonMID: String(app.mid || ''),
+          isExistingAccount: true,
           existingAccountSource: 'mspware_import',
           applicationStepStatus: 'Active (Existing)',
         };
@@ -342,11 +421,11 @@ Deno.serve(async (req) => {
           }
           summary.merchantMIDs.created++;
           appResults.push({
-          appNo,
-          dba:             app.dba,
-          result:          dryRun ? 'would_create' : 'created',
+            appNo,
+            dba: app.dba,
+            mid: app.mid,
+            result: dryRun ? 'would_create' : 'created',
           });
-          console.log(`[importMSPPortfolio] ${dryRun ? '[DRY] ' : ''}MerchantMID "${app.dba}" MID ${app.mid} → corporateId ${corporateId}`);
         } catch (err: any) {
           summary.merchantMIDs.errors++;
           appResults.push({ appNo, dba: app.dba, mid: app.mid, result: 'error', error: err.message });
@@ -358,7 +437,10 @@ Deno.serve(async (req) => {
         legalName,
         tin: tin ? `***${tin.slice(-4)}` : null,
         corporateId,
+        merchantAccountId: dryRun && accountCreated ? account.id : merchantAccountId,
+        accountCreated,
         profileCreated,
+        mspRef: corporateId.startsWith('msp-'),
         apps: appResults,
       });
     }
@@ -366,11 +448,13 @@ Deno.serve(async (req) => {
     return Response.json({
       success: true,
       dryRun,
+      confirmLive: !dryRun,
+      hubspot: false,
       summary,
       entities: entityResults,
     });
-
   } catch (error: any) {
+    console.error('[importMSPPortfolio]', error);
     return Response.json({
       error: error.message,
       stack: error.stack?.split('\n').slice(0, 3).join(' | '),

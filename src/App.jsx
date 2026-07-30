@@ -17,6 +17,9 @@ import AdminMerchantDashboard from './pages/AdminMerchantDashboard';
 import AdminMerchantPortfolio from './pages/AdminMerchantPortfolio';
 import AdminMerchantAccountHome from './pages/AdminMerchantAccountHome';
 import AdminInstallationsPanel from './pages/AdminInstallationsPanel';
+import AdminMspPortfolioSync from './pages/AdminMspPortfolioSync';
+import AdminTeam from './pages/AdminTeam';
+import AdminProtectedRoute from './components/AdminProtectedRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -66,17 +69,22 @@ function App() {
             <Route path="/locations" element={<MerchantLocationsHome />} />
             <Route path="/locations/:id" element={<MerchantLocationDetail />} />
             <Route path="/account" element={<MerchantAccountPage />} />
-            <Route path="/admin/architecture" element={<SystemAdminHidden />} />
-            <Route path="/admin/applications" element={<ApplicationManager />} />
-            <Route path="/admin/applications/:corporateId" element={<ApplicationDealRoom />} />
-            <Route path="/admin/center" element={<AdminMerchantCenterShell />}>
-              <Route index element={<AdminMerchantDashboard />} />
-              <Route path="merchants" element={<AdminMerchantPortfolio mode="all" />} />
-              <Route path="prospects" element={<AdminMerchantPortfolio mode="prospect" />} />
-              <Route path="attention" element={<AdminMerchantPortfolio mode="needs_attention" />} />
-              <Route path="unlinked" element={<AdminMerchantPortfolio mode="unlinked" />} />
-              <Route path="installations" element={<AdminInstallationsPanel />} />
-              <Route path="accounts/:merchantAccountId" element={<AdminMerchantAccountHome />} />
+            {/* Staff-only: Base44 app User with role=admin (not merchants, not editor) */}
+            <Route element={<AdminProtectedRoute />}>
+              <Route path="/admin/architecture" element={<SystemAdminHidden />} />
+              <Route path="/admin/applications" element={<ApplicationManager />} />
+              <Route path="/admin/applications/:corporateId" element={<ApplicationDealRoom />} />
+              <Route path="/admin/center" element={<AdminMerchantCenterShell />}>
+                <Route index element={<AdminMerchantDashboard />} />
+                <Route path="merchants" element={<AdminMerchantPortfolio mode="all" />} />
+                <Route path="prospects" element={<AdminMerchantPortfolio mode="prospect" />} />
+                <Route path="attention" element={<AdminMerchantPortfolio mode="needs_attention" />} />
+                <Route path="unlinked" element={<AdminMerchantPortfolio mode="unlinked" />} />
+                <Route path="installations" element={<AdminInstallationsPanel />} />
+                <Route path="sync-msp" element={<AdminMspPortfolioSync />} />
+                <Route path="team" element={<AdminTeam />} />
+                <Route path="accounts/:merchantAccountId" element={<AdminMerchantAccountHome />} />
+              </Route>
             </Route>
             {/* Auth pages — required when base44.auth.redirectToLogin() lands on /login
                 (e.g. agent opens /?corporateId= without a workspace session). Without
