@@ -46,7 +46,20 @@ Schedule daily (Base44 cron or manual) once env is set.
 - Merchants and agents submit bug or idea → `submitProductFeedback` → GitHub Issue.
 - Requires auth (merchant JWT or workspace session).
 - **Screenshot (optional):** Capture button uses `html2canvas` on the page. **SSN-only** fields (`data-private="ssn"` + name/id deny-list) are masked to `•••-••-••••` before capture; preview + Remove before submit. Upload via Base44 `UploadFile`; if that fails, JPEG base64 is sent to `submitProductFeedback` for service-role upload. Issue body gets `## Screenshot` markdown when attached. Text-only submit still works if capture/upload fails. BoldSign iframes will not appear (cross-origin).
-- **GitHub token required for Issues:** set `GITHUB_FEEDBACK_TOKEN` (PAT with `issues:write`) in Base44 env and redeploy `submitProductFeedback`. If the token is missing, feedback is still **queued** as an `OperationalEvent` (`USER_BUG_REPORT_QUEUED`) for the digest — the form should not hard-fail.
+- **GitHub token required for Issues:** set `GITHUB_FEEDBACK_TOKEN` in Base44 and redeploy `submitProductFeedback`. If the token is missing or returns 403, feedback is **queued** as an `OperationalEvent` (`USER_BUG_REPORT_QUEUED`) for the digest.
+
+### Creating `GITHUB_FEEDBACK_TOKEN` (fine-grained PAT — recommended)
+
+1. GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate.
+2. **Resource owner:** the account that owns `teddy-cliqbux/Cliqbux_onboarding`.
+3. **Repository access:** Only select repositories → `Cliqbux_onboarding`.
+4. **Permissions → Repository permissions → Issues:** **Read and write** (Contents can stay No access).
+5. Generate, copy the token once, paste into Base44 env `GITHUB_FEEDBACK_TOKEN`.
+6. Redeploy `submitProductFeedback`.
+
+Classic PAT alternative: enable the **`repo`** scope (private repos) or **`public_repo`** if the repo is public.
+
+`Resource not accessible by personal access token` = wrong scopes or the token’s repo list does not include this repo.
 
 ## Pipeline (agents + Teddy)
 

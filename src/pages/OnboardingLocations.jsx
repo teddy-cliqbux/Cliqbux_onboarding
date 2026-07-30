@@ -894,9 +894,10 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
                   </button>
                 );
 
-  // ── Combined panel: 1 location × 1 processing account ──
+  // ── Combined panel: exactly 1 processing account at this location ──
   // One store card — name, address, and processing fields. No nested "same name" MID box.
-  if (simpleMode && locMids.length === 1) {
+  // Gate is per-location MID count (not full-app simpleMode) — see GitHub #12.
+  if (locMids.length === 1) {
     const mid = locMids[0];
     return (
       <Draggable draggableId={`loc-${location.id}`} index={index}>
@@ -978,25 +979,46 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
           {...provided.draggableProps}
           className={`rounded-cb border transition-colors ${snapshot.isDragging ? 'border-cb-border-strong bg-cb-surface-raised shadow-cb-overlay' : locationError ? 'border-cb-danger bg-cb-surface-raised' : 'border-cb-border bg-cb-surface-raised hover:border-cb-border-strong'}`}
         >
-          {/* Location header */}
+          {/* Location header — multi-MID: address-only organizer (no DBA title). 0 MIDs: keep DBA. */}
           <div className="flex items-center gap-3 px-4 py-3">
             <span {...provided.dragHandleProps} className="hidden sm:block text-gray-600 hover:text-gray-300 cursor-grab active:cursor-grabbing flex-shrink-0">
               <GripVertical className="w-4 h-4" />
             </span>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-cb-body font-semibold text-white truncate">{location.dbaName}</p>
-                {locationError && (
-                  <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cb-danger flex-shrink-0" />Needs info
-                  </span>
-                )}
-              </div>
-              <p className="text-cb-body text-gray-500 truncate">{location.businessAddress}</p>
+              {locMids.length > 1 ? (
+                <>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-cb-caption uppercase text-gray-500">Location</p>
+                    {locationError && (
+                      <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cb-danger flex-shrink-0" />Needs info
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-cb-body font-semibold text-white truncate">
+                    {location.businessAddress
+                      || [location.businessStreet, location.businessCity, location.businessState, location.businessZip]
+                          .filter(Boolean).join(', ')
+                      || 'Address needed'}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <p className="text-cb-body font-semibold text-white truncate">{location.dbaName}</p>
+                    {locationError && (
+                      <span className="inline-flex items-center gap-1.5 text-cb-caption text-cb-danger whitespace-nowrap">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cb-danger flex-shrink-0" />Needs info
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-cb-body text-gray-500 truncate">{location.businessAddress}</p>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2.5 flex-shrink-0">
               {allMidsComplete && <Check className="w-3.5 h-3.5 text-cb-success" />}
-              {!simpleMode && (
+              {locMids.length > 1 && (
               <span className="hidden sm:inline text-cb-caption text-gray-500">
                 {locMids.length} account{locMids.length !== 1 ? 's' : ''}
               </span>
@@ -1011,7 +1033,7 @@ function LocationCard({ location, corporateId, merchantIDs, onDelete, onMerchant
               )}
               <button
                 onClick={e => { e.stopPropagation(); if (!formsLocked) startLocEdit(); }}
-                title={formsLocked ? FORMS_LOCKED_MESSAGE : 'Edit location name / address'}
+                title={formsLocked ? FORMS_LOCKED_MESSAGE : (locMids.length > 1 ? 'Edit location address' : 'Edit location name / address')}
                 disabled={formsLocked}
                 className="p-3 -m-1 sm:p-2 sm:m-0 text-gray-600 hover:text-white rounded-cb transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >

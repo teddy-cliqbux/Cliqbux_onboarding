@@ -101,6 +101,23 @@ async function uploadScreenshotBytes(base44: any, bytes: Uint8Array): Promise<st
   return undefined;
 }
 
+function humanizeGithubIssueError(status: number, body: string): string {
+  const lower = String(body || '').toLowerCase();
+  if (status === 403 && lower.includes('resource not accessible by personal access token')) {
+    return 'GitHub token cannot create issues on this repo. Use a fine-grained PAT with Issues: Read and write on teddy-cliqbux/Cliqbux_onboarding (or a classic PAT with the repo scope), update GITHUB_FEEDBACK_TOKEN in Base44, and redeploy submitProductFeedback.';
+  }
+  if (status === 403 && lower.includes('user-agent')) {
+    return 'GitHub rejected the request (User-Agent). Redeploy submitProductFeedback with the latest code.';
+  }
+  if (status === 404) {
+    return 'GitHub repo not found for this token. Check GITHUB_FEEDBACK_REPO and that the PAT can access teddy-cliqbux/Cliqbux_onboarding.';
+  }
+  if (status === 422 && lower.includes('label')) {
+    return 'GitHub rejected issue labels. Create labels bug, enhancement, and needs-triage on the repo (or we can file without labels).';
+  }
+  return 'Could not create a GitHub issue with the current token. Check PAT permissions and GITHUB_FEEDBACK_REPO.';
+}
+
 async function createGithubIssue(opts: {
   title: string;
   body: string;
@@ -111,25 +128,40 @@ async function createGithubIssue(opts: {
     return null;
   }
   const repo = githubRepo();
-  const res = await fetch(`https://api.github.com/repos/${repo}/issues`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      'Content-Type': 'application/json',
-      // GitHub rejects requests without User-Agent (403 administrative rules)
-      'User-Agent': 'Cliqbux-Onboarding-Feedback',
-    },
-    body: JSON.stringify({
+
+  const post = async (labels?: string[]) => {
+    const payload: Record<string, unknown> = {
       title: opts.title.slice(0, 200),
       body: opts.body,
-      labels: opts.labels,
-    }),
-  });
-  if (!res.ok) {
+    };
+    if (labels && labels.length) payload.labels = labels;
+    return fetch(`https://api.github.com/repos/${repo}/issues`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+        // GitHub rejects requests without User-Agent (403 administrative rules)
+        'User-Agent': 'Cliqbux-Onboarding-Feedback',
+      },
+      body: JSON.stringify(payload),
+    });
+  };
+
+  let res = await post(opts.labels);
+  // Retry once without labels (missing labels → 422; some tokens can create issues but not set labels)
+  if (!res.ok && (res.status === 422 || res.status === 403) && opts.labels?.length) {
+    const err1 = await res.text();
+    console.warn('[submitProductFeedback] GitHub with labels failed, retrying without labels', res.status, err1);
+    res = await post(undefined);
+    if (!res.ok) {
+      const err2 = await res.text();
+      throw new Error(humanizeGithubIssueError(res.status, err2 || err1));
+    }
+  } else if (!res.ok) {
     const err = await res.text();
-    throw new Error(`GitHub issue failed (${res.status}): ${err}`);
+    throw new Error(humanizeGithubIssueError(res.status, err));
   }
   const data = await res.json();
   return { number: data.number, html_url: data.html_url };
@@ -270,18 +302,20 @@ Deno.serve(async (req) => {
 
     if (!created) {
       const queued = await persistQueued();
+      const friendly =
+        githubError ||
+        'Could not create a GitHub issue with the current token.';
       return Response.json({
         success: queued,
         queued: true,
-        error: queued
-          ? undefined
-          : (githubError || 'Failed to create GitHub issue and could not queue locally'),
+        // Never put raw GitHub JSON in `error` when we queued — widget treats error as failure
+        error: queued ? undefined : friendly,
         message: queued
-          ? 'Could not open a GitHub issue right now; your feedback was saved for the daily digest. Redeploy if you just fixed User-Agent / token settings.'
-          : undefined,
+          ? `${friendly} Your feedback was saved for the daily digest meanwhile.`
+          : friendly,
         issueUrl: queued ? 'queued://operational-event (GitHub create failed)' : undefined,
         screenshotAttached: Boolean(screenshotUrl),
-        hint: githubError || undefined,
+        hint: 'Fine-grained PAT: Repository access = teddy-cliqbux/Cliqbux_onboarding, Permissions → Issues = Read and write. Then update GITHUB_FEEDBACK_TOKEN and redeploy.',
       }, { status: queued ? 200 : 502 });
     }
 
