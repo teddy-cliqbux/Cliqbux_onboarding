@@ -2526,7 +2526,7 @@ Built admin explorer so Teddy/agents can open every POV without hitting bare `/c
 
 ---
 **[CURSOR]** ? 2026-07-20
-**Type:** UI Fix ? Self-serve empty Locations first landing matches 1×1 store UI
+**Type:** UI Fix ? Self-serve empty Locations first landing matches 1ï¿½1 store UI
 
 **Problem:** No HubSpot locations ? page showed Legal address Yes/No + separate "New Location" card before any store existed (old/disjointed). After save, snapped into the proper "Your store" UI.
 
@@ -2575,7 +2575,7 @@ Copy: ?Preparing your signing documents? / stay on page; iframe: ?Loading your s
 
 ### Shipped (OnboardingLocations.jsx only)
 1. Location cards no longer collapse ? chevron/toggle removed; MID list always shown
-2. Nested MidCard starts as summary (edit fields only after pencil); 1×1 combined unchanged
+2. Nested MidCard starts as summary (edit fields only after pencil); 1ï¿½1 combined unchanged
 3. `locMids` sorted oldest-first by `created_date` / `createdAt` (then id)
 
 **Waiting on:** Teddy ? push frontend; check multi-location Island Pacific order + no chevron.
@@ -2606,7 +2606,7 @@ Copy: ?Preparing your signing documents? / stay on page; iframe: ?Loading your s
 5. Successful complete Save collapses; validation force-opens when incomplete
 6. No schema / MSPWare / save-path changes beyond wiring existing saves into one surface
 
-**Waiting on:** Teddy ? push frontend; verify multi-location nesting + 1×1 pencil.
+**Waiting on:** Teddy ? push frontend; verify multi-location nesting + 1ï¿½1 pencil.
 ---
 
 ---
