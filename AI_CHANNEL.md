@@ -2995,3 +2995,25 @@ Welcome hub no longer marks People Complete from roster-only. Uses same field ga
 
 **Waiting on:** Teddy (push + function redeploy + dry/live sync)
 ---
+
+---
+**[CURSOR]** ? 2026-07-30
+**Type:** Fix / Feature
+**Re:** MSP sync ? Merchants API (not applications-only)
+
+### Finding
+Dry-run via `GET /applications` saw ~30 apps / 19 Approved+MID. Full Merchants CSV export had **106** Approved+MID under **62** corporate names. Sync was applications-scoped; Merchants UI uses Merchants API.
+
+### Shipped
+1. **`probeMSPMerchantData`** ? admin read-only: `GET /merchants` vs applications coverage + sample `GET /merchants/{mid}` (no full TIN).
+2. **`importMSPPortfolio` rewired** ? discover via `GET /merchants`, enrich via `GET /merchants/{mid}`, group by TIN else Corporate Name (`msp-corp-{slug}`). Apps/form supplement for TIN + `mspApplicationNo`. Idempotent on `elavonMID`. Still `confirmLive: true` for writes; no HubSpot.
+3. **UI** `/admin/center/sync-msp` ? Probe ? Dry run ? Confirm live; shows TIN unavailable / mid counts.
+4. Spec + AGENTS updated.
+
+### Teddy ops
+1. Push via GitHub Desktop.
+2. Redeploy **`probeMSPMerchantData`** + **`importMSPPortfolio`** in Base44.
+3. Sync MSPWare ? **Probe MSP data** (expect merchants count near ~106) ? **Dry run** ? review groups (e.g. GAMEWAY one account, many MIDs) ? Confirm live only if coverage looks right.
+
+**Waiting on:** Teddy (push + redeploy + probe/dry run)
+---

@@ -1,35 +1,46 @@
 # MSP Portfolio → Merchant Center Sync (Approach A)
 
 **Date:** 2026-07-30  
-**Status:** Approved (Teddy)
+**Status:** Approved (Teddy) — **Merchants API primary** (updated same day)
 
 ## Goal
 
-Pull approved MSPWare applications (with Elavon MIDs) via API and land them in Merchant Center as `MerchantAccount` + locations + existing MIDs. **No HubSpot writes** in v1.
+Pull the live MSPWare **merchants** portfolio into Merchant Center as `MerchantAccount` + locations + existing MIDs. **No HubSpot writes** in v1.
 
 ## Locked decisions
 
 | Decision | Choice |
 |---|---|
-| Parent | Create/link `MerchantAccount` per TIN group |
+| Discovery | `GET /merchants` (not applications list) |
+| Enrichment | `GET /merchants/{mid}` |
+| Parent | Create/link `MerchantAccount` per TIN, else **Corporate Name** |
 | HubSpot | Skip |
-| `corporateId` (new profiles) | Stable `msp-{tin}` or `msp-app-{appNo}` |
+| `corporateId` (new profiles) | `msp-{tin}` / `msp-corp-{slug}` / `msp-mid-{mid}` |
 | Live writes | Require `confirmLive: true` (dry run default-safe) |
 | MID status | `Active (Existing)` + `mspware_import` |
+
+## Why Merchants API
+
+Merchants CSV export (2026-07-30): **106** Approved+MID under **62** corporate names.  
+Applications-only sync: **~30** apps / **~19** approved with MID.  
+
+MSP docs ([api.mspware.com/api-docs](https://api.mspware.com/api-docs/#/)): `GET /merchants`, `GET /merchants/{mid}`. Same auth as boarding (`MSP_BASE_URL` / `MSP_APP_KEY`).
+
+Applications + form remain a **supplement** for `mspApplicationNo` and TIN when present.
 
 ## API
 
 `POST /functions/importMSPPortfolio`
 
 - `{ "dryRun": true }` — preview only  
-- `{ "confirmLive": true }` — write (or `dryRun: false` + `confirmLive: true`)
+- `{ "confirmLive": true }` — write
 
-Admin role required. MSP: paginated `GET /applications` + `GET /applications/{no}/form`.
+`POST /functions/probeMSPMerchantData` — admin read-only coverage / field-shape probe.
 
 ## UI
 
-`/admin/center/sync-msp` — dry run → review → confirm live.
+`/admin/center/sync-msp` — Probe → Dry run → Confirm live.
 
 ## Non-goals
 
-HubSpot company/deal, Excel upload, scheduled sync, signer KYC from owners, multi-EIN corp merge beyond TIN.
+HubSpot company/deal, Excel as primary path, scheduled sync, signer KYC, PCI/volume/notes UI.

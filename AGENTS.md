@@ -317,7 +317,7 @@ Post-signing is the **Merchant Center** start; onboarding is the **entrance**. L
 | `/admin/center/team` | Invite Cliqbux staff as app **Admin** (live app only — not Base44 editor) |
 | `/admin/center/accounts/:merchantAccountId` | Account home — deals (label **Deal ID** = HubSpot deal / `corporateId`, or **MSP ref** for `msp-*` imports), legal entities, MID snapshot, impersonate / Deal Room |
 
-**Hub vs desk (2026-07-30):** `/admin/center` is the company-first hub with admin shell (sidebar + search). `/admin/applications` remains the deal desk (not wrapped in the shell yet). Do not treat `corporateId` as the Merchant Account id. Prefer MSPWare API sync (`/admin/center/sync-msp` → `importMSPPortfolio`) over Excel for filling Live accounts. API: `manageMerchantAccount` (`list` / `get` / `listUnlinkedDeals`) — admin only. Specs: `docs/superpowers/specs/2026-07-30-admin-merchant-center-shell-design.md`, `docs/superpowers/specs/2026-07-30-msp-portfolio-account-sync-design.md`.
+**Hub vs desk (2026-07-30):** `/admin/center` is the company-first hub with admin shell (sidebar + search). `/admin/applications` remains the deal desk (not wrapped in the shell yet). Do not treat `corporateId` as the Merchant Account id. Prefer MSPWare **Merchants API** sync (`/admin/center/sync-msp` → probe `probeMSPMerchantData` then `importMSPPortfolio`) over Excel / applications-only pull. Applications list under-counts vs Merchants portfolio (~19 vs ~106 Approved MIDs). API: `manageMerchantAccount` (`list` / `get` / `listUnlinkedDeals`) — admin only. Specs: `docs/superpowers/specs/2026-07-30-admin-merchant-center-shell-design.md`, `docs/superpowers/specs/2026-07-30-msp-portfolio-account-sync-design.md`.
 
 **Staff app accounts (2026-07-30) — not Base44 builders:**
 - Cliqbux staff log into the **published app** at `/login` as Base44 **app Users** with role `admin`. They use `/admin/applications` and `/admin/center`.
@@ -457,7 +457,8 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 | `refillMSPForms` | Standalone re-fill of existing drafts by corporateId. Useful for patching stuck forms. |
 | `pollMSPStatus` | Polls MSPWare status for all Pending MID records (both Locations and MerchantMIDs) |
 | `importExistingMIDs` | TIN-matches MSPWare approved apps to a corporateId; creates MerchantMID records |
-| `importMSPPortfolio` | Pulls MSPWare approved apps with MIDs → **MerchantAccount** + Profile + Locations + MerchantMIDs (`Active (Existing)`). Groups by TIN. Stable `corporateId` `msp-{tin}` / `msp-app-{no}` (not HubSpot). Admin-only. `{ dryRun: true }` preview; live requires `{ confirmLive: true }`. No HubSpot writes. UI: `/admin/center/sync-msp`. |
+| `importMSPPortfolio` | Pulls MSPWare **merchants** (`GET /merchants` + `GET /merchants/{mid}`) → **MerchantAccount** + Profile + Locations + MerchantMIDs (`Active (Existing)`). Groups by TIN else Corporate Name. Stable `corporateId` `msp-{tin}` / `msp-corp-{slug}` (not HubSpot). Apps/form optional for TIN + `mspApplicationNo`. Admin-only. `{ dryRun: true }` preview; live requires `{ confirmLive: true }`. No HubSpot writes. UI: `/admin/center/sync-msp`. |
+| `probeMSPMerchantData` | Admin read-only: Merchants API vs applications coverage + sample `GET /merchants/{mid}` field shape. |
 | `migrateToMerchantMIDs` | One-time migration: copies any records left in the legacy MerchantProcessingConcept table into MerchantMID, and derives MerchantMID records from MerchantLocations boarding data for locations that still don't have one |
 | `manageMSPTemplate` | Reads/fills MSPWare templates. Actions: `read`, `fill_icpls`, `fill_cd`, `create_cd`. Template #6 = ICPLS, Template #154 = Cash Discount (pricing_method: `"CLEAR"`). |
 | `uploadSignerIDsToMSP` | Uploads signer ID document files to all pending MSPWare applications for a corporateId. Call after signers upload their IDs via the portal. |
@@ -469,7 +470,7 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 `createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `manageMerchantAccount`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `updatePricing`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `nudgeMerchant`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `submitLegacyPOSConnection`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`, `reportOperationalEvent`, `submitProductFeedback`
 
 ### Debug/admin-only functions (do not call from merchant portal)
-`checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`, `cleanupTestHubspot`, `sendOperationalDigest`, `manageMerchantAccount`
+`checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`, `probeMSPMerchantData`, `cleanupTestHubspot`, `sendOperationalDigest`, `manageMerchantAccount`
 
 
 ### MID creation → auto MSPWare draft
