@@ -2850,12 +2850,12 @@ Phone Sign & Submit showed Company Application in iframe + Forms locked banner, 
 
 
 ---
-**[CURSOR]** — 2026-07-28
+**[CURSOR]** ï¿½ 2026-07-28
 **Type:** Bug Fix
-**Re:** Agent impersonation — partial prefill on signer KYC modal
+**Re:** Agent impersonation ï¿½ partial prefill on signer KYC modal
 
 ### Problem
-Agents prefilling People/KYC (impersonation JWT) were blocked by merchant completeness rules — e.g. "A valid 9-digit SSN is required" on Save & Verify even when address/phone/DOB were already filled.
+Agents prefilling People/KYC (impersonation JWT) were blocked by merchant completeness rules ï¿½ e.g. "A valid 9-digit SSN is required" on Save & Verify even when address/phone/DOB were already filled.
 
 ### Fix (frontend only)
 SignerDetailsModal + SignerModal: when merchantTokenHasImp() or portal_impersonating matches corporateId:
@@ -2866,15 +2866,15 @@ SignerDetailsModal + SignerModal: when merchantTokenHasImp() or portal_impersona
 
 Merchant signing readiness / signApplication KYC_INCOMPLETE gate unchanged.
 
-**Teddy:** Push via GitHub Desktop (no function redeploy). Retest Luna modal under View as merchant — save address without SSN, confirm it sticks; merchant self-serve still requires full KYC.
+**Teddy:** Push via GitHub Desktop (no function redeploy). Retest Luna modal under View as merchant ï¿½ save address without SSN, confirm it sticks; merchant self-serve still requires full KYC.
 
 **Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-28
+**[CURSOR]** ï¿½ 2026-07-28
 **Type:** Bug Fix
-**Re:** Estorya Coffee — Open to prep / phantom MID / People Complete false positive
+**Re:** Estorya Coffee ï¿½ Open to prep / phantom MID / People Complete false positive
 
 ### 1. Open to prep
 Expanding a row flipped mode prep?nudge (Waiting on bank) and hid Open to prep. Now Open to prep stays visible for prep+nudge until Submitted (stuck still uses Open to fix).
