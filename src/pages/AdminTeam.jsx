@@ -65,7 +65,7 @@ export default function AdminTeam() {
   };
 
   return (
-    <div className="px-4 sm:px-6 py-6 max-w-2xl">
+    <div className="max-w-2xl space-y-6">
       <p className="text-cb-caption text-cb-accent mb-1">Admin</p>
       <h1 className="font-display text-cb-display text-white">Team</h1>
       <p className="text-cb-body-lg text-gray-400 mt-2 max-w-xl">

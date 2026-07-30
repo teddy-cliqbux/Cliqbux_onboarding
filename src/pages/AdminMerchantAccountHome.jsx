@@ -108,7 +108,7 @@ export default function AdminMerchantAccountHome() {
   const midCounts = data?.midCounts || {};
 
   return (
-    <div className="px-4 sm:px-6 py-6 space-y-6">
+    <div className="space-y-6">
       <div>
         <nav className="flex flex-wrap items-center gap-1.5 text-cb-caption text-gray-500 mb-2">
           <Link to="/admin/center/merchants" className="hover:text-white">

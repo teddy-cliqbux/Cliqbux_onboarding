@@ -7,7 +7,7 @@ import { Building2, ClipboardList, FolderOpen, Wrench } from 'lucide-react';
 
 export default function AdminInstallationsPanel() {
   return (
-    <div className="px-4 sm:px-6 py-6 space-y-6 max-w-3xl">
+    <div className="space-y-6 max-w-3xl">
       <div>
         <div className="flex items-center gap-2 mb-1">
           <Wrench className="w-5 h-5 text-gray-500" />

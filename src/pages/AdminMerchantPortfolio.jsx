@@ -154,7 +154,7 @@ export default function AdminMerchantPortfolio({ mode: modeProp = 'all' }) {
   };
 
   return (
-    <div className="px-4 sm:px-6 py-6 space-y-4">
+    <div className="space-y-4">
       <div>
         <h1 className="font-display text-cb-display text-white">{meta.title}</h1>
         <p className="text-cb-body-lg text-gray-400 mt-1 max-w-2xl">{meta.subtitle}</p>
