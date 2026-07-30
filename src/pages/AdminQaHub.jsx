@@ -1,4 +1,7 @@
 /**
+ * @deprecated Superseded 2026-07-30 by AdminMerchantPortfolio (/admin/center).
+ * Kept for reference; App.jsx no longer routes here.
+ *
  * Admin QA hub — /admin/center
  * Lists merchants (same source as Applications) and opens each POV:
  * Portal, Merchant Center, Locations, Account (impersonate JWT), Deal Room (admin).

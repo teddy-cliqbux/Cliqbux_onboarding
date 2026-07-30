@@ -15,6 +15,7 @@
     "test:state": "node --test src/lib/usState.test.js",
     "test:website": "node --test src/lib/businessWebsite.test.js",
     "test:ops-events": "node --test src/lib/operationalEvents.test.js",
+    "test:merchant-account": "node --test src/lib/merchantAccountStatus.test.js",
     "test:signing-layout": "node --test src/lib/signingFrameLayout.test.js",
     "test:signing-mobile": "playwright test --config=playwright.config.ts --project=signing-mobile",
     "test:stress": "playwright test --config=playwright.config.ts",

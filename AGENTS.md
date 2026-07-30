@@ -305,9 +305,12 @@ Post-signing is the **Merchant Center** start; onboarding is the **entrance**. L
 | `/onboarding/dashboard`, `/center`, `/center/deals/:corporateId` | Deal board — checklist, quote sign→pay, UW status, setup gates |
 | `/locations` | Merchant account home — storefront list + status |
 | `/locations/:id` | Live location detail + go-live (logo/hours/install/chat) |
-| `/admin/applications` | Agent Applications desk |
+| `/admin/applications` | Agent Applications desk (deal pipeline tool) |
 | `/admin/applications/:corporateId` | Deal Room (handoff, call notes, runbook) |
-| `/admin/center` | Admin QA hub — list merchants; open Portal / Merchant Center / Locations / Account (impersonate) or Deal Room |
+| `/admin/center` | Admin Merchant Center home — **MerchantAccount portfolio** (company parents); status filters; Unlinked deals bucket |
+| `/admin/center/accounts/:merchantAccountId` | Account home — deals (label **Deal ID** = HubSpot deal / `corporateId`), legal entities, MID snapshot, impersonate / Deal Room |
+
+**Hub vs desk (2026-07-30):** `/admin/center` is the company-first hub. `/admin/applications` remains the deal desk. Do not treat `corporateId` as the Merchant Account id. Excel import of accounts is deferred. API: `manageMerchantAccount` (`list` / `get` / `listUnlinkedDeals`) — admin only.
 
 Auth Stage 1: magic-link JWT via `src/lib/merchantCenterAuth.js` (swap-friendly). Checklist: `manageMerchantChecklist` + `MerchantChecklistItem` (republish entity). Agent **Request document** lives in Deal Room. Quotes never block application signing. Do not call POS dashboard APIs; join later on `elavonMID`.
 
@@ -448,10 +451,10 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 | `demoteApplication` | Unlock portal forms after signing packages exist: revoke MSPWare/BoldSign packages (`DELETE /signatures`), reset signed→verified, `portalLockStatus=unlocked`. Refuses if MID already Pending MID/Active. |
 
 ### Other active functions
-`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `updatePricing`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `nudgeMerchant`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `submitLegacyPOSConnection`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`, `reportOperationalEvent`, `submitProductFeedback`
+`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `manageMerchantAccount`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `updatePricing`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `nudgeMerchant`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `submitLegacyPOSConnection`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`, `reportOperationalEvent`, `submitProductFeedback`
 
 ### Debug/admin-only functions (do not call from merchant portal)
-`checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`, `cleanupTestHubspot`, `sendOperationalDigest`
+`checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`, `cleanupTestHubspot`, `sendOperationalDigest`, `manageMerchantAccount`
 
 
 ### MID creation → auto MSPWare draft

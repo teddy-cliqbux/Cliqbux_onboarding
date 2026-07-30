@@ -1452,7 +1452,7 @@ HubSpot tier cannot run automated workflow webhooks. Pivot:
 **Re:** QA automation for 8 critical MCC/draft/HubSpot scenarios
 
 ### Shipped
-- `tests/onboardingStress.spec.ts` ? 8 scenarios (MCC delay, state�MCC matrix, live MCC swap, state swap+restricted MCC, HubSpot bypass, empty MID refusal, multi-MID split MCC, partial fill recovery)
+- `tests/onboardingStress.spec.ts` ? 8 scenarios (MCC delay, state?MCC matrix, live MCC swap, state swap+restricted MCC, HubSpot bypass, empty MID refusal, multi-MID split MCC, partial fill recovery)
 - Helpers: `tests/helpers/{productionLogic,simulatedPortal,reportStore}.ts`
 - Reporter ? `stress-test-report.md`
 - Run: `npm run test:stress` (safe in-memory sim of production gates; no live MSPWare/HubSpot)
@@ -1463,9 +1463,9 @@ Playwright: **8 passed**. Scenario scores: **6 PASS / 0 FAIL / 2 WARN**.
 | # | Scenario | Status |
 |---|---|---|
 | 1 | MCC Delay (empty MCC, 30s) | PASS ? draft deferred; no 5999 |
-| 2 | State/MCC Matrix (CA/CO/NY � 12 MCCs) | WARN ? 36 drafts OK; no CA/NY+5813 liquor gate |
+| 2 | State/MCC Matrix (CA/CO/NY ? 12 MCCs) | WARN ? 36 drafts OK; no CA/NY+5813 liquor gate |
 | 3 | Live MCC Swap 5813?5812?5411 | PASS ? update re-fills draft |
-| 4 | TX?CA with 5813 | WARN ? no inline state�MCC warning |
+| 4 | TX?CA with 5813 | WARN ? no inline state?MCC warning |
 | 5 | HubSpot bypass "Danono's Donuts" | PASS ? hubspotBypass, zero API |
 | 6 | Empty MID refusal | PASS ? UI + backend refuse |
 | 7 | Multi-MID split MCC | PASS ? 5812 vs 5411 distinct drafts |
@@ -1827,8 +1827,8 @@ Dual-agent critique after the UX pass: **28/40 (up from 22)**, detector clean, z
 3. **[P2] Silent failures gone:** drag-move failures (location?entity, account?location) now surface in the actionError banner ("your layout was restored") instead of silently snapping back; EntityMailingAddress save/clear failures show inline error + Retry, and a failed clear restores the address instead of lying.
 4. **[P2] Mobile restructuring:** new mobile-only **"Move"** button on location + processing-account rows (drag grips stay desktop-only) ? tap-to-move menus wired to the same `batchUpdateStatus` / `manageMerchantID` calls as drag. Icon buttons enlarged to ~40px touch targets on mobile (`p-3 -m-1 sm:p-2`); card-split inputs stack on mobile.
 5. **[P3] Sales cross-field rules inline:** typical < monthly, largest > typical, largest < monthly validated in the editor with plain-English messages ? backend no longer has to silently cap typed figures.
-6. **Progressive org disclosure** (Teddy said yes to the critique's provocation): single-entity + ?1-location merchants see no entity rails/indent and no "N locations � N accounts" caption; the "Processing Accounts" caption + rail inside a location only appears with 2+ accounts. The tree reveals itself when a 2nd location/entity/account is added.
-7. **Cleanup:** dead in-file `AddEntityModal` (~60 lines, never rendered) deleted + unused duplicate `src/components/onboarding/AddEntityModal.jsx` deleted; unused `onEntityAdded`/`handleEntityAdded`/`setCurrentProfile` removed; unreachable no-op `onDelete` removed; `Ready to Submit` dot `bg-gray-300` ? `bg-cb-success` token; completeness predicate deduped into one `isMidComplete()` helper (was copy-pasted 5�); `getMerchantData` readiness labels de-jargoned ("business category", "typical sale amount").
+6. **Progressive org disclosure** (Teddy said yes to the critique's provocation): single-entity + ?1-location merchants see no entity rails/indent and no "N locations ? N accounts" caption; the "Processing Accounts" caption + rail inside a location only appears with 2+ accounts. The tree reveals itself when a 2nd location/entity/account is added.
+7. **Cleanup:** dead in-file `AddEntityModal` (~60 lines, never rendered) deleted + unused duplicate `src/components/onboarding/AddEntityModal.jsx` deleted; unused `onEntityAdded`/`handleEntityAdded`/`setCurrentProfile` removed; unreachable no-op `onDelete` removed; `Ready to Submit` dot `bg-gray-300` ? `bg-cb-success` token; completeness predicate deduped into one `isMidComplete()` helper (was copy-pasted 5?); `getMerchantData` readiness labels de-jargoned ("business category", "typical sale amount").
 
 ### Backend files touched (redeploy needed)
 `manageMerchantID` (accept/clear `mccHelpRequested`; `??` fix so a cleared MCC doesn't refill from stale code), `signApplication` (friendly pending-category messages), `getMerchantData` (readiness honors help flag + label rename + projection carries flag). Plus `base44/entities/MerchantMID.jsonc` ? **republish required**.
@@ -1871,25 +1871,25 @@ Moved `useReducedMotion` + `stepSpring` to the top of `OnboardingPortal` with th
 ---
 
 ---
-**[CURSOR]** � 2026-07-16
-**Type:** Action Taken � Locations 1�1 combined store panel
+**[CURSOR]** ? 2026-07-16
+**Type:** Action Taken ? Locations 1?1 combined store panel
 
-Teddy: single-location / single-MID applicants saw Entity ? Location ? MID nesting with the same DBA repeated twice (Porky's screenshot). Decision: for exactly **1 location � 1 processing account**, show **one combined panel**.
+Teddy: single-location / single-MID applicants saw Entity ? Location ? MID nesting with the same DBA repeated twice (Porky's screenshot). Decision: for exactly **1 location ? 1 processing account**, show **one combined panel**.
 
-**UI:** `LocationCard` `simpleMode && locMids.length === 1` renders store name + address + status on one card; `MidCard combined` mounts processing fields under a `Card processing` caption (no nested card, no duplicate title, no drag grips, no Account Name field � save uses location DBA). Adding a second account or location upgrades back to the nested tree. Same `manageMerchantID` / `updateLocationDetails` save paths.
+**UI:** `LocationCard` `simpleMode && locMids.length === 1` renders store name + address + status on one card; `MidCard combined` mounts processing fields under a `Card processing` caption (no nested card, no duplicate title, no drag grips, no Account Name field ? save uses location DBA). Adding a second account or location upgrades back to the nested tree. Same `manageMerchantID` / `updateLocationDetails` save paths.
 
-**ACTION for Base44 after Teddy pushes:** publish frontend. Re-check Porky's (or any 1�1 merchant) on Locations step.
+**ACTION for Base44 after Teddy pushes:** publish frontend. Re-check Porky's (or any 1?1 merchant) on Locations step.
 
 **? Waiting on:** Teddy (push + visual check)
 ---
 
 ---
 **[CURSOR]** ? 2026-07-17
-**Type:** Action Taken ? Locations store-first 1�1 + plain MCC picker
+**Type:** Action Taken ? Locations store-first 1?1 + plain MCC picker
 **Re:** Critique Recommended Actions 1 + 3 (Teddy approved)
 
-### 1. Store-first layout (1�1 only)
-`EntitySection` `simpleMode` now leads with **Your store** (combined location + card processing), then a required **Legal entity** accordion (name/EIN edit + Business details + mailing). Multi-location path unchanged (entity ? locations ? accounts). Page subtitle switches to store-first copy when 1�1.
+### 1. Store-first layout (1?1 only)
+`EntitySection` `simpleMode` now leads with **Your store** (combined location + card processing), then a required **Legal entity** accordion (name/EIN edit + Business details + mailing). Multi-location path unchanged (entity ? locations ? accounts). Page subtitle switches to store-first copy when 1?1.
 
 ### 3. Business Category ? plain labels + search
 - Labels: `Restaurant / Cafe / Coffee Shop (5812)`, `Fast Food (5814)`, etc. (MCC in parentheses)
@@ -1899,32 +1899,32 @@ Teddy: single-location / single-MID applicants saw Entity ? Location ? MID nesti
 
 **No field/key/validation/fetch changes.** Frontend only.
 
-**Waiting on:** Teddy ? push + visual check on a 1�1 merchant. Confirm Bakery MCC if we should add it as its own row.
+**Waiting on:** Teddy ? push + visual check on a 1?1 merchant. Confirm Bakery MCC if we should add it as its own row.
 ---
 
 ---
-**[CURSOR]** — 2026-07-17
-**Type:** Action Taken — Locations verify quieter + multi-store coach
+**[CURSOR]** ? 2026-07-17
+**Type:** Action Taken ? Locations verify quieter + multi-store coach
 **Re:** Critique Recommended Actions 4 + 2 (Teddy approved)
 
 ### 4. Quieter verify banner (applicant only)
 - Full gold left-rule banner on first applicant visit
-- After applicant successful save → quiet tip; localStorage per corporateId
+- After applicant successful save ? quiet tip; localStorage per corporateId
 - Agent impersonation always keeps full banner; agent saves never set quiet flag
 
 ### 2. Multi-store coach mark
-- When hierarchy > 1x1, one-time tip: Legal entity → Location → Processing account
+- When hierarchy > 1x1, one-time tip: Legal entity ? Location ? Processing account
 - Got it dismiss persists per corporateId
 
 Frontend only.
 
-**Waiting on:** Teddy — push + check applicant quiet / agent full banner / multi coach dismiss.
+**Waiting on:** Teddy ? push + check applicant quiet / agent full banner / multi coach dismiss.
 ---
 
 ---
-**[CURSOR]** — 2026-07-17
-**Type:** Action Taken — MCC catalog expand (Restaurant/Coffee/Bakery + Elavon letter variants)
-**Re:** Teddy decisions + MSPWare screenshot confirming 5251/5251A–E
+**[CURSOR]** ? 2026-07-17
+**Type:** Action Taken ? MCC catalog expand (Restaurant/Coffee/Bakery + Elavon letter variants)
+**Re:** Teddy decisions + MSPWare screenshot confirming 5251/5251A?E
 
 ### Decisions
 1. Split Restaurant (5812) / Coffee Shop (5499) / Bakery (5462+)
@@ -1932,12 +1932,12 @@ Frontend only.
 3. Curated merchant list (~150), not full 1,393 catalog
 
 ### Shipped
-- src/lib/mccCatalog.js — Elavon-sourced options; regenerate via scripts/gen-mcc-catalog.mjs
+- src/lib/mccCatalog.js ? Elavon-sourced options; regenerate via scripts/gen-mcc-catalog.mjs
 - OnboardingLocations imports catalog
 - Liquor compliance treats 5813A/B/C like 5813
 - Department store: 5311G only; 5999 family still banned
 
-**Waiting on:** Teddy — push + publish frontend; spot-check coffee / bakery / hardware search.
+**Waiting on:** Teddy ? push + publish frontend; spot-check coffee / bakery / hardware search.
 ---
 
 ---
@@ -1966,7 +1966,7 @@ Wired in submitToMSP, signApplication, refillMSPForms. Catalog regenerated with 
 ### Fix (frontend only, OnboardingLocations.jsx)
 1. Accordion uses short ease (`ACCORDION_EASE` 0.2s), not spring
 2. Removed `layout` from store / MID / entity card wrappers
-3. 1�1 Card processing expand/collapse now uses AnimatePresence + same accordion ease
+3. 1?1 Card processing expand/collapse now uses AnimatePresence + same accordion ease
 
 No field/validation/save/fetch changes.
 **Waiting on:** Teddy ? push + eyeball collapse on Locations (card processing Cancel/Save + location expand).
@@ -1994,28 +1994,28 @@ No UI / no prompt ? Advanced override still works.
 ---
 
 ---
-**[CURSOR]** — 2026-07-17
-**Type:** Feature — Legal vs correspondence mailing address split
+**[CURSOR]** ? 2026-07-17
+**Type:** Feature ? Legal vs correspondence mailing address split
 
 ### Problem
 Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare distinguishes:
-1. **Legal Address** (required when ≠ store/DBA) → `has_legal_address: new` + `legal_*`
-2. **Mailing Address** (optional correspondence) → `mailing_*`
+1. **Legal Address** (required when ? store/DBA) ? `has_legal_address: new` + `legal_*`
+2. **Mailing Address** (optional correspondence) ? `mailing_*`
 
 ### Shipped
-1. UI: Yes/No "Legal address same as store?" — No requires legal address; optional "Mailing address for correspondence"
+1. UI: Yes/No "Legal address same as store?" ? No requires legal address; optional "Mailing address for correspondence"
 2. Schema on legalEntities: `legalAddressSameAsStore`, `correspondenceStreet/City/State/Zip` (keep `mailing*` as legal override storage)
 3. Continue + getMerchantData readiness gate legal address when different
 4. `submitToMSP` / `signApplication` / `refillMSPForms`: legal_* for override; mailing_* only for correspondence. Fixed refillMSPForms old `has_legal_address:'mailing'` bug.
 
-**ACTION:** Push → republish MerchantCorporateProfile schema → redeploy manageLegalEntity, getMerchantData, submitToMSP, signApplication, refillMSPForms + frontend.
+**ACTION:** Push ? republish MerchantCorporateProfile schema ? redeploy manageLegalEntity, getMerchantData, submitToMSP, signApplication, refillMSPForms + frontend.
 
 **? Waiting on:** Teddy (push + schema publish)
 ---
 
 ---
-**[CURSOR]** — 2026-07-17
-**Type:** Bug Fix — Forms must not lock when signing link generation fails
+**[CURSOR]** ? 2026-07-17
+**Type:** Bug Fix ? Forms must not lock when signing link generation fails
 
 **Symptom:** Sole prop with 24% ownership failed MSPWare validation ("Ownership % must total 100") but UI still showed Forms Locked / ready for signature.
 
@@ -2023,7 +2023,7 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **Fix:** Lock only when a usable package exists (signingUrl / signed signer). If locked with zero usable packages and nobody signed, auto-unlock on retry. Frontend only applies lock when usable or status is `unlocked`.
 
-**ACTION:** Push → redeploy `signApplication` + publish frontend. Stuck merchants: click Retry Signing (auto-unlocks) or Unlock & Modify Details, then fix ownership to 100% for Sole Prop.
+**ACTION:** Push ? redeploy `signApplication` + publish frontend. Stuck merchants: click Retry Signing (auto-unlocks) or Unlock & Modify Details, then fix ownership to 100% for Sole Prop.
 
 **? Waiting on:** Teddy (push + redeploy)
 ---
@@ -2062,28 +2062,28 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Action Taken — Agent Applications deal-desk UX (grilled plan)
+**[CURSOR]** ? 2026-07-18
+**Type:** Action Taken ? Agent Applications deal-desk UX (grilled plan)
 
 **Shipped in repo:**
-1. Row modes (`applicationRowMode.js`): **prep** / **nudge** / **stuck** / **underwriting** — priority underwriting > stuck > prep > nudge.
-2. Removed always-on Open portal / Copy Link / Send Link. Mode primary only: Prep in portal, Fix in portal, Nudge ▾, Dashboard (submitted).
+1. Row modes (`applicationRowMode.js`): **prep** / **nudge** / **stuck** / **underwriting** ? priority underwriting > stuck > prep > nudge.
+2. Removed always-on Open portal / Copy Link / Send Link. Mode primary only: Prep in portal, Fix in portal, Nudge ?, Dashboard (submitted).
 3. Quiet utilities: Dashboard (preview), Edit, Delete. Staged invite Send moved into Edit drawer.
-4. `nudgeMerchant` function — Resend email + Quo SMS (`channels`: sms|email|both). Needs `QUO_API_KEY` + `QUO_FROM_NUMBER`. Phone from signer `corporatePhone`.
+4. `nudgeMerchant` function ? Resend email + Quo SMS (`channels`: sms|email|both). Needs `QUO_API_KEY` + `QUO_FROM_NUMBER`. Phone from signer `corporatePhone`.
 5. Submitted rows: Underwriting badge + Dashboard as primary (equipment/payments/docs path).
 
 **Defaults locked in grilling:** Stuck = merchant activity + MSP errors / lock at Sign / 3-day idle. Nudge default = Text+Email (localStorage per agent).
 
-**ACTION:** Push → publish frontend → deploy `nudgeMerchant` → set Quo env vars in Base44.
+**ACTION:** Push ? publish frontend ? deploy `nudgeMerchant` ? set Quo env vars in Base44.
 
 **? Waiting on:** Teddy (push + Quo credentials)
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Bugfix — Porky's stuck on legal address with no Unlock button
+**[CURSOR]** ? 2026-07-18
+**Type:** Bugfix ? Porky's stuck on legal address with no Unlock button
 
-**Symptom:** Locations step shows legal-address / "Forms are locked… Use Unlock & Modify Details first" but no Unlock button. Merchant cannot save "Yes — same as store" (HTTP 423 FORMS_LOCKED).
+**Symptom:** Locations step shows legal-address / "Forms are locked? Use Unlock & Modify Details first" but no Unlock button. Merchant cannot save "Yes ? same as store" (HTTP 423 FORMS_LOCKED).
 
 **Cause:** Unlock lived only in the top `FormsLockedBanner`. Deep in entity/legal-address UI the save error quoted Unlock but offered no CTA. Banner also scrolled away; legal-address toggles stayed clickable while locked.
 
@@ -2093,31 +2093,31 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 3. Sync local `portalLockStatus` when API returns FORMS_LOCKED
 4. Disable legal-address Yes/No while locked
 
-**Teddy:** Push / hard-refresh → Unlock & Modify Details (confirm) → set Legal address Yes — same as store → Save → Continue → Prepare Signing Documents.
+**Teddy:** Push / hard-refresh ? Unlock & Modify Details (confirm) ? set Legal address Yes ? same as store ? Save ? Continue ? Prepare Signing Documents.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Bugfix — Agent impersonation "Signing Locked" despite Verified sole owner (Porky's)
+**[CURSOR]** ? 2026-07-18
+**Type:** Bugfix ? Agent impersonation "Signing Locked" despite Verified sole owner (Porky's)
 
-**Root cause:** Michael John Torres was **Beneficial Owner only** (`isAuthorizedSigner` not set). Signing unlock + BoldSign packages require exactly one **Control Person**. Merchant and agent both saw Signing Locked — links were **not** available to the merchant either.
+**Root cause:** Michael John Torres was **Beneficial Owner only** (`isAuthorizedSigner` not set). Signing unlock + BoldSign packages require exactly one **Control Person**. Merchant and agent both saw Signing Locked ? links were **not** available to the merchant either.
 
 **Fix:**
-1. `manageSigner` list (lock-safe) auto-heals sole non-admin → Control Person + Beneficial Owner
+1. `manageSigner` list (lock-safe) auto-heals sole non-admin ? Control Person + Beneficial Owner
 2. `healControlPerson` action; roster soft-gates via `effectiveControlPersons`
 3. `signApplication` falls back to sole non-admin email when no Control Person flagged
 4. Agent preview copy + banner when impersonating (same BoldSign URLs as merchant)
 
-**Teddy:** Push → redeploy `manageSigner` + `signApplication` → publish frontend → hard-refresh impersonation. Expect Control Person badge, then **Preview / Prepare Signing Documents**.
+**Teddy:** Push ? redeploy `manageSigner` + `signApplication` ? publish frontend ? hard-refresh impersonation. Expect Control Person badge, then **Preview / Prepare Signing Documents**.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Bugfix — Signing docs not persisting across refresh; false "Signing link failed"
+**[CURSOR]** ? 2026-07-18
+**Type:** Bugfix ? Signing docs not persisting across refresh; false "Signing link failed"
 
 **Symptoms (Porky's):** Forms locked (ready for signature) + Verified Control Person, but every visit shows Prepare Signing Documents. Admin row: Stuck / "Signing link failed" even though links are live.
 
@@ -2127,17 +2127,17 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 
 **Fix:**
 1. Auto-restore signing packages once when forms are already locked for signature
-2. Admin: awaiting-signature lock → nudge ("waiting for them to sign"), not stuck
+2. Admin: awaiting-signature lock ? nudge ("waiting for them to sign"), not stuck
 3. Resume / Load copy when packages already exist
 
-**Teddy:** Push + publish frontend (no function redeploy required for this fix). Hard-refresh — signing iframe should reload automatically when locked for signature.
+**Teddy:** Push + publish frontend (no function redeploy required for this fix). Hard-refresh ? signing iframe should reload automatically when locked for signature.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Action Taken — `$impeccable clarify` /admin/applications
+**[CURSOR]** ? 2026-07-18
+**Type:** Action Taken ? `$impeccable clarify` /admin/applications
 
 **Audience:** Sales agents mid-call (product register). Terminology locked to grilled deal-desk: Open to prep / Open to fix / Remind / Open dashboard.
 
@@ -2153,15 +2153,15 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Action Taken — Full impeccable pass on `/admin/applications` (harden→distill→layout→audit→quieter→polish)
+**[CURSOR]** ? 2026-07-18
+**Type:** Action Taken ? Full impeccable pass on `/admin/applications` (harden?distill?layout?audit?quieter?polish)
 
 **Shipped:**
 1. **Harden:** At-risk rows prefetch MSP health with `getMSPFormStatus formOnly: true` (no signature POST). Expand loads health + Retry on failure. Page load/jump errors surfaced. Sort by `modeSortRank`.
 2. **Distill:** Header = mode counts (Needs setup / Waiting / Stuck / Underwriting); pie + Incomplete-as-not-started removed.
 3. **Layout:** Waiting on sign chip; visible `rowMode.reason`; expand leads with Next action.
 4. **Audit (fixes applied despite report-only skill):** keyboard expand, Escape closes overlays, dialog roles, owner Copy/Send aria-labels.
-5. **Quieter:** No `border-l-2` / blur; lifecycle → `lifecycleDotClass`; activity 3-card grid → one caption; StepTracker uses `cb-caption`.
+5. **Quieter:** No `border-l-2` / blur; lifecycle ? `lifecycleDotClass`; activity 3-card grid ? one caption; StepTracker uses `cb-caption`.
 6. **Backend:** `getMSPFormStatus` `formOnly` skip signature probe for list health.
 
 **Deploy:** push frontend + republish `getMSPFormStatus`.
@@ -2170,35 +2170,35 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Bugfix — Prepare Signing Documents regresses on every visit (conflict + root cause)
+**[CURSOR]** ? 2026-07-18
+**Type:** Bugfix ? Prepare Signing Documents regresses on every visit (conflict + root cause)
 
-**Symptoms (Porky's again):** Signer shows Signing… but main CTA resets to Prepare Signing Documents after refresh. Likely conflict with another agent's `applicationRowMode` / impeccable pass; deeper root cause also found.
+**Symptoms (Porky's again):** Signer shows Signing? but main CTA resets to Prepare Signing Documents after refresh. Likely conflict with another agent's `applicationRowMode` / impeccable pass; deeper root cause also found.
 
 **Root cause:**
-1. `healPrematurePortalLock` in `signApplication` unlocked whenever `portalLockStatus=signing` and nobody had finished signing yet — including when live BoldSign links existed and we were only waiting. Early abort paths called it with no `applications` array, so it cleared the lock on failed/partial runs too.
-2. Frontend restore was gated only on lock status → once lock wiped, every revisit showed Prepare.
+1. `healPrematurePortalLock` in `signApplication` unlocked whenever `portalLockStatus=signing` and nobody had finished signing yet ? including when live BoldSign links existed and we were only waiting. Early abort paths called it with no `applications` array, so it cleared the lock on failed/partial runs too.
+2. Frontend restore was gated only on lock status ? once lock wiped, every revisit showed Prepare.
 3. Failed restore / empty catch called `applyPortalLockFromSigningResponse({})` which forces local unlock.
 
 **Fix:**
 1. `healPrematurePortalLock`: never unlock when live signing URLs exist; never unlock when `applications` omitted (early abort). Only unlock when apps were evaluated and have no usable package.
-2. Auto-restore when MIDs have `mspApplicationNo`, session `signing_prepared_*` flag, or lock — not lock-only.
+2. Auto-restore when MIDs have `mspApplicationNo`, session `signing_prepared_*` flag, or lock ? not lock-only.
 3. Restore failures must not wipe local lock state; set session flag when packages load.
-4. `applicationRowMode`: awaiting-signature = nudge (not Stuck / Signing link failed) — kept `MODE_SORT_RANK` from other agent.
+4. `applicationRowMode`: awaiting-signature = nudge (not Stuck / Signing link failed) ? kept `MODE_SORT_RANK` from other agent.
 
-**Teddy:** Push frontend + **redeploy `signApplication`** (backend heal is the critical part). Hard-refresh Porky's impersonation — should auto-load signing iframe. If lock still unlocked in DB, one successful Prepare / restore will re-lock.
+**Teddy:** Push frontend + **redeploy `signApplication`** (backend heal is the critical part). Hard-refresh Porky's impersonation ? should auto-load signing iframe. If lock still unlocked in DB, one successful Prepare / restore will re-lock.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Action Taken — Critique follow-up (27/40 backlog): expand-only + densify
+**[CURSOR]** ? 2026-07-18
+**Type:** Action Taken ? Critique follow-up (27/40 backlog): expand-only + densify
 
 **Choices:** Prefetch = expand-only; full remaining backlog.
 
 **Shipped:**
-1. Removed at-risk mount MSP prefetch — health loads **only on expand** (`formOnly: true`)
+1. Removed at-risk mount MSP prefetch ? health loads **only on expand** (`formOnly: true`)
 2. Replaced row `alert()` with dismissible inline `rowActionError`
 3. MidRow = single disclosure button + `aria-expanded`; CheckRow = focusable checkbox (not `hidden`)
 4. Mode dots differentiated: stuck=danger, waiting=gray, prep=gold, underwriting=green
@@ -2211,27 +2211,27 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Decision — `/grill-me` Admin/applications → Merchant Account parent model (v1 gate)
+**[CURSOR]** ? 2026-07-18
+**Type:** Decision ? `/grill-me` Admin/applications ? Merchant Account parent model (v1 gate)
 
 **Audience:** Sales + underwriting/CS share `/admin/applications`. Handoff is blurry. Deep UW (email feed from underwriting@, per-MID AWB history) is **phase 2**. Deal room (`/admin/applications/:id`) is **blocked until** parent model ships.
 
 **Locked:**
 1. Continuity key = **Merchant Account Parent** = HubSpot **Tier-1 Corporation** company (not TIN; multiple TINs under one account).
-2. No provisional Cliqbux-only parents — create Tier-1 in HubSpot from applicant/agent entry.
-3. **Quick Stage:** prompt for **parent company name** → create HubSpot company + deal → agents add signers in admin.
+2. No provisional Cliqbux-only parents ? create Tier-1 in HubSpot from applicant/agent entry.
+3. **Quick Stage:** prompt for **parent company name** ? create HubSpot company + deal ? agents add signers in admin.
 4. **Legal entities (TINs)** live on the **account** (reuse across deals).
 5. **People** live on the **account** with **KYC retained**; roster **assigned per deal** (agents adjust before send).
-6. Account MVP gate before deal room: MerchantAccount↔HS Tier-1, legal entities on account, people+KYC, deal assignment, list shows account, migration path.
+6. Account MVP gate before deal room: MerchantAccount?HS Tier-1, legal entities on account, people+KYC, deal assignment, list shows account, migration path.
 
 **Deferred:** deal-room notes/tasks, underwriting@ email feed, AWB per-MID threads.
 
-**→ Shipping now:** Account MVP (entity + Quick Stage HubSpot parent + continuity FKs). Deal room after.
+**? Shipping now:** Account MVP (entity + Quick Stage HubSpot parent + continuity FKs). Deal room after.
 
 **Shipped in repo (needs publish):**
 - `MerchantAccount` entity schema
 - Profile/Signers FKs `merchantAccountId` / `hubspotCompanyId`
-- Quick Stage → HubSpot Tier-1 company + deal; opens Signers tab
+- Quick Stage ? HubSpot Tier-1 company + deal; opens Signers tab
 - `manageLegalEntity` dual-write to account
 - `manageSigner` stamps account + prefers same-account KYC
 - `createHubspotDeal` links/creates MerchantAccount
@@ -2241,13 +2241,13 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Action Taken — Deal Room v1 (`/admin/applications/:corporateId`)
+**[CURSOR]** ? 2026-07-18
+**Type:** Action Taken ? Deal Room v1 (`/admin/applications/:corporateId`)
 
 **Shipped:**
 1. `ApplicationDeskItem` entity (notes + tasks)
-2. `manageApplicationDesk` — admin-only get / addNote / addTask / updateTask / deleteItem + snapshot
-3. `ApplicationDealRoom.jsx` — header, Open portal / Dashboard, tasks, notes, MID/signer/legal snapshot
+2. `manageApplicationDesk` ? admin-only get / addNote / addTask / updateTask / deleteItem + snapshot
+3. `ApplicationDealRoom.jsx` ? header, Open portal / Dashboard, tasks, notes, MID/signer/legal snapshot
 4. Route + **Deal room** link on every Applications row
 5. Phase 2 still deferred: underwriting@ email feed, per-MID AWB history
 
@@ -2255,15 +2255,15 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Action Taken — Deal Room phase 2 (per-MID AWB + underwriting@ threads)
+**[CURSOR]** ? 2026-07-18
+**Type:** Action Taken ? Deal Room phase 2 (per-MID AWB + underwriting@ threads)
 
 **Shipped:**
-1. `MerchantMID.elavonAwb` — Elavon AWB (admin-settable even when MID locked)
-2. `UnderwritingMessage` entity — per-MID thread (gmail / manual / forward)
+1. `MerchantMID.elavonAwb` ? Elavon AWB (admin-settable even when MID locked)
+2. `UnderwritingMessage` entity ? per-MID thread (gmail / manual / forward)
 3. Desk actions: `setMidAwb`, `logUwMessage`, `deleteUwMessage`; `get` returns `uwMessages`
-4. `syncUnderwritingMail` — Gmail API pull for underwriting@; match by AWB; dedupe by message id
-5. Deal Room UI — MID tabs, Save AWB, log email, Sync inbox, thread list
+4. `syncUnderwritingMail` ? Gmail API pull for underwriting@; match by AWB; dedupe by message id
+5. Deal Room UI ? MID tabs, Save AWB, log email, Sync inbox, thread list
 6. Docs: `docs/underwriting-inbox.md`
 
 **Works without Gmail today:** set AWB + log emails manually. Sync needs `UNDERWRITING_GMAIL_*` env.
@@ -2272,31 +2272,31 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Decision + Action — Post-sign agent submits to Elavon; AWB from MSP
+**[CURSOR]** ? 2026-07-18
+**Type:** Decision + Action ? Post-sign agent submits to Elavon; AWB from MSP
 
 **Ops model (Teddy):**
 1. After signing, **agent** submits to Elavon via MSP
-2. Pre-screen → auto-approve ~15m **or** underwriting
+2. Pre-screen ? auto-approve ~15m **or** underwriting
 3. **AWB retrievable from MSP** (not paste-first)
 
 **Shipped:**
-- `extractElavonAwb` helper (inlined) — probes common MSP keys until live field confirmed
-- `submitToMSP` best-effort AWB after submit → `MerchantMID.elavonAwb`
+- `extractElavonAwb` helper (inlined) ? probes common MSP keys until live field confirmed
+- `submitToMSP` best-effort AWB after submit ? `MerchantMID.elavonAwb`
 - `pollMSPStatus` captures AWB while Pending MID / on approve
-- Deal Room **From MSP** → `refreshAwbFromMsp` (returns status keys if not found)
+- Deal Room **From MSP** ? `refreshAwbFromMsp` (returns status keys if not found)
 - Docs: agent flow in `docs/underwriting-inbox.md`
 
-**Still need live confirm:** exact MSPWare JSON key for AWB — first successful refresh/poll after a real submit should pin it in AGENTS.md.
+**Still need live confirm:** exact MSPWare JSON key for AWB ? first successful refresh/poll after a real submit should pin it in AGENTS.md.
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Action Taken — Elavon ApplicationStatus@ workflow wired into Deal Room
+**[CURSOR]** ? 2026-07-18
+**Type:** Action Taken ? Elavon ApplicationStatus@ workflow wired into Deal Room
 
 **Elavon process (apps after 2026-07-07):**
-- Status → `ApplicationStatus@elavon.com` with **AWB in subject** (one AWB per chain)
-- Escalation → `MSPFulSer@elavon.com` / `FulSerCenter@elavon.com`
+- Status ? `ApplicationStatus@elavon.com` with **AWB in subject** (one AWB per chain)
+- Escalation ? `MSPFulSer@elavon.com` / `FulSerCenter@elavon.com`
 - Auto-replies omit DBA / legal / MID / data-entry pends
 
 **Shipped:**
@@ -2307,13 +2307,13 @@ Portal labeled entity address as "Add Mailing Address (optional)" but MSPWare di
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Decision + Action Taken — Control Person signing + KYC-wait workflow
+**[CURSOR]** ? 2026-07-18
+**Type:** Decision + Action Taken ? Control Person signing + KYC-wait workflow
 
 Teddy clarified: one Control Person signs MSP; multiple Beneficial Owners may need KYC only. Absent owners get invites; Control Person waits for KYC before signing. Form filler who is not CP can send Verify & Sign packet to CP.
 
 **Shipped:**
-1. Hard gate `isRosterReadyForSigning` — all AML KYC verified (invites do not unlock)
+1. Hard gate `isRosterReadyForSigning` ? all AML KYC verified (invites do not unlock)
 2. BO invites = `intent=kyc` email; CP invites = `intent=sign`
 3. Roster: Send KYC Invite (BO), Send Verify & Sign Invite (CP), waiting banner + 8s poll
 4. `/verify` KYC-only stops after identity; sign path continues to BoldSign for CP
@@ -2323,15 +2323,15 @@ Teddy clarified: one Control Person signs MSP; multiple Beneficial Owners may ne
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Action Taken — Do not stage signing while KYC pending
+**[CURSOR]** ? 2026-07-18
+**Type:** Action Taken ? Do not stage signing while KYC pending
 
 Teddy: preparing signing while waiting on other owners' KYC locks the app un-editable.
 
 **Fix:** `signApplication` returns 422 `KYC_INCOMPLETE` before creating packages; heals `portalLockStatus` to unlocked when KYC still pending. UI blocks Prepare until roster Ready; auto-heals stuck lock while waiting.
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Action Taken — People & KYC vs Application Signing split
+**[CURSOR]** ? 2026-07-18
+**Type:** Action Taken ? People & KYC vs Application Signing split
 
 Teddy chose: separate People page first (before Locations), Sign last. Form filler defaults to Control Person with UI guidance. Remote KYC runs in parallel; live activity strip on opened/verified.
 
@@ -2345,22 +2345,22 @@ Teddy chose: separate People page first (before Locations), Sign last. Form fill
 ---
 
 ---
-**[CURSOR]** — 2026-07-18
-**Type:** Action Taken — Blank application send from prep rows
+**[CURSOR]** ? 2026-07-18
+**Type:** Action Taken ? Blank application send from prep rows
 
 Teddy: prep is ideal, but agents must still send a blank app from Applications (e.g. Trisha Company) without prepping locations/MIDs first.
 
 **Shipped:**
 1. Prep rows: secondary **Send application** next to **Open to prep**
-2. `manageStagedApplication` action `sendApplication` — finds or creates a non-`__auto_track__` stage + emails portal link (no locations/MIDs/KYC required)
+2. `manageStagedApplication` action `sendApplication` ? finds or creates a non-`__auto_track__` stage + emails portal link (no locations/MIDs/KYC required)
 3. SendModal copy clarifies blank send is allowed
 
 **ACTION for Base44:** redeploy `manageStagedApplication` + publish frontend.
 ---
 
 ---
-**[CURSOR]** — 2026-07-20
-**Type:** Bugfix — People & KYC hub shows "Set up people" after Control Person already saved (Porky's)
+**[CURSOR]** ? 2026-07-20
+**Type:** Bugfix ? People & KYC hub shows "Set up people" after Control Person already saved (Porky's)
 
 **Symptom:** People step shows Michael as Control Person + Verified + Ready to sign, but Welcome Hub still Incomplete / "Set up people".
 
@@ -2368,97 +2368,97 @@ Teddy: prep is ideal, but agents must still send a blank app from Applications (
 
 **Fix:** On `fetchMerchantData`, load signers; derive People done via `isRosterConfiguredForPeopleStep`; derive verify via `isRosterReadyForSigning`; merge into ProgressTracker `completedSteps`.
 
-**Teddy:** Push + publish frontend (no function redeploy). Hard-refresh Porky's — People should show Complete / Review people.
+**Teddy:** Push + publish frontend (no function redeploy). Hard-refresh Porky's ? People should show Complete / Review people.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-20
-**Type:** Bugfix — MSPWare rejects `business_state_usa: "California"` (Trisha Company)
+**[CURSOR]** ? 2026-07-20
+**Type:** Bugfix ? MSPWare rejects `business_state_usa: "California"` (Trisha Company)
 
 **Live evidence (corp 336613831402):** Processor validation
 `{"errors":"California is not a valid option.","label":"State","key":"business_state_usa"}`
-→ form `-1%` + cascade "Owner DOB/SSN missing" / "Bank account not linked" (rollback noise — Trisha's KYC was already Verified).
+? form `-1%` + cascade "Owner DOB/SSN missing" / "Bank account not linked" (rollback noise ? Trisha's KYC was already Verified).
 
 **Root cause:** HubSpot company `state` often stores full names. `business_state_usa` / `state_of_formation` were sent **raw** (other state fields already used `sanitizeState`, which only accepted 2-letter codes and dropped full names to `''`).
 
 **Fix:**
-1. `sanitizeState` maps full names → codes (`California`→`CA`); shared `src/lib/usState.js` + `npm run test:state`
+1. `sanitizeState` maps full names ? codes (`California`?`CA`); shared `src/lib/usState.js` + `npm run test:state`
 2. Applied to `business_state_usa` + `state_of_formation` in `submitToMSP` / `signApplication` / `refillMSPForms`
 3. `syncFromHubspot` normalizes state on location write (also heals existing "California" on next sync)
 
-**John B DBA (336605066825):** separate issue — Primary "Eisenbaumer" is Pending with 8 missing KYC fields (not the California bug). Complete People & KYC (or delete stub + re-add Control Person) before signing.
+**John B DBA (336605066825):** separate issue ? Primary "Eisenbaumer" is Pending with 8 missing KYC fields (not the California bug). Complete People & KYC (or delete stub + re-add Control Person) before signing.
 
 **Teddy:** Push + redeploy `signApplication`, `submitToMSP`, `syncFromHubspot` (+ `refillMSPForms` optional). On Trisha: HubSpot Sync once (heals stored state) or just **Retry Signing**. Ignore cascade DOB/bank until the California error is gone.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-20
-**Type:** Bugfix — Admin Applications showed Remind instead of Open to fix (Trisha Company)
+**[CURSOR]** ? 2026-07-20
+**Type:** Bugfix ? Admin Applications showed Remind instead of Open to fix (Trisha Company)
 
 **Problem:** Corp `336613831402` was at Sign with MSP form ~62% / processor reject on `business_state_usa`, but Applications primary CTA was **Remind** ("Waiting on sign"). Agents were nudged to text the merchant instead of opening the portal to fix inputs.
 
 **Root cause:** `resolveApplicationRowMode` treated `portalLockStatus: signing` as nudge whenever `mspErrorCount === 0`. Health only loaded on row expand; and even when loaded, incomplete `%` / `-1%` with empty top-level error arrays (errors nested under `validation.errors`) did not count as stuck.
 
 **Fix:**
-1. `formIncomplete` flag — MSP `% < 100` / `-1` / `canSave: false` → **stuck** → **Open to fix** (even while awaiting signature)
-2. `src/lib/mspFormHealth.js` — shared error collect + incomplete detection; MidRow uses it
+1. `formIncomplete` flag ? MSP `% < 100` / `-1` / `canSave: false` ? **stuck** ? **Open to fix** (even while awaiting signature)
+2. `src/lib/mspFormHealth.js` ? shared error collect + incomplete detection; MidRow uses it
 3. Prefetch MSP health when track step is Sign or `portalLockStatus` is signing/pending_signature (collapsed rows get the right CTA)
 4. `getMSPFormStatus` flattens `validation.errors` into `completion_errors` / `data_errors` (same as `signApplication`)
 
 **Tests:** `node --test src/lib/mspFormHealth.test.js src/lib/applicationRowMode.test.js`
 
-**ACTION:** publish frontend + redeploy `getMSPFormStatus`. Still refill/retry Trisha after California→CA state fix lands so the form can reach 100%.
+**ACTION:** publish frontend + redeploy `getMSPFormStatus`. Still refill/retry Trisha after California?CA state fix lands so the form can reach 100%.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-20
-**Type:** Bugfix — False "stuck / form incomplete" on 100% ready-to-sign apps (Porky's)
+**[CURSOR]** ? 2026-07-20
+**Type:** Bugfix ? False "stuck / form incomplete" on 100% ready-to-sign apps (Porky's)
 
-**Problem:** After the Trisha "Remind→Open to fix" change, Applications marked *all* Sign-step rows stuck — including Porky's and Cliqbux at **100%** with "Form complete — ready to sign" in the MID expand.
+**Problem:** After the Trisha "Remind?Open to fix" change, Applications marked *all* Sign-step rows stuck ? including Porky's and Cliqbux at **100%** with "Form complete ? ready to sign" in the MID expand.
 
 **Root cause:** `mspFormNeedsAgentFix` treated `canSave === false` as incomplete. MSPWare (and our `canSave: formData.canSave ?? false` coercion) often reports `canSave: false` when the form is already 100% / locked for signing.
 
-**Fix:** If `percent_complete >= 100` and error arrays are empty → not incomplete. Ignore `canSave`/`canSubmit` for stuck detection. Stop defaulting `canSave` to `false` in `getMSPFormStatus`.
+**Fix:** If `percent_complete >= 100` and error arrays are empty ? not incomplete. Ignore `canSave`/`canSubmit` for stuck detection. Stop defaulting `canSave` to `false` in `getMSPFormStatus`.
 
 **ACTION:** publish frontend + redeploy `getMSPFormStatus`. Porky's/Cliqbux should return to **Remind**; Trisha at 62% should stay **Open to fix**.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-20
-**Type:** Action Taken — Merchant Center Stages 1–4 (staged roadmap)
+**[CURSOR]** ? 2026-07-20
+**Type:** Action Taken ? Merchant Center Stages 1?4 (staged roadmap)
 
 Teddy approved the Merchant Center roadmap: post-signing dashboard is the deal board; applications are the entrance; Stage 1 = quote/pay + UW checklist; hybrid account home later; kitchen sink in stages.
 
 **Shipped in repo:**
-1. **Deal board** — `PostSubmissionDashboard` reframed with `MerchantCenterShell` (Locations / Account / Setup nav). Aliases: `/center`, `/center/deals/:corporateId` (old `/onboarding/dashboard` kept).
-2. **Quote → pay** — first-class “Equipment quote coming” empty state; Step 1 sign / Step 2 pay copy on `EquipmentOrderPanel`. Applications list shows **Quote needed** when Submitted and no `hubspotQuoteUrl`.
-3. **Checklist** — entity `MerchantChecklistItem` + `manageMerchantChecklist` (auto sync + agent `requestDocument` + merchant upload). UI on deal board; Deal Room **Request document** panel. Auto kinds: quote missing/unsigned/unpaid, MCC help, missing bank, liquor license, MID error.
-4. **Account home** — `/locations` storefront list with status derivation (`src/lib/locationStatus.js`); `/locations/:id` detail; Add location → onboarding.
-5. **Auth module** — `src/lib/merchantCenterAuth.js` (`getSession`/`signIn`/`signOut`/`requireAuth`) wraps magic-link JWT; does **not** change `merchantAuthFetch`.
-6. **Go-live** — logo/hours/install date + installer chat via `manageLocationGoLive` + `MerchantInstallerMessage`; schema fields on `MerchantLocations`.
-7. **Account** — `/account` statements placeholder + MID join-key display.
+1. **Deal board** ? `PostSubmissionDashboard` reframed with `MerchantCenterShell` (Locations / Account / Setup nav). Aliases: `/center`, `/center/deals/:corporateId` (old `/onboarding/dashboard` kept).
+2. **Quote ? pay** ? first-class ?Equipment quote coming? empty state; Step 1 sign / Step 2 pay copy on `EquipmentOrderPanel`. Applications list shows **Quote needed** when Submitted and no `hubspotQuoteUrl`.
+3. **Checklist** ? entity `MerchantChecklistItem` + `manageMerchantChecklist` (auto sync + agent `requestDocument` + merchant upload). UI on deal board; Deal Room **Request document** panel. Auto kinds: quote missing/unsigned/unpaid, MCC help, missing bank, liquor license, MID error.
+4. **Account home** ? `/locations` storefront list with status derivation (`src/lib/locationStatus.js`); `/locations/:id` detail; Add location ? onboarding.
+5. **Auth module** ? `src/lib/merchantCenterAuth.js` (`getSession`/`signIn`/`signOut`/`requireAuth`) wraps magic-link JWT; does **not** change `merchantAuthFetch`.
+6. **Go-live** ? logo/hours/install date + installer chat via `manageLocationGoLive` + `MerchantInstallerMessage`; schema fields on `MerchantLocations`.
+7. **Account** ? `/account` statements placeholder + MID join-key display.
 
 **ACTION for Base44 / Teddy:**
 1. Republish entities: `MerchantChecklistItem`, `MerchantInstallerMessage`, `MerchantLocations` (logoUrl, businessHours, installationDate, shippingTrackingNumber, shippingCarrier)
 2. Redeploy functions: `manageMerchantChecklist`, `manageLocationGoLive`
 3. Publish frontend
 
-**→ Waiting on:** Teddy (publish + redeploy)
+**? Waiting on:** Teddy (publish + redeploy)
 ---
 
 ---
-**[CURSOR]** — 2026-07-20
-**Type:** Action Taken — Excel deployment checklist → split-audience in-app runbook
+**[CURSOR]** ? 2026-07-20
+**Type:** Action Taken ? Excel deployment checklist ? split-audience in-app runbook
 
-Teddy provided Onboarding Checklist Template 1/2.xlsx (~183 POS deployment tasks). Decision: **split audiences** — merchants see a short pack; agents/installers get the full Template 2 tracker.
+Teddy provided Onboarding Checklist Template 1/2.xlsx (~183 POS deployment tasks). Decision: **split audiences** ? merchants see a short pack; agents/installers get the full Template 2 tracker.
 
 **Shipped:**
 1. Catalog: `src/lib/deploymentChecklistCatalog.js` (+ raw JSON + `scripts/gen-deployment-catalog.cjs`) and same-folder `manageMerchantChecklist/deploymentCatalog.ts`
@@ -2470,50 +2470,50 @@ Teddy provided Onboarding Checklist Template 1/2.xlsx (~183 POS deployment tasks
 
 **ACTION:** Republish `MerchantChecklistItem` + `MerchantLocations`; redeploy `manageMerchantChecklist` + `manageLocationGoLive`; publish frontend. New installs should not need the Excel files.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-20
-**Type:** Action Taken — Team handoff pipeline (shared facts, not re-asks)
+**[CURSOR]** ? 2026-07-20
+**Type:** Action Taken ? Team handoff pipeline (shared facts, not re-asks)
 
-Shipped sales → underwriting → implementation → installation → support handoffs so teams share one fact store and merchants are not re-asked.
+Shipped sales ? underwriting ? implementation ? installation ? support handoffs so teams share one fact store and merchants are not re-asked.
 
 **Shipped:**
 1. Entities: `MerchantOnboardingFact`, `CallTranscript`; profile `handoffStage` (+ updatedAt/By, overrideReason)
-2. Lib: `src/lib/onboardingFacts.js` (stage order, catalog→factKey, soft/hard gate concepts, transcript phrases)
-3. API: `manageHandoff` — get / upsertFact / advanceStage / ingestTranscript / accept|rejectSuggestion
+2. Lib: `src/lib/onboardingFacts.js` (stage order, catalog?factKey, soft/hard gate concepts, transcript phrases)
+3. API: `manageHandoff` ? get / upsertFact / advanceStage / ingestTranscript / accept|rejectSuggestion
 4. Checklist wiring: markDone/upload/updateDeploymentItem upsert facts; listDeployment auto-completes + hides merchant items when fact gathered
-5. Deal Room `HandoffPanel` — stage strip, missing/gathered, Hand off CTA (hard block + override), call-notes paste inbox
+5. Deal Room `HandoffPanel` ? stage strip, missing/gathered, Hand off CTA (hard block + override), call-notes paste inbox
 6. Applications list + Deal Room header show handoff stage; submit seeds underwriting; scheduleInstall suggests installation
 
 **Not in v1:** auto-apply transcript suggestions; Gemini API; HubSpot note pull.
 
 **ACTION:** Republish `MerchantOnboardingFact`, `CallTranscript`, `MerchantCorporateProfile` (handoff fields); redeploy `manageHandoff`, `manageMerchantChecklist`, `updateMerchantProfile`; publish frontend.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 
 ---
-**[CURSOR]** — 2026-07-20
-**Type:** Action Taken — Admin QA hub at `/admin/center`
+**[CURSOR]** ? 2026-07-20
+**Type:** Action Taken ? Admin QA hub at `/admin/center`
 
-Built admin explorer so Teddy/agents can open every POV without hitting bare `/center` “unavailable”.
+Built admin explorer so Teddy/agents can open every POV without hitting bare `/center` ?unavailable?.
 
 **Shipped:**
-1. Page `AdminQaHub` at `/admin/center` — lists `MerchantCorporateProfile` (same as Applications); search; buttons Portal / Merchant Center / Locations / Account / Deal Room
+1. Page `AdminQaHub` at `/admin/center` ? lists `MerchantCorporateProfile` (same as Applications); search; buttons Portal / Merchant Center / Locations / Account / Deal Room
 2. `manageStagedApplication` impersonate destinations extended: `portal` | `dashboard` | `locations` | `account` (30-min JWT)
-3. Link from Applications header → QA hub; Locations/Account strip `impersonateToken` from URL after load
+3. Link from Applications header ? QA hub; Locations/Account strip `impersonateToken` from URL after load
 
 **ACTION:** Redeploy `manageStagedApplication`; publish frontend. Then open `/admin/center` while signed into Base44 workspace.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-20
-**Type:** Bugfix — People home address Places autocomplete dies after first clear
+**[CURSOR]** ? 2026-07-20
+**Type:** Bugfix ? People home address Places autocomplete dies after first clear
 
 **Cause:** `useAddressAutocomplete` refused to re-bind when `acRef` was already set. Clearing the verified chip unmounts the input; the new input never got Places. Typing free-text then failed save ("Home address is required") because city/state/ZIP only fill from a Places pick.
 
@@ -2521,42 +2521,42 @@ Built admin explorer so Teddy/agents can open every POV without hitting bare `/c
 
 **Teddy:** Push + publish frontend.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-20
-**Type:** UI Fix — Self-serve empty Locations first landing matches 1×1 store UI
+**[CURSOR]** ? 2026-07-20
+**Type:** UI Fix ? Self-serve empty Locations first landing matches 1�1 store UI
 
-**Problem:** No HubSpot locations → page showed Legal address Yes/No + separate "New Location" card before any store existed (old/disjointed). After save, snapped into the proper "Your store" UI.
+**Problem:** No HubSpot locations ? page showed Legal address Yes/No + separate "New Location" card before any store existed (old/disjointed). After save, snapped into the proper "Your store" UI.
 
 **Fix:** First empty store embeds into the **Your store** card (`Save store`); legal entity waits until the store is saved. Prefill tip / external New Location chrome only after a location exists (or for add-another).
 
 **Teddy:** Push + publish frontend. Test self-serve signup with zero locations.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-20
-**Type:** Bugfix — Business homepage URL accepted junk (self-serve)
+**[CURSOR]** ? 2026-07-20
+**Type:** Bugfix ? Business homepage URL accepted junk (self-serve)
 
-**Problem:** Form only checked non-empty string when Online % > 0 — invalid values like `asdf` saved.
+**Problem:** Form only checked non-empty string when Online % > 0 ? invalid values like `asdf` saved.
 
 **Fix:**
-1. `src/lib/businessWebsite.js` (+ tests) — normalize + validate real http(s) domain
+1. `src/lib/businessWebsite.js` (+ tests) ? normalize + validate real http(s) domain
 2. Locations MID editor blocks Save / complete until valid
 3. `manageMerchantID` add/update returns 422 on invalid; stores normalized URL
 4. `submitToMSP` / `signApplication` / `refillMSPForms` treat invalid as missing
 
-**Teddy:** Push frontend + redeploy `manageMerchantID` (boarding funcs optional but recommended). Edit MID → fix website → Save.
+**Teddy:** Push frontend + redeploy `manageMerchantID` (boarding funcs optional but recommended). Edit MID ? fix website ? Save.
 
-**→ Waiting on:** Teddy
+**? Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-21
-**Type:** Action Taken — Signing URL loading guidance
+**[CURSOR]** ? 2026-07-21
+**Type:** Action Taken ? Signing URL loading guidance
 **Re:** Tester confusion while BoldSign URL loaded (no wait affordance)
 
 ### Shipped
@@ -2564,60 +2564,60 @@ Built admin explorer so Teddy/agents can open every POV without hitting bare `/c
 - Portal Sign step (`OnboardingVerification`): replaces silent skeleton during `loadingSigning`; overlay until iframe `onLoad`
 - Remote `/verify` signing phase: same wait pattern (light tone)
 
-Copy: “Preparing your signing documents” / stay on page; iframe: “Loading your signing form… Please wait.”
-**Waiting on:** Teddy — push frontend.
+Copy: ?Preparing your signing documents? / stay on page; iframe: ?Loading your signing form? Please wait.?
+**Waiting on:** Teddy ? push frontend.
 ---
 
 ---
-**[CURSOR]** — 2026-07-21
-**Type:** Action Taken — Locations always-open MID list + creation order
+**[CURSOR]** ? 2026-07-21
+**Type:** Action Taken ? Locations always-open MID list + creation order
 **Re:** Teddy: no location chevron collapse; keep processing accounts visible; first-created MID first
 
 ### Shipped (OnboardingLocations.jsx only)
-1. Location cards no longer collapse — chevron/toggle removed; MID list always shown
-2. Nested MidCard starts as summary (edit fields only after pencil); 1×1 combined unchanged
+1. Location cards no longer collapse ? chevron/toggle removed; MID list always shown
+2. Nested MidCard starts as summary (edit fields only after pencil); 1�1 combined unchanged
 3. `locMids` sorted oldest-first by `created_date` / `createdAt` (then id)
 
-**Waiting on:** Teddy — push frontend; check multi-location Island Pacific order + no chevron.
+**Waiting on:** Teddy ? push frontend; check multi-location Island Pacific order + no chevron.
 ---
 
 ---
-**[CURSOR]** — 2026-07-21
-**Type:** Bug Fix — ProgressTracker bubble + Banking completed grey
+**[CURSOR]** ? 2026-07-21
+**Type:** Bug Fix ? ProgressTracker bubble + Banking completed grey
 **Re:** Teddy screenshot: double bubble on Locations; Banking grey though bank done
 
 ### Fixes
 1. Removed absolute `layoutId` capsule behind the circle (misaligned vs label-width buttons). `layoutId` now on the active circle itself.
 2. `allCompletedSteps` now derives **locations** + **banking** from live data (same spirit as people/verify) so refresh keeps Banking gold when routing numbers are saved.
 
-**Waiting on:** Teddy — push frontend; revisit Locations with banking already connected.
+**Waiting on:** Teddy ? push frontend; revisit Locations with banking already connected.
 ---
 
 ---
-**[CURSOR]** — 2026-07-21
-**Type:** Action Taken — Legal entity pencil edit + restore location nesting
-**Re:** Plan legal_entity_ui_nest — addresses were breaking hierarchy between entity header and locations
+**[CURSOR]** ? 2026-07-21
+**Type:** Action Taken ? Legal entity pencil edit + restore location nesting
+**Re:** Plan legal_entity_ui_nest ? addresses were breaking hierarchy between entity header and locations
 
 ### Shipped (OnboardingLocations.jsx only)
-1. `EntitySection` owns `legalEditOpen` — header **Pencil** toggles full legal edit (not rename-only)
-2. Collapsed: name + quiet summary (`LLC · Est. … · legal address…`) → **locations immediately under header**
+1. `EntitySection` owns `legalEditOpen` ? header **Pencil** toggles full legal edit (not rename-only)
+2. Collapsed: name + quiet summary (`LLC ? Est. ? ? legal address?`) ? **locations immediately under header**
 3. Expanded: legal name + business details + legal/mailing addresses + one **Save Details**
 4. simpleMode: Legal entity row uses Pencil (chevron removed)
 5. Successful complete Save collapses; validation force-opens when incomplete
 6. No schema / MSPWare / save-path changes beyond wiring existing saves into one surface
 
-**Waiting on:** Teddy — push frontend; verify multi-location nesting + 1×1 pencil.
+**Waiting on:** Teddy ? push frontend; verify multi-location nesting + 1�1 pencil.
 ---
 
 ---
-**[CURSOR]** — 2026-07-21
-**Type:** Action Taken — Address Line 2 (apt/suite/unit) everywhere
+**[CURSOR]** ? 2026-07-21
+**Type:** Action Taken ? Address Line 2 (apt/suite/unit) everywhere
 **Re:** Places suite suggestions never persisted; no Line 2 UI/schema/MSPWare compose
 
 ### Shipped
 - Schemas: `businessStreet2`, `homeStreet2`, `mailingStreet2`, `correspondenceStreet2` (Locations, Signers, CorporateProfile, MerchantAccount)
 - Helpers: `src/lib/addressLine.js` + `helpers/addressLine.ts` (`composeStreet`)
-- Places: `subpremise` → street2 in all autocomplete parsers
+- Places: `subpremise` ? street2 in all autocomplete parsers
 - UI: Apt/Suite/Unit on locations, legal/mail, signers, verify, manual entry, underwriting, AddLocationModal
 - Backend: persist allowlists + getMerchantData projections + HubSpot `address2` fill-blanks
 - MSPWare: compose street+street2 into `business_address` / `legal_address` / `mailing_address` / `owner_address` (submitToMSP, signApplication, refillMSPForms)
@@ -2629,12 +2629,12 @@ Copy: “Preparing your signing documents” / stay on page; iframe: “Loading 
 ---
 
 ---
-**[CURSOR]** — 2026-07-23
-**Type:** Bug Fix — products_or_services ≤33 chars + suite join without comma
+**[CURSOR]** ? 2026-07-23
+**Type:** Bug Fix ? products_or_services ?33 chars + suite join without comma
 **Re:** KK House of Lechon signing: MSPWare rejected products_or_services length and business_address special chars
 
 ### Root cause
-1. MCC label e.g. `"Eating Places & Restaurants (Non Fast Food)"` is >33 chars — hard MSPWare max.
+1. MCC label e.g. `"Eating Places & Restaurants (Non Fast Food)"` is >33 chars ? hard MSPWare max.
 2. Address fields themselves were clean (`8700 Woodman Ave` + `Suite 8`); our `composeStreet` joined with a **comma**, which MSPWare Address Line 1 rejects as a special character.
 
 ### Fix
@@ -2642,36 +2642,36 @@ Copy: “Preparing your signing documents” / stay on page; iframe: “Loading 
 - Regenerated MCC products map; synced into submitToMSP / signApplication / refillMSPForms
 - `composeStreet` joins suite with a **space** (UI city/state commas unchanged)
 
-**Teddy:** Push + redeploy `submitToMSP`, `signApplication`, `refillMSPForms`. Retry signing on KK House of Lechon (DOB/SSN/bank “missing” were cascade from −1%).
+**Teddy:** Push + redeploy `submitToMSP`, `signApplication`, `refillMSPForms`. Retry signing on KK House of Lechon (DOB/SSN/bank ?missing? were cascade from ?1%).
 
 **Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-23
-**Type:** Feature — Editable deal display name (legalName) for HubSpot typos
-**Re:** Applications header showed "KKS House…" while MID DBA was "KK House…" — HubSpot typo stuck in Base44
+**[CURSOR]** ? 2026-07-23
+**Type:** Feature ? Editable deal display name (legalName) for HubSpot typos
+**Re:** Applications header showed "KKS House?" while MID DBA was "KK House?" ? HubSpot typo stuck in Base44
 
 ### Shipped
-- Applications row: pencil next to deal title → edits `MerchantCorporateProfile.legalName` via `updateMerchantProfile`; list refreshes in place
+- Applications row: pencil next to deal title ? edits `MerchantCorporateProfile.legalName` via `updateMerchantProfile`; list refreshes in place
 - Deal Room: same pencil on the title
 - `syncFromHubspot`: `legalName` is **fill-blanks only** (unless `force: true`) so HubSpot Sync does not re-poison a rep fix
 
-Does **not** rewrite HubSpot deal name — Base44 display only. Location/MID DBAs stay separate.
+Does **not** rewrite HubSpot deal name ? Base44 display only. Location/MID DBAs stay separate.
 
-**Teddy:** Push frontend + redeploy `syncFromHubspot` (and `updateMerchantProfile` if not already live). On KK deal 337553383838: pencil → fix to "KK House of Lechon and BBQ" → Save.
+**Teddy:** Push frontend + redeploy `syncFromHubspot` (and `updateMerchantProfile` if not already live). On KK deal 337553383838: pencil ? fix to "KK House of Lechon and BBQ" ? Save.
 
 **Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-23
-**Type:** Feature — Lock/unlock tighten + Prepare form → Sign split
+**[CURSOR]** ? 2026-07-23
+**Type:** Feature ? Lock/unlock tighten + Prepare form ? Sign split
 **Re:** Live client: extra location/draft during signing; BoldSign "document edited"; unlock fought auto-staging
 
 ### Decisions (grilled with Teddy)
 - Unlock voids MSPWare apps that have a **signature package** only; fail-closed if void fails
-- Merchants never unlock; agents (workspace/imp) before anyone signed; post-sign → `UNLOCK_ADMIN_EMAILS` allowlist (workspace only)
+- Merchants never unlock; agents (workspace/imp) before anyone signed; post-sign ? `UNLOCK_ADMIN_EMAILS` allowlist (workspace only)
 - Lock still only after BoldSign packages exist
 - **Prepare form** = fill only (no packages/lock); **Sign** only when every MID is 100% + full KYC
 - No auto MSP drafts on MID add/update; Sign step no auto `signApplication` when unlocked
@@ -2684,53 +2684,53 @@ Does **not** rewrite HubSpot deal name — Base44 display only. Location/MID DBA
 - Portal: Prepare form + Sign agreement UI; merchant lock copy (contact Cliqbux); agent unlock on banner/Locations; Deal Room Unlock
 - Env: set `UNLOCK_ADMIN_EMAILS` in Base44 (comma-separated)
 
-**Teddy:** Push + republish/redeploy `demoteApplication`, `prepareMSPForms` (new), `signApplication`, `manageMerchantID`, frontend. Set `UNLOCK_ADMIN_EMAILS`. On KK: Unlock from Deal Room (as allowlisted admin if already signed) → clean orphan KKS draft in MSPWare by hand → Prepare form → Sign.
+**Teddy:** Push + republish/redeploy `demoteApplication`, `prepareMSPForms` (new), `signApplication`, `manageMerchantID`, frontend. Set `UNLOCK_ADMIN_EMAILS`. On KK: Unlock from Deal Room (as allowlisted admin if already signed) ? clean orphan KKS draft in MSPWare by hand ? Prepare form ? Sign.
 
 **Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-23
-**Type:** Bug Fix — Applications “Waiting on sign” after BoldSign already signed
-**Re:** KK House of Lechon — owner shows Application signed; row still Remind / waiting on sign (signing happened outside clean Base44 completion)
+**[CURSOR]** ? 2026-07-23
+**Type:** Bug Fix ? Applications ?Waiting on sign? after BoldSign already signed
+**Re:** KK House of Lechon ? owner shows Application signed; row still Remind / waiting on sign (signing happened outside clean Base44 completion)
 
 ### Root cause
-`manageSigner` `markSigned` early-returned when already `application signed` and **skipped** promoting `portalLockStatus` → `all_signed`. Row mode only treated `signing`/`pending_signature` as “waiting to sign,” ignoring CP signed.
+`manageSigner` `markSigned` early-returned when already `application signed` and **skipped** promoting `portalLockStatus` ? `all_signed`. Row mode only treated `signing`/`pending_signature` as ?waiting to sign,? ignoring CP signed.
 
 ### Fix
 - `markSigned` / `setLifecycleStatus` always reconcile lock when CP(s) signed
 - Applications expand heals lock via idempotent `markSigned`
-- Row mode: agreement signed → “Open to submit” (not Remind)
+- Row mode: agreement signed ? ?Open to submit? (not Remind)
 
-**Teddy:** Redeploy `manageSigner` + push frontend. Expand KK row (or refresh Applications) → should show **Signed — submit next** / **Open to submit** → open portal → finish Submit.
+**Teddy:** Redeploy `manageSigner` + push frontend. Expand KK row (or refresh Applications) ? should show **Signed ? submit next** / **Open to submit** ? open portal ? finish Submit.
 
 **Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-23
+**[CURSOR]** ? 2026-07-23
 **Type:** Decision + Action Taken
-**Re:** Post-sign thank-you → Merchant Center; agent-only processor submit
+**Re:** Post-sign thank-you ? Merchant Center; agent-only processor submit
 
 ### Product
-- After BoldSign completes, **merchants** see a Cliqbux shield stamp celebration, then **Continue to Merchant Center** (sets `applicationStatus: Submitted` for dashboard access — does **not** call `submitToMSP` / Elavon).
+- After BoldSign completes, **merchants** see a Cliqbux shield stamp celebration, then **Continue to Merchant Center** (sets `applicationStatus: Submitted` for dashboard access ? does **not** call `submitToMSP` / Elavon).
 - **Only agents/admins** (impersonation JWT or workspace) see **Submit Application for Processing** and may call Elavon submit.
 
 ### Shipped
-- `AgreementSignedCelebration.jsx` — shield stamp motion (respects `prefers-reduced-motion`)
-- `OnboardingVerification.jsx` — removed merchant auto-`submitToMSP`; agent submit CTA + optional skip to Merchant Center
-- `submitToMSP` — `PUT /submit` only when `MSP_SUBMIT_ENABLED` **and** actor is workspace admin or `imp:true` JWT
+- `AgreementSignedCelebration.jsx` ? shield stamp motion (respects `prefers-reduced-motion`)
+- `OnboardingVerification.jsx` ? removed merchant auto-`submitToMSP`; agent submit CTA + optional skip to Merchant Center
+- `submitToMSP` ? `PUT /submit` only when `MSP_SUBMIT_ENABLED` **and** actor is workspace admin or `imp:true` JWT
 - Lock banner copy for `all_signed` / Submitted
 
-**Teddy:** Push frontend + redeploy `submitToMSP`. On KK (impersonating): after sign, merchant path should celebrate → Merchant Center; agent path keeps Submit to processor.
+**Teddy:** Push frontend + redeploy `submitToMSP`. On KK (impersonating): after sign, merchant path should celebrate ? Merchant Center; agent path keeps Submit to processor.
 
 **Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-23
+**[CURSOR]** ? 2026-07-23
 **Type:** Action Taken
-**Re:** Merchant Center — no Unlock for merchants
+**Re:** Merchant Center ? no Unlock for merchants
 
 `PostSubmissionDashboard`: Forms locked / Unlock banner only for agent viewers (workspace or impersonation). Plain merchants after sign never see Unlock & Modify on Merchant Center.
 
@@ -2738,36 +2738,36 @@ Does **not** rewrite HubSpot deal name — Base44 display only. Location/MID DBA
 ---
 
 ---
-**[CURSOR]** — 2026-07-23
+**[CURSOR]** ? 2026-07-23
 **Type:** Decision + Action Taken
-**Re:** Draft MID delete — void MSP + cascade everywhere
+**Re:** Draft MID delete ? void MSP + cascade everywhere
 
 ### Rules
 - Agents/admins: delete **draft-only** MIDs from Applications expand (trash on each MID row). Hidden when boarded (`Pending MID` / `Active` / `Active (Existing)`). Backend refuses if BoldSign already **signed** (`MID_SIGNED`).
 - After deal is `Submitted` / `all_signed`, whole-merchant trash on the Applications row is hidden (use per-MID draft delete instead).
-- Delete voids MSPWare draft (signatures DELETE → app DELETE / Cancelled), cascades UW messages, checklist (mid+location), onboarding facts, call transcripts, installer chat, staged `included*Ids`, then deletes MID; if last MID on location → deletes location too.
+- Delete voids MSPWare draft (signatures DELETE ? app DELETE / Cancelled), cascades UW messages, checklist (mid+location), onboarding facts, call transcripts, installer chat, staged `included*Ids`, then deletes MID; if last MID on location ? deletes location too.
 - Same cascade in `manageMerchantID` delete (merchant portal) and `removeSelfServeLocation`.
 - Agents may delete draft MIDs while forms are locked; plain merchants still need unlock.
 
-**Teddy:** Push + redeploy `manageMerchantID`, `removeSelfServeLocation`. On KK: expand row → trash the orphan draft MID (not the signed one).
+**Teddy:** Push + redeploy `manageMerchantID`, `removeSelfServeLocation`. On KK: expand row ? trash the orphan draft MID (not the signed one).
 
 **Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-24
+**[CURSOR]** ? 2026-07-24
 **Type:** Action Taken
 **Re:** Merchant Center POS-shell Setup dashboard (feature/merchant-center-pos-shell)
 
 ### Product
-Merchant Center chrome now matches dashboard.cliqbux.com family: left sidebar + top bar + wide main canvas. Content stays onboarding → go-live (status cards, checklist, quote, underwriting table, setup gates) — not POS sales metrics. No ⌘K search in v1.
+Merchant Center chrome now matches dashboard.cliqbux.com family: left sidebar + top bar + wide main canvas. Content stays onboarding ? go-live (status cards, checklist, quote, underwriting table, setup gates) ? not POS sales metrics. No ?K search in v1.
 
-### Shipped (layout/chrome only — fetch/auth/Save/gate rules unchanged)
-- `MerchantCenterShell` — fixed `w-56` sidebar (Setup / Locations / Account), sticky top bar, `max-w-[1400px]` main, mobile bottom nav + checklist badge
-- `deriveSetupStatusCards` + `SetupStatusCard` — Needs attention / Underwriting / Equipment quote / Shipping
-- `PostSubmissionDashboard` — compact submitted banner, status row, `lg` two-column checklist|quote+shipping, full-width underwriting + menu/legacy gates; celebration confetti kept
-- `UnderwritingTracker` — full width + Account/Status/MID table
-- Locations / Account / Detail — `showDealLink` + `corporateId` on loading + loaded shells; `dealId` preserved on detail links
+### Shipped (layout/chrome only ? fetch/auth/Save/gate rules unchanged)
+- `MerchantCenterShell` ? fixed `w-56` sidebar (Setup / Locations / Account), sticky top bar, `max-w-[1400px]` main, mobile bottom nav + checklist badge
+- `deriveSetupStatusCards` + `SetupStatusCard` ? Needs attention / Underwriting / Equipment quote / Shipping
+- `PostSubmissionDashboard` ? compact submitted banner, status row, `lg` two-column checklist|quote+shipping, full-width underwriting + menu/legacy gates; celebration confetti kept
+- `UnderwritingTracker` ? full width + Account/Status/MID table
+- Locations / Account / Detail ? `showDealLink` + `corporateId` on loading + loaded shells; `dealId` preserved on detail links
 
 ### Spec / plan
 - `docs/superpowers/specs/2026-07-23-merchant-center-pos-shell-design.md`
@@ -2782,24 +2782,24 @@ Code checklist verified (sidebar active classes, `xl:grid-cols-4`, `lg:grid-cols
 ---
 
 ---
-**[CURSOR]** — 2026-07-24
+**[CURSOR]** ? 2026-07-24
 **Type:** Bug Fix
 **Re:** KK LLC draft location keeps resurrecting
 
 ### Root cause
-`syncFromHubspot` (runs on Merchant Center + portal load) treats HubSpot **parent company** as a location source when there are no child companies. Parent name = legal **"KK House of Lechon and BBQ LLC"**; portal already has DBA **"KK House of Lechon and BBQ"** with the real address. Upsert key is exact `dbaName` → sync **re-creates** the LLC orphan after every delete.
+`syncFromHubspot` (runs on Merchant Center + portal load) treats HubSpot **parent company** as a location source when there are no child companies. Parent name = legal **"KK House of Lechon and BBQ LLC"**; portal already has DBA **"KK House of Lechon and BBQ"** with the real address. Upsert key is exact `dbaName` ? sync **re-creates** the LLC orphan after every delete.
 
 ### Fix
-- `syncFromHubspot`: if `_useParent` and the deal already has any location, **skip create** (`skipped_parent_duplicate`) — attach to existing storefront instead.
-- Merchant Center Locations: agent trash on non-boarded rows → `removeSelfServeLocation`.
+- `syncFromHubspot`: if `_useParent` and the deal already has any location, **skip create** (`skipped_parent_duplicate`) ? attach to existing storefront instead.
+- Merchant Center Locations: agent trash on non-boarded rows ? `removeSelfServeLocation`.
 
 **Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** — 2026-07-24
+**[CURSOR]** ? 2026-07-24
 **Type:** Decision + Action Taken
-**Re:** Signing page — single Proceed CTA; processor submit on Applications / Deal Room
+**Re:** Signing page ? single Proceed CTA; processor submit on Applications / Deal Room
 
 ### Product
 - Sign step (merchant + agent impersonation): after BoldSign, only **Proceed to Onboarding Center** (celebration stamp). No Submit to processor / Skip.
@@ -2809,9 +2809,9 @@ Code checklist verified (sidebar active classes, `xl:grid-cols-4`, `lg:grid-cols
 ---
 
 ---
-**[CURSOR]** — 2026-07-24
+**[CURSOR]** ? 2026-07-24
 **Type:** Bug Fix
-**Re:** Quick Stage — HubSpot deal created but UI said MerchantAccount failed
+**Re:** Quick Stage ? HubSpot deal created but UI said MerchantAccount failed
 
 ### Cause
 `createLocalStage` created HubSpot company+deal first, then **hard-failed 503** if `MerchantAccount.create` failed (schema not published / etc.). Self-serve `createHubspotDeal` already soft-skipped MerchantAccount.
@@ -2819,43 +2819,43 @@ Code checklist verified (sidebar active classes, `xl:grid-cols-4`, `lg:grid-cols
 ### Fix
 Soft-skip MerchantAccount; still create Profile / Location / Signer / Stage with `corporateId = dealId`. Optional `merchantAccountWarning` in response. UI surfaces dealId hint on failure.
 
-**Teddy:** Redeploy `manageStagedApplication`. For **Trisha Mobile Test** already in HubSpot: paste the deal ID into Applications Quick Stage (numeric) to open it — don’t recreate. Then republish `MerchantAccount` schema in Base44 when you can.
+**Teddy:** Redeploy `manageStagedApplication`. For **Trisha Mobile Test** already in HubSpot: paste the deal ID into Applications Quick Stage (numeric) to open it ? don?t recreate. Then republish `MerchantAccount` schema in Base44 when you can.
 
 **Waiting on:** Teddy
 ---
 
 
 ---
-**[CURSOR]** — 2026-07-24
+**[CURSOR]** ? 2026-07-24
 **Type:** Bug Fix
-**Re:** Trisha Mobile Test — can't scroll/tap BoldSign on Sign & Submit
+**Re:** Trisha Mobile Test ? can't scroll/tap BoldSign on Sign & Submit
 
 ### Symptom
 Phone Sign & Submit showed Company Application in iframe + Forms locked banner, but merchant could not scroll to the bottom or tap the document.
 
 ### Root cause
-1. Portal shell used portal-card overflow-hidden — nested overflow traps touch scroll inside cross-origin BoldSign iframes on mobile.
+1. Portal shell used portal-card overflow-hidden ? nested overflow traps touch scroll inside cross-origin BoldSign iframes on mobile.
 2. Fixed 680px iframe + sticky lock banner ate the viewport; no open-in-new-tab escape hatch.
 
 ### Fix (frontend only)
 - overflow-x-hidden on portal card (keep horizontal step clip; don't trap vertical/iframe touch).
 - Hide Forms locked sticky banner on the Sign step (merchant is already signing; unlock stays on Deal Room / other steps).
-- New SigningDocumentFrame with viewport-aware iframe height + gold **Open signing form** (new tab) — wired in OnboardingVerification + VerifyIdentity.
+- New SigningDocumentFrame with viewport-aware iframe height + gold **Open signing form** (new tab) ? wired in OnboardingVerification + VerifyIdentity.
 - Contract helpers + Playwright mobile fixture: `npm run test:signing-layout` / `npm run test:signing-mobile` (both green).
 
-**Teddy:** Push via GitHub Desktop (no Base44 function redeploy). Retest Trisha on phone — if iframe still stubborn, tap **Open signing form**.
+**Teddy:** Push via GitHub Desktop (no Base44 function redeploy). Retest Trisha on phone ? if iframe still stubborn, tap **Open signing form**.
 
 **Waiting on:** Teddy
 ---
 
 
 ---
-**[CURSOR]** � 2026-07-28
+**[CURSOR]** ? 2026-07-28
 **Type:** Bug Fix
-**Re:** Agent impersonation � partial prefill on signer KYC modal
+**Re:** Agent impersonation ? partial prefill on signer KYC modal
 
 ### Problem
-Agents prefilling People/KYC (impersonation JWT) were blocked by merchant completeness rules � e.g. "A valid 9-digit SSN is required" on Save & Verify even when address/phone/DOB were already filled.
+Agents prefilling People/KYC (impersonation JWT) were blocked by merchant completeness rules ? e.g. "A valid 9-digit SSN is required" on Save & Verify even when address/phone/DOB were already filled.
 
 ### Fix (frontend only)
 SignerDetailsModal + SignerModal: when merchantTokenHasImp() or portal_impersonating matches corporateId:
@@ -2866,15 +2866,15 @@ SignerDetailsModal + SignerModal: when merchantTokenHasImp() or portal_impersona
 
 Merchant signing readiness / signApplication KYC_INCOMPLETE gate unchanged.
 
-**Teddy:** Push via GitHub Desktop (no function redeploy). Retest Luna modal under View as merchant � save address without SSN, confirm it sticks; merchant self-serve still requires full KYC.
+**Teddy:** Push via GitHub Desktop (no function redeploy). Retest Luna modal under View as merchant ? save address without SSN, confirm it sticks; merchant self-serve still requires full KYC.
 
 **Waiting on:** Teddy
 ---
 
 ---
-**[CURSOR]** � 2026-07-28
+**[CURSOR]** ? 2026-07-28
 **Type:** Bug Fix
-**Re:** Estorya Coffee � Open to prep / phantom MID / People Complete false positive
+**Re:** Estorya Coffee ? Open to prep / phantom MID / People Complete false positive
 
 ### 1. Open to prep
 Expanding a row flipped mode prep?nudge (Waiting on bank) and hid Open to prep. Now Open to prep stays visible for prep+nudge until Submitted (stuck still uses Open to fix).
@@ -2896,16 +2896,16 @@ Welcome hub no longer marks People Complete from roster-only. Uses same field ga
 ---
 
 ---
-**[CURSOR]** � 2026-07-29
+**[CURSOR]** ? 2026-07-29
 **Type:** Feature
 **Re:** Feedback ? Fix Loop (Detection ? Intake ? Pipeline)
 
-### Shipped (Approach B � GitHub-native)
+### Shipped (Approach B ? GitHub-native)
 1. **Spec:** `docs/superpowers/specs/2026-07-29-feedback-fix-loop-design.md`
 2. **Runbook:** `docs/agents/feedback-fix-loop-runbook.md`
 3. **Detection:** Sentry (`VITE_SENTRY_DSN` + PII scrubbers), ErrorBoundary ? `CLIENT_CRASH`, `invokePortalFunction` failures ? `reportOperationalEvent`. High/boarding-critical auto-files GitHub Issues (`bug` + `needs-triage`); rest ? `OperationalEvent` + `sendOperationalDigest`.
 4. **Intake:** Help & Feedback widget (global) ? `submitProductFeedback` ? GitHub Issue.
-5. **Pipeline:** Documented only � `/triage` ? `ready-for-agent` ? agent PR ? Teddy approves. No auto-merge/deploy.
+5. **Pipeline:** Documented only ? `/triage` ? `ready-for-agent` ? agent PR ? Teddy approves. No auto-merge/deploy.
 
 ### Teddy ops before it works live
 1. Publish entity **OperationalEvent** in Base44.
@@ -2916,4 +2916,24 @@ Welcome hub no longer marks People Complete from roster-only. Uses same field ga
 6. Smoke: Help & Feedback as admin; `sendOperationalDigest` with `{ "dryRun": true }`.
 
 **Waiting on:** Teddy (env + entity publish + function redeploy)
+---
+
+---
+**[CURSOR]** ? 2026-07-30
+**Type:** Feature
+**Re:** Merchant Account Portfolio Hub (`/admin/center`)
+
+### Shipped
+1. **Spec:** `docs/superpowers/specs/2026-07-30-merchant-account-portfolio-design.md`
+2. **Plan:** `docs/superpowers/plans/2026-07-30-merchant-account-portfolio.md`
+3. **API:** `manageMerchantAccount` ? admin-only `list` / `get` / `listUnlinkedDeals`. Company parent = `MerchantAccount`; Deal ID = HubSpot deal = profile `corporateId` (labeled Deal ID in UI).
+4. **UI:** `/admin/center` = account portfolio (status filters + Unlinked deals). `/admin/center/accounts/:merchantAccountId` = account home (deals, legal entities, MIDs, impersonate / Deal Room).
+5. **Helpers:** `src/lib/merchantAccountStatus.js` (+ tests). Applications desk link renamed to Merchant Center; `?jump=<Deal ID>` deep-link.
+
+### Teddy ops
+1. Push via GitHub Desktop.
+2. Publish / redeploy function **`manageMerchantAccount`** in Base44.
+3. Open `/admin/center` as admin ? expect company list (may be thin until Excel import / Quick Stage links). Unlinked deals stay visible without inventing parents.
+
+**Waiting on:** Teddy (push + function publish)
 ---

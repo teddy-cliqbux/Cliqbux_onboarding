@@ -12,7 +12,8 @@ import PostSubmissionDashboard from './pages/PostSubmissionDashboard';
 import SystemAdminHidden from './pages/SystemAdminHidden';
 import ApplicationManager from './pages/ApplicationManager';
 import ApplicationDealRoom from './pages/ApplicationDealRoom';
-import AdminQaHub from './pages/AdminQaHub';
+import AdminMerchantPortfolio from './pages/AdminMerchantPortfolio';
+import AdminMerchantAccountHome from './pages/AdminMerchantAccountHome';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
@@ -65,7 +66,8 @@ function App() {
             <Route path="/admin/architecture" element={<SystemAdminHidden />} />
             <Route path="/admin/applications" element={<ApplicationManager />} />
             <Route path="/admin/applications/:corporateId" element={<ApplicationDealRoom />} />
-            <Route path="/admin/center" element={<AdminQaHub />} />
+            <Route path="/admin/center" element={<AdminMerchantPortfolio />} />
+            <Route path="/admin/center/accounts/:merchantAccountId" element={<AdminMerchantAccountHome />} />
             {/* Auth pages — required when base44.auth.redirectToLogin() lands on /login
                 (e.g. agent opens /?corporateId= without a workspace session). Without
                 these routes the SPA catch-all rendered a blank/404 "login" page. */}

@@ -7,7 +7,7 @@ import {
   CheckCircle2, AlertCircle, Eye, Zap, LayoutDashboard,
   ChevronDown, ChevronRight, XCircle, RefreshCw, Percent, Wrench, FolderOpen, ShieldCheck
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   lifecycleLabel,
   lifecycleDotClass,
@@ -2337,6 +2337,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function ApplicationManager() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [profiles, setProfiles]           = useState([]);
   const [allStages, setAllStages]         = useState([]);
   const [merchantNames, setMerchantNames] = useState({});
@@ -2354,6 +2355,7 @@ export default function ApplicationManager() {
   const [searchText, setSearchText]       = useState('');
   const [jumpId, setJumpId]               = useState('');
   const [localStageDraft, setLocalStageDraft] = useState(null);
+  const jumpFromUrlDone = useRef(false);
 
   const publicUrl = (import.meta.env.VITE_PUBLIC_URL || window.location.origin).replace(/\/$/, '');
 
@@ -2516,26 +2518,40 @@ export default function ApplicationManager() {
     }
   };
 
-  const handleJump = async () => {
-    if (!jumpId.trim()) return;
+  const handleJump = useCallback(async (idOverride) => {
+    const id = String(idOverride ?? jumpId).trim();
+    if (!id) return;
+    setJumpId(id);
     setSearching(true);
     setJumpError('');
     try {
-      const r = await base44.functions.invoke('getMerchantData', { corporateId: jumpId.trim() });
-      const name = r.data?.profile?.legalName || jumpId.trim();
-      setMerchantNames(prev => ({ ...prev, [jumpId.trim()]: name }));
+      const r = await base44.functions.invoke('getMerchantData', { corporateId: id });
+      const name = r.data?.profile?.legalName || id;
+      setMerchantNames(prev => ({ ...prev, [id]: name }));
       setProfiles(prev => {
-        if (prev.find(p => p.corporateId === jumpId.trim())) return prev;
-        return [r.data?.profile || { corporateId: jumpId.trim(), legalName: name }, ...prev];
+        if (prev.find(p => String(p.corporateId) === id)) return prev;
+        return [r.data?.profile || { corporateId: id, legalName: name }, ...prev];
       });
-      setSearchText(jumpId.trim());
+      setSearchText(id);
     } catch (err) {
       setJumpError(err?.message || 'Merchant not found for that ID.');
-      setSearchText(jumpId.trim());
+      setSearchText(id);
     } finally {
       setSearching(false);
     }
-  };
+  }, [jumpId]);
+
+  // Deep-link from Merchant Center portfolio: /admin/applications?jump=<Deal ID>
+  useEffect(() => {
+    if (jumpFromUrlDone.current || loading) return;
+    const jump = String(searchParams.get('jump') || '').trim();
+    if (!jump) return;
+    jumpFromUrlDone.current = true;
+    handleJump(jump);
+    const next = new URLSearchParams(searchParams);
+    next.delete('jump');
+    setSearchParams(next, { replace: true });
+  }, [loading, searchParams, setSearchParams, handleJump]);
 
   // Build grouped map: corporateId → { profile, track, admin[] }
   // Always key by String(corporateId) — HubSpot deal ids may arrive as number or string.
@@ -2613,9 +2629,9 @@ export default function ApplicationManager() {
             <Link
               to="/admin/center"
               className="text-cb-caption font-semibold px-3 py-2 rounded-cb border border-cb-border text-gray-300 hover:text-white hover:border-cb-border-strong flex-shrink-0 mt-1"
-              title="Open Portal / Merchant Center / Locations / Deal Room for any merchant"
+              title="Merchant Account portfolio — companies, deals, processing"
             >
-              QA hub
+              Merchant Center
             </Link>
           </div>
 
