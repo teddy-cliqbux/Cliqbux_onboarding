@@ -102,49 +102,56 @@ export default function AdminMerchantAccountHome() {
   const midCounts = data?.midCounts || {};
 
   return (
-    <div className="min-h-screen bg-cb-bg text-white">
-      <header className="border-b border-cb-border bg-cb-surface">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-5">
-          <Link
-            to="/admin/center"
-            className="inline-flex items-center gap-1.5 text-cb-caption text-gray-400 hover:text-white mb-2"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" /> All merchant accounts
+    <div className="px-4 sm:px-6 py-6 space-y-6">
+      <div>
+        <nav className="flex flex-wrap items-center gap-1.5 text-cb-caption text-gray-500 mb-2">
+          <Link to="/admin/center/merchants" className="hover:text-white">
+            Merchants
           </Link>
-          {loading && (
-            <div className="flex items-center gap-2 text-cb-caption text-gray-500 py-4">
-              <Loader2 className="w-4 h-4 animate-spin" /> Loading account…
-            </div>
-          )}
-          {!loading && error && (
-            <div>
-              <h1 className="font-display text-cb-display text-white">Account not found</h1>
-              <p className="text-cb-body text-cb-danger mt-2 border-l-2 border-cb-danger pl-3">{error}</p>
-            </div>
-          )}
-          {!loading && account && (
-            <>
-              <div className="flex flex-wrap items-baseline gap-2">
-                <h1 className="font-display text-cb-display text-white">{account.name}</h1>
-                {statusLabel && (
-                  <span className={`text-cb-caption ${statusChipClass(data.status)}`}>{statusLabel}</span>
-                )}
-              </div>
-              {account.hubspotCompanyId && (
-                <p className="text-cb-caption font-mono text-gray-600 mt-1">
-                  HubSpot company {account.hubspotCompanyId}
-                </p>
+          <span aria-hidden>/</span>
+          <span className="text-gray-400 truncate max-w-[16rem]">
+            {loading ? '…' : (account?.name || 'Account')}
+          </span>
+        </nav>
+        {loading && (
+          <div className="flex items-center gap-2 text-cb-caption text-gray-500 py-4">
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading account…
+          </div>
+        )}
+        {!loading && error && (
+          <div>
+            <h1 className="font-display text-cb-display text-white">Account not found</h1>
+            <p className="text-cb-body text-cb-danger mt-2 border-l-2 border-cb-danger pl-3">{error}</p>
+            <Link
+              to="/admin/center/merchants"
+              className="inline-flex items-center gap-1.5 text-cb-caption text-cb-accent mt-3 hover:underline"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" /> Back to Merchants
+            </Link>
+          </div>
+        )}
+        {!loading && account && (
+          <>
+            <div className="flex flex-wrap items-baseline gap-2">
+              <h1 className="font-display text-cb-display text-white">{account.name}</h1>
+              {statusLabel && (
+                <span className={`text-cb-caption ${statusChipClass(data.status)}`}>{statusLabel}</span>
               )}
-              {account.domain && (
-                <p className="text-cb-caption text-gray-500 mt-0.5">{account.domain}</p>
-              )}
-            </>
-          )}
-        </div>
-      </header>
+            </div>
+            {account.hubspotCompanyId && (
+              <p className="text-cb-caption font-mono text-gray-600 mt-1">
+                HubSpot company {account.hubspotCompanyId}
+              </p>
+            )}
+            {account.domain && (
+              <p className="text-cb-caption text-gray-500 mt-0.5">{account.domain}</p>
+            )}
+          </>
+        )}
+      </div>
 
       {!loading && account && (
-        <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        <>
           {rowError && (
             <p className="text-cb-caption text-cb-danger border-l-2 border-cb-danger pl-3">{rowError}</p>
           )}
@@ -288,7 +295,7 @@ export default function AdminMerchantAccountHome() {
               ))}
             </ul>
           </section>
-        </main>
+        </>
       )}
     </div>
   );

@@ -2937,3 +2937,21 @@ Welcome hub no longer marks People Complete from roster-only. Uses same field ga
 
 **Waiting on:** Teddy (push + function publish)
 ---
+
+---
+**[CURSOR]** — 2026-07-30
+**Type:** Feature
+**Re:** Admin Merchant Center shell (layout)
+
+### Shipped
+1. **Spec:** `docs/superpowers/specs/2026-07-30-admin-merchant-center-shell-design.md`
+2. **Shell:** `AdminMerchantCenterShell` — left sidebar (Portfolio + Work) + top search + Outlet. Dark `cb-*`; no charts.
+3. **Routes:** `/admin/center` = Dashboard; `/merchants` `/prospects` `/attention` `/unlinked` `/installations`; `/accounts/:id` inside shell with Merchants → name breadcrumb.
+4. Onboarding nav → Applications desk (not wrapped). Installations = light launch panel only.
+
+### Teddy ops
+1. Push frontend via GitHub Desktop (no new backend function).
+2. Open `/admin/center` — expect sidebar + dashboard KPIs; Merchants list under Portfolio.
+
+**Waiting on:** Teddy (push / smoke)
+---
