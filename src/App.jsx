@@ -1,7 +1,8 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider } from '@/lib/AuthContext';
 import ScrollToTop from './components/ScrollToTop';
@@ -22,6 +23,27 @@ import MerchantAccountPage from './pages/MerchantAccountPage';
 import DevTrackerPreview from './pages/DevTrackerPreview';
 import DevSignerPreview from './pages/DevSignerPreview';
 import DevPortalPreview from './pages/DevPortalPreview';
+import FeedbackWidget from '@/components/feedback/FeedbackWidget';
+import { setSentryPortalContext } from '@/lib/sentry';
+
+function SentryRouteTags() {
+  const location = useLocation();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const corporateId = params.get('corporateId') || params.get('dealId') || undefined;
+    const impersonating =
+      (typeof sessionStorage !== 'undefined' &&
+        corporateId &&
+        sessionStorage.getItem('portal_impersonating') === String(corporateId)) ||
+      false;
+    setSentryPortalContext({
+      corporateId,
+      impersonating,
+      route: location.pathname + location.search,
+    });
+  }, [location.pathname, location.search]);
+  return null;
+}
 
 function App() {
   return (
@@ -29,6 +51,8 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <ScrollToTop />
+          <SentryRouteTags />
+          <FeedbackWidget />
           <Routes>
             <Route path="/" element={<OnboardingPortal />} />
             <Route path="/verify" element={<VerifyIdentity />} />

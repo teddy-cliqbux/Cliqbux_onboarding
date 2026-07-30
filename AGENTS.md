@@ -448,10 +448,10 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 | `demoteApplication` | Unlock portal forms after signing packages exist: revoke MSPWare/BoldSign packages (`DELETE /signatures`), reset signed→verified, `portalLockStatus=unlocked`. Refuses if MID already Pending MID/Active. |
 
 ### Other active functions
-`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `updatePricing`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `nudgeMerchant`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `submitLegacyPOSConnection`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`
+`createPlaidLinkToken`, `exchangePlaidToken`, `saveLocationBankDetails`, `getMerchantData`, `manageLegalEntity`, `manageSigner`, `manageMerchantID`, `addSelfServeLocation`, `removeSelfServeLocation`, `listLocations`, `updateMerchantProfile`, `updatePricing`, `verifyEIN`, `verifySignerToken`, `validateResumeToken`, `sendResumeLink`, `nudgeMerchant`, `processAIDocumentExtraction`, `saveInventoryFile`, `listInventoryFiles`, `getDocuments`, `listDocuments`, `createHubspotDeal`, `syncFromHubspot`, `pushStatusToHubspot`, `getHubspotQuote`, `submitLegacyPOSConnection`, `setupHubspotProperties`, `manageStagedApplication`, `batchUpdateStatus`, `debugEnv`, `reportOperationalEvent`, `submitProductFeedback`
 
 ### Debug/admin-only functions (do not call from merchant portal)
-`checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`, `cleanupTestHubspot`
+`checkMSPEnv`, `readMSPTemplate`, `debugMSPForm`, `debugMSPFormRaw`, `cleanupTestHubspot`, `sendOperationalDigest`
 
 
 ### MID creation → auto MSPWare draft
@@ -484,8 +484,22 @@ When a new `MerchantMID` is created via `manageMerchantID` (action="add") **and 
 | `HUBSPOT_API_KEY` | HubSpot Private App token — used by `createHubspotDeal`, `pushStatusToHubspot`, `syncFromHubspot`, `getHubspotQuote`, `cleanupTestHubspot` |
 | `QUO_API_KEY` | Quo (OpenPhone) API key — agent **Nudge** SMS from `/admin/applications` (`nudgeMerchant`) |
 | `QUO_FROM_NUMBER` | Quo sending number in E.164 (e.g. `+15551234567`) for `nudgeMerchant` |
+| `GITHUB_FEEDBACK_TOKEN` | Fine-scoped GitHub PAT (`issues:write`) for Detection/Intake auto-filing |
+| `GITHUB_FEEDBACK_REPO` | Optional; default `teddy-cliqbux/Cliqbux_onboarding` |
+| `FEEDBACK_DIGEST_TO` | Email for daily operational digest (`sendOperationalDigest`) |
+| `VITE_SENTRY_DSN` | Frontend Sentry DSN (omit to disable); scrubbers in `src/lib/sentry.js` |
 
 **Production credentials live in Base44 env vars only — never in code or committed files.**
+
+---
+
+## Feedback → Fix Loop (2026-07-29)
+
+GitHub-native Detection → Intake → Pipeline. Full runbook: `docs/agents/feedback-fix-loop-runbook.md`. Spec: `docs/superpowers/specs/2026-07-29-feedback-fix-loop-design.md`.
+
+- **Detection:** Sentry + `reportOperationalEvent` (tiered: high → Issue `needs-triage`; else digest). Entity `OperationalEvent` must be published in Base44.
+- **Intake:** Help & Feedback widget → `submitProductFeedback` → GitHub Issue.
+- **Pipeline:** `/triage` → `ready-for-agent` → agent plan/PR → **Teddy approves before merge/publish**. Never auto-deploy; never set `MSP_SUBMIT_ENABLED` in automation.
 
 ---
 

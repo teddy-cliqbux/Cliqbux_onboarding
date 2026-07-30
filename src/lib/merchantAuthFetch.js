@@ -73,7 +73,21 @@ export async function invokePortalFunction(functionName, payload = {}) {
   }
 
   if (!res.ok) {
-    throw new Error(data?.error || `Request failed with status ${res.status}`);
+    const errMsg = data?.error || `Request failed with status ${res.status}`;
+    // Fire-and-forget operational event (dynamic import avoids circular deps)
+    if (functionName !== 'reportOperationalEvent' && functionName !== 'submitProductFeedback') {
+      import('@/lib/operationalEvents')
+        .then((m) => {
+          const corp = payload?.corporateId;
+          m.reportPortalFunctionFailure(functionName, res.status, errMsg, {
+            corporateId: corp,
+            midId: payload?.midId || payload?.midIds?.[0],
+            mspApplicationNo: payload?.mspApplicationNo || data?.mspApplicationNo,
+          });
+        })
+        .catch(() => {});
+    }
+    throw new Error(errMsg);
   }
 
   return { data };

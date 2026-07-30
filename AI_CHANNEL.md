@@ -2894,3 +2894,26 @@ Welcome hub no longer marks People Complete from roster-only. Uses same field ga
 
 **Waiting on:** Teddy
 ---
+
+---
+**[CURSOR]** — 2026-07-29
+**Type:** Feature
+**Re:** Feedback ? Fix Loop (Detection ? Intake ? Pipeline)
+
+### Shipped (Approach B — GitHub-native)
+1. **Spec:** `docs/superpowers/specs/2026-07-29-feedback-fix-loop-design.md`
+2. **Runbook:** `docs/agents/feedback-fix-loop-runbook.md`
+3. **Detection:** Sentry (`VITE_SENTRY_DSN` + PII scrubbers), ErrorBoundary ? `CLIENT_CRASH`, `invokePortalFunction` failures ? `reportOperationalEvent`. High/boarding-critical auto-files GitHub Issues (`bug` + `needs-triage`); rest ? `OperationalEvent` + `sendOperationalDigest`.
+4. **Intake:** Help & Feedback widget (global) ? `submitProductFeedback` ? GitHub Issue.
+5. **Pipeline:** Documented only — `/triage` ? `ready-for-agent` ? agent PR ? Teddy approves. No auto-merge/deploy.
+
+### Teddy ops before it works live
+1. Publish entity **OperationalEvent** in Base44.
+2. Redeploy: `reportOperationalEvent`, `sendOperationalDigest`, `submitProductFeedback`.
+3. Set Base44 env: `GITHUB_FEEDBACK_TOKEN` (issues:write), `FEEDBACK_DIGEST_TO`, optional `GITHUB_FEEDBACK_REPO`.
+4. Optional: `VITE_SENTRY_DSN` + rebuild frontend.
+5. Ensure GitHub labels `needs-triage`, `bug`, `enhancement` exist.
+6. Smoke: Help & Feedback as admin; `sendOperationalDigest` with `{ "dryRun": true }`.
+
+**Waiting on:** Teddy (env + entity publish + function redeploy)
+---

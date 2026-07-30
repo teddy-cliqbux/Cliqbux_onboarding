@@ -1,0 +1,84 @@
+{
+  "name": "OperationalEvent",
+  "type": "object",
+  "description": "Detection-layer operational events (boarding failures, client crashes, portal errors). High-severity events may create GitHub issues; others feed the daily digest. See docs/superpowers/specs/2026-07-29-feedback-fix-loop-design.md. Never store SSN/bank/raw form dumps.",
+  "properties": {
+    "fingerprint": {
+      "type": "string",
+      "description": "Dedupe key (code:function:status:corporateId)"
+    },
+    "severity": {
+      "type": "string",
+      "enum": ["low", "medium", "high"],
+      "description": "high = boarding-critical / crash (may auto-file GitHub)"
+    },
+    "code": {
+      "type": "string",
+      "description": "Machine code e.g. RATE_LIMIT, CLIENT_CRASH, MSP_FORM_INCOMPLETE"
+    },
+    "message": {
+      "type": "string",
+      "description": "Short human-readable message (scrubbed, max ~500 chars)"
+    },
+    "corporateId": {
+      "type": "string",
+      "description": "Deal / corp id when known"
+    },
+    "midId": {
+      "type": "string",
+      "description": "MerchantMID id when known"
+    },
+    "mspApplicationNo": {
+      "type": "string",
+      "description": "MSPWare application number when known"
+    },
+    "route": {
+      "type": "string",
+      "description": "Browser path when event came from client"
+    },
+    "functionName": {
+      "type": "string",
+      "description": "Backend function that failed, if any"
+    },
+    "httpStatus": {
+      "type": "number",
+      "description": "HTTP status when applicable"
+    },
+    "source": {
+      "type": "string",
+      "enum": ["client", "server", "feedback"],
+      "description": "Where the event originated"
+    },
+    "actor": {
+      "type": "string",
+      "description": "merchant | admin | system"
+    },
+    "githubIssueUrl": {
+      "type": "string",
+      "description": "URL of auto-filed GitHub issue if created"
+    },
+    "githubIssueNumber": {
+      "type": "number",
+      "description": "GitHub issue number if created"
+    },
+    "digestedAt": {
+      "type": "string",
+      "description": "ISO timestamp when included in daily digest email"
+    },
+    "occurrenceCount": {
+      "type": "number",
+      "description": "How many times this fingerprint was seen in the dedupe window",
+      "default": 1
+    },
+    "lastSeenAt": {
+      "type": "string",
+      "description": "ISO timestamp of most recent occurrence"
+    }
+  },
+  "required": [
+    "fingerprint",
+    "severity",
+    "code",
+    "message"
+  ]
+}
