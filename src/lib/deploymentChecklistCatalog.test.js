@@ -1,6 +1,7 @@
 /**
  * node src/lib/deploymentChecklistCatalog.test.js
  */
+/* global process */
 import {
   DEPLOYMENT_CATALOG,
   PHASES,

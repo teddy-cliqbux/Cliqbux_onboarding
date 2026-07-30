@@ -8,7 +8,7 @@
     },
     "merchantAccountId": {
       "type": "string",
-      "description": "FK to MerchantAccount (HubSpot Tier-1 Corporation parent). Continuity across deals — legal entities and people KYC hang on the account."
+      "description": "FK to MerchantAccount (HubSpot Tier-1 Corporation parent). Continuity across deals \u2014 legal entities and people KYC hang on the account."
     },
     "hubspotCompanyId": {
       "type": "string",
@@ -79,7 +79,10 @@
     "taxIdType": {
       "type": "string",
       "description": "EIN for corporations/LLCs/etc.; SSN for sole proprietors (MSP form.ssn / ownership_type SP)",
-      "enum": ["EIN", "SSN"]
+      "enum": [
+        "EIN",
+        "SSN"
+      ]
     },
     "corporatePhone": {
       "type": "string",
@@ -90,7 +93,7 @@
     },
     "pricingTier": {
       "type": "string",
-      "description": "Simplified 2026-07-06 to match Cliqbux's actual 4-template model (see AGENTS.md Critical Lesson #12). CUSTOM_FLAT_RATE and CUSTOM_INTERCHANGE_PLUS are always sales-assisted, never self-serve, and always individually negotiated (see customMarkupPercentage/customPerTxFee/customAuthPerCard). SELF_SERVE_CASH_DISCOUNT is the only current self-serve option. Self_Swiped/Self_Keyed self-serve flat rate is on hold (Elavon doesn't support it yet). Legacy STANDARD/TRADITIONAL/PREMIUM kept in the enum so existing HubSpot-synced profiles can still be updated (2026-07-14) — treat them as unconfigured until an agent Saves Pricing.",
+      "description": "Simplified 2026-07-06 to match Cliqbux's actual 4-template model (see AGENTS.md Critical Lesson #12). CUSTOM_FLAT_RATE and CUSTOM_INTERCHANGE_PLUS are always sales-assisted, never self-serve, and always individually negotiated (see customMarkupPercentage/customPerTxFee/customAuthPerCard). SELF_SERVE_CASH_DISCOUNT is the only current self-serve option. Self_Swiped/Self_Keyed self-serve flat rate is on hold (Elavon doesn't support it yet). Legacy STANDARD/TRADITIONAL/PREMIUM kept in the enum so existing HubSpot-synced profiles can still be updated (2026-07-14) \u2014 treat them as unconfigured until an agent Saves Pricing.",
       "enum": [
         "CUSTOM_FLAT_RATE",
         "CUSTOM_INTERCHANGE_PLUS",
@@ -151,7 +154,7 @@
     },
     "handoffStage": {
       "type": "string",
-      "description": "Internal team pipeline stage: sales → underwriting → implementation → installation → support. Not a HubSpot deal stage. Default underwriting after Submitted.",
+      "description": "Internal team pipeline stage: sales \u2192 underwriting \u2192 implementation \u2192 installation \u2192 support. Not a HubSpot deal stage. Default underwriting after Submitted.",
       "enum": [
         "sales",
         "underwriting",
@@ -306,7 +309,7 @@
           },
           "mailingStreet": {
             "type": "string",
-            "description": "Legal entity street when different from the store/DBA address. Maps to MSPWare legal_* when set. Despite the name, this is the LEGAL address override — not the optional correspondence mailing address."
+            "description": "Legal entity street when different from the store/DBA address. Maps to MSPWare legal_* when set. Despite the name, this is the LEGAL address override \u2014 not the optional correspondence mailing address."
           },
           "mailingStreet2": {
             "type": "string",
