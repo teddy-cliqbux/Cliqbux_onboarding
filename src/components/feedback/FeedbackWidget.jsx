@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { MessageCircleWarning, X } from 'lucide-react';
+import { Camera, MessageCircleWarning, X } from 'lucide-react';
 import { invokePortalFunction, getMerchantToken } from '@/lib/merchantAuthFetch';
 import { base44 } from '@/api/base44Client';
+import { captureFeedbackScreenshot } from '@/lib/feedbackScreenshot';
 
 /**
  * Global Help & Feedback control — merchants and agents.
- * Explicit Submit only (no autosave). Files GitHub issues via submitProductFeedback.
+ * Explicit Submit only (no autosave). Optional screenshot with SSN-only masking.
+ * Files GitHub issues via submitProductFeedback.
  */
 export default function FeedbackWidget() {
   const [open, setOpen] = useState(false);
@@ -14,8 +16,12 @@ export default function FeedbackWidget() {
   const [description, setDescription] = useState('');
   const [expected, setExpected] = useState('');
   const [busy, setBusy] = useState(false);
+  const [capturing, setCapturing] = useState(false);
   const [error, setError] = useState('');
   const [doneUrl, setDoneUrl] = useState('');
+  const [screenshotPreview, setScreenshotPreview] = useState('');
+  const [screenshotBlob, setScreenshotBlob] = useState(null);
+  const [screenshotNote, setScreenshotNote] = useState('');
   const panelRef = useRef(null);
 
   useEffect(() => {
@@ -37,6 +43,12 @@ export default function FeedbackWidget() {
     };
   }, [open]);
 
+  const clearScreenshot = () => {
+    setScreenshotPreview('');
+    setScreenshotBlob(null);
+    setScreenshotNote('');
+  };
+
   const reset = () => {
     setTitle('');
     setDescription('');
@@ -44,16 +56,72 @@ export default function FeedbackWidget() {
     setType('bug');
     setError('');
     setDoneUrl('');
+    clearScreenshot();
+  };
+
+  const handleCapture = async () => {
+    setError('');
+    setCapturing(true);
+    try {
+      const { blob, dataUrl } = await captureFeedbackScreenshot();
+      setScreenshotBlob(blob);
+      setScreenshotPreview(dataUrl);
+      setScreenshotNote('');
+    } catch (err) {
+      setError(err?.message || 'Could not capture screenshot');
+      clearScreenshot();
+    } finally {
+      setCapturing(false);
+    }
+  };
+
+  const uploadScreenshot = async (blob) => {
+    const file = new File([blob], `feedback-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    const uploadResult = await base44.integrations.Core.UploadFile({ file });
+    const url = uploadResult?.file_url;
+    if (!url || !String(url).startsWith('https://')) {
+      throw new Error('Upload did not return an https file URL');
+    }
+    return String(url);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setScreenshotNote('');
     setBusy(true);
     setDoneUrl('');
     try {
       const params = new URLSearchParams(window.location.search);
       const corporateId = params.get('corporateId') || params.get('dealId') || undefined;
+
+      let screenshotUrl;
+      let screenshotBase64;
+      if (screenshotBlob) {
+        try {
+          screenshotUrl = await uploadScreenshot(screenshotBlob);
+        } catch (uploadErr) {
+          // Fallback: send base64 for server-side upload (size-capped in helper/backend)
+          try {
+            const buf = await screenshotBlob.arrayBuffer();
+            if (buf.byteLength <= 1.5 * 1024 * 1024) {
+              const bytes = new Uint8Array(buf);
+              let binary = '';
+              for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+              screenshotBase64 = `data:image/jpeg;base64,${btoa(binary)}`;
+            } else {
+              setScreenshotNote(
+                uploadErr?.message
+                  ? `Screenshot could not be attached (${uploadErr.message}).`
+                  : 'Screenshot could not be attached.'
+              );
+            }
+          } catch {
+            setScreenshotNote('Screenshot could not be attached.');
+          }
+        }
+      }
+
       const payload = {
         type,
         title: title.trim(),
@@ -62,6 +130,8 @@ export default function FeedbackWidget() {
         corporateId,
         route: window.location.pathname + window.location.search,
         userAgent: navigator.userAgent,
+        screenshotUrl,
+        screenshotBase64,
       };
 
       let res;
@@ -72,10 +142,17 @@ export default function FeedbackWidget() {
       }
       if (res.data?.error) throw new Error(res.data.error);
       if (!res.data?.issueUrl) throw new Error('Feedback submitted but no issue URL returned');
+      const hadScreenshot = Boolean(screenshotBlob);
       setDoneUrl(res.data.issueUrl);
       setTitle('');
       setDescription('');
       setExpected('');
+      clearScreenshot();
+      if (hadScreenshot && !res.data?.screenshotAttached) {
+        setScreenshotNote('Feedback filed; screenshot could not be attached.');
+      } else {
+        setScreenshotNote('');
+      }
     } catch (err) {
       setError(err?.message || 'Could not submit feedback');
     } finally {
@@ -84,7 +161,7 @@ export default function FeedbackWidget() {
   };
 
   return (
-    <div className="fixed bottom-20 left-4 z-[70] md:bottom-6 md:left-6">
+    <div className="fixed bottom-20 left-4 z-[70] md:bottom-6 md:left-6" data-feedback-widget>
       <button
         type="button"
         data-feedback-widget-toggle
@@ -105,7 +182,7 @@ export default function FeedbackWidget() {
           ref={panelRef}
           role="dialog"
           aria-label="Submit feedback"
-          className="absolute bottom-14 left-0 w-[min(100vw-2rem,22rem)] rounded-cb border border-cb-border bg-cb-surface shadow-cb-overlay p-4"
+          className="absolute bottom-14 left-0 w-[min(100vw-2rem,22rem)] rounded-cb border border-cb-border bg-cb-surface shadow-cb-overlay p-4 max-h-[min(80vh,36rem)] overflow-y-auto"
         >
           <p className="font-display text-cb-title text-white mb-1">Help & Feedback</p>
           <p className="text-cb-caption normal-case tracking-normal text-gray-500 mb-3">
@@ -118,6 +195,9 @@ export default function FeedbackWidget() {
               <p className="text-cb-caption normal-case tracking-normal text-gray-400 break-all">
                 Tracked as {doneUrl}
               </p>
+              {screenshotNote && (
+                <p className="text-cb-caption normal-case tracking-normal text-gray-500">{screenshotNote}</p>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -193,15 +273,49 @@ export default function FeedbackWidget() {
                 />
               </label>
 
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={handleCapture}
+                  disabled={capturing || busy}
+                  className="w-full inline-flex items-center justify-center gap-2 py-2 rounded-cb border border-cb-border bg-cb-bg text-cb-caption normal-case tracking-normal text-gray-300 hover:border-cb-accent/50 hover:text-white disabled:opacity-60"
+                >
+                  <Camera className="w-4 h-4 text-cb-accent" />
+                  {capturing ? 'Capturing…' : screenshotPreview ? 'Retake screenshot' : 'Capture screenshot'}
+                </button>
+                {screenshotPreview ? (
+                  <div className="rounded-cb border border-cb-border bg-cb-bg p-2 space-y-2">
+                    <img
+                      src={screenshotPreview}
+                      alt="Feedback screenshot preview"
+                      className="w-full rounded-cb border border-cb-border max-h-36 object-cover object-top"
+                    />
+                    <p className="text-cb-caption normal-case tracking-normal text-gray-500">
+                      SSN fields are hidden in this screenshot. Remove the image if anything sensitive still shows.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={clearScreenshot}
+                      className="text-cb-caption normal-case tracking-normal text-gray-400 hover:text-white"
+                    >
+                      Remove screenshot
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
               {error && (
                 <p className="text-cb-caption normal-case tracking-normal text-cb-danger" role="alert">
                   {error}
                 </p>
               )}
+              {screenshotNote && !error && (
+                <p className="text-cb-caption normal-case tracking-normal text-gray-500">{screenshotNote}</p>
+              )}
 
               <button
                 type="submit"
-                disabled={busy}
+                disabled={busy || capturing}
                 className="w-full py-2 rounded-cb bg-cb-accent text-cb-bg font-medium text-cb-body disabled:opacity-60"
               >
                 {busy ? 'Sending…' : 'Submit'}

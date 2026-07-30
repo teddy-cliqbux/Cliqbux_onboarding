@@ -344,7 +344,7 @@ export default function VerifyIdentity() {
 
               <div>
                 <label className={labelCls}>Social Security Number (SSN)</label>
-                <input type="password" maxLength={9} className={inputCls} value={form.ssn} onChange={e => set('ssn', e.target.value.replace(/\D/g,'').slice(0,9))} placeholder="9 digits — encrypted" />
+                <input type="password" name="ssn" data-private="ssn" maxLength={9} className={inputCls} value={form.ssn} onChange={e => set('ssn', e.target.value.replace(/\D/g,'').slice(0,9))} placeholder="9 digits — encrypted" autoComplete="off" />
                 {form.ssn.length > 0 && form.ssn.length < 9 && <p className="text-xs text-gray-400 mt-1">{form.ssn.length}/9 digits</p>}
               </div>
 

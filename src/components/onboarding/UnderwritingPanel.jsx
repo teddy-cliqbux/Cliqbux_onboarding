@@ -262,11 +262,14 @@ export default function UnderwritingPanel({ profile, onValidChange }) {
           <FieldWrap label="Social Security Number (SSN)" error={showError('ssn') ? errors.ssn : null}>
             <input
               type="password"
+              name="ssn"
+              data-private="ssn"
               value={form.ssn}
               onChange={(e) => set('ssn', e.target.value.replace(/\D/g, '').slice(0, 9))}
               onBlur={() => setTouched(p => ({ ...p, ssn: true }))}
               placeholder="9 digits — secured"
               maxLength={9}
+              autoComplete="off"
               className={inputClass('ssn')}
             />
             {form.ssn.length > 0 && form.ssn.length < 9 && (

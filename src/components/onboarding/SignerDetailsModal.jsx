@@ -444,11 +444,14 @@ export default function SignerDetailsModal({ signer, corporateId, profile, onSav
                 <div className="relative">
                   <input
                     type={showSsn ? 'text' : 'password'}
+                    name="ssn"
+                    data-private="ssn"
                     maxLength={showSsn ? 11 : 9}
                     className={`${inputCls} pr-10 font-mono tracking-[0.2em]`}
                     value={showSsn ? formatSSN(form.ssn || '') : (form.ssn || '')}
                     onChange={e => set('ssn', e.target.value.replace(/\D/g, '').slice(0, 9))}
                     placeholder="XXX-XX-XXXX"
+                    autoComplete="off"
                   />
                   <button type="button" onClick={() => setShowSsn(!showSsn)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">

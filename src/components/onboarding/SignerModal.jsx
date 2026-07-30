@@ -225,7 +225,7 @@ export default function SignerModal({ corporateId, legalName, isPrimary = false,
                 </div>
                 <div>
                   <label className={labelCls}>Social Security Number (SSN) *</label>
-                  <input type="password" maxLength={9} className={`${inputCls} font-mono tracking-widest`} value={form.ssn} onChange={e => set('ssn', e.target.value.replace(/\D/g, '').slice(0, 9))} placeholder="9 digits — secured" />
+                  <input type="password" name="ssn" data-private="ssn" maxLength={9} className={`${inputCls} font-mono tracking-widest`} value={form.ssn} onChange={e => set('ssn', e.target.value.replace(/\D/g, '').slice(0, 9))} placeholder="9 digits — secured" autoComplete="off" />
                 </div>
                 <div>
                   <label className={labelCls}>Home Address *</label>

@@ -74,6 +74,7 @@ Feedback UI ──────────┴─► submitProductFeedback ──
 - `submitProductFeedback` — type `bug` | `enhancement`, title, description + auto context
 - Creates GitHub Issue with QA-style durable body + `needs-triage` (+ `bug` or `enhancement`)
 - Shared `FeedbackWidget` on portal, Merchant Center, Applications / Deal Room (global mount in `App.jsx`)
+- **Screenshot (shipped 2026-07-30):** optional Capture via `html2canvas`; **SSN-only** DOM mask (`data-private="ssn"` + deny-list); preview/remove; UploadFile or base64 fallback; markdown image on issue when attached.
 
 ## Phase C — Pipeline
 

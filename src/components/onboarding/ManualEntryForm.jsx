@@ -106,7 +106,7 @@ export default function ManualEntryForm({ corporateId, onSaved }) {
           <h4 className="text-sm font-semibold text-gray-700">Social Security Number *</h4>
         </div>
         <input value={form.ssn} onChange={e => set('ssn', e.target.value)}
-          placeholder="XXX-XX-XXXX" maxLength={11} type="password"
+          placeholder="XXX-XX-XXXX" maxLength={11} type="password" name="ssn" data-private="ssn" autoComplete="off"
           className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         <p className="text-xs text-gray-400 mt-1">Encrypted and used only for identity verification.</p>
       </div>

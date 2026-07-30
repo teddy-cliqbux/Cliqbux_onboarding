@@ -9,7 +9,9 @@
  *   expected?: string,
  *   steps?: string,
  *   route?: string,
- *   userAgent?: string
+ *   userAgent?: string,
+ *   screenshotUrl?: string,      // https from UploadFile
+ *   screenshotBase64?: string    // optional JPEG data URL / base64, max ~1.5MB
  * }
  *
  * Creates a GitHub Issue with needs-triage + bug|enhancement.
@@ -54,6 +56,49 @@ async function getPortalActor(req: Request, base44: any): Promise<{ actor: 'merc
 
 function githubRepo(): string {
   return Deno.env.get('GITHUB_FEEDBACK_REPO') || 'teddy-cliqbux/Cliqbux_onboarding';
+}
+
+const MAX_SCREENSHOT_BYTES = Math.floor(1.5 * 1024 * 1024);
+
+function sanitizeScreenshotUrl(raw: unknown): string | undefined {
+  if (raw == null || raw === '') return undefined;
+  const url = String(raw).trim();
+  if (!url.startsWith('https://')) return undefined;
+  if (url.length > 2000) return undefined;
+  return url;
+}
+
+/** Decode data URL or raw base64 JPEG; return bytes or null if invalid/too large. */
+function decodeScreenshotBase64(raw: unknown): Uint8Array | null {
+  if (raw == null || raw === '') return null;
+  let b64 = String(raw).trim();
+  const dataUrl = /^data:image\/(jpeg|jpg|png);base64,/i.exec(b64);
+  if (dataUrl) b64 = b64.slice(dataUrl[0].length);
+  if (!/^[A-Za-z0-9+/=\s]+$/.test(b64) || b64.length < 32) return null;
+  try {
+    const bin = atob(b64.replace(/\s/g, ''));
+    if (bin.length > MAX_SCREENSHOT_BYTES) return null;
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+async function uploadScreenshotBytes(base44: any, bytes: Uint8Array): Promise<string | undefined> {
+  try {
+    const file = new File([bytes], `feedback-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    const srv = base44.asServiceRole;
+    if (srv?.integrations?.Core?.UploadFile) {
+      const up = await srv.integrations.Core.UploadFile({ file });
+      const url = up?.file_url;
+      if (url && String(url).startsWith('https://')) return String(url);
+    }
+  } catch (e) {
+    console.warn('[submitProductFeedback] screenshot upload via service role failed', e);
+  }
+  return undefined;
 }
 
 async function createGithubIssue(opts: {
@@ -123,9 +168,17 @@ Deno.serve(async (req) => {
     const expected = body.expected ? String(body.expected).slice(0, 1000) : undefined;
     const steps = body.steps ? String(body.steps).slice(0, 2000) : undefined;
 
+    let screenshotUrl = sanitizeScreenshotUrl(body.screenshotUrl);
+    if (!screenshotUrl && body.screenshotBase64) {
+      const bytes = decodeScreenshotBase64(body.screenshotBase64);
+      if (bytes) {
+        screenshotUrl = await uploadScreenshotBytes(base44, bytes);
+      }
+    }
+
     const prefix = type === 'bug' ? '[feedback:bug]' : '[feedback:idea]';
     const issueTitle = `${prefix} ${title}`.slice(0, 200);
-    const issueBody = [
+    const issueParts = [
       '> *Submitted via in-product Help & Feedback. Durable user report — triage before assigning.*',
       '',
       '## What happened',
@@ -142,7 +195,11 @@ Deno.serve(async (req) => {
       `- **Route:** ${route || '(none)'}`,
       `- **User-Agent:** ${userAgent || '(none)'}`,
       `- **Type:** ${type}`,
-    ].join('\n');
+    ];
+    if (screenshotUrl) {
+      issueParts.push('', '## Screenshot', `![feedback screenshot](${screenshotUrl})`);
+    }
+    const issueBody = issueParts.join('\n');
 
     if (!Deno.env.get('GITHUB_FEEDBACK_TOKEN')) {
       return Response.json({
@@ -186,6 +243,7 @@ Deno.serve(async (req) => {
       success: true,
       issueNumber: created.number,
       issueUrl: created.html_url,
+      screenshotAttached: Boolean(screenshotUrl),
     });
   } catch (err: any) {
     console.error('[submitProductFeedback]', err);

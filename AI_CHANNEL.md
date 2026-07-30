@@ -3062,3 +3062,20 @@ Dry-run had 106 MIDs but **97 store-named accounts**. OpenAPI (`api.mspware.com/
 
 **Waiting on:** Teddy (push + redeploy + republish + probe/dry)
 ---
+
+---
+**[CURSOR]** — 2026-07-30
+**Type:** Feature
+**Re:** Help & Feedback — optional screenshot (SSN-masked)
+
+### Shipped
+- `src/lib/feedbackScreenshot.js` — html2canvas capture; masks `data-private=ssn` + SSN name/id deny-list to `•••-••-••••`; hides feedback widget during capture.
+- Tagged SSN inputs: SignerDetailsModal, SignerModal, VerifyIdentity, UnderwritingPanel, ManualEntryForm.
+- FeedbackWidget: Capture / Retake / preview / Remove; UploadFile then base64 fallback to `submitProductFeedback`.
+- Backend accepts `screenshotUrl` or `screenshotBase64`; embeds `## Screenshot` on GitHub issue when attached.
+- Tests: `npm run test:feedback-shot`.
+
+**Teddy:** Push frontend + redeploy `submitProductFeedback`. Smoke: open Help & Feedback on a KYC screen with SSN filled (show SSN), Capture, confirm preview shows `•••-••-••••`, Submit, confirm issue has image.
+
+**Waiting on:** Teddy
+---
