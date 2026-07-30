@@ -201,11 +201,56 @@ Deno.serve(async (req) => {
     }
     const issueBody = issueParts.join('\n');
 
-    if (!Deno.env.get('GITHUB_FEEDBACK_TOKEN')) {
+    const hasToken = Boolean(Deno.env.get('GITHUB_FEEDBACK_TOKEN')?.trim());
+
+    // Persist always (GitHub or queue) so a missing env var never drops the report.
+    const persistQueued = async (extra: Record<string, unknown> = {}) => {
+      try {
+        const summary = [
+          title,
+          description.slice(0, 1500),
+          expected ? `Expected: ${expected}` : '',
+          screenshotUrl ? `Screenshot: ${screenshotUrl}` : '',
+        ].filter(Boolean).join('\n---\n').slice(0, 4000);
+        await base44.asServiceRole.entities.OperationalEvent.create({
+          fingerprint: `feedback:queued:${type}:${Date.now()}:${corporateId || 'none'}`,
+          severity: 'medium',
+          code: type === 'bug' ? 'USER_BUG_REPORT_QUEUED' : 'USER_ENHANCEMENT_QUEUED',
+          message: summary,
+          corporateId,
+          route,
+          source: 'feedback',
+          actor: actor.actor,
+          occurrenceCount: 1,
+          lastSeenAt: new Date().toISOString(),
+          // Leave digestedAt empty so daily digest surfaces it until GitHub is wired
+          ...extra,
+        });
+        return true;
+      } catch (e) {
+        console.warn('[submitProductFeedback] queue OperationalEvent failed', e);
+        return false;
+      }
+    };
+
+    if (!hasToken) {
+      const queued = await persistQueued();
       return Response.json({
-        error: 'GITHUB_FEEDBACK_TOKEN not configured',
-        hint: 'Add a fine-scoped GitHub PAT with issues:write to Base44 env, then redeploy.',
-      }, { status: 503 });
+        success: true,
+        queued: true,
+        githubConfigured: false,
+        screenshotAttached: Boolean(screenshotUrl),
+        // Client treats issueUrl as success receipt — use a stable local marker
+        issueUrl: queued
+          ? 'queued://operational-event (GitHub token not set yet)'
+          : undefined,
+        message:
+          'Your feedback was saved. GitHub filing is not set up yet — add GITHUB_FEEDBACK_TOKEN in Base44 (issues:write PAT), then redeploy submitProductFeedback.',
+        error: queued
+          ? undefined
+          : 'Could not save feedback (OperationalEvent missing?). Add GITHUB_FEEDBACK_TOKEN in Base44 and publish the OperationalEvent entity.',
+        hint: 'Base44 Dashboard → Settings → Environment → GITHUB_FEEDBACK_TOKEN = GitHub PAT with issues:write on teddy-cliqbux/Cliqbux_onboarding',
+      }, { status: queued ? 200 : 503 });
     }
 
     const created = await createGithubIssue({
@@ -215,7 +260,19 @@ Deno.serve(async (req) => {
     });
 
     if (!created) {
-      return Response.json({ error: 'Failed to create GitHub issue' }, { status: 502 });
+      const queued = await persistQueued();
+      return Response.json({
+        success: queued,
+        queued: true,
+        error: queued
+          ? undefined
+          : 'Failed to create GitHub issue and could not queue locally',
+        message: queued
+          ? 'GitHub issue create failed; your feedback was saved for the daily digest.'
+          : undefined,
+        issueUrl: queued ? 'queued://operational-event (GitHub create failed)' : undefined,
+        screenshotAttached: Boolean(screenshotUrl),
+      }, { status: queued ? 200 : 502 });
     }
 
     // Best-effort OperationalEvent breadcrumb (non-blocking)
@@ -244,6 +301,7 @@ Deno.serve(async (req) => {
       issueNumber: created.number,
       issueUrl: created.html_url,
       screenshotAttached: Boolean(screenshotUrl),
+      githubConfigured: true,
     });
   } catch (err: any) {
     console.error('[submitProductFeedback]', err);

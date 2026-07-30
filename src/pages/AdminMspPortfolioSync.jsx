@@ -1,11 +1,13 @@
 /**
  * Admin MSPWare portfolio sync — /admin/center/sync-msp
- * Probe → dry run → confirm live. Owner → Legal Entity → MID. No HubSpot.
+ * Probe → dry run → confirm live (chunked). Owner → Legal Entity → MID. No HubSpot.
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Loader2, RefreshCw, Search } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+
+const LIVE_OWNER_LIMIT = 8;
 
 function rateLimit429(result) {
   return result?.rateLimit?.rateLimit429Count
@@ -13,9 +15,73 @@ function rateLimit429(result) {
     ?? 0;
 }
 
+/** Prefer server { error, stack } over generic axios "status code 500". */
+function extractInvokeError(err) {
+  const data = err?.response?.data
+    ?? err?.data
+    ?? err?.cause?.response?.data
+    ?? err?.cause?.data
+    ?? null;
+  if (data?.error) {
+    return data.stack ? `${data.error} — ${data.stack}` : String(data.error);
+  }
+  if (typeof data === 'string' && data.trim()) return data;
+  return err?.message || 'Sync failed';
+}
+
+function mergeLiveBatch(acc, batch) {
+  if (!acc) {
+    return {
+      ...batch,
+      entities: [...(batch.entities || [])],
+      summary: { ...(batch.summary || {}) },
+    };
+  }
+  const a = acc.summary || {};
+  const b = batch.summary || {};
+  const sumNest = (key) => ({
+    created: (a[key]?.created || 0) + (b[key]?.created || 0),
+    linked: (a[key]?.linked || 0) + (b[key]?.linked || 0),
+    skipped: (a[key]?.skipped || 0) + (b[key]?.skipped || 0),
+    found: (a[key]?.found || 0) + (b[key]?.found || 0),
+    linkedToAccount: (a[key]?.linkedToAccount || 0) + (b[key]?.linkedToAccount || 0),
+    errors: (a[key]?.errors || 0) + (b[key]?.errors || 0),
+  });
+  return {
+    ...acc,
+    ...batch,
+    success: !!(batch.success && acc.success),
+    dryRun: false,
+    confirmLive: true,
+    ownerOffset: 0,
+    ownersTotal: batch.ownersTotal ?? acc.ownersTotal,
+    ownersProcessed: (acc.ownersProcessed || 0) + (batch.ownersProcessed || 0),
+    nextOwnerOffset: batch.nextOwnerOffset,
+    done: batch.done,
+    rateLimit: {
+      ...(acc.rateLimit || {}),
+      ...(batch.rateLimit || {}),
+      mspRequestCount: (acc.rateLimit?.mspRequestCount || 0) + (batch.rateLimit?.mspRequestCount || 0),
+      rateLimit429Count: (acc.rateLimit?.rateLimit429Count || 0) + (batch.rateLimit?.rateLimit429Count || 0),
+    },
+    // Keep first-batch portfolio scan stats; accumulate write counters only
+    summary: {
+      ...a,
+      accounts: sumNest('accounts'),
+      corporateEntities: sumNest('corporateEntities'),
+      locations: sumNest('locations'),
+      merchantMIDs: sumNest('merchantMIDs'),
+      writeErrors: (a.writeErrors || 0) + (b.writeErrors || 0),
+      writeErrorDetails: [...(a.writeErrorDetails || []), ...(b.writeErrorDetails || [])],
+    },
+    entities: [...(acc.entities || []), ...(batch.entities || [])],
+  };
+}
+
 export default function AdminMspPortfolioSync() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [liveProgress, setLiveProgress] = useState('');
   const [probeResult, setProbeResult] = useState(null);
   const [dryResult, setDryResult] = useState(null);
   const [liveResult, setLiveResult] = useState(null);
@@ -29,27 +95,72 @@ export default function AdminMspPortfolioSync() {
       setProbeResult(res.data);
     } catch (err) {
       console.error('[AdminMspPortfolioSync] probe', err);
-      setError(err?.message || 'Probe failed');
+      setError(extractInvokeError(err));
     } finally {
       setBusy('');
     }
   };
 
-  const run = async (mode) => {
-    setBusy(mode);
+  const runDry = async () => {
+    setBusy('dry');
     setError('');
-    if (mode === 'dry') setLiveResult(null);
+    setLiveResult(null);
+    setLiveProgress('');
     try {
-      const payload = mode === 'dry'
-        ? { dryRun: true }
-        : { confirmLive: true, dryRun: false };
-      const res = await base44.functions.invoke('importMSPPortfolio', payload);
+      const res = await base44.functions.invoke('importMSPPortfolio', { dryRun: true });
       if (res.data?.error) throw new Error(res.data.error);
-      if (mode === 'dry') setDryResult(res.data);
-      else setLiveResult(res.data);
+      setDryResult(res.data);
     } catch (err) {
-      console.error('[AdminMspPortfolioSync]', err);
-      setError(err?.message || 'Sync failed');
+      console.error('[AdminMspPortfolioSync] dry', err);
+      setError(extractInvokeError(err));
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const runLive = async () => {
+    setBusy('live');
+    setError('');
+    setLiveProgress('');
+    let offset = 0;
+    let merged = null;
+    let batchNum = 0;
+    try {
+      while (true) {
+        batchNum += 1;
+        setLiveProgress(`Writing batch ${batchNum} (owners ${offset + 1}–…)…`);
+        const res = await base44.functions.invoke('importMSPPortfolio', {
+          confirmLive: true,
+          dryRun: false,
+          ownerOffset: offset,
+          ownerLimit: LIVE_OWNER_LIMIT,
+        });
+        if (res.data?.error) throw new Error(res.data.error);
+        const batch = res.data;
+        merged = mergeLiveBatch(merged, batch);
+        setLiveResult({ ...merged });
+        const total = batch.ownersTotal || 0;
+        const next = batch.nextOwnerOffset ?? (offset + (batch.ownersProcessed || LIVE_OWNER_LIMIT));
+        setLiveProgress(
+          batch.done
+            ? `Done — ${merged.ownersProcessed || next}/${total} owners`
+            : `Batch ${batchNum} done — ${next}/${total} owners…`,
+        );
+        if (batch.done) break;
+        if (next <= offset) {
+          throw new Error('Live sync did not advance ownerOffset — aborting to avoid infinite loop');
+        }
+        offset = next;
+      }
+      if (merged?.summary?.writeErrors > 0) {
+        const details = (merged.summary.writeErrorDetails || []).slice(0, 5).join('; ');
+        setError(
+          `${merged.summary.writeErrors} owner write error(s)${details ? `: ${details}` : ''}`,
+        );
+      }
+    } catch (err) {
+      console.error('[AdminMspPortfolioSync] live', err);
+      setError(extractInvokeError(err));
     } finally {
       setBusy('');
     }
@@ -72,13 +183,13 @@ export default function AdminMspPortfolioSync() {
           Pull live merchants into Merchant Center as{' '}
           <span className="text-gray-300">Owner → Legal Entity → MID</span>
           {' '}(contact email; EIN for corps / SSN for sole props).
-          Throttled to ≤8 MSP calls/sec. No HubSpot. Nothing submitted to Elavon.
+          Throttled to ≤8 MSP calls/sec. Live writes in batches of {LIVE_OWNER_LIMIT} owners. No HubSpot. Nothing submitted to Elavon.
         </p>
       </div>
 
       <div className="bg-cb-surface border border-cb-border rounded-cb px-4 py-4 space-y-3">
         <p className="text-cb-caption text-gray-500">
-          Probe first (owner clustering), then dry-run, then confirm live. Expect a few minutes — rate-limited on purpose.
+          Probe first (owner clustering), then dry-run, then confirm live. Live runs in chunks so it won&apos;t time out or rate-limit the whole portfolio.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -93,7 +204,7 @@ export default function AdminMspPortfolioSync() {
           <button
             type="button"
             disabled={!!busy}
-            onClick={() => run('dry')}
+            onClick={runDry}
             className="inline-flex items-center gap-2 text-cb-caption font-semibold px-3 py-2 rounded-cb border border-cb-border text-gray-300 hover:text-white disabled:opacity-40"
           >
             {busy === 'dry' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
@@ -104,9 +215,9 @@ export default function AdminMspPortfolioSync() {
             disabled={!!busy || !dryResult?.success}
             onClick={() => {
               if (!window.confirm(
-                'Live sync will create Merchant Accounts (by owner email), legal entities, locations, and MIDs. HubSpot will not be touched. Continue?',
+                'Live sync will create Merchant Accounts (by owner email), legal entities, locations, and MIDs in batches. HubSpot will not be touched. Continue?',
               )) return;
-              run('live');
+              runLive();
             }}
             className="inline-flex items-center gap-2 text-cb-caption font-semibold px-3 py-2 rounded-cb bg-cb-accent text-cb-bg hover:opacity-90 disabled:opacity-40"
           >
@@ -120,10 +231,16 @@ export default function AdminMspPortfolioSync() {
             View Merchants
           </Link>
         </div>
+        {busy === 'live' && liveProgress && (
+          <p className="text-cb-caption text-cb-accent">{liveProgress}</p>
+        )}
+        {!busy && liveProgress && liveResult && (
+          <p className="text-cb-caption text-gray-500">{liveProgress}</p>
+        )}
       </div>
 
       {error && (
-        <p className="text-cb-caption text-cb-danger border-l-2 border-cb-danger pl-3">{error}</p>
+        <p className="text-cb-caption text-cb-danger border-l-2 border-cb-danger pl-3 whitespace-pre-wrap break-words">{error}</p>
       )}
 
       {any429 > 0 && (
@@ -201,6 +318,7 @@ export default function AdminMspPortfolioSync() {
               { label: 'Merged by corp name', value: summary.mergedByCorporateName },
               { label: 'MIDs create', value: summary.merchantMIDs?.created },
               { label: 'Accounts create', value: summary.accounts?.created },
+              { label: 'Write errors', value: summary.writeErrors },
               { label: 'Apps matched by MID', value: summary.applicationsMatchedByMid },
               { label: 'Unique owner emails', value: summary.uniqueOwnerEmails },
             ].map((k) => (
@@ -222,6 +340,18 @@ export default function AdminMspPortfolioSync() {
               </ul>
             </details>
           )}
+          {summary.writeErrorDetails?.length > 0 && (
+            <details className="text-cb-caption text-cb-danger" open>
+              <summary className="cursor-pointer hover:underline">
+                Write errors ({summary.writeErrorDetails.length})
+              </summary>
+              <ul className="mt-2 space-y-1 list-disc pl-4 text-gray-400">
+                {summary.writeErrorDetails.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            </details>
+          )}
         </section>
       )}
 
@@ -237,21 +367,30 @@ export default function AdminMspPortfolioSync() {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-cb-body font-semibold text-white">
-                      {e.ownerContact || e.legalName || 'Owner'}
+                      {e.ownerContact || e.legalName || e.ownerKey || 'Owner'}
+                      {e.result === 'error' ? (
+                        <span className="ml-2 text-cb-caption font-normal text-cb-danger">write failed</span>
+                      ) : null}
                       {e.skipSuggested ? (
                         <span className="ml-2 text-cb-caption font-normal text-amber-400">test MID?</span>
                       ) : null}
                     </p>
                     <p className="text-cb-caption text-gray-500 mt-0.5">
-                      {e.ownerEmail || 'no email'}
-                      {e.emailSource ? ` (${e.emailSource})` : ''}
-                      {e.alternateEmails?.length ? ` · also ${e.alternateEmails.join(', ')}` : ''}
-                      {' · '}
-                      {e.legalEntityCount ?? e.legalEntities?.length ?? 0} legal entit(y/ies)
-                      {' · '}
-                      {e.midCount ?? 0} MID(s)
-                      {e.mergedBy?.length ? ` · merged via ${e.mergedBy.join('+')}` : ''}
-                      {e.accountCreated ? ' · new account' : ' · existing account'}
+                      {e.error ? (
+                        <span className="text-cb-danger">{e.error}</span>
+                      ) : (
+                        <>
+                          {e.ownerEmail || 'no email'}
+                          {e.emailSource ? ` (${e.emailSource})` : ''}
+                          {e.alternateEmails?.length ? ` · also ${e.alternateEmails.join(', ')}` : ''}
+                          {' · '}
+                          {e.legalEntityCount ?? e.legalEntities?.length ?? 0} legal entit(y/ies)
+                          {' · '}
+                          {e.midCount ?? 0} MID(s)
+                          {e.mergedBy?.length ? ` · merged via ${e.mergedBy.join('+')}` : ''}
+                          {e.accountCreated ? ' · new account' : e.merchantAccountId ? ' · existing account' : ''}
+                        </>
+                      )}
                     </p>
                     {(e.legalEntities || []).length > 0 && (
                       <ul className="mt-2 space-y-1 border-l border-cb-border pl-3">

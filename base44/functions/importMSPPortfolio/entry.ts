@@ -6,13 +6,19 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
  * Rate limits (MSP OpenAPI): ≤10 req/s, ≤60k/day → HTTP 429.
  * This gate runs at ≤8 req/s; every 429 is counted and surfaced (never silent).
  *
- * POST { dryRun: true } | { confirmLive: true }
+ * POST { dryRun: true } | { confirmLive: true, ownerOffset?, ownerLimit? }
+ * Live sync is chunked by owner (default 8/call). UI loops until done=true.
  */
 
 const MSP_MAX_RPS = 8;
 const MSP_MIN_GAP_MS = Math.ceil(1000 / MSP_MAX_RPS); // 125ms
 const MSP_SESSION_BUDGET = 5000;
 const MSP_429_MAX_RETRIES = 4;
+/** Space Base44 asServiceRole writes to avoid account-wide rate limits (AGENTS Lesson #2). */
+const BASE44_WRITE_GAP_MS = 120;
+const BASE44_RATE_RETRIES = 3;
+/** Default owners per live invocation — UI loops until done. */
+const LIVE_OWNER_LIMIT_DEFAULT = 8;
 
 function mspOwnershipToInternal(code: string): string {
   const map: Record<string, string> = {
@@ -130,6 +136,26 @@ function newEntityId(): string {
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Throttle + retry Base44 entity writes on "Rate limit exceeded". */
+async function base44Write<T>(fn: () => Promise<T>, label = 'write'): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    await sleep(BASE44_WRITE_GAP_MS);
+    try {
+      return await fn();
+    } catch (err: any) {
+      const msg = String(err?.message || err || '');
+      if (/rate limit/i.test(msg) && attempt < BASE44_RATE_RETRIES) {
+        attempt++;
+        console.warn(`[importMSPPortfolio] Base44 rate limit on ${label}; retry ${attempt}/${BASE44_RATE_RETRIES}`);
+        await sleep(1000 * Math.pow(2, attempt));
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 /** Classify tax id: sole prop → SSN; otherwise EIN when digits present. */
@@ -720,319 +746,371 @@ Deno.serve(async (req) => {
       corporateEntities: { found: 0, created: 0, skipped: 0, linkedToAccount: 0 },
       locations: { created: 0, skipped: 0 },
       merchantMIDs: { created: 0, skipped: 0, errors: 0 },
+      writeErrors: 0,
+      writeErrorDetails: [] as string[],
     };
     // Fix einMissing to mean: no EIN among non-SSN (tax id missing for corps)
     summary.einMissing = importable.filter((i) => !i.fields.tin && i.taxIdType !== 'SSN').length;
 
     const entityResults: any[] = [];
 
-    // ── 6. Write / dry-run per owner ────────────────────────────────────────
-    for (const [ownerKey, legalMap] of ownerGroups) {
-      const allOwnerItems = [...legalMap.values()].flat();
-      const rep = allOwnerItems[0];
-      const ownerEmail = rep.fields.email || '';
-      const ownerContact = rep.fields.contact || '';
-      const accountName = accountDisplayName({
-        contact: ownerContact,
-        email: ownerEmail,
-        corporateName: rep.fields.corporateName,
-      });
-      const altEmails = [...new Set(
-        allOwnerItems.map((i) => i.fields.email).filter((e) => e && e !== ownerEmail),
-      )];
+    // ── 6. Write / dry-run per owner (chunked on live) ───────────────────────
+    const ownerEntries = [...ownerGroups.entries()];
+    const ownersTotal = ownerEntries.length;
+    const rawOffset = Number(body?.ownerOffset);
+    const rawLimit = Number(body?.ownerLimit);
+    const ownerOffset = dryRun ? 0 : (Number.isFinite(rawOffset) && rawOffset > 0 ? Math.floor(rawOffset) : 0);
+    const ownerLimit = dryRun
+      ? ownersTotal
+      : Math.max(1, Math.min(
+        Number.isFinite(rawLimit) && rawLimit > 0 ? Math.floor(rawLimit) : LIVE_OWNER_LIMIT_DEFAULT,
+        50,
+      ));
+    const ownerSlice = dryRun
+      ? ownerEntries
+      : ownerEntries.slice(ownerOffset, ownerOffset + ownerLimit);
+    const nextOwnerOffset = dryRun ? ownersTotal : ownerOffset + ownerSlice.length;
+    const batchDone = dryRun || nextOwnerOffset >= ownersTotal;
 
-      let account =
-        (ownerEmail && accountByEmail.get(ownerEmail))
-        || allOwnerItems.map((i) => i.fields.tin).filter(Boolean).map((t) => accountByEin.get(t)).find(Boolean)
-        || accountByName.get(normalizeNameKey(accountName))
-        || null;
-      let accountCreated = false;
-
-      const legalEntitiesPayload: any[] = [];
-      const seenEntityKeys = new Set<string>();
-      for (const [, items] of legalMap) {
-        const f = items[0].fields;
-        const ek = legalKeyOf(f);
-        if (seenEntityKeys.has(ek)) continue;
-        seenEntityKeys.add(ek);
-        const taxIdType = items[0].taxIdType || classifyTaxIdType({
-          tin: f.tin,
-          source: items[0].tinSource,
-          ownershipCode: items[0].form?.ownership_type,
+    for (const [ownerKey, legalMap] of ownerSlice) {
+      try {
+        const allOwnerItems = [...legalMap.values()].flat();
+        const rep = allOwnerItems[0];
+        const ownerEmail = rep.fields.email || '';
+        const ownerContact = rep.fields.contact || '';
+        const accountName = accountDisplayName({
+          contact: ownerContact,
+          email: ownerEmail,
+          corporateName: rep.fields.corporateName,
         });
-        legalEntitiesPayload.push({
-          entityId: newEntityId(),
-          legalBusinessName: f.corporateName || f.dba,
-          federalEIN: f.tin || '',
-          taxIdType: taxIdType || undefined,
-          mailingStreet: f.street || '',
-          mailingCity: f.city || '',
-          mailingState: f.state || '',
-          mailingZip: f.zip || '',
-        });
-      }
+        const altEmails = [...new Set(
+          allOwnerItems.map((i) => i.fields.email).filter((e) => e && e !== ownerEmail),
+        )];
 
-      if (account) {
-        summary.accounts.linked++;
-        if (!dryRun) {
-          const patch: Record<string, unknown> = {};
-          if (ownerEmail && !account.primaryContactEmail) patch.primaryContactEmail = ownerEmail;
-          if (ownerContact && !account.primaryContactName) patch.primaryContactName = ownerContact;
-          const existing = parseEntities(account.legalEntities);
-          const existingEins = new Set(existing.map((e: any) => cleanDigits(e.federalEIN || '')).filter(Boolean));
-          const existingNames = new Set(existing.map((e: any) => normalizeNameKey(e.legalBusinessName || '')).filter(Boolean));
-          let merged = false;
-          for (const le of legalEntitiesPayload) {
-            const ein = cleanDigits(le.federalEIN || '');
-            const nk = normalizeNameKey(le.legalBusinessName || '');
-            if ((ein && existingEins.has(ein)) || (nk && existingNames.has(nk))) continue;
-            existing.push(le);
-            merged = true;
-          }
-          if (merged) patch.legalEntities = existing;
-          if (Object.keys(patch).length) {
-            account = await base44.asServiceRole.entities.MerchantAccount.update(account.id, patch);
-          }
-        }
-      } else {
-        const accountPayload = {
-          name: accountName,
-          domain: ownerEmail.includes('@') ? ownerEmail.split('@')[1] : null,
-          hubspotCompanyId: null,
-          primaryContactEmail: ownerEmail || null,
-          primaryContactName: ownerContact || null,
-          legalEntities: legalEntitiesPayload.filter((le) => le.federalEIN || le.legalBusinessName),
-        };
-        if (!dryRun) {
-          account = await base44.asServiceRole.entities.MerchantAccount.create(accountPayload);
-          if (ownerEmail) accountByEmail.set(ownerEmail, account);
-          accountByName.set(normalizeNameKey(accountName), account);
-          for (const le of legalEntitiesPayload) {
-            const ein = cleanDigits(le.federalEIN || '');
-            if (ein) accountByEin.set(ein, account);
-          }
-        } else {
-          account = { id: `[dry-run-account:${ownerKey}]`, ...accountPayload };
-        }
-        accountCreated = true;
-        summary.accounts.created++;
-      }
-
-      const merchantAccountId = account.id;
-      const legalResults: any[] = [];
-
-      for (const [legalKey, items] of legalMap) {
-        const f = items[0].fields;
-        const form = items[0].form || {};
-        const tin = f.tin || '';
-        const taxIdType = items[0].taxIdType || classifyTaxIdType({
-          tin, source: items[0].tinSource, ownershipCode: form.ownership_type,
-        });
-        const legalName = (f.corporateName || f.dba || '').trim();
-        const ownershipCode = form.ownership_type || (taxIdType === 'SSN' ? 'SP' : 'CO');
-        const primaryOwner = (form.owners || [])[0] || {};
-        const dob = parseDob(primaryOwner.owner_dob || '');
-        const email = f.email || normalizeEmail(primaryOwner.owner_email || form.business_email || '');
-        const phone = f.phone || cleanDigits(form.business_phone || '');
-        const taxClassType = mspLlcClassToTaxClass(ownershipCode, form.llc_class || '');
-        const nameKey = normalizeNameKey(legalName);
-        const corporateIdStable = stableMspCorporateId(tin, legalName, items[0].mid);
-
-        let profile =
-          (tin && profileByTin.get(tin))
-          || profileByName.get(nameKey)
-          || profileByCorporateId.get(corporateIdStable)
+        let account =
+          (ownerEmail && accountByEmail.get(ownerEmail))
+          || allOwnerItems.map((i) => i.fields.tin).filter(Boolean).map((t) => accountByEin.get(t)).find(Boolean)
+          || accountByName.get(normalizeNameKey(accountName))
           || null;
-        let profileCreated = false;
+        let accountCreated = false;
 
-        if (profile) {
-          summary.corporateEntities.skipped++;
-          if (!profile.merchantAccountId && !dryRun) {
-            profile = await base44.asServiceRole.entities.MerchantCorporateProfile.update(profile.id, {
-              merchantAccountId,
-              ...(taxIdType && !profile.taxIdType ? { taxIdType } : {}),
-            });
-            summary.corporateEntities.linkedToAccount++;
-          } else {
-            summary.corporateEntities.linkedToAccount++;
+        const legalEntitiesPayload: any[] = [];
+        const seenEntityKeys = new Set<string>();
+        for (const [, items] of legalMap) {
+          const f = items[0].fields;
+          const ek = legalKeyOf(f);
+          if (seenEntityKeys.has(ek)) continue;
+          seenEntityKeys.add(ek);
+          const taxIdType = items[0].taxIdType || classifyTaxIdType({
+            tin: f.tin,
+            source: items[0].tinSource,
+            ownershipCode: items[0].form?.ownership_type,
+          });
+          legalEntitiesPayload.push({
+            entityId: newEntityId(),
+            legalBusinessName: f.corporateName || f.dba,
+            federalEIN: f.tin || '',
+            taxIdType: taxIdType || undefined,
+            mailingStreet: f.street || '',
+            mailingCity: f.city || '',
+            mailingState: f.state || '',
+            mailingZip: f.zip || '',
+          });
+        }
+
+        if (account) {
+          summary.accounts.linked++;
+          if (!dryRun) {
+            const patch: Record<string, unknown> = {};
+            if (ownerEmail && !account.primaryContactEmail) patch.primaryContactEmail = ownerEmail;
+            if (ownerContact && !account.primaryContactName) patch.primaryContactName = ownerContact;
+            const existing = parseEntities(account.legalEntities);
+            const existingEins = new Set(existing.map((e: any) => cleanDigits(e.federalEIN || '')).filter(Boolean));
+            const existingNames = new Set(existing.map((e: any) => normalizeNameKey(e.legalBusinessName || '')).filter(Boolean));
+            let merged = false;
+            for (const le of legalEntitiesPayload) {
+              const ein = cleanDigits(le.federalEIN || '');
+              const nk = normalizeNameKey(le.legalBusinessName || '');
+              if ((ein && existingEins.has(ein)) || (nk && existingNames.has(nk))) continue;
+              existing.push(le);
+              merged = true;
+            }
+            if (merged) patch.legalEntities = existing;
+            if (Object.keys(patch).length) {
+              account = await base44Write(
+                () => base44.asServiceRole.entities.MerchantAccount.update(account.id, patch),
+                `MerchantAccount.update:${account.id}`,
+              );
+            }
           }
         } else {
-          summary.corporateEntities.found++;
-          const contactParts = (f.contact || '').trim().split(/\s+/);
-          const profilePayload: Record<string, unknown> = {
-            corporateId: corporateIdStable,
-            merchantAccountId,
-            legalName,
-            dbaName: f.dba || legalName,
-            signerEmail: email || `import+msp-${slugCorp(legalName).slice(0, 12)}@cliqbux.com`,
-            taxId: tin || null,
-            ...(taxIdType ? { taxIdType } : {}),
-            ownershipType: mspOwnershipToInternal(ownershipCode),
-            ...(taxClassType ? { taxClassType } : {}),
-            firstName: primaryOwner.owner_firstname || f.contactFirst || contactParts[0] || '',
-            lastName: primaryOwner.owner_lastname || f.contactLast || contactParts.slice(1).join(' ') || '',
-            corporatePhone: phone,
-            titleType: mspTitleToInternal(primaryOwner.owner_title || ''),
-            ...dob,
-            homeStreet: primaryOwner.owner_address || '',
-            homeCity: primaryOwner.owner_city || '',
-            homeState: primaryOwner.owner_state_usa || '',
-            homeZip: primaryOwner.owner_zipcode || '',
-            productDescription: form.products_or_services || '',
-            establishmentYear: form.year_business_established || '',
-            monthlyCardSales: form.monthly_sales || '',
-            avgSaleAmount: form.average_sales || '',
-            highestTicketAmount: form.highest_ticket || '',
-            cardPresentPct: form.cp_percent || '100',
-            mccCode: f.mcc || form.mcc || '',
-            applicationStatus: 'Submitted',
-            handoffStage: 'support',
-            portalLockStatus: 'unlocked',
+          const accountPayload = {
+            name: accountName,
+            domain: ownerEmail.includes('@') ? ownerEmail.split('@')[1] : null,
+            hubspotCompanyId: null,
+            primaryContactEmail: ownerEmail || null,
+            primaryContactName: ownerContact || null,
+            legalEntities: legalEntitiesPayload.filter((le) => le.federalEIN || le.legalBusinessName),
           };
-
           if (!dryRun) {
-            profile = await base44.asServiceRole.entities.MerchantCorporateProfile.create(profilePayload);
-            if (tin) profileByTin.set(tin, profile);
-            profileByName.set(nameKey, profile);
-            profileByCorporateId.set(corporateIdStable, profile);
+            account = await base44Write(
+              () => base44.asServiceRole.entities.MerchantAccount.create(accountPayload),
+              `MerchantAccount.create:${ownerKey}`,
+            );
+            if (ownerEmail) accountByEmail.set(ownerEmail, account);
+            accountByName.set(normalizeNameKey(accountName), account);
+            for (const le of legalEntitiesPayload) {
+              const ein = cleanDigits(le.federalEIN || '');
+              if (ein) accountByEin.set(ein, account);
+            }
           } else {
-            profile = { id: `[dry-run:${legalName}]`, ...profilePayload };
+            account = { id: `[dry-run-account:${ownerKey}]`, ...accountPayload };
           }
-          profileCreated = true;
-          summary.corporateEntities.created++;
-          summary.corporateEntities.linkedToAccount++;
+          accountCreated = true;
+          summary.accounts.created++;
         }
 
-        const corporateId = String(profile.corporateId || corporateIdStable);
-        const existingLocations: any[] = dryRun
-          ? []
-          : await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId });
+        const merchantAccountId = account.id;
+        const legalResults: any[] = [];
 
-        const midResults: any[] = [];
-
-        for (const item of items) {
-          const { mid, fields } = item;
-          const itemForm = item.form || {};
-          const appNo = item.appNo || (appByMid.get(mid)?.merchantapplicationno
-            ? String(appByMid.get(mid).merchantapplicationno) : '');
-
-          if (trackedMids.has(mid) || (appNo && trackedAppNos.has(appNo))) {
-            summary.merchantMIDs.skipped++;
-            midResults.push({ mid, appNo: appNo || null, dba: fields.dba, result: 'mid_already_tracked' });
-            continue;
-          }
-
-          const street = (fields.street || itemForm.business_address || '').trim().toLowerCase();
-          const zip = cleanDigits(fields.zip || itemForm.business_zipcode || '');
-          let location = existingLocations.find((l: any) => {
-            const ls = (l.businessStreet || l.businessAddress || '').trim().toLowerCase();
-            const lz = cleanDigits(l.businessZip || '');
-            return ls && ls === street && lz === zip;
+        for (const [legalKey, items] of legalMap) {
+          const f = items[0].fields;
+          const form = items[0].form || {};
+          const tin = f.tin || '';
+          const taxIdType = items[0].taxIdType || classifyTaxIdType({
+            tin, source: items[0].tinSource, ownershipCode: form.ownership_type,
           });
+          const legalName = (f.corporateName || f.dba || '').trim();
+          const ownershipCode = form.ownership_type || (taxIdType === 'SSN' ? 'SP' : 'CO');
+          const primaryOwner = (form.owners || [])[0] || {};
+          const dob = parseDob(primaryOwner.owner_dob || '');
+          const email = f.email || normalizeEmail(primaryOwner.owner_email || form.business_email || '');
+          const phone = f.phone || cleanDigits(form.business_phone || '');
+          const taxClassType = mspLlcClassToTaxClass(ownershipCode, form.llc_class || '');
+          const nameKey = normalizeNameKey(legalName);
+          const corporateIdStable = stableMspCorporateId(tin, legalName, items[0].mid);
 
-          if (!location) {
-            const locationPayload = {
-              corporateId,
-              dbaName: fields.dba || fields.corporateName,
-              businessStreet: fields.street || itemForm.business_address || '',
-              businessCity: fields.city || itemForm.business_city || '',
-              businessState: fields.state || itemForm.business_state_usa || '',
-              businessZip: fields.zip || itemForm.business_zipcode || '',
-              businessAddress: [
-                fields.street || itemForm.business_address,
-                fields.city || itemForm.business_city,
-                fields.state || itemForm.business_state_usa,
-                fields.zip || itemForm.business_zipcode,
-              ].filter(Boolean).join(', '),
-              applicationStepStatus: 'Active',
-            };
-            if (!dryRun) {
-              location = await base44.asServiceRole.entities.MerchantLocations.create(locationPayload);
-              existingLocations.push(location);
+          let profile =
+            (tin && profileByTin.get(tin))
+            || profileByName.get(nameKey)
+            || profileByCorporateId.get(corporateIdStable)
+            || null;
+          let profileCreated = false;
+
+          if (profile) {
+            summary.corporateEntities.skipped++;
+            if (!profile.merchantAccountId && !dryRun) {
+              profile = await base44Write(
+                () => base44.asServiceRole.entities.MerchantCorporateProfile.update(profile.id, {
+                  merchantAccountId,
+                  ...(taxIdType && !profile.taxIdType ? { taxIdType } : {}),
+                }),
+                `MerchantCorporateProfile.update:${profile.id}`,
+              );
+              summary.corporateEntities.linkedToAccount++;
             } else {
-              location = { id: `[dry-run-loc:${mid}]`, ...locationPayload };
+              summary.corporateEntities.linkedToAccount++;
             }
-            summary.locations.created++;
           } else {
-            summary.locations.skipped++;
-          }
+            summary.corporateEntities.found++;
+            const contactParts = (f.contact || '').trim().split(/\s+/);
+            const profilePayload: Record<string, unknown> = {
+              corporateId: corporateIdStable,
+              merchantAccountId,
+              legalName,
+              dbaName: f.dba || legalName,
+              signerEmail: email || `import+msp-${slugCorp(legalName).slice(0, 12)}@cliqbux.com`,
+              taxId: tin || null,
+              ...(taxIdType ? { taxIdType } : {}),
+              ownershipType: mspOwnershipToInternal(ownershipCode),
+              ...(taxClassType ? { taxClassType } : {}),
+              firstName: primaryOwner.owner_firstname || f.contactFirst || contactParts[0] || '',
+              lastName: primaryOwner.owner_lastname || f.contactLast || contactParts.slice(1).join(' ') || '',
+              corporatePhone: phone,
+              titleType: mspTitleToInternal(primaryOwner.owner_title || ''),
+              ...dob,
+              homeStreet: primaryOwner.owner_address || '',
+              homeCity: primaryOwner.owner_city || '',
+              homeState: primaryOwner.owner_state_usa || '',
+              homeZip: primaryOwner.owner_zipcode || '',
+              productDescription: form.products_or_services || '',
+              establishmentYear: form.year_business_established || '',
+              monthlyCardSales: form.monthly_sales || '',
+              avgSaleAmount: form.average_sales || '',
+              highestTicketAmount: form.highest_ticket || '',
+              cardPresentPct: form.cp_percent || '100',
+              mccCode: f.mcc || form.mcc || '',
+              applicationStatus: 'Submitted',
+              handoffStage: 'support',
+              portalLockStatus: 'unlocked',
+            };
 
-          const merchantMIDPayload = {
-            locationId: location.id,
-            corporateId,
-            merchantName: fields.dba || fields.corporateName,
-            dbaName: fields.dba || fields.corporateName,
-            mccCode: fields.mcc || itemForm.mcc || '',
-            industryType: itemForm.industry_type || 'RE',
-            pricingCategory: itemForm.pricing_category || '1',
-            pricingMethod: itemForm.pricing_method || 'ICPLS',
-            monthlyCardSales: itemForm.monthly_sales ? parseFloat(itemForm.monthly_sales) : null,
-            avgSaleAmount: itemForm.average_sales ? parseFloat(itemForm.average_sales) : null,
-            highestTicketAmount: itemForm.highest_ticket ? parseFloat(itemForm.highest_ticket) : null,
-            cardPresentPct: itemForm.cp_percent ? parseFloat(itemForm.cp_percent) : 100,
-            ...(appNo ? { mspApplicationNo: appNo } : {}),
-            elavonMID: mid,
-            isExistingAccount: true,
-            existingAccountSource: 'mspware_import',
-            applicationStepStatus: 'Active (Existing)',
-          };
-
-          try {
             if (!dryRun) {
-              await base44.asServiceRole.entities.MerchantMID.create(merchantMIDPayload);
-              trackedMids.add(mid);
-              if (appNo) trackedAppNos.add(appNo);
+              profile = await base44Write(
+                () => base44.asServiceRole.entities.MerchantCorporateProfile.create(profilePayload),
+                `MerchantCorporateProfile.create:${corporateIdStable}`,
+              );
+              if (tin) profileByTin.set(tin, profile);
+              profileByName.set(nameKey, profile);
+              profileByCorporateId.set(corporateIdStable, profile);
+            } else {
+              profile = { id: `[dry-run:${legalName}]`, ...profilePayload };
             }
-            summary.merchantMIDs.created++;
-            midResults.push({
-              mid, appNo: appNo || null, dba: fields.dba,
-              result: dryRun ? 'would_create' : 'created',
-              mergedBy: item.mergedBy || null,
-              skipSuggested: !!item.skipSuggested,
-            });
-          } catch (err: any) {
-            summary.merchantMIDs.errors++;
-            midResults.push({ mid, dba: fields.dba, result: 'error', error: err.message });
+            profileCreated = true;
+            summary.corporateEntities.created++;
+            summary.corporateEntities.linkedToAccount++;
           }
+
+          const corporateId = String(profile.corporateId || corporateIdStable);
+          const existingLocations: any[] = dryRun
+            ? []
+            : await base44.asServiceRole.entities.MerchantLocations.filter({ corporateId });
+
+          const midResults: any[] = [];
+
+          for (const item of items) {
+            const { mid, fields } = item;
+            const itemForm = item.form || {};
+            const appNo = item.appNo || (appByMid.get(mid)?.merchantapplicationno
+              ? String(appByMid.get(mid).merchantapplicationno) : '');
+
+            if (trackedMids.has(mid) || (appNo && trackedAppNos.has(appNo))) {
+              summary.merchantMIDs.skipped++;
+              midResults.push({ mid, appNo: appNo || null, dba: fields.dba, result: 'mid_already_tracked' });
+              continue;
+            }
+
+            const street = (fields.street || itemForm.business_address || '').trim().toLowerCase();
+            const zip = cleanDigits(fields.zip || itemForm.business_zipcode || '');
+            let location = existingLocations.find((l: any) => {
+              const ls = (l.businessStreet || l.businessAddress || '').trim().toLowerCase();
+              const lz = cleanDigits(l.businessZip || '');
+              return ls && ls === street && lz === zip;
+            });
+
+            if (!location) {
+              const locationPayload = {
+                corporateId,
+                dbaName: fields.dba || fields.corporateName,
+                businessStreet: fields.street || itemForm.business_address || '',
+                businessCity: fields.city || itemForm.business_city || '',
+                businessState: fields.state || itemForm.business_state_usa || '',
+                businessZip: fields.zip || itemForm.business_zipcode || '',
+                businessAddress: [
+                  fields.street || itemForm.business_address,
+                  fields.city || itemForm.business_city,
+                  fields.state || itemForm.business_state_usa,
+                  fields.zip || itemForm.business_zipcode,
+                ].filter(Boolean).join(', '),
+                applicationStepStatus: 'Active',
+              };
+              if (!dryRun) {
+                location = await base44Write(
+                  () => base44.asServiceRole.entities.MerchantLocations.create(locationPayload),
+                  `MerchantLocations.create:${mid}`,
+                );
+                existingLocations.push(location);
+              } else {
+                location = { id: `[dry-run-loc:${mid}]`, ...locationPayload };
+              }
+              summary.locations.created++;
+            } else {
+              summary.locations.skipped++;
+            }
+
+            const merchantMIDPayload = {
+              locationId: location.id,
+              corporateId,
+              merchantName: fields.dba || fields.corporateName,
+              dbaName: fields.dba || fields.corporateName,
+              mccCode: fields.mcc || itemForm.mcc || '',
+              industryType: itemForm.industry_type || 'RE',
+              pricingCategory: itemForm.pricing_category || '1',
+              pricingMethod: itemForm.pricing_method || 'ICPLS',
+              monthlyCardSales: itemForm.monthly_sales ? parseFloat(itemForm.monthly_sales) : null,
+              avgSaleAmount: itemForm.average_sales ? parseFloat(itemForm.average_sales) : null,
+              highestTicketAmount: itemForm.highest_ticket ? parseFloat(itemForm.highest_ticket) : null,
+              cardPresentPct: itemForm.cp_percent ? parseFloat(itemForm.cp_percent) : 100,
+              ...(appNo ? { mspApplicationNo: appNo } : {}),
+              elavonMID: mid,
+              isExistingAccount: true,
+              existingAccountSource: 'mspware_import',
+              applicationStepStatus: 'Active (Existing)',
+            };
+
+            try {
+              if (!dryRun) {
+                await base44Write(
+                  () => base44.asServiceRole.entities.MerchantMID.create(merchantMIDPayload),
+                  `MerchantMID.create:${mid}`,
+                );
+                trackedMids.add(mid);
+                if (appNo) trackedAppNos.add(appNo);
+              }
+              summary.merchantMIDs.created++;
+              midResults.push({
+                mid, appNo: appNo || null, dba: fields.dba,
+                result: dryRun ? 'would_create' : 'created',
+                mergedBy: item.mergedBy || null,
+                skipSuggested: !!item.skipSuggested,
+              });
+            } catch (err: any) {
+              summary.merchantMIDs.errors++;
+              midResults.push({ mid, dba: fields.dba, result: 'error', error: err.message });
+            }
+          }
+
+          legalResults.push({
+            legalKey,
+            legalName,
+            tin: tin ? `***${tin.slice(-4)}` : null,
+            taxIdType: taxIdType || null,
+            taxIdLabel: taxIdLabel(tin, taxIdType),
+            tinSource: items[0].tinSource || null,
+            corporateId,
+            profileCreated,
+            midCount: items.length,
+            mergedBy: items.some((i: any) => i.mergedBy) ? items.map((i: any) => i.mergedBy).filter(Boolean)[0] : null,
+            mids: midResults,
+          });
         }
 
-        legalResults.push({
-          legalKey,
-          legalName,
-          tin: tin ? `***${tin.slice(-4)}` : null,
-          taxIdType: taxIdType || null,
-          taxIdLabel: taxIdLabel(tin, taxIdType),
-          tinSource: items[0].tinSource || null,
-          corporateId,
-          profileCreated,
-          midCount: items.length,
-          mergedBy: items.some((i: any) => i.mergedBy) ? items.map((i: any) => i.mergedBy).filter(Boolean)[0] : null,
-          mids: midResults,
+        entityResults.push({
+          groupKey: ownerKey,
+          ownerKey,
+          ownerEmail: ownerEmail || null,
+          ownerContact: ownerContact || null,
+          alternateEmails: altEmails,
+          emailSource: rep.emailSource || null,
+          legalName: accountName,
+          tin: null,
+          tinUnavailable: allOwnerItems.every((i) => !i.fields.tin),
+          corporateId: legalResults[0]?.corporateId || null,
+          merchantAccountId: dryRun && accountCreated ? account.id : merchantAccountId,
+          accountCreated,
+          profileCreated: legalResults.some((l) => l.profileCreated),
+          mspRef: true,
+          midCount: allOwnerItems.length,
+          legalEntityCount: legalMap.size,
+          mergedBy: allOwnerItems.some((i) => i.mergedBy) ? [...new Set(allOwnerItems.map((i) => i.mergedBy).filter(Boolean))] : [],
+          skipSuggested: allOwnerItems.every((i) => i.skipSuggested),
+          legalEntities: legalResults,
+          apps: legalResults.flatMap((l) => l.mids),
+        });
+      } catch (ownerErr: any) {
+        const msg = String(ownerErr?.message || ownerErr || 'owner write failed');
+        console.error(`[importMSPPortfolio] owner ${ownerKey}:`, ownerErr);
+        summary.writeErrors++;
+        summary.writeErrorDetails.push(`${ownerKey}: ${msg}`);
+        entityResults.push({
+          groupKey: ownerKey,
+          ownerKey,
+          result: 'error',
+          error: msg,
+          midCount: [...legalMap.values()].flat().length,
+          legalEntityCount: legalMap.size,
         });
       }
-
-      entityResults.push({
-        groupKey: ownerKey,
-        ownerKey,
-        ownerEmail: ownerEmail || null,
-        ownerContact: ownerContact || null,
-        alternateEmails: altEmails,
-        emailSource: rep.emailSource || null,
-        legalName: accountName,
-        tin: null,
-        tinUnavailable: allOwnerItems.every((i) => !i.fields.tin),
-        corporateId: legalResults[0]?.corporateId || null,
-        merchantAccountId: dryRun && accountCreated ? account.id : merchantAccountId,
-        accountCreated,
-        profileCreated: legalResults.some((l) => l.profileCreated),
-        mspRef: true,
-        midCount: allOwnerItems.length,
-        legalEntityCount: legalMap.size,
-        mergedBy: allOwnerItems.some((i) => i.mergedBy) ? [...new Set(allOwnerItems.map((i) => i.mergedBy).filter(Boolean))] : [],
-        skipSuggested: allOwnerItems.every((i) => i.skipSuggested),
-        legalEntities: legalResults,
-        apps: legalResults.flatMap((l) => l.mids),
-      });
     }
 
     return Response.json({
@@ -1042,6 +1120,12 @@ Deno.serve(async (req) => {
       hubspot: false,
       source: 'merchants',
       hierarchy: 'owner_email → legal_entity → mid',
+      ownerOffset,
+      ownerLimit: dryRun ? ownersTotal : ownerLimit,
+      ownersTotal,
+      ownersProcessed: ownerSlice.length,
+      nextOwnerOffset,
+      done: batchDone,
       rateLimit: {
         maxRps: MSP_MAX_RPS,
         sessionBudget: MSP_SESSION_BUDGET,

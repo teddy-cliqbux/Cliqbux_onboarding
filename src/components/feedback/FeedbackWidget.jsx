@@ -19,6 +19,8 @@ export default function FeedbackWidget() {
   const [capturing, setCapturing] = useState(false);
   const [error, setError] = useState('');
   const [doneUrl, setDoneUrl] = useState('');
+  const [doneQueued, setDoneQueued] = useState(false);
+  const [doneMessage, setDoneMessage] = useState('');
   const [screenshotPreview, setScreenshotPreview] = useState('');
   const [screenshotBlob, setScreenshotBlob] = useState(null);
   const [screenshotNote, setScreenshotNote] = useState('');
@@ -56,6 +58,8 @@ export default function FeedbackWidget() {
     setType('bug');
     setError('');
     setDoneUrl('');
+    setDoneQueued(false);
+    setDoneMessage('');
     clearScreenshot();
   };
 
@@ -140,10 +144,17 @@ export default function FeedbackWidget() {
       } else {
         res = await base44.functions.invoke('submitProductFeedback', payload);
       }
-      if (res.data?.error) throw new Error(res.data.error);
-      if (!res.data?.issueUrl) throw new Error('Feedback submitted but no issue URL returned');
+      if (res.data?.error) {
+        const hint = res.data?.hint ? ` ${res.data.hint}` : '';
+        throw new Error(`${res.data.error}${hint}`);
+      }
+      if (!res.data?.success && !res.data?.issueUrl) {
+        throw new Error(res.data?.message || 'Feedback submitted but no confirmation returned');
+      }
       const hadScreenshot = Boolean(screenshotBlob);
-      setDoneUrl(res.data.issueUrl);
+      setDoneQueued(Boolean(res.data?.queued));
+      setDoneMessage(res.data?.message || '');
+      setDoneUrl(res.data?.issueUrl || (res.data?.queued ? 'queued' : ''));
       setTitle('');
       setDescription('');
       setExpected('');
@@ -192,9 +203,16 @@ export default function FeedbackWidget() {
           {doneUrl ? (
             <div className="space-y-3">
               <p className="text-cb-body text-cb-success">Thanks — we got it.</p>
-              <p className="text-cb-caption normal-case tracking-normal text-gray-400 break-all">
-                Tracked as {doneUrl}
-              </p>
+              {doneQueued ? (
+                <p className="text-cb-caption normal-case tracking-normal text-gray-400">
+                  {doneMessage ||
+                    'Saved locally. Add GITHUB_FEEDBACK_TOKEN in Base44 to file GitHub issues automatically.'}
+                </p>
+              ) : (
+                <p className="text-cb-caption normal-case tracking-normal text-gray-400 break-all">
+                  Tracked as {doneUrl}
+                </p>
+              )}
               {screenshotNote && (
                 <p className="text-cb-caption normal-case tracking-normal text-gray-500">{screenshotNote}</p>
               )}

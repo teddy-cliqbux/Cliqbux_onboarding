@@ -27,7 +27,8 @@ Live base: `MSP_BASE_URL` (typically `https://api.msppulsepoint.com/v2`).
 ## Functions
 
 - `POST /functions/probeMSPMerchantData` — coverage + owner email clustering + signatures sample  
-- `POST /functions/importMSPPortfolio` — `{ dryRun: true }` or `{ confirmLive: true }`
+- `POST /functions/importMSPPortfolio` — `{ dryRun: true }` or `{ confirmLive: true, ownerOffset?, ownerLimit? }` (live default 8 owners/call; UI loops until `done`)
+- Live writes: Base44 throttle + rate-limit retry; per-owner try/catch → `summary.writeErrors` (HTTP 200 partial success)
 
 ## UI
 

@@ -46,6 +46,7 @@ Schedule daily (Base44 cron or manual) once env is set.
 - Merchants and agents submit bug or idea → `submitProductFeedback` → GitHub Issue.
 - Requires auth (merchant JWT or workspace session).
 - **Screenshot (optional):** Capture button uses `html2canvas` on the page. **SSN-only** fields (`data-private="ssn"` + name/id deny-list) are masked to `•••-••-••••` before capture; preview + Remove before submit. Upload via Base44 `UploadFile`; if that fails, JPEG base64 is sent to `submitProductFeedback` for service-role upload. Issue body gets `## Screenshot` markdown when attached. Text-only submit still works if capture/upload fails. BoldSign iframes will not appear (cross-origin).
+- **GitHub token required for Issues:** set `GITHUB_FEEDBACK_TOKEN` (PAT with `issues:write`) in Base44 env and redeploy `submitProductFeedback`. If the token is missing, feedback is still **queued** as an `OperationalEvent` (`USER_BUG_REPORT_QUEUED`) for the digest — the form should not hard-fail.
 
 ## Pipeline (agents + Teddy)
 

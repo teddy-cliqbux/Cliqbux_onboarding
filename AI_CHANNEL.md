@@ -3064,18 +3064,82 @@ Dry-run had 106 MIDs but **97 store-named accounts**. OpenAPI (`api.mspware.com/
 ---
 
 ---
-**[CURSOR]** ó 2026-07-30
+**[CURSOR]** ù 2026-07-30
 **Type:** Feature
-**Re:** Help & Feedback ó optional screenshot (SSN-masked)
+**Re:** Help & Feedback ù optional screenshot (SSN-masked)
 
 ### Shipped
-- `src/lib/feedbackScreenshot.js` ó html2canvas capture; masks `data-private=ssn` + SSN name/id deny-list to `ïïï-ïï-ïïïï`; hides feedback widget during capture.
+- `src/lib/feedbackScreenshot.js` ù html2canvas capture; masks `data-private=ssn` + SSN name/id deny-list to `ùùù-ùù-ùùùù`; hides feedback widget during capture.
 - Tagged SSN inputs: SignerDetailsModal, SignerModal, VerifyIdentity, UnderwritingPanel, ManualEntryForm.
 - FeedbackWidget: Capture / Retake / preview / Remove; UploadFile then base64 fallback to `submitProductFeedback`.
 - Backend accepts `screenshotUrl` or `screenshotBase64`; embeds `## Screenshot` on GitHub issue when attached.
 - Tests: `npm run test:feedback-shot`.
 
-**Teddy:** Push frontend + redeploy `submitProductFeedback`. Smoke: open Help & Feedback on a KYC screen with SSN filled (show SSN), Capture, confirm preview shows `ïïï-ïï-ïïïï`, Submit, confirm issue has image.
+**Teddy:** Push frontend + redeploy `submitProductFeedback`. Smoke: open Help & Feedback on a KYC screen with SSN filled (show SSN), Capture, confirm preview shows `***-**-****`, Submit, confirm issue has image.
+
+**Waiting on:** Teddy
+---
+
+---
+**[CURSOR]** ∑ 2026-07-30
+**Type:** Fix
+**Re:** MSP live sync HTTP 500 ó chunked writes + error surfacing
+
+### Symptom
+Dry run OK (106 MIDs / 47 owners); **Confirm live sync** returned HTTP 500. Likely Base44 write burst (rate limit / uncaught create) or timeout ó not MSP fetch.
+
+### Shipped
+1. **`importMSPPortfolio`:** `base44Write` throttle (120ms) + retry on `Rate limit exceeded`; **per-owner try/catch** ? `summary.writeErrors` / `writeErrorDetails` (partial success HTTP 200).
+2. **Chunked live:** `ownerOffset` + `ownerLimit` (default 8); response `nextOwnerOffset` / `ownersTotal` / `done`.
+3. **UI:** loops batches with progress; extracts server `error`/`stack` from SDK 500 responses (not generic status text).
+
+### Teddy ops
+1. Push via GitHub Desktop.
+2. Redeploy **`importMSPPortfolio`** (frontend picks up with app publish / sync).
+3. Confirm MerchantAccount + MerchantCorporateProfile schemas republished (`taxIdType`, contact email fields).
+4. Dry run ? **Confirm live sync** (watch batch progress) ? Merchants list.
+5. If any owner fails, red banner shows the **real** create error ó paste that if still stuck.
+
+**Waiting on:** Teddy (push + redeploy + live sync)
+---
+
+---
+**[CURSOR]** ¬∑ 2026-07-30
+**Type:** Fix
+**Re:** MSP live sync HTTP 500 ‚Äî chunked writes + error surfacing
+
+### Symptom
+Dry run OK (106 MIDs / 47 owners); **Confirm live sync** returned HTTP 500. Likely Base44 write burst (rate limit / uncaught create) or timeout ‚Äî not MSP fetch.
+
+### Shipped
+1. **`importMSPPortfolio`:** `base44Write` throttle (120ms) + retry on `Rate limit exceeded`; **per-owner try/catch** ‚Üí `summary.writeErrors` / `writeErrorDetails` (partial success HTTP 200).
+2. **Chunked live:** `ownerOffset` + `ownerLimit` (default 8); response `nextOwnerOffset` / `ownersTotal` / `done`.
+3. **UI:** loops batches with progress; extracts server `error`/`stack` from SDK 500 responses (not generic status text).
+
+### Teddy ops
+1. Push via GitHub Desktop.
+2. Redeploy **`importMSPPortfolio`** (frontend picks up with app publish / sync).
+3. Confirm MerchantAccount + MerchantCorporateProfile schemas republished (`taxIdType`, contact email fields).
+4. Dry run ‚Üí **Confirm live sync** (watch batch progress) ‚Üí Merchants list.
+5. If any owner fails, red banner shows the **real** create error ‚Äî paste that if still stuck.
+
+**Waiting on:** Teddy (push + redeploy + live sync)
+---
+
+---
+**[CURSOR]** ó 2026-07-30
+**Type:** Bug Fix
+**Re:** Help & Feedback ó GITHUB_FEEDBACK_TOKEN irony
+
+### Problem
+Submit showed raw `GITHUB_FEEDBACK_TOKEN not configured` (503) and dropped the report.
+
+### Fix
+- If token missing (or GitHub create fails): queue full report on `OperationalEvent` and return success `queued: true` with plain-language message.
+- Widget shows queued success instead of a red env-var name.
+- Teddy still needs `GITHUB_FEEDBACK_TOKEN` in Base44 for real GitHub Issues.
+
+**Teddy:** Redeploy `submitProductFeedback` + push frontend. Then add PAT in Base44 env and re-submit (or check digest for queued MID-tile report).
 
 **Waiting on:** Teddy
 ---
