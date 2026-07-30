@@ -73,30 +73,43 @@ function taxLikeKeys(obj: any, prefix = ''): string[] {
   return hits;
 }
 
+function firstAddress(src: any) {
+  const addrs = Array.isArray(src.addresses) ? src.addresses : [];
+  const a = addrs.find((x: any) => x && (x.address_line_1 || x.city)) || addrs[0] || {};
+  return {
+    address: a.address_line_1 || pick(src, ['address', 'Address', 'business_address', 'street']),
+    city: a.city || pick(src, ['city', 'City', 'business_city']),
+    state: a.state || pick(src, ['state', 'State', 'business_state']),
+    zip: a.postal_code || pick(src, ['zip', 'Zip', 'zipcode']),
+  };
+}
+
 function safeMerchantView(detail: any): Record<string, unknown> {
   if (!detail || typeof detail !== 'object') return {};
   const src = detail.merchant && typeof detail.merchant === 'object' ? detail.merchant : detail;
+  const first = String(pick(src, ['contact_firstname']) || '');
+  const last = String(pick(src, ['contact_lastname']) || '');
+  const addr = firstAddress(src);
+  const tinRaw = String(pick(src, [
+    'federal_tax_id', 'federalTaxId', 'tin', 'TIN', 'ssn', 'ein', 'EIN', 'federal_ein',
+  ]) || '');
   return {
     mid: midOf(src),
     status: statusOf(src),
-    dba: pick(src, ['dba', 'Merchant', 'merchant_name', 'merchantName', 'full_dba_name', 'name']),
+    dba: pick(src, ['name', 'dba', 'Merchant', 'merchant_name', 'full_dba_name']),
     corporateName: pick(src, [
-      'corporate_name', 'corporateName', 'Corporate Name', 'legal_name', 'legalName',
-      'legal_dba_name', 'company_name', 'companyName',
+      'corporate_name', 'corporateName', 'legal_name', 'legalName', 'company_name',
     ]),
-    contact: pick(src, ['contact', 'Contact', 'contact_name', 'contactName']),
+    contact: pick(src, ['contact_name', 'contactName', 'contact']) || [first, last].filter(Boolean).join(' '),
     email: pick(src, ['email', 'Email', 'business_email', 'contact_email']),
-    phone: pick(src, ['phone', 'Phone', 'business_phone', 'contact_phone']),
-    address: pick(src, ['address', 'Address', 'business_address', 'street']),
-    city: pick(src, ['city', 'City', 'business_city']),
-    state: pick(src, ['state', 'State', 'business_state', 'business_state_usa']),
-    zip: pick(src, ['zip', 'Zip', 'zipcode', 'business_zipcode']),
-    awb: pick(src, ['awb', 'App ID', 'app_id', 'application_id', 'boarding_id']),
-    internalId: pick(src, ['internal_id', 'Internal ID', 'internalId', 'id']),
-    sic: pick(src, ['sic', 'SIC Code', 'sic_code', 'mcc', 'mcc_code']),
+    phone: pick(src, ['phone', 'Phone', 'business_phone']),
+    ...addr,
+    elavonAppId: pick(src, ['elavonappid', 'elavon_app_id']),
+    sic: pick(src, ['mcc', 'sic', 'SIC Code', 'sic_code']),
     topKeys: Object.keys(src).slice(0, 40),
     taxLikeKeys: taxLikeKeys(src).slice(0, 20),
-    tinLast4: last4(String(pick(src, ['tin', 'TIN', 'ssn', 'SSN', 'ein', 'EIN', 'federal_ein']) || '')),
+    tinLast4: last4(tinRaw),
+    hasFederalTaxId: Boolean(cleanDigits(tinRaw)),
   };
 }
 
@@ -203,31 +216,62 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Sample merchant detail ──────────────────────────────────────────────
+    // ── Sample merchant detail + owner cluster (all MIDs, batched) ──────────
     const listMids = merchantsList.items.map(midOf).filter(Boolean);
-    const sampleMids = [...new Set([...extraMids, ...listMids])].slice(0, sampleSize);
+    const allUniqueMids = [...new Set([...extraMids, ...listMids])];
+    const sampleMids = allUniqueMids.slice(0, sampleSize);
 
     const detailSamples: any[] = [];
-    for (const mid of sampleMids) {
-      const res = await fetch(`${mspBase}/merchants/${encodeURIComponent(mid)}`, { headers });
-      const text = await res.text();
-      let data: any = {};
-      try { data = text ? JSON.parse(text) : {}; } catch { data = { _raw: text.slice(0, 300) }; }
-      detailSamples.push({
-        mid,
-        httpStatus: res.status,
-        ok: res.ok,
-        view: res.ok ? safeMerchantView(data) : null,
-        errorSnippet: res.ok ? null : text.slice(0, 200),
-      });
+    const ownerByEmail = new Map<string, { mids: string[]; corps: Set<string>; contact: string }>();
+    let withFederalTaxId = 0;
+    let withEmail = 0;
+    let detailOkAll = 0;
+
+    // Full pass for clustering (batched)
+    for (let i = 0; i < allUniqueMids.length; i += 8) {
+      const batch = allUniqueMids.slice(i, i + 8);
+      await Promise.all(batch.map(async (mid) => {
+        const res = await fetch(`${mspBase}/merchants/${encodeURIComponent(mid)}`, { headers });
+        const text = await res.text();
+        let data: any = {};
+        try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
+        const view = res.ok ? safeMerchantView(data) : null;
+        if (res.ok) detailOkAll++;
+        if (sampleMids.includes(mid)) {
+          detailSamples.push({
+            mid,
+            httpStatus: res.status,
+            ok: res.ok,
+            view,
+            errorSnippet: res.ok ? null : text.slice(0, 200),
+          });
+        }
+        if (!view) return;
+        if (view.hasFederalTaxId) withFederalTaxId++;
+        const email = String(view.email || '').trim().toLowerCase();
+        if (email) {
+          withEmail++;
+          if (!ownerByEmail.has(email)) {
+            ownerByEmail.set(email, { mids: [], corps: new Set(), contact: String(view.contact || '') });
+          }
+          const o = ownerByEmail.get(email)!;
+          o.mids.push(mid);
+          if (view.corporateName) o.corps.add(String(view.corporateName));
+        }
+      }));
     }
 
-    // ── Optional form TIN sample (from apps that have MID) ──────────────────
+    const multiMidEmails = [...ownerByEmail.entries()].filter(([, v]) => v.mids.length >= 2);
+    const multiCorpEmails = [...ownerByEmail.entries()].filter(([, v]) => v.corps.size >= 2);
+
+    // ── Form + signatures sample (apps with MID) ────────────────────────────
     const approvedApps = appsList.items.filter(
       (a: any) => ['Approved', 'Complete'].includes(a.application_status) && a.mid,
     ).slice(0, Math.min(sampleSize, 6));
 
     let formsWithTin = 0;
+    let signaturesOk = 0;
+    let signaturesMiss = 0;
     const formSamples: any[] = [];
     for (const app of approvedApps) {
       const appNo = app.merchantapplicationno;
@@ -238,12 +282,36 @@ Deno.serve(async (req) => {
         const tin = form.tin || form.ssn || '';
         const taxKeys = taxLikeKeys(form);
         if (cleanDigits(tin) || taxKeys.length) formsWithTin++;
+
+        let sig: any = null;
+        try {
+          const sigRes = await fetch(`${mspBase}/applications/${appNo}/signatures`, { headers });
+          if (sigRes.ok) {
+            signaturesOk++;
+            const sigData = await sigRes.json().catch(() => ({}));
+            const signers = Array.isArray(sigData?.signers) ? sigData.signers : [];
+            sig = {
+              envelopeStatus: sigData?.envelopeStatus,
+              signerCount: signers.length,
+              signers: signers.slice(0, 3).map((s: any) => ({
+                name: s.name,
+                emailLast: s.emailAddress ? String(s.emailAddress).replace(/(.{2}).+(@.+)/, '$1…$2') : null,
+              })),
+            };
+          } else {
+            signaturesMiss++;
+          }
+        } catch {
+          signaturesMiss++;
+        }
+
         formSamples.push({
           appNo,
           mid: app.mid,
           httpStatus: res.status,
           tinLast4: last4(tin),
           taxLikeKeys: taxKeys.slice(0, 15),
+          signatures: sig,
         });
       } catch (err: any) {
         formSamples.push({ appNo, error: err.message });
@@ -284,6 +352,24 @@ Deno.serve(async (req) => {
         gapVsCsv: merchantsBaselineCsv - merchantsWithMid,
         gapAppsVsMerchantsApi: merchantsWithMid - appsApprovedWithMid,
       },
+      ownerClustering: {
+        detailOk: detailOkAll,
+        withEmail,
+        withFederalTaxId,
+        uniqueEmails: ownerByEmail.size,
+        emailsWithMultipleMids: multiMidEmails.length,
+        emailsWithMultipleCorps: multiCorpEmails.length,
+        topMultiMid: multiMidEmails
+          .sort((a, b) => b[1].mids.length - a[1].mids.length)
+          .slice(0, 10)
+          .map(([email, v]) => ({
+            emailHint: email.replace(/(.{2}).+(@.+)/, '$1…$2'),
+            contact: v.contact,
+            midCount: v.mids.length,
+            corpCount: v.corps.size,
+            corps: [...v.corps].slice(0, 5),
+          })),
+      },
       merchantDetails: {
         sampled: detailSamples.length,
         okCount: detailSamples.filter((d) => d.ok).length,
@@ -292,6 +378,8 @@ Deno.serve(async (req) => {
       formTinSupplement: {
         sampled: formSamples.length,
         withTaxSignal: formsWithTin,
+        signaturesOk,
+        signaturesMiss,
         samples: formSamples,
       },
     });

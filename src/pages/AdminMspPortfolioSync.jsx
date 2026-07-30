@@ -1,6 +1,6 @@
 /**
  * Admin MSPWare portfolio sync — /admin/center/sync-msp
- * Probe Merchants API → dry run → confirm live. No HubSpot.
+ * Probe → dry run → confirm live. Owner → Legal Entity → MID. No HubSpot.
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -53,20 +53,23 @@ export default function AdminMspPortfolioSync() {
   const summary = display?.summary;
   const entities = display?.entities || [];
   const cov = probeResult?.coverage;
+  const owners = probeResult?.ownerClustering;
 
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="font-display text-cb-display text-white">Sync from MSPWare</h1>
         <p className="text-cb-body-lg text-gray-400 mt-1 max-w-2xl">
-          Pull live merchants from MSPWare (<span className="font-mono text-gray-500">GET /merchants</span>) into Merchant Center accounts.
-          Does not create HubSpot companies or deals. Does not submit anything to Elavon.
+          Pull live merchants into Merchant Center as{' '}
+          <span className="text-gray-300">Owner → Legal Entity → MID</span>
+          {' '}(merchant contact email, then corporate name / federal tax id).
+          No HubSpot. Nothing submitted to Elavon.
         </p>
       </div>
 
       <div className="bg-cb-surface border border-cb-border rounded-cb px-4 py-4 space-y-3">
         <p className="text-cb-caption text-gray-500">
-          Probe first to confirm Merchants API coverage, then dry-run, then confirm live.
+          Probe first (owner clustering), then dry-run, then confirm live.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -92,7 +95,7 @@ export default function AdminMspPortfolioSync() {
             disabled={!!busy || !dryResult?.success}
             onClick={() => {
               if (!window.confirm(
-                'Live sync will create Merchant Accounts, locations, and MIDs in Base44 from MSPWare. HubSpot will not be touched. Continue?',
+                'Live sync will create Merchant Accounts (by owner email), legal entities, locations, and MIDs. HubSpot will not be touched. Continue?',
               )) return;
               run('live');
             }}
@@ -120,13 +123,13 @@ export default function AdminMspPortfolioSync() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
               { label: 'Merchants API total', value: probeResult.merchants?.total },
-              { label: 'Merchants w/ MID', value: probeResult.merchants?.withMid },
+              { label: 'Unique owner emails', value: owners?.uniqueEmails },
+              { label: 'Emails w/ 2+ MIDs', value: owners?.emailsWithMultipleMids },
+              { label: 'Emails w/ 2+ corps', value: owners?.emailsWithMultipleCorps },
+              { label: 'With federal_tax_id', value: owners?.withFederalTaxId },
+              { label: 'With email', value: owners?.withEmail },
               { label: 'Apps Approved+MID', value: probeResult.applications?.approvedWithMid },
-              { label: 'CSV baseline (Approved+MID)', value: cov?.merchantsExportApprovedMidBaseline },
-              { label: 'Detail samples OK', value: `${probeResult.merchantDetails?.okCount}/${probeResult.merchantDetails?.sampled}` },
-              { label: 'Forms w/ tax signal', value: `${probeResult.formTinSupplement?.withTaxSignal}/${probeResult.formTinSupplement?.sampled}` },
-              { label: 'Gap vs CSV', value: cov?.gapVsCsv },
-              { label: 'Apps vs Merchants gap', value: cov?.gapAppsVsMerchantsApi },
+              { label: 'Signatures OK / miss', value: `${probeResult.formTinSupplement?.signaturesOk ?? 0} / ${probeResult.formTinSupplement?.signaturesMiss ?? 0}` },
             ].map((k) => (
               <div key={k.label} className="bg-cb-surface border border-cb-border rounded-cb px-3 py-2">
                 <p className="text-cb-caption text-gray-500">{k.label}</p>
@@ -134,24 +137,24 @@ export default function AdminMspPortfolioSync() {
               </div>
             ))}
           </div>
-          {probeResult.merchants?.byStatus && (
+          {owners?.topMultiMid?.length > 0 && (
+            <div className="bg-cb-surface border border-cb-border rounded-cb px-4 py-3 space-y-2">
+              <p className="text-cb-caption text-gray-500">Top multi-MID owners (by email)</p>
+              <ul className="space-y-1">
+                {owners.topMultiMid.map((o) => (
+                  <li key={o.emailHint} className="text-cb-caption text-gray-400">
+                    <span className="text-white">{o.contact || o.emailHint}</span>
+                    {' · '}{o.midCount} MID(s) · {o.corpCount} corp(s)
+                    {o.corps?.length ? ` — ${o.corps.join(', ')}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {cov && (
             <p className="text-cb-caption text-gray-500">
-              Merchants by status:{' '}
-              {Object.entries(probeResult.merchants.byStatus).map(([s, n]) => `${s}: ${n}`).join(' · ') || '—'}
+              CSV baseline {cov.merchantsExportApprovedMidBaseline} · gap vs CSV {cov.gapVsCsv} · apps vs merchants gap {cov.gapAppsVsMerchantsApi}
             </p>
-          )}
-          {!probeResult.merchants?.listOk && (
-            <p className="text-cb-caption text-cb-danger">
-              GET /merchants HTTP {probeResult.merchants?.listHttpStatus} — check API access before dry run.
-            </p>
-          )}
-          {probeResult.merchantDetails?.samples?.[0]?.view && (
-            <details className="text-cb-caption text-gray-500">
-              <summary className="cursor-pointer text-gray-400 hover:text-white">Sample merchant fields</summary>
-              <pre className="mt-2 overflow-x-auto text-[11px] text-gray-400 bg-cb-bg border border-cb-border rounded-cb p-3">
-                {JSON.stringify(probeResult.merchantDetails.samples[0].view, null, 2)}
-              </pre>
-            </details>
           )}
         </section>
       )}
@@ -162,39 +165,28 @@ export default function AdminMspPortfolioSync() {
             <h2 className="font-display text-cb-title text-white">
               {display?.dryRun ? 'Dry-run summary' : 'Live sync summary'}
             </h2>
-            {display?.dryRun && (
-              <span className="text-cb-caption text-cb-accent">No writes</span>
-            )}
-            {!display?.dryRun && (
-              <span className="text-cb-caption text-cb-success">Written to Base44</span>
-            )}
-            {display?.source === 'merchants' && (
-              <span className="text-cb-caption text-gray-500">Source: Merchants API</span>
-            )}
+            {display?.dryRun && <span className="text-cb-caption text-cb-accent">No writes</span>}
+            {!display?.dryRun && <span className="text-cb-caption text-cb-success">Written to Base44</span>}
+            <span className="text-cb-caption text-gray-500">Owner → Legal Entity → MID</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
-              { label: 'Merchants scanned', value: summary.merchantsScanned ?? summary.mspAppsScanned },
-              { label: 'Importable w/ MID', value: summary.importableMerchants ?? summary.approvedWithMid },
-              { label: 'Account groups', value: summary.groups },
+              { label: 'Merchants importable', value: summary.importableMerchants },
+              { label: 'Owner accounts', value: summary.ownerGroups ?? summary.groups },
+              { label: 'Legal entities', value: summary.legalEntityGroups },
+              { label: 'Unique owner emails', value: summary.uniqueOwnerEmails },
               { label: 'TIN unavailable', value: summary.tinUnavailable },
               { label: 'Accounts create', value: summary.accounts?.created },
-              { label: 'Accounts link', value: summary.accounts?.linked },
               { label: 'Profiles create', value: summary.corporateEntities?.created },
               { label: 'MIDs create', value: summary.merchantMIDs?.created },
-              { label: 'MIDs skip', value: summary.merchantMIDs?.skipped },
-              { label: 'Merchant fetch errors', value: summary.merchantFetchErrors },
-              { label: 'Form fetch errors', value: summary.formFetchErrors },
+              { label: 'Signatures OK', value: summary.signaturesOk },
+              { label: 'Email from signer', value: summary.emailFromSigner },
               { label: 'Apps matched by MID', value: summary.applicationsMatchedByMid },
+              { label: 'Merchant fetch errors', value: summary.merchantFetchErrors },
             ].map((k) => (
-              <div
-                key={k.label}
-                className="bg-cb-surface border border-cb-border rounded-cb px-3 py-2"
-              >
+              <div key={k.label} className="bg-cb-surface border border-cb-border rounded-cb px-3 py-2">
                 <p className="text-cb-caption text-gray-500">{k.label}</p>
-                <p className="font-display text-cb-title text-white tabular-nums mt-0.5">
-                  {k.value ?? 0}
-                </p>
+                <p className="font-display text-cb-title text-white tabular-nums mt-0.5">{k.value ?? 0}</p>
               </div>
             ))}
           </div>
@@ -203,28 +195,46 @@ export default function AdminMspPortfolioSync() {
 
       {entities.length > 0 && (
         <section>
-          <h2 className="font-display text-cb-title text-white mb-3">Groups</h2>
+          <h2 className="font-display text-cb-title text-white mb-3">Owners</h2>
           <ul className="space-y-2">
             {entities.map((e) => (
               <li
-                key={e.groupKey}
+                key={e.ownerKey || e.groupKey}
                 className="bg-cb-surface border border-cb-border rounded-cb px-4 py-3"
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-cb-body font-semibold text-white">{e.legalName}</p>
+                    <p className="text-cb-body font-semibold text-white">
+                      {e.ownerContact || e.legalName || 'Owner'}
+                    </p>
                     <p className="text-cb-caption text-gray-500 mt-0.5">
-                      TIN {e.tin || '—'}
-                      {e.tinUnavailable ? ' (unavailable from API)' : e.tinSource ? ` (${e.tinSource})` : ''}
+                      {e.ownerEmail || 'no email'}
+                      {e.emailSource ? ` (${e.emailSource})` : ''}
                       {' · '}
-                      MSP ref <span className="font-mono text-gray-400">{e.corporateId}</span>
+                      {e.legalEntityCount ?? e.legalEntities?.length ?? 0} legal entit(y/ies)
+                      {' · '}
+                      {e.midCount ?? 0} MID(s)
                       {e.accountCreated ? ' · new account' : ' · existing account'}
-                      {e.profileCreated ? ' · new profile' : ' · existing profile'}
                     </p>
-                    <p className="text-cb-caption text-gray-600 mt-1">
-                      {e.midCount ?? (e.apps || []).length} MID(s):{' '}
-                      {(e.apps || []).map((a) => a.result).join(', ') || '—'}
-                    </p>
+                    {(e.legalEntities || []).length > 0 && (
+                      <ul className="mt-2 space-y-1 border-l border-cb-border pl-3">
+                        {e.legalEntities.map((le) => (
+                          <li key={le.legalKey} className="text-cb-caption text-gray-400">
+                            <span className="text-gray-300">{le.legalName}</span>
+                            {' · TIN '}{le.tin || '—'}
+                            {le.tinSource ? ` (${le.tinSource})` : ''}
+                            {' · '}{le.midCount} MID(s)
+                            {(le.mids || []).slice(0, 4).map((m) => m.dba).filter(Boolean).length > 0 && (
+                              <span className="text-gray-600">
+                                {' — '}
+                                {(le.mids || []).slice(0, 4).map((m) => m.dba).filter(Boolean).join(', ')}
+                                {(le.mids || []).length > 4 ? '…' : ''}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                   {!display?.dryRun && e.merchantAccountId && !String(e.merchantAccountId).startsWith('[') && (
                     <Link

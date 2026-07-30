@@ -1,46 +1,42 @@
 # MSP Portfolio → Merchant Center Sync (Approach A)
 
 **Date:** 2026-07-30  
-**Status:** Approved (Teddy) — **Merchants API primary** (updated same day)
+**Status:** Approved — Merchants API + **Owner → Legal Entity → MID** hierarchy
 
 ## Goal
 
-Pull the live MSPWare **merchants** portfolio into Merchant Center as `MerchantAccount` + locations + existing MIDs. **No HubSpot writes** in v1.
+Pull the live MSPWare merchants portfolio into Merchant Center. **No HubSpot writes** in v1.
 
-## Locked decisions
+## Hierarchy (matches ADRs)
 
-| Decision | Choice |
-|---|---|
-| Discovery | `GET /merchants` (not applications list) |
-| Enrichment | `GET /merchants/{mid}` |
-| Parent | Create/link `MerchantAccount` per TIN, else **Corporate Name** |
-| HubSpot | Skip |
-| `corporateId` (new profiles) | `msp-{tin}` / `msp-corp-{slug}` / `msp-mid-{mid}` |
-| Live writes | Require `confirmLive: true` (dry run default-safe) |
-| MID status | `Active (Existing)` + `mspware_import` |
+| Layer | Key | Source |
+|---|---|---|
+| **MerchantAccount** (Parent) | contact `email` → contact name → corporate_name | `GET /merchants/{mid}` |
+| **legalEntities + profile** | `federal_tax_id` → `corporate_name` | same |
+| **Location + MID** | each `mid` / DBA `name` | same |
+| Enrichment | form `owners[]`, signatures `signers[]` | only when `merchantapplicationno` known |
 
-## Why Merchants API
+## API (OpenAPI: https://api.mspware.com/api-docs/#/)
 
-Merchants CSV export (2026-07-30): **106** Approved+MID under **62** corporate names.  
-Applications-only sync: **~30** apps / **~19** approved with MID.  
+Primary: `GET /merchants`, `GET /merchants/{mid}`  
+Bridge: `GET /applications` (by mid)  
+Optional: `GET .../form`, `GET .../signatures` (404-safe)
 
-MSP docs ([api.mspware.com/api-docs](https://api.mspware.com/api-docs/#/)): `GET /merchants`, `GET /merchants/{mid}`. Same auth as boarding (`MSP_BASE_URL` / `MSP_APP_KEY`).
+Live base: `MSP_BASE_URL` (typically `https://api.msppulsepoint.com/v2`).
 
-Applications + form remain a **supplement** for `mspApplicationNo` and TIN when present.
+## Functions
 
-## API
-
-`POST /functions/importMSPPortfolio`
-
-- `{ "dryRun": true }` — preview only  
-- `{ "confirmLive": true }` — write
-
-`POST /functions/probeMSPMerchantData` — admin read-only coverage / field-shape probe.
+- `POST /functions/probeMSPMerchantData` — coverage + owner email clustering + signatures sample  
+- `POST /functions/importMSPPortfolio` — `{ dryRun: true }` or `{ confirmLive: true }`
 
 ## UI
 
 `/admin/center/sync-msp` — Probe → Dry run → Confirm live.
 
+## Schema
+
+`MerchantAccount.primaryContactEmail` / `primaryContactName` — **republish entity** in Base44.
+
 ## Non-goals
 
-HubSpot company/deal, Excel as primary path, scheduled sync, signer KYC, PCI/volume/notes UI.
+HubSpot company/deal, PCI/volume UI, inventing TINs, signatures as primary grouping key.

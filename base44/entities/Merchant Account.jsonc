@@ -15,6 +15,14 @@
       "type": "string",
       "description": "Optional company domain from HubSpot or primary signer email"
     },
+    "primaryContactEmail": {
+      "type": "string",
+      "description": "Normalized owner/operator contact email — used to link MSP portfolio sync and multi-EIN parents (Parent → Legal Entity → Location)"
+    },
+    "primaryContactName": {
+      "type": "string",
+      "description": "Owner/operator display name from MSP contact or HubSpot"
+    },
     "legalEntities": {
       "type": "array",
       "description": "Multi-EIN legal entities owned by this account — reusable across deals. Source of truth when merchantAccountId is set on a profile; profile.legalEntities is mirrored for boarding compatibility.",

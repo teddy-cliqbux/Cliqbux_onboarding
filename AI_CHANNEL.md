@@ -3017,3 +3017,26 @@ Dry-run via `GET /applications` saw ~30 apps / 19 Approved+MID. Full Merchants C
 
 **Waiting on:** Teddy (push + redeploy + probe/dry run)
 ---
+
+---
+**[CURSOR]** ? 2026-07-30
+**Type:** Fix
+**Re:** MSP sync Owner ? Legal Entity ? MID (OpenAPI inventory)
+
+### Finding
+Dry-run had 106 MIDs but **97 store-named accounts**. OpenAPI (`api.mspware.com/api-docs`) shows owner keys on `GET /merchants/{mid}`: `email`, `contact_*`, `corporate_name`, `federal_tax_id`. `GET .../signatures` gives signer email/name but needs `merchantapplicationno` (~19 apps only) ? enrichment only.
+
+### Shipped
+1. Group **MerchantAccount** by contact email ? contact name; **profile/legalEntities** by `federal_tax_id` ? corporate_name; MIDs under profile.
+2. Map `federal_tax_id`, prefer `corporate_name` over DBA `name`, `addresses[]`, contact first/last.
+3. Optional form owners + signatures when appNo known (404-safe).
+4. `MerchantAccount.primaryContactEmail` / `primaryContactName` ? **republish entity**.
+5. Probe shows owner email clusters; dry-run UI nests Owner ? Legal entities ? MIDs.
+
+### Teddy ops
+1. Push + redeploy `importMSPPortfolio` + `probeMSPMerchantData`.
+2. Republish **MerchantAccount** entity.
+3. Probe ? confirm multi-MID owners collapse ? Dry run ? live only if hierarchy looks right.
+
+**Waiting on:** Teddy (push + redeploy + entity republish + probe/dry)
+---
