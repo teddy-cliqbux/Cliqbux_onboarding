@@ -40,7 +40,13 @@
             "type": "string"
           },
           "federalEIN": {
-            "type": "string"
+            "type": "string",
+            "description": "Tax ID digits — EIN for entities, or SSN for sole props (see taxIdType)"
+          },
+          "taxIdType": {
+            "type": "string",
+            "description": "EIN for corporations/LLCs; SSN for sole proprietors",
+            "enum": ["EIN", "SSN"]
           },
           "mailingStreet": {
             "type": "string"

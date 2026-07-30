@@ -1,17 +1,18 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 /**
- * importMSPPortfolio — MSP Merchants → Merchant Center (Parent → Legal Entity → MID).
+ * importMSPPortfolio — MSP Merchants → Merchant Center (Owner → Legal Entity → MID).
  *
- * Primary: GET /merchants + GET /merchants/{mid}
- * Parent (MerchantAccount): contact email → contact name → corporate_name
- * Legal entity + profile: federal_tax_id → corporate_name
- * Location/MID: each mid / DBA name
- * Enrichment (optional): GET /applications by mid, form owners, signatures signers
+ * Rate limits (MSP OpenAPI): ≤10 req/s, ≤60k/day → HTTP 429.
+ * This gate runs at ≤8 req/s; every 429 is counted and surfaced (never silent).
  *
  * POST { dryRun: true } | { confirmLive: true }
- * No HubSpot. MSP read-only. Never invents TIN.
  */
+
+const MSP_MAX_RPS = 8;
+const MSP_MIN_GAP_MS = Math.ceil(1000 / MSP_MAX_RPS); // 125ms
+const MSP_SESSION_BUDGET = 5000;
+const MSP_429_MAX_RETRIES = 4;
 
 function mspOwnershipToInternal(code: string): string {
   const map: Record<string, string> = {
@@ -88,7 +89,6 @@ function pagesOf(data: any): number {
 function unwrapMerchant(data: any): any {
   if (!data || typeof data !== 'object') return {};
   if (data.merchant && typeof data.merchant === 'object') return data.merchant;
-  // OpenAPI returns merchant fields at top level alongside success/error
   return data;
 }
 
@@ -128,7 +128,30 @@ function newEntityId(): string {
   return crypto.randomUUID();
 }
 
-function firstAddress(m: any): { street: string; city: string; state: string; zip: string } {
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** Classify tax id: sole prop → SSN; otherwise EIN when digits present. */
+function classifyTaxIdType(opts: {
+  tin: string;
+  source?: string | null;
+  ownershipCode?: string | null;
+}): 'EIN' | 'SSN' | null {
+  if (!opts.tin || opts.tin.length < 4) return null;
+  const src = String(opts.source || '').toLowerCase();
+  if (src.includes('ssn') || src.includes('owners.ssn')) return 'SSN';
+  if (String(opts.ownershipCode || '').toUpperCase() === 'SP') return 'SSN';
+  return 'EIN';
+}
+
+function taxIdLabel(tin: string, taxIdType: string | null): string {
+  if (!tin) return '—';
+  const kind = taxIdType === 'SSN' ? 'SSN' : taxIdType === 'EIN' ? 'EIN' : 'Tax ID';
+  return `${kind} ***${tin.slice(-4)}`;
+}
+
+function firstAddress(m: any) {
   const addrs = Array.isArray(m.addresses) ? m.addresses : [];
   const a = addrs.find((x: any) => x && (x.address_line_1 || x.city)) || addrs[0] || {};
   return {
@@ -142,9 +165,7 @@ function firstAddress(m: any): { street: string; city: string; state: string; zi
 function mapMerchantFields(raw: any) {
   const m = unwrapMerchant(raw);
   const mid = midOf(m);
-  // DBA / storefront = MSP `name` (list "Merchant")
   const dba = String(pick(m, ['name', 'dba', 'Merchant', 'merchant_name', 'merchantName', 'full_dba_name']) || '').trim();
-  // Legal entity = corporate_name (do not fall back to DBA until necessary)
   const corporateNameRaw = String(pick(m, [
     'corporate_name', 'corporateName', 'Corporate Name', 'legal_name', 'legalName',
     'legal_dba_name', 'company_name', 'companyName',
@@ -152,16 +173,14 @@ function mapMerchantFields(raw: any) {
   const corporateName = corporateNameRaw || dba;
   const first = String(pick(m, ['contact_firstname', 'contactFirstname']) || '').trim();
   const last = String(pick(m, ['contact_lastname', 'contactLastname']) || '').trim();
-  const contactFromParts = [first, last].filter(Boolean).join(' ');
   const contact = String(
-    pick(m, ['contact_name', 'contactName', 'contact', 'Contact']) || contactFromParts || '',
+    pick(m, ['contact_name', 'contactName', 'contact', 'Contact']) || [first, last].filter(Boolean).join(' ') || '',
   ).trim();
   const email = normalizeEmail(String(pick(m, ['email', 'Email', 'business_email', 'contact_email']) || ''));
   const phone = cleanDigits(String(pick(m, ['phone', 'Phone', 'business_phone', 'contact_phone']) || ''));
   const addr = firstAddress(m);
   const mcc = String(pick(m, ['mcc', 'mcc_code', 'sic', 'SIC Code', 'sic_code']) || '').trim();
   const status = statusOf(m);
-  // OpenAPI: federal_tax_id
   const tin = cleanDigits(String(pick(m, [
     'federal_tax_id', 'federalTaxId', 'tin', 'TIN', 'ssn', 'SSN', 'ein', 'EIN', 'federal_ein', 'tax_id',
   ]) || ''));
@@ -174,11 +193,13 @@ function mapMerchantFields(raw: any) {
 
 function extractTinFromForm(form: any): { tin: string; source: string | null } {
   if (!form || typeof form !== 'object') return { tin: '', source: null };
-  const direct = cleanDigits(form.tin || form.ssn || '');
-  if (direct) return { tin: direct, source: form.tin ? 'form.tin' : 'form.ssn' };
+  if (form.ssn && cleanDigits(form.ssn)) return { tin: cleanDigits(form.ssn), source: 'form.ssn' };
+  if (form.tin && cleanDigits(form.tin)) return { tin: cleanDigits(form.tin), source: 'form.tin' };
   for (const o of Array.isArray(form.owners) ? form.owners : []) {
-    const ssn = cleanDigits(o?.owner_ssn || o?.ssn || o?.owner_tin || '');
+    const ssn = cleanDigits(o?.owner_ssn || o?.ssn || '');
     if (ssn) return { tin: ssn, source: 'owners.ssn' };
+    const otin = cleanDigits(o?.owner_tin || '');
+    if (otin) return { tin: otin, source: 'owners.tin' };
   }
   return { tin: '', source: null };
 }
@@ -204,6 +225,76 @@ function accountDisplayName(fields: { contact?: string; email?: string; corporat
   return fields.corporateName || 'MSP Portfolio';
 }
 
+function isCliqbuxTestMid(fields: { dba?: string; corporateName?: string }): boolean {
+  const s = `${fields.dba || ''} ${fields.corporateName || ''}`.toUpperCase();
+  return /CLIQBUX/.test(s) && /(LIVE|EQUIPMENT|TEST)/.test(s);
+}
+
+/** MSP HTTP gate: ≤8 req/s, counts requests + 429s, retries 429 with backoff. */
+class MspRateGate {
+  mspRequestCount = 0;
+  rateLimit429Count = 0;
+  private lastAt = 0;
+  private chain: Promise<void> = Promise.resolve();
+
+  constructor(private budget = MSP_SESSION_BUDGET) {}
+
+  private async throttle() {
+    const run = async () => {
+      if (this.mspRequestCount >= this.budget) {
+        throw new Error(
+          `MSP session budget exceeded (${this.budget} requests). Soft cap under 60k/day limit.`,
+        );
+      }
+      const now = Date.now();
+      const wait = Math.max(0, MSP_MIN_GAP_MS - (now - this.lastAt));
+      if (wait > 0) await sleep(wait);
+      this.lastAt = Date.now();
+      this.mspRequestCount++;
+    };
+    const next = this.chain.then(run, run);
+    this.chain = next.catch(() => {});
+    await next;
+  }
+
+  async fetch(url: string, init: RequestInit, label = ''): Promise<Response> {
+    let attempt = 0;
+    while (true) {
+      await this.throttle();
+      let res: Response;
+      try {
+        res = await fetch(url, init);
+      } catch (err: any) {
+        if (attempt >= MSP_429_MAX_RETRIES) throw err;
+        attempt++;
+        await sleep(1000 * attempt);
+        continue;
+      }
+      if (res.status === 429) {
+        this.rateLimit429Count++;
+        const path = label || url.replace(/^https?:\/\/[^/]+/, '');
+        console.warn(`[msp] HTTP 429 path=${path} attempt=${attempt + 1} total429=${this.rateLimit429Count}`);
+        if (attempt >= MSP_429_MAX_RETRIES) return res;
+        const retryAfter = Number(res.headers.get('Retry-After') || '');
+        const backoff = Number.isFinite(retryAfter) && retryAfter > 0
+          ? retryAfter * 1000
+          : 1000 * Math.pow(2, attempt);
+        attempt++;
+        await sleep(backoff);
+        continue;
+      }
+      return res;
+    }
+  }
+
+  stats() {
+    return {
+      mspRequestCount: this.mspRequestCount,
+      rateLimit429Count: this.rateLimit429Count,
+    };
+  }
+}
+
 async function batchedParallel<T>(items: T[], concurrency: number, fn: (item: T) => Promise<any>): Promise<any[]> {
   const results: any[] = [];
   for (let i = 0; i < items.length; i += concurrency) {
@@ -213,18 +304,23 @@ async function batchedParallel<T>(items: T[], concurrency: number, fn: (item: T)
   return results;
 }
 
-async function paginateAll(mspBase: string, path: string, headers: Record<string, string>) {
+async function paginateAll(
+  gate: MspRateGate,
+  mspBase: string,
+  path: string,
+  headers: Record<string, string>,
+) {
   let all: any[] = [];
   let page = 1;
   let status = 0;
   while (true) {
     const url = `${mspBase}${path}${path.includes('?') ? '&' : '?'}page=${page}&limit=100`;
-    const res = await fetch(url, { headers });
+    const res = await gate.fetch(url, { headers }, path);
     status = res.status;
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       if (page === 1) {
-        const bare = await fetch(`${mspBase}${path}`, { headers });
+        const bare = await gate.fetch(`${mspBase}${path}`, { headers }, path);
         status = bare.status;
         const bareData = await bare.json().catch(() => ({}));
         return { ok: bare.ok, status, items: extractList(bareData) };
@@ -239,6 +335,92 @@ async function paginateAll(mspBase: string, path: string, headers: Record<string
     if (page > 50) break;
   }
   return { ok: status >= 200 && status < 300, status, items: all };
+}
+
+/** Second-pass: unify by tax id, then absorb orphans by corporate_name. */
+function mergeImportableItems(items: any[]): { items: any[]; mergeNotes: string[] } {
+  const mergeNotes: string[] = [];
+  const byTin = new Map<string, any[]>();
+  for (const it of items) {
+    const tin = it.fields.tin;
+    if (tin && tin.length >= 4) {
+      if (!byTin.has(tin)) byTin.set(tin, []);
+      byTin.get(tin)!.push(it);
+    }
+  }
+
+  // Canonical owner for each tax id = email group with most MIDs (else richest contact)
+  for (const [tin, group] of byTin) {
+    if (group.length < 2) continue;
+    const byOwner = new Map<string, any[]>();
+    for (const it of group) {
+      const ok = ownerKeyOf(it.fields) || `mid:${it.mid}`;
+      if (!byOwner.has(ok)) byOwner.set(ok, []);
+      byOwner.get(ok)!.push(it);
+    }
+    if (byOwner.size < 2) continue;
+    let bestKey = '';
+    let bestList: any[] = [];
+    for (const [k, list] of byOwner) {
+      if (list.length > bestList.length || (list.length === bestList.length && list[0].fields.email)) {
+        bestKey = k;
+        bestList = list;
+      }
+    }
+    const canon = bestList[0];
+    const altEmails = new Set<string>();
+    for (const [k, list] of byOwner) {
+      if (k === bestKey) continue;
+      for (const it of list) {
+        if (it.fields.email) altEmails.add(it.fields.email);
+        it.fields.email = canon.fields.email || it.fields.email;
+        it.fields.contact = canon.fields.contact || it.fields.contact;
+        it.mergedBy = 'tax_id';
+        it.canonicalOwnerKey = ownerKeyOf(canon.fields);
+      }
+    }
+    mergeNotes.push(
+      `tax_id ***${tin.slice(-4)}: unified ${group.length} MIDs under ${canon.fields.email || canon.fields.contact || bestKey}`
+      + (altEmails.size ? ` (also: ${[...altEmails].join(', ')})` : ''),
+    );
+  }
+
+  // Build corporate_name → rich template (has email or tin)
+  const richByCorp = new Map<string, any>();
+  for (const it of items) {
+    const ck = normalizeNameKey(it.fields.corporateName || '');
+    if (!ck) continue;
+    const rich = !!(it.fields.email || it.fields.tin);
+    if (!rich) continue;
+    const prev = richByCorp.get(ck);
+    if (!prev || (it.fields.tin && !prev.fields.tin) || (it.fields.email && !prev.fields.email)) {
+      richByCorp.set(ck, it);
+    }
+  }
+
+  for (const it of items) {
+    if (it.fields.email && it.fields.tin) continue;
+    const ck = normalizeNameKey(it.fields.corporateName || '');
+    if (!ck) continue;
+    const rich = richByCorp.get(ck);
+    if (!rich || rich.mid === it.mid) continue;
+    if (!it.fields.email && rich.fields.email) {
+      it.fields.email = rich.fields.email;
+      it.emailSource = it.emailSource || 'merged.corporate_name';
+      it.mergedBy = it.mergedBy || 'corporate_name';
+    }
+    if (!it.fields.contact && rich.fields.contact) {
+      it.fields.contact = rich.fields.contact;
+    }
+    if (!it.fields.tin && rich.fields.tin) {
+      it.fields.tin = rich.fields.tin;
+      it.tinSource = it.tinSource || rich.tinSource || 'merged.corporate_name';
+      it.taxIdType = it.taxIdType || rich.taxIdType;
+      it.mergedBy = it.mergedBy || 'corporate_name';
+    }
+  }
+
+  return { items, mergeNotes };
 }
 
 Deno.serve(async (req) => {
@@ -267,14 +449,16 @@ Deno.serve(async (req) => {
     if (!apiKey) return Response.json({ error: 'MSP_APP_KEY env var not set' }, { status: 500 });
 
     const mspHeaders = { 'X-API-KEY': apiKey, 'X-App-ID': appId, Accept: 'application/json' };
-    console.log(`[importMSPPortfolio] Starting${dryRun ? ' DRY RUN' : ' LIVE'} (owner hierarchy)...`);
+    const gate = new MspRateGate();
+    console.log(`[importMSPPortfolio] Starting${dryRun ? ' DRY RUN' : ' LIVE'} (≤${MSP_MAX_RPS} req/s)...`);
 
     // ── 1. Merchants list + detail ──────────────────────────────────────────
-    const merchantsPage = await paginateAll(mspBase, '/merchants', mspHeaders);
+    const merchantsPage = await paginateAll(gate, mspBase, '/merchants', mspHeaders);
     if (!merchantsPage.ok) {
       return Response.json({
         error: `GET /merchants failed HTTP ${merchantsPage.status}`,
         hint: 'Run probeMSPMerchantData.',
+        ...gate.stats(),
       }, { status: 502 });
     }
 
@@ -282,12 +466,17 @@ Deno.serve(async (req) => {
     const uniqueMids = [...new Set(listWithMid.map(midOf))];
     let merchantFetchErrors = 0;
 
-    const detailed = await batchedParallel(uniqueMids, 8, async (mid: string) => {
+    const detailed = await batchedParallel(uniqueMids, 2, async (mid: string) => {
+      const listRow = listWithMid.find((r) => midOf(r) === mid) || { mid };
       try {
-        const res = await fetch(`${mspBase}/merchants/${encodeURIComponent(mid)}`, { headers: mspHeaders });
-        const listRow = listWithMid.find((r) => midOf(r) === mid) || { mid };
+        const res = await gate.fetch(
+          `${mspBase}/merchants/${encodeURIComponent(mid)}`,
+          { headers: mspHeaders },
+          `/merchants/${mid}`,
+        );
         if (!res.ok) {
           merchantFetchErrors++;
+          console.warn(`[importMSPPortfolio] merchant ${mid} HTTP ${res.status}`);
           return { mid, fields: mapMerchantFields(listRow), detailOk: false };
         }
         const data = await res.json().catch(() => ({}));
@@ -297,18 +486,20 @@ Deno.serve(async (req) => {
         for (const k of ['dba', 'corporateName', 'contact', 'email', 'phone', 'street', 'city', 'state', 'zip', 'mcc', 'status', 'tin'] as const) {
           if (!(fields as any)[k] && (fromList as any)[k]) (fields as any)[k] = (fromList as any)[k];
         }
-        return { mid, fields, detailOk: true, tinSource: fields.tin ? 'merchant.federal_tax_id' : null };
+        const tinSource = fields.tin ? 'merchant.federal_tax_id' : null;
+        const taxIdType = classifyTaxIdType({ tin: fields.tin, source: tinSource });
+        return { mid, fields, detailOk: true, tinSource, taxIdType };
       } catch (err: any) {
         merchantFetchErrors++;
         console.warn(`[importMSPPortfolio] merchant ${mid}: ${err.message}`);
-        return { mid, fields: mapMerchantFields(listWithMid.find((r) => midOf(r) === mid) || { mid }), detailOk: false };
+        return { mid, fields: mapMerchantFields(listRow), detailOk: false };
       }
     });
 
-    const importable = detailed.filter((d) => d.fields.mid && isImportableStatus(d.fields.status));
+    let importable = detailed.filter((d) => d.fields.mid && isImportableStatus(d.fields.status));
 
-    // ── 2. Applications bridge + form / signatures enrichment ───────────────
-    const appsPage = await paginateAll(mspBase, '/applications', mspHeaders);
+    // ── 2. Applications bridge + form / signatures ──────────────────────────
+    const appsPage = await paginateAll(gate, mspBase, '/applications', mspHeaders);
     const appByMid = new Map<string, any>();
     const appByNo = new Map<string, any>();
     for (const a of appsPage.items || []) {
@@ -327,12 +518,11 @@ Deno.serve(async (req) => {
 
     const enrichTargets = importable.filter((d) => {
       if (appByMid.has(d.mid)) return true;
-      // elavonappid sometimes equals app no — try numeric match
       const eid = d.fields.elavonAppId;
       return eid && (/^\d+$/.test(eid) || appByNo.has(eid));
     });
 
-    await batchedParallel(enrichTargets, 5, async (item: any) => {
+    await batchedParallel(enrichTargets, 2, async (item: any) => {
       let app = appByMid.get(item.mid);
       if (!app && item.fields.elavonAppId && appByNo.has(item.fields.elavonAppId)) {
         app = appByNo.get(item.fields.elavonAppId);
@@ -344,7 +534,11 @@ Deno.serve(async (req) => {
       item.appNo = appNo;
 
       try {
-        const formRes = await fetch(`${mspBase}/applications/${appNo}/form`, { headers: mspHeaders });
+        const formRes = await gate.fetch(
+          `${mspBase}/applications/${appNo}/form`,
+          { headers: mspHeaders },
+          `/applications/${appNo}/form`,
+        );
         if (formRes.ok) {
           const formData = await formRes.json().catch(() => ({}));
           const form = formData?.form || {};
@@ -355,6 +549,11 @@ Deno.serve(async (req) => {
             item.tinSource = source;
             tinFromForm++;
           }
+          item.taxIdType = classifyTaxIdType({
+            tin: item.fields.tin,
+            source: item.tinSource,
+            ownershipCode: form.ownership_type,
+          });
           if (!item.fields.corporateName && form.legal_dba_name) {
             item.fields.corporateName = String(form.legal_dba_name).trim();
           }
@@ -367,6 +566,8 @@ Deno.serve(async (req) => {
           if (!item.fields.contact && (owner0.owner_firstname || owner0.owner_lastname)) {
             item.fields.contact = [owner0.owner_firstname, owner0.owner_lastname].filter(Boolean).join(' ');
           }
+        } else if (formRes.status !== 429) {
+          formFetchErrors++;
         } else {
           formFetchErrors++;
         }
@@ -375,7 +576,11 @@ Deno.serve(async (req) => {
       }
 
       try {
-        const sigRes = await fetch(`${mspBase}/applications/${appNo}/signatures`, { headers: mspHeaders });
+        const sigRes = await gate.fetch(
+          `${mspBase}/applications/${appNo}/signatures`,
+          { headers: mspHeaders },
+          `/applications/${appNo}/signatures`,
+        );
         if (sigRes.ok) {
           const sigData = await sigRes.json().catch(() => ({}));
           const signers = Array.isArray(sigData?.signers) ? sigData.signers : [];
@@ -402,12 +607,29 @@ Deno.serve(async (req) => {
     for (const item of importable) {
       if (item.fields.tin && !item.tinSource) item.tinSource = 'merchant.federal_tax_id';
       if (item.fields.email && !item.emailSource) item.emailSource = 'merchant.email';
+      if (item.fields.tin && !item.taxIdType) {
+        item.taxIdType = classifyTaxIdType({
+          tin: item.fields.tin,
+          source: item.tinSource,
+          ownershipCode: item.form?.ownership_type,
+        });
+      }
+      item.skipSuggested = isCliqbuxTestMid(item.fields);
     }
 
-    // ── 3. Nested groups: owner → legal entity → mids ───────────────────────
-    type MidItem = typeof importable[0];
-    const ownerGroups = new Map<string, Map<string, MidItem[]>>();
+    // ── 3. Second-pass merge ────────────────────────────────────────────────
+    const mergeResult = mergeImportableItems(importable);
+    importable = mergeResult.items;
 
+    // Re-classify after merge fills tin
+    for (const item of importable) {
+      if (item.fields.tin && !item.taxIdType) {
+        item.taxIdType = classifyTaxIdType({ tin: item.fields.tin, source: item.tinSource });
+      }
+    }
+
+    // ── 4. Nested groups: owner → legal entity → mids ───────────────────────
+    const ownerGroups = new Map<string, Map<string, any[]>>();
     for (const item of importable) {
       const ok = ownerKeyOf(item.fields);
       const lk = legalKeyOf(item.fields);
@@ -418,7 +640,7 @@ Deno.serve(async (req) => {
       legals.get(lk)!.push(item);
     }
 
-    // ── 4. Existing Base44 ──────────────────────────────────────────────────
+    // ── 5. Existing Base44 ──────────────────────────────────────────────────
     const [allProfiles, allMerchantMIDs, allAccounts] = await Promise.all([
       base44.asServiceRole.entities.MerchantCorporateProfile.filter({}),
       base44.asServiceRole.entities.MerchantMID.filter({}),
@@ -454,6 +676,10 @@ Deno.serve(async (req) => {
     );
 
     const uniqueEmails = new Set(importable.map((i) => i.fields.email).filter(Boolean));
+    const withEin = importable.filter((i) => i.taxIdType === 'EIN').length;
+    const withSsn = importable.filter((i) => i.taxIdType === 'SSN').length;
+    const taxIdUnavailable = importable.filter((i) => !i.fields.tin).length;
+
     const summary = {
       source: 'merchants',
       hierarchy: 'owner_email → legal_entity → mid',
@@ -464,18 +690,29 @@ Deno.serve(async (req) => {
       formFetchErrors,
       signaturesOk,
       signaturesMiss,
+      ...gate.stats(),
+      detailOk: importable.filter((i) => i.detailOk).length,
       tinFromMerchant: importable.filter((i) => String(i.tinSource || '').startsWith('merchant')).length,
       tinFromForm,
-      tinUnavailable: importable.filter((i) => !i.fields.tin).length,
+      withEin,
+      withSsn,
+      einMissing: importable.filter((i) => !i.fields.tin || i.taxIdType === 'SSN').length - withSsn < 0
+        ? 0
+        : importable.filter((i) => !i.fields.tin).length, // keep simple below
+      ssnPresent: withSsn,
+      taxIdUnavailable,
+      tinUnavailable: taxIdUnavailable,
       emailFromMerchant: importable.filter((i) => i.emailSource === 'merchant.email').length,
       emailFromSigner,
       emailFromOwner,
       uniqueOwnerEmails: uniqueEmails.size,
       ownerGroups: ownerGroups.size,
       legalEntityGroups: [...ownerGroups.values()].reduce((n, m) => n + m.size, 0),
+      mergeNotes: mergeResult.mergeNotes,
+      mergedByTaxId: importable.filter((i) => i.mergedBy === 'tax_id').length,
+      mergedByCorporateName: importable.filter((i) => i.mergedBy === 'corporate_name').length,
       applicationsScanned: appsPage.items?.length || 0,
       applicationsMatchedByMid: importable.filter((i) => appByMid.has(i.mid)).length,
-      // legacy UI keys
       mspAppsScanned: appsPage.items?.length || 0,
       approvedWithMid: importable.length,
       groups: ownerGroups.size,
@@ -484,9 +721,12 @@ Deno.serve(async (req) => {
       locations: { created: 0, skipped: 0 },
       merchantMIDs: { created: 0, skipped: 0, errors: 0 },
     };
+    // Fix einMissing to mean: no EIN among non-SSN (tax id missing for corps)
+    summary.einMissing = importable.filter((i) => !i.fields.tin && i.taxIdType !== 'SSN').length;
+
     const entityResults: any[] = [];
 
-    // ── 5. Write / dry-run per owner ────────────────────────────────────────
+    // ── 6. Write / dry-run per owner ────────────────────────────────────────
     for (const [ownerKey, legalMap] of ownerGroups) {
       const allOwnerItems = [...legalMap.values()].flat();
       const rep = allOwnerItems[0];
@@ -497,8 +737,10 @@ Deno.serve(async (req) => {
         email: ownerEmail,
         corporateName: rep.fields.corporateName,
       });
+      const altEmails = [...new Set(
+        allOwnerItems.map((i) => i.fields.email).filter((e) => e && e !== ownerEmail),
+      )];
 
-      // Prefer email link, then any EIN under this owner, then contact name
       let account =
         (ownerEmail && accountByEmail.get(ownerEmail))
         || allOwnerItems.map((i) => i.fields.tin).filter(Boolean).map((t) => accountByEin.get(t)).find(Boolean)
@@ -506,7 +748,6 @@ Deno.serve(async (req) => {
         || null;
       let accountCreated = false;
 
-      // Build legalEntities union for this owner
       const legalEntitiesPayload: any[] = [];
       const seenEntityKeys = new Set<string>();
       for (const [, items] of legalMap) {
@@ -514,10 +755,16 @@ Deno.serve(async (req) => {
         const ek = legalKeyOf(f);
         if (seenEntityKeys.has(ek)) continue;
         seenEntityKeys.add(ek);
+        const taxIdType = items[0].taxIdType || classifyTaxIdType({
+          tin: f.tin,
+          source: items[0].tinSource,
+          ownershipCode: items[0].form?.ownership_type,
+        });
         legalEntitiesPayload.push({
           entityId: newEntityId(),
           legalBusinessName: f.corporateName || f.dba,
           federalEIN: f.tin || '',
+          taxIdType: taxIdType || undefined,
           mailingStreet: f.street || '',
           mailingCity: f.city || '',
           mailingState: f.state || '',
@@ -578,8 +825,11 @@ Deno.serve(async (req) => {
         const f = items[0].fields;
         const form = items[0].form || {};
         const tin = f.tin || '';
+        const taxIdType = items[0].taxIdType || classifyTaxIdType({
+          tin, source: items[0].tinSource, ownershipCode: form.ownership_type,
+        });
         const legalName = (f.corporateName || f.dba || '').trim();
-        const ownershipCode = form.ownership_type || 'CO';
+        const ownershipCode = form.ownership_type || (taxIdType === 'SSN' ? 'SP' : 'CO');
         const primaryOwner = (form.owners || [])[0] || {};
         const dob = parseDob(primaryOwner.owner_dob || '');
         const email = f.email || normalizeEmail(primaryOwner.owner_email || form.business_email || '');
@@ -600,6 +850,7 @@ Deno.serve(async (req) => {
           if (!profile.merchantAccountId && !dryRun) {
             profile = await base44.asServiceRole.entities.MerchantCorporateProfile.update(profile.id, {
               merchantAccountId,
+              ...(taxIdType && !profile.taxIdType ? { taxIdType } : {}),
             });
             summary.corporateEntities.linkedToAccount++;
           } else {
@@ -615,6 +866,7 @@ Deno.serve(async (req) => {
             dbaName: f.dba || legalName,
             signerEmail: email || `import+msp-${slugCorp(legalName).slice(0, 12)}@cliqbux.com`,
             taxId: tin || null,
+            ...(taxIdType ? { taxIdType } : {}),
             ownershipType: mspOwnershipToInternal(ownershipCode),
             ...(taxClassType ? { taxClassType } : {}),
             firstName: primaryOwner.owner_firstname || f.contactFirst || contactParts[0] || '',
@@ -735,6 +987,8 @@ Deno.serve(async (req) => {
             midResults.push({
               mid, appNo: appNo || null, dba: fields.dba,
               result: dryRun ? 'would_create' : 'created',
+              mergedBy: item.mergedBy || null,
+              skipSuggested: !!item.skipSuggested,
             });
           } catch (err: any) {
             summary.merchantMIDs.errors++;
@@ -746,10 +1000,13 @@ Deno.serve(async (req) => {
           legalKey,
           legalName,
           tin: tin ? `***${tin.slice(-4)}` : null,
+          taxIdType: taxIdType || null,
+          taxIdLabel: taxIdLabel(tin, taxIdType),
           tinSource: items[0].tinSource || null,
           corporateId,
           profileCreated,
           midCount: items.length,
+          mergedBy: items.some((i: any) => i.mergedBy) ? items.map((i: any) => i.mergedBy).filter(Boolean)[0] : null,
           mids: midResults,
         });
       }
@@ -759,6 +1016,7 @@ Deno.serve(async (req) => {
         ownerKey,
         ownerEmail: ownerEmail || null,
         ownerContact: ownerContact || null,
+        alternateEmails: altEmails,
         emailSource: rep.emailSource || null,
         legalName: accountName,
         tin: null,
@@ -770,6 +1028,8 @@ Deno.serve(async (req) => {
         mspRef: true,
         midCount: allOwnerItems.length,
         legalEntityCount: legalMap.size,
+        mergedBy: allOwnerItems.some((i) => i.mergedBy) ? [...new Set(allOwnerItems.map((i) => i.mergedBy).filter(Boolean))] : [],
+        skipSuggested: allOwnerItems.every((i) => i.skipSuggested),
         legalEntities: legalResults,
         apps: legalResults.flatMap((l) => l.mids),
       });
@@ -782,6 +1042,11 @@ Deno.serve(async (req) => {
       hubspot: false,
       source: 'merchants',
       hierarchy: 'owner_email → legal_entity → mid',
+      rateLimit: {
+        maxRps: MSP_MAX_RPS,
+        sessionBudget: MSP_SESSION_BUDGET,
+        ...gate.stats(),
+      },
       summary,
       entities: entityResults,
     });

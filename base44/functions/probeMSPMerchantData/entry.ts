@@ -1,13 +1,14 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 /**
- * probeMSPMerchantData — admin read-only diagnostic for MSP Merchants API vs applications.
- *
- * Confirms GET /merchants (+ GET /merchants/{mid}) shape and coverage vs GET /applications.
- * Never writes Base44 or MSP. Never returns full TIN/SSN (last-4 only).
- *
- * POST {} optional { sampleSize?: number, mids?: string[] }
+ * probeMSPMerchantData — admin read-only MSP Merchants vs applications probe.
+ * Rate gate ≤8 req/s; every HTTP 429 counted and returned (never silent).
  */
+
+const MSP_MAX_RPS = 8;
+const MSP_MIN_GAP_MS = Math.ceil(1000 / MSP_MAX_RPS);
+const MSP_SESSION_BUDGET = 5000;
+const MSP_429_MAX_RETRIES = 4;
 
 function cleanDigits(s: string): string {
   return (s || '').replace(/\D/g, '');
@@ -23,10 +24,7 @@ function pick(obj: any, keys: string[]): unknown {
   for (const k of keys) {
     if (obj[k] != null && obj[k] !== '') return obj[k];
   }
-  // case-insensitive fallback
-  const lower = Object.fromEntries(
-    Object.keys(obj).map((k) => [k.toLowerCase(), obj[k]]),
-  );
+  const lower = Object.fromEntries(Object.keys(obj).map((k) => [k.toLowerCase(), obj[k]]));
   for (const k of keys) {
     const v = lower[k.toLowerCase()];
     if (v != null && v !== '') return v;
@@ -73,6 +71,67 @@ function taxLikeKeys(obj: any, prefix = ''): string[] {
   return hits;
 }
 
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+class MspRateGate {
+  mspRequestCount = 0;
+  rateLimit429Count = 0;
+  private lastAt = 0;
+  private chain: Promise<void> = Promise.resolve();
+
+  constructor(private budget = MSP_SESSION_BUDGET) {}
+
+  private async throttle() {
+    const run = async () => {
+      if (this.mspRequestCount >= this.budget) {
+        throw new Error(`MSP session budget exceeded (${this.budget}).`);
+      }
+      const wait = Math.max(0, MSP_MIN_GAP_MS - (Date.now() - this.lastAt));
+      if (wait > 0) await sleep(wait);
+      this.lastAt = Date.now();
+      this.mspRequestCount++;
+    };
+    const next = this.chain.then(run, run);
+    this.chain = next.catch(() => {});
+    await next;
+  }
+
+  async fetch(url: string, init: RequestInit, label = ''): Promise<Response> {
+    let attempt = 0;
+    while (true) {
+      await this.throttle();
+      let res: Response;
+      try {
+        res = await fetch(url, init);
+      } catch (err: any) {
+        if (attempt >= MSP_429_MAX_RETRIES) throw err;
+        attempt++;
+        await sleep(1000 * attempt);
+        continue;
+      }
+      if (res.status === 429) {
+        this.rateLimit429Count++;
+        console.warn(`[msp] HTTP 429 path=${label || url} attempt=${attempt + 1} total429=${this.rateLimit429Count}`);
+        if (attempt >= MSP_429_MAX_RETRIES) return res;
+        const retryAfter = Number(res.headers.get('Retry-After') || '');
+        const backoff = Number.isFinite(retryAfter) && retryAfter > 0
+          ? retryAfter * 1000
+          : 1000 * Math.pow(2, attempt);
+        attempt++;
+        await sleep(backoff);
+        continue;
+      }
+      return res;
+    }
+  }
+
+  stats() {
+    return { mspRequestCount: this.mspRequestCount, rateLimit429Count: this.rateLimit429Count };
+  }
+}
+
 function firstAddress(src: any) {
   const addrs = Array.isArray(src.addresses) ? src.addresses : [];
   const a = addrs.find((x: any) => x && (x.address_line_1 || x.city)) || addrs[0] || {};
@@ -113,12 +172,7 @@ function safeMerchantView(detail: any): Record<string, unknown> {
   };
 }
 
-async function paginate(
-  mspBase: string,
-  path: string,
-  headers: Record<string, string>,
-  listKeyHint: string,
-): Promise<{ ok: boolean; status: number; items: any[]; rawKeys: string[]; pages: number; firstPageSample: any }> {
+async function paginate(gate: MspRateGate, mspBase: string, path: string, headers: Record<string, string>) {
   let all: any[] = [];
   let page = 1;
   let status = 0;
@@ -128,11 +182,11 @@ async function paginate(
 
   while (true) {
     const url = `${mspBase}${path}${path.includes('?') ? '&' : '?'}page=${page}&limit=100`;
-    const res = await fetch(url, { headers });
+    const res = await gate.fetch(url, { headers }, path);
     status = res.status;
     const text = await res.text();
     let data: any = {};
-    try { data = text ? JSON.parse(text) : {}; } catch { data = { _parseError: true, _raw: text.slice(0, 200) }; }
+    try { data = text ? JSON.parse(text) : {}; } catch { data = { _parseError: true }; }
 
     if (page === 1) {
       rawKeys = data && typeof data === 'object' ? Object.keys(data) : [];
@@ -141,32 +195,25 @@ async function paginate(
     }
 
     if (!res.ok) {
+      if (page === 1) {
+        const bare = await gate.fetch(`${mspBase}${path}`, { headers }, path);
+        status = bare.status;
+        const bareData = await bare.json().catch(() => ({}));
+        return {
+          ok: bare.ok, status, items: extractList(bareData),
+          rawKeys: Object.keys(bareData || {}), pages: 1, firstPageSample: bareData,
+        };
+      }
       return { ok: false, status, items: all, rawKeys, pages, firstPageSample };
     }
 
     const batch = extractList(data);
-    // If empty but single object with mid, treat as one
-    if (!batch.length && midOf(data)) {
-      all.push(data);
-      break;
-    }
     all = all.concat(batch);
     if (!batch.length || page >= pages) break;
     page++;
-    if (page > 50) break; // safety
+    if (page > 50) break;
   }
 
-  // Try without pagination if first page empty but 200
-  if (!all.length && status === 200 && firstPageSample) {
-    const bare = await fetch(`${mspBase}${path}`, { headers });
-    status = bare.status;
-    const data = await bare.json().catch(() => ({}));
-    rawKeys = data && typeof data === 'object' ? Object.keys(data) : rawKeys;
-    all = extractList(data);
-    firstPageSample = data;
-  }
-
-  void listKeyHint;
   return { ok: status >= 200 && status < 300, status, items: all, rawKeys, pages, firstPageSample };
 }
 
@@ -190,9 +237,9 @@ Deno.serve(async (req) => {
     if (!apiKey) return Response.json({ error: 'MSP_APP_KEY env var not set' }, { status: 500 });
 
     const headers = { 'X-API-KEY': apiKey, 'X-App-ID': appId, Accept: 'application/json' };
+    const gate = new MspRateGate();
 
-    // ── Merchants list ──────────────────────────────────────────────────────
-    const merchantsList = await paginate(mspBase, '/merchants', headers, 'merchants');
+    const merchantsList = await paginate(gate, mspBase, '/merchants', headers);
 
     const merchantsByStatus: Record<string, number> = {};
     let merchantsWithMid = 0;
@@ -202,8 +249,7 @@ Deno.serve(async (req) => {
       if (midOf(m)) merchantsWithMid++;
     }
 
-    // ── Applications list (comparison) ──────────────────────────────────────
-    const appsList = await paginate(mspBase, '/applications', headers, 'applications');
+    const appsList = await paginate(gate, mspBase, '/applications', headers);
     const appsByStatus: Record<string, number> = {};
     let appsWithMid = 0;
     let appsApprovedWithMid = 0;
@@ -216,7 +262,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Sample merchant detail + owner cluster (all MIDs, batched) ──────────
     const listMids = merchantsList.items.map(midOf).filter(Boolean);
     const allUniqueMids = [...new Set([...extraMids, ...listMids])];
     const sampleMids = allUniqueMids.slice(0, sampleSize);
@@ -226,17 +271,22 @@ Deno.serve(async (req) => {
     let withFederalTaxId = 0;
     let withEmail = 0;
     let detailOkAll = 0;
+    let merchantFetchErrors = 0;
 
-    // Full pass for clustering (batched)
-    for (let i = 0; i < allUniqueMids.length; i += 8) {
-      const batch = allUniqueMids.slice(i, i + 8);
+    for (let i = 0; i < allUniqueMids.length; i += 2) {
+      const batch = allUniqueMids.slice(i, i + 2);
       await Promise.all(batch.map(async (mid) => {
-        const res = await fetch(`${mspBase}/merchants/${encodeURIComponent(mid)}`, { headers });
+        const res = await gate.fetch(
+          `${mspBase}/merchants/${encodeURIComponent(mid)}`,
+          { headers },
+          `/merchants/${mid}`,
+        );
         const text = await res.text();
         let data: any = {};
         try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
         const view = res.ok ? safeMerchantView(data) : null;
         if (res.ok) detailOkAll++;
+        else merchantFetchErrors++;
         if (sampleMids.includes(mid)) {
           detailSamples.push({
             mid,
@@ -264,28 +314,38 @@ Deno.serve(async (req) => {
     const multiMidEmails = [...ownerByEmail.entries()].filter(([, v]) => v.mids.length >= 2);
     const multiCorpEmails = [...ownerByEmail.entries()].filter(([, v]) => v.corps.size >= 2);
 
-    // ── Form + signatures sample (apps with MID) ────────────────────────────
     const approvedApps = appsList.items.filter(
       (a: any) => ['Approved', 'Complete'].includes(a.application_status) && a.mid,
     ).slice(0, Math.min(sampleSize, 6));
 
     let formsWithTin = 0;
+    let formsWithSsn = 0;
     let signaturesOk = 0;
     let signaturesMiss = 0;
     const formSamples: any[] = [];
     for (const app of approvedApps) {
       const appNo = app.merchantapplicationno;
       try {
-        const res = await fetch(`${mspBase}/applications/${appNo}/form`, { headers });
+        const res = await gate.fetch(
+          `${mspBase}/applications/${appNo}/form`,
+          { headers },
+          `/applications/${appNo}/form`,
+        );
         const data = await res.json().catch(() => ({}));
         const form = data?.form || {};
-        const tin = form.tin || form.ssn || '';
+        const tin = form.tin || '';
+        const ssn = form.ssn || '';
         const taxKeys = taxLikeKeys(form);
         if (cleanDigits(tin) || taxKeys.length) formsWithTin++;
+        if (cleanDigits(ssn)) formsWithSsn++;
 
         let sig: any = null;
         try {
-          const sigRes = await fetch(`${mspBase}/applications/${appNo}/signatures`, { headers });
+          const sigRes = await gate.fetch(
+            `${mspBase}/applications/${appNo}/signatures`,
+            { headers },
+            `/applications/${appNo}/signatures`,
+          );
           if (sigRes.ok) {
             signaturesOk++;
             const sigData = await sigRes.json().catch(() => ({}));
@@ -310,6 +370,7 @@ Deno.serve(async (req) => {
           mid: app.mid,
           httpStatus: res.status,
           tinLast4: last4(tin),
+          ssnLast4: last4(ssn),
           taxLikeKeys: taxKeys.slice(0, 15),
           signatures: sig,
         });
@@ -318,11 +379,19 @@ Deno.serve(async (req) => {
       }
     }
 
-    const merchantsBaselineCsv = 106; // Merchants_2026-07-30_190910.csv Approved+MID
+    const merchantsBaselineCsv = 106;
+    const detailPct = allUniqueMids.length
+      ? Math.round((detailOkAll / allUniqueMids.length) * 100)
+      : 0;
 
     return Response.json({
       success: true,
       mspBase,
+      rateLimit: {
+        maxRps: MSP_MAX_RPS,
+        sessionBudget: MSP_SESSION_BUDGET,
+        ...gate.stats(),
+      },
       merchants: {
         listOk: merchantsList.ok,
         listHttpStatus: merchantsList.status,
@@ -332,9 +401,7 @@ Deno.serve(async (req) => {
         withMid: merchantsWithMid,
         byStatus: merchantsByStatus,
         sampleListRowKeys: merchantsList.items[0] ? Object.keys(merchantsList.items[0]).slice(0, 40) : [],
-        sampleListRow: merchantsList.items[0]
-          ? safeMerchantView(merchantsList.items[0])
-          : null,
+        sampleListRow: merchantsList.items[0] ? safeMerchantView(merchantsList.items[0]) : null,
       },
       applications: {
         listOk: appsList.ok,
@@ -351,11 +418,14 @@ Deno.serve(async (req) => {
         applicationsApprovedWithMid: appsApprovedWithMid,
         gapVsCsv: merchantsBaselineCsv - merchantsWithMid,
         gapAppsVsMerchantsApi: merchantsWithMid - appsApprovedWithMid,
+        detailOkPct: detailPct,
+        merchantFetchErrors,
       },
       ownerClustering: {
         detailOk: detailOkAll,
         withEmail,
         withFederalTaxId,
+        withEinEstimate: withFederalTaxId,
         uniqueEmails: ownerByEmail.size,
         emailsWithMultipleMids: multiMidEmails.length,
         emailsWithMultipleCorps: multiCorpEmails.length,
@@ -378,6 +448,7 @@ Deno.serve(async (req) => {
       formTinSupplement: {
         sampled: formSamples.length,
         withTaxSignal: formsWithTin,
+        withSsnSignal: formsWithSsn,
         signaturesOk,
         signaturesMiss,
         samples: formSamples,

@@ -3040,3 +3040,25 @@ Dry-run had 106 MIDs but **97 store-named accounts**. OpenAPI (`api.mspware.com/
 
 **Waiting on:** Teddy (push + redeploy + entity republish + probe/dry)
 ---
+
+---
+**[CURSOR]** ? 2026-07-30
+**Type:** Fix
+**Re:** MSP sync gap fill ? rate gate, EIN/SSN, merge pass
+
+### Root cause
+~76 `merchantFetchErrors` were silent 429s (concurrency 8 > MSP 10/s). Left 68 MIDs without email/TIN and fragmented GAMEWAY.
+
+### Shipped
+1. **MspRateGate** in `importMSPPortfolio` + `probeMSPMerchantData`: ?8 req/s, session budget 5k, retry 429 with backoff; **`rateLimit429Count` always surfaced** + amber UI banner (never silent).
+2. **Second-pass merge** by shared tax id (unify multi-email parents) then `corporate_name` orphans.
+3. **`taxIdType` EIN | SSN** on profile + `legalEntities[]` (sole prop / form.ssn ? SSN). Dry-run shows `EIN ***` / `SSN ***`.
+4. Probe: detail OK %, 429 count, SSN signal. Cliqbux test MIDs flagged `skipSuggested`.
+
+### Teddy ops
+1. Push + redeploy **`importMSPPortfolio`** + **`probeMSPMerchantData`**.
+2. Republish **MerchantAccount** + **MerchantCorporateProfile** (taxIdType fields).
+3. Probe ? Dry run (slower by design) ? expect GAMEWAY one account, far fewer orphans, visible 429 banner only if limits still hit.
+
+**Waiting on:** Teddy (push + redeploy + republish + probe/dry)
+---

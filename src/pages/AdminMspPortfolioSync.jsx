@@ -7,6 +7,12 @@ import { Link } from 'react-router-dom';
 import { Loader2, RefreshCw, Search } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
+function rateLimit429(result) {
+  return result?.rateLimit?.rateLimit429Count
+    ?? result?.summary?.rateLimit429Count
+    ?? 0;
+}
+
 export default function AdminMspPortfolioSync() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -54,6 +60,9 @@ export default function AdminMspPortfolioSync() {
   const entities = display?.entities || [];
   const cov = probeResult?.coverage;
   const owners = probeResult?.ownerClustering;
+  const probe429 = rateLimit429(probeResult);
+  const sync429 = rateLimit429(display);
+  const any429 = probe429 + sync429;
 
   return (
     <div className="space-y-6 max-w-4xl">
@@ -62,14 +71,14 @@ export default function AdminMspPortfolioSync() {
         <p className="text-cb-body-lg text-gray-400 mt-1 max-w-2xl">
           Pull live merchants into Merchant Center as{' '}
           <span className="text-gray-300">Owner → Legal Entity → MID</span>
-          {' '}(merchant contact email, then corporate name / federal tax id).
-          No HubSpot. Nothing submitted to Elavon.
+          {' '}(contact email; EIN for corps / SSN for sole props).
+          Throttled to ≤8 MSP calls/sec. No HubSpot. Nothing submitted to Elavon.
         </p>
       </div>
 
       <div className="bg-cb-surface border border-cb-border rounded-cb px-4 py-4 space-y-3">
         <p className="text-cb-caption text-gray-500">
-          Probe first (owner clustering), then dry-run, then confirm live.
+          Probe first (owner clustering), then dry-run, then confirm live. Expect a few minutes — rate-limited on purpose.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -117,19 +126,31 @@ export default function AdminMspPortfolioSync() {
         <p className="text-cb-caption text-cb-danger border-l-2 border-cb-danger pl-3">{error}</p>
       )}
 
+      {any429 > 0 && (
+        <p className="text-cb-caption text-amber-400 border-l-2 border-amber-500 bg-cb-surface pl-3 py-2 rounded-r-cb">
+          MSP returned {any429}× HTTP 429 (rate limit). Throttle is ≤8/sec; results may be incomplete if fetch errors remain.
+          {probe429 > 0 ? ` Probe: ${probe429}.` : ''}
+          {sync429 > 0 ? ` Sync: ${sync429}.` : ''}
+        </p>
+      )}
+
       {probeResult?.success && (
         <section className="space-y-3">
           <h2 className="font-display text-cb-title text-white">Probe report</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
               { label: 'Merchants API total', value: probeResult.merchants?.total },
+              { label: 'Detail OK %', value: cov?.detailOkPct != null ? `${cov.detailOkPct}%` : '—' },
+              { label: 'MSP requests', value: probeResult.rateLimit?.mspRequestCount },
+              { label: 'HTTP 429 count', value: probeResult.rateLimit?.rateLimit429Count ?? 0 },
               { label: 'Unique owner emails', value: owners?.uniqueEmails },
               { label: 'Emails w/ 2+ MIDs', value: owners?.emailsWithMultipleMids },
-              { label: 'Emails w/ 2+ corps', value: owners?.emailsWithMultipleCorps },
               { label: 'With federal_tax_id', value: owners?.withFederalTaxId },
-              { label: 'With email', value: owners?.withEmail },
+              { label: 'Forms w/ SSN signal', value: probeResult.formTinSupplement?.withSsnSignal },
+              { label: 'Merchant fetch errors', value: cov?.merchantFetchErrors },
               { label: 'Apps Approved+MID', value: probeResult.applications?.approvedWithMid },
               { label: 'Signatures OK / miss', value: `${probeResult.formTinSupplement?.signaturesOk ?? 0} / ${probeResult.formTinSupplement?.signaturesMiss ?? 0}` },
+              { label: 'Emails w/ 2+ corps', value: owners?.emailsWithMultipleCorps },
             ].map((k) => (
               <div key={k.label} className="bg-cb-surface border border-cb-border rounded-cb px-3 py-2">
                 <p className="text-cb-caption text-gray-500">{k.label}</p>
@@ -151,11 +172,6 @@ export default function AdminMspPortfolioSync() {
               </ul>
             </div>
           )}
-          {cov && (
-            <p className="text-cb-caption text-gray-500">
-              CSV baseline {cov.merchantsExportApprovedMidBaseline} · gap vs CSV {cov.gapVsCsv} · apps vs merchants gap {cov.gapAppsVsMerchantsApi}
-            </p>
-          )}
         </section>
       )}
 
@@ -174,15 +190,19 @@ export default function AdminMspPortfolioSync() {
               { label: 'Merchants importable', value: summary.importableMerchants },
               { label: 'Owner accounts', value: summary.ownerGroups ?? summary.groups },
               { label: 'Legal entities', value: summary.legalEntityGroups },
-              { label: 'Unique owner emails', value: summary.uniqueOwnerEmails },
-              { label: 'TIN unavailable', value: summary.tinUnavailable },
-              { label: 'Accounts create', value: summary.accounts?.created },
-              { label: 'Profiles create', value: summary.corporateEntities?.created },
-              { label: 'MIDs create', value: summary.merchantMIDs?.created },
-              { label: 'Signatures OK', value: summary.signaturesOk },
-              { label: 'Email from signer', value: summary.emailFromSigner },
-              { label: 'Apps matched by MID', value: summary.applicationsMatchedByMid },
+              { label: 'Detail OK', value: summary.detailOk },
+              { label: 'With EIN', value: summary.withEin },
+              { label: 'With SSN', value: summary.withSsn },
+              { label: 'Tax ID unavailable', value: summary.taxIdUnavailable ?? summary.tinUnavailable },
+              { label: 'MSP requests', value: summary.mspRequestCount ?? display?.rateLimit?.mspRequestCount },
+              { label: 'HTTP 429 count', value: summary.rateLimit429Count ?? display?.rateLimit?.rateLimit429Count ?? 0 },
               { label: 'Merchant fetch errors', value: summary.merchantFetchErrors },
+              { label: 'Merged by tax ID', value: summary.mergedByTaxId },
+              { label: 'Merged by corp name', value: summary.mergedByCorporateName },
+              { label: 'MIDs create', value: summary.merchantMIDs?.created },
+              { label: 'Accounts create', value: summary.accounts?.created },
+              { label: 'Apps matched by MID', value: summary.applicationsMatchedByMid },
+              { label: 'Unique owner emails', value: summary.uniqueOwnerEmails },
             ].map((k) => (
               <div key={k.label} className="bg-cb-surface border border-cb-border rounded-cb px-3 py-2">
                 <p className="text-cb-caption text-gray-500">{k.label}</p>
@@ -190,6 +210,18 @@ export default function AdminMspPortfolioSync() {
               </div>
             ))}
           </div>
+          {summary.mergeNotes?.length > 0 && (
+            <details className="text-cb-caption text-gray-500">
+              <summary className="cursor-pointer text-gray-400 hover:text-white">
+                Merge notes ({summary.mergeNotes.length})
+              </summary>
+              <ul className="mt-2 space-y-1 list-disc pl-4">
+                {summary.mergeNotes.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            </details>
+          )}
         </section>
       )}
 
@@ -206,14 +238,19 @@ export default function AdminMspPortfolioSync() {
                   <div className="min-w-0">
                     <p className="text-cb-body font-semibold text-white">
                       {e.ownerContact || e.legalName || 'Owner'}
+                      {e.skipSuggested ? (
+                        <span className="ml-2 text-cb-caption font-normal text-amber-400">test MID?</span>
+                      ) : null}
                     </p>
                     <p className="text-cb-caption text-gray-500 mt-0.5">
                       {e.ownerEmail || 'no email'}
                       {e.emailSource ? ` (${e.emailSource})` : ''}
+                      {e.alternateEmails?.length ? ` · also ${e.alternateEmails.join(', ')}` : ''}
                       {' · '}
                       {e.legalEntityCount ?? e.legalEntities?.length ?? 0} legal entit(y/ies)
                       {' · '}
                       {e.midCount ?? 0} MID(s)
+                      {e.mergedBy?.length ? ` · merged via ${e.mergedBy.join('+')}` : ''}
                       {e.accountCreated ? ' · new account' : ' · existing account'}
                     </p>
                     {(e.legalEntities || []).length > 0 && (
@@ -221,9 +258,10 @@ export default function AdminMspPortfolioSync() {
                         {e.legalEntities.map((le) => (
                           <li key={le.legalKey} className="text-cb-caption text-gray-400">
                             <span className="text-gray-300">{le.legalName}</span>
-                            {' · TIN '}{le.tin || '—'}
+                            {' · '}{le.taxIdLabel || (le.tin ? `Tax ID ${le.tin}` : 'Tax ID —')}
                             {le.tinSource ? ` (${le.tinSource})` : ''}
                             {' · '}{le.midCount} MID(s)
+                            {le.mergedBy ? ` · ${le.mergedBy}` : ''}
                             {(le.mids || []).slice(0, 4).map((m) => m.dba).filter(Boolean).length > 0 && (
                               <span className="text-gray-600">
                                 {' — '}

@@ -76,6 +76,11 @@
     "taxId": {
       "type": "string"
     },
+    "taxIdType": {
+      "type": "string",
+      "description": "EIN for corporations/LLCs/etc.; SSN for sole proprietors (MSP form.ssn / ownership_type SP)",
+      "enum": ["EIN", "SSN"]
+    },
     "corporatePhone": {
       "type": "string",
       "description": "10-digit US phone, stored as digits only e.g. 8654037301"
