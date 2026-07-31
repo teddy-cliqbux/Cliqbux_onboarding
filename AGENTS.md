@@ -17,6 +17,37 @@ Before touching any file in this repo:
 
 ---
 
+## CliqBux Second Brain vault (judgment layer)
+
+Revenue/product **judgment** lives in the sibling Obsidian vault, not only here.
+The vault’s `CLAUDE.md` applies when rooted in the vault; **this section teaches
+product-repo agents the same habit**. Prefer a multi-root Cursor workspace:
+this repo + folder `Cliqbux Second Brain` (on Teddy’s machine:
+`C:\Users\teddy\Documents\Cliqbux Second Brain`). Do **not** nest a copy of the
+vault inside this repo.
+
+**Before MSPWare / portfolio / boarding / merchant-center work**, when the vault
+is in the workspace, read in order:
+
+1. `_index.md` — map + vocabulary
+2. `partners/mspware.md` + OpenAPI pin under `partners/mspware/`
+3. Relevant `decisions/` and specs (`specs/merchant-center.md`,
+   `specs/domain-model.md`, `specs/engineering-invariants.md`)
+
+**Rules:** Don’t invent API behavior — cite the OpenAPI pin / live probe, or mark
+`TODO`. Durable judgment goes **back to the vault** (numbered decision, partner
+note, or spec), not only chat. Repo `docs/adr/` is historical; new architecture
+decisions are canonical in the vault `decisions/`. If the vault folder is absent,
+say so and fall back to this file + `docs/mspware-field-reference.md`.
+
+**Optional:** With Obsidian open, Vault-as-MCP may be available (vault decision
+0015). Still follow the read order; MCP does not replace it.
+
+Cursor: always-on rule `.cursor/rules/cliqbux-second-brain-vault.mdc`. Detail:
+`docs/agents/second-brain-vault.md`. Skill: `.agents/skills/obsidian-vault/`.
+
+---
+
 ## ⚠️ Edit in the repo only — test in Base44 wherever helpful
 
 **Decided with Teddy 2026-07-03, after this exact mistake caused two merge conflicts in one session:**

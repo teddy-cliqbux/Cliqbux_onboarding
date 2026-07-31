@@ -3143,3 +3143,20 @@ Submit showed raw `GITHUB_FEEDBACK_TOKEN not configured` (503) and dropped the r
 
 **Waiting on:** Teddy
 ---
+
+---
+**[CURSOR]** ? 2026-07-31
+**Type:** Decision
+**Re:** Teach product-repo agents where vault judgment lives
+
+### Shipped (repo only ? no Base44 publish required)
+1. Always-on Cursor rule `.cursor/rules/cliqbux-second-brain-vault.mdc`
+2. `AGENTS.md` + `CLAUDE.md` sections; `docs/agents/second-brain-vault.md`; `docs/agents/domain.md` pointer
+3. Retargeted `.agents/skills/obsidian-vault/` from a personal vault path to **CliqBux Second Brain**
+4. Cursor **user** rule: ?CliqBux Second Brain vault? (helps across chats; still needs vault in workspace)
+
+### Habit for agents
+Before MSPWare / portfolio / boarding / merchant-center: vault `_index.md` ? `partners/mspware.md` (+ OpenAPI pin) ? relevant `decisions/` / specs. Don?t invent API behavior; write durable judgment back to the vault. Sibling multi-root workspace ? do not nest vault inside this repo.
+
+**Waiting on:** Teddy (push via GitHub Desktop when ready; open the multi-root `.code-workspace` for day-to-day work)
+---

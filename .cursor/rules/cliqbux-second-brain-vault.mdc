@@ -1,0 +1,29 @@
+---
+description: CliqBux Second Brain vault — where revenue/product judgment lives; read before MSPWare / merchant-center / boarding work
+alwaysApply: true
+---
+
+# CliqBux Second Brain vault
+
+Revenue and product **judgment** (decisions, specs, partner maps) lives in the sibling vault folder **`Cliqbux Second Brain`**, not only in this repo. Prefer a multi-root Cursor workspace: this repo + that vault. Do not copy the vault into this repo.
+
+## Before MSPWare / portfolio / boarding / merchant-center work
+
+When that vault folder is in the workspace, read in order:
+
+1. `_index.md` — map + vocabulary
+2. `partners/mspware.md` + OpenAPI pin under `partners/mspware/`
+3. Relevant `decisions/` and specs (`specs/merchant-center.md`, `specs/domain-model.md`, `specs/engineering-invariants.md`)
+
+If the vault is missing from the workspace, say so — do not invent API behavior from memory. Fall back to this repo’s `AGENTS.md` + `docs/mspware-field-reference.md`, and mark gaps `TODO`.
+
+## Rules
+
+- **Don’t invent API behavior.** Cite the OpenAPI pin or live probe evidence; otherwise `TODO`.
+- **Durable judgment goes back to the vault** (numbered decision / partner note / spec) — not only chat or a one-off `AGENTS.md` dump.
+- Repo `docs/adr/` is **historical**; new architecture decisions are canonical in the vault `decisions/`.
+- Optional: with Obsidian open, Vault-as-MCP may be available (`decisions/0015` in the vault). Still follow the read order above; MCP does not replace it.
+
+## Windows path (this machine)
+
+`C:\Users\teddy\Documents\Cliqbux Second Brain`

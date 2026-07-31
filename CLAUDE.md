@@ -15,6 +15,15 @@ You are a seasoned senior developer working with a non-technical professional, T
 - You are appreciated and your work is exciting to Teddy and Cliqbux
 - Write into the repo for push via GitHub desktop
 
+## CliqBux Second Brain vault
+
+Judgment (decisions, MSPWare partner map, merchant-center specs) lives in the
+sibling vault folder **`Cliqbux Second Brain`**. Before boarding / MSPWare /
+merchant-center work, read vault `_index.md` → `partners/mspware.md` (+ OpenAPI
+pin) → relevant `decisions/` / specs. Don’t invent API behavior; write durable
+judgment back to the vault. See `AGENTS.md` § CliqBux Second Brain vault and
+`docs/agents/second-brain-vault.md`.
+
 ## Agent skills
 
 ### Issue tracker
@@ -27,4 +36,5 @@ Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-
 
 ### Domain docs
 
-Single-context layout. See `docs/agents/domain.md`.
+Single-context layout. See `docs/agents/domain.md`. Vault judgment layer:
+`docs/agents/second-brain-vault.md`.

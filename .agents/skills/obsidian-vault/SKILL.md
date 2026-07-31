@@ -1,59 +1,44 @@
 ---
 name: obsidian-vault
-description: Search, create, and manage notes in the Obsidian vault with wikilinks and index notes. Use when user wants to find, create, or organize notes in Obsidian.
+description: Search, create, and manage notes in the CliqBux Second Brain Obsidian vault. Use when the user wants vault decisions, specs, partner maps, or account notes — or when MSPWare / merchant-center / boarding work needs judgment beyond this repo.
 ---
 
-# Obsidian Vault
+# CliqBux Second Brain vault
 
 ## Vault location
 
-`/mnt/d/Obsidian Vault/AI Research/`
+Sibling workspace folder (preferred): **`Cliqbux Second Brain`**
 
-Mostly flat at root level.
+Absolute path on Teddy’s machine:
 
-## Naming conventions
+`C:\Users\teddy\Documents\Cliqbux Second Brain`
 
-- **Index notes**: aggregate related topics (e.g., `Ralph Wiggum Index.md`, `Skills Index.md`, `RAG Index.md`)
-- **Title case** for all note names
-- No folders for organization - use links and index notes instead
+Not nested inside `Cliqbux_onboarding`. Follow vault `CLAUDE.md` and `_index.md`
+conventions (append-only decisions, no live-data copies, MID as join key).
 
-## Linking
+## Before boarding / MSPWare / merchant-center work
 
-- Use Obsidian `[[wikilinks]]` syntax: `[[Note Title]]`
-- Notes link to dependencies/related notes at the bottom
-- Index notes are just lists of `[[wikilinks]]`
+1. `_index.md`
+2. `partners/mspware.md` + OpenAPI pin under `partners/mspware/`
+3. Relevant `decisions/` and `specs/` (e.g. `specs/merchant-center.md`)
+
+Don’t invent API behavior — cite the pin or mark `TODO`. Durable judgment goes
+back to the vault, not only chat.
 
 ## Workflows
 
-### Search for notes
+### Search notes
 
-```bash
-# Search by filename
-find "/mnt/d/Obsidian Vault/AI Research/" -name "*.md" | grep -i "keyword"
+Use Glob / Grep / Read against the vault workspace folder (or absolute path).
 
-# Search by content
-grep -rl "keyword" "/mnt/d/Obsidian Vault/AI Research/" --include="*.md"
-```
+### New decision
 
-Or use Grep/Glob tools directly on the vault path.
+Copy `decisions/0000-template.md`, take the next number, link from `_index.md`
+and related specs. Never edit an accepted decision to change what was decided —
+write a new record with `supersedes` / `superseded_by`.
 
-### Create a new note
+### Optional MCP
 
-1. Use **Title Case** for filename
-2. Write content as a unit of learning (per vault rules)
-3. Add `[[wikilinks]]` to related notes at the bottom
-4. If part of a numbered sequence, use the hierarchical numbering scheme
-
-### Find related notes
-
-Search for `[[Note Title]]` across the vault to find backlinks:
-
-```bash
-grep -rl "\\[\\[Note Title\\]\\]" "/mnt/d/Obsidian Vault/AI Research/"
-```
-
-### Find index notes
-
-```bash
-find "/mnt/d/Obsidian Vault/AI Research/" -name "*Index*"
-```
+With Obsidian open, Vault-as-MCP may be available (see vault
+`decisions/0015-vault-mcp-clients-cursor-and-claude.md`). Still use the read
+order above; fall back to filesystem reads if MCP is down.
