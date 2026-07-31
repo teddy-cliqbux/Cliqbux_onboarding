@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-07-31a — force redeploy after MerchantAccount schema republish (taxIdType on legal entities)
 
 /**
  * importMSPPortfolio — MSP Merchants → Merchant Center (Owner → Legal Entity → MID).
