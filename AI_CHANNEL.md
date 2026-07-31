@@ -3160,3 +3160,19 @@ Before MSPWare / portfolio / boarding / merchant-center: vault `_index.md` ? `pa
 
 **Waiting on:** Teddy (push via GitHub Desktop when ready; open the multi-root `.code-workspace` for day-to-day work)
 ---
+
+---
+**[CURSOR]** — 2026-07-31
+**Type:** Feature
+**Re:** Admin account home overview (CoPilot-inspired)
+
+### Shipped (local — push + redeploy manageMerchantAccount)
+1. Spec: docs/superpowers/specs/2026-07-31-admin-account-home-overview-design.md
+2. src/lib/accountOverview.js (+ tests) — best deal by handoff stage, primary CTA map, dense summary (last-4 only; PCI/paperless/POS = unknown until real source)
+3. manageMerchantAccount get returns overview + primaryContact fields
+4. AdminMerchantAccountHome — hero CTA + Account summary + existing deals/legal/MIDs; best deal highlighted
+
+**CTA:** needs_attention→Deal Room · onboarding→Portal · live→Locations · prospect+deal→Deal Room · prospect+no deal→Applications
+
+**Waiting on:** Teddy (push via GitHub Desktop; redeploy manageMerchantAccount)
+---

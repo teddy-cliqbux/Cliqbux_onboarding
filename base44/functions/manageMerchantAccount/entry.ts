@@ -4,11 +4,13 @@
  *
  * Actions:
  *   list              — paginated accounts + derived status + counts; q + status filter
- *   get               — one account + deals + locations + MIDs
+ *   get               — one account + deals + locations + MIDs + overview (CTA/summary)
  *   listUnlinkedDeals — profiles with no merchantAccountId
  *
  * corporateId on profiles = HubSpot Deal ID — never use as account primary key.
  * Never expose to merchant portal tokens.
+ *
+ * Overview helpers: keep in sync with src/lib/accountOverview.js
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
@@ -110,6 +112,236 @@ function latestDealActivity(deals: any[] = []): string | null {
 }
 // --- END merchantAccountStatus ---
 
+// --- BEGIN accountOverview (sync with src/lib/accountOverview.js) ---
+const HANDOFF_STAGES_ORDER = ['sales', 'underwriting', 'implementation', 'installation', 'support'];
+const HANDOFF_RANK: Record<string, number> = { '': 0 };
+HANDOFF_STAGES_ORDER.forEach((stage, i) => {
+  HANDOFF_RANK[stage] = i + 1;
+});
+
+function handoffRank(stage: unknown): number {
+  const key = String(stage || '').toLowerCase().trim();
+  if (!key) return 0;
+  if (Object.prototype.hasOwnProperty.call(HANDOFF_RANK, key)) return HANDOFF_RANK[key];
+  return HANDOFF_STAGES_ORDER.length + 1;
+}
+
+function dealUpdatedMs(deal: any): number {
+  const raw = deal?.updated_date || deal?.updatedAt || deal?.created_date || null;
+  if (!raw) return 0;
+  const ms = new Date(raw).getTime();
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function pickBestDeal(deals: any[] = []): any | null {
+  const list = (Array.isArray(deals) ? deals : []).filter((d) => String(d?.corporateId || '').trim());
+  if (list.length === 0) return null;
+  const sorted = [...list].sort((a, b) => {
+    const ra = handoffRank(a?.handoffStage);
+    const rb = handoffRank(b?.handoffStage);
+    if (ra !== rb) return ra - rb;
+    return dealUpdatedMs(b) - dealUpdatedMs(a);
+  });
+  return sorted[0] || null;
+}
+
+function buildPrimaryCta({ status, bestDeal = null }: { status: string; bestDeal?: any | null }) {
+  const corporateId = bestDeal ? String(bestDeal.corporateId || '').trim() || null : null;
+
+  if (status === 'needs_attention' && corporateId) {
+    return { label: 'Fix in Deal Room', kind: 'deal_room', corporateId };
+  }
+  if (status === 'onboarding' && corporateId) {
+    return { label: 'Continue onboarding', kind: 'portal', corporateId, destination: 'portal' };
+  }
+  if (status === 'live' && corporateId) {
+    return { label: 'Open locations', kind: 'locations', corporateId, destination: 'locations' };
+  }
+  if (status === 'prospect' && corporateId) {
+    return { label: 'Open Deal Room', kind: 'deal_room', corporateId };
+  }
+  if (status === 'prospect' && !corporateId) {
+    return { label: 'Start application', kind: 'quick_stage', corporateId: null };
+  }
+  if (corporateId) {
+    return { label: 'Open Deal Room', kind: 'deal_room', corporateId };
+  }
+  return { label: 'Open Applications', kind: 'applications', corporateId: null };
+}
+
+function last4Digits(value: unknown): string | null {
+  const digits = String(value || '').replace(/\D/g, '');
+  if (digits.length < 4) return null;
+  return digits.slice(-4);
+}
+
+function bankAccountLast4(bank: any): string | null {
+  if (!bank || typeof bank !== 'object') return null;
+  const masked = String(bank.accountNumberMasked || '').trim();
+  if (masked) {
+    const fromMask = last4Digits(masked);
+    if (fromMask) return fromMask;
+  }
+  return last4Digits(bank.accountNumber);
+}
+
+function maskTaxId(taxId: unknown): string | null {
+  const digits = String(taxId || '').replace(/\D/g, '');
+  if (digits.length < 4) return null;
+  return `•••${digits.slice(-4)}`;
+}
+
+function pickReportingMid(mids: any[] = []): string | null {
+  const list = Array.isArray(mids) ? mids : [];
+  const live = list.find((m) => isLiveMid(m) && String(m?.elavonMID || '').trim());
+  if (live) return String(live.elavonMID).trim();
+  const any = list.find((m) => String(m?.elavonMID || '').trim());
+  return any ? String(any.elavonMID).trim() : null;
+}
+
+function buildAttentionReason(mids: any[] = []): string | null {
+  const list = Array.isArray(mids) ? mids : [];
+  const errors = list.filter((m) => String(m?.applicationStepStatus || '') === 'Error');
+  if (errors.length === 1) {
+    const name = errors[0].dbaName || errors[0].merchantName || 'A MID';
+    return `${name} is in Error`;
+  }
+  if (errors.length > 1) return `${errors.length} MIDs are in Error`;
+  const help = list.filter((m) => m?.mccHelpRequested === true);
+  if (help.length === 1) {
+    const name = help[0].dbaName || help[0].merchantName || 'A MID';
+    return `${name} needs MCC help`;
+  }
+  if (help.length > 1) return `${help.length} MIDs need MCC help`;
+  if (list.some(midNeedsAttention)) return 'One or more MIDs need attention';
+  return null;
+}
+
+function formatMailingAddress(entity: any): string | null {
+  if (!entity) return null;
+  const parts = [
+    entity.mailingStreet,
+    entity.mailingStreet2,
+    [entity.mailingCity, entity.mailingState].filter(Boolean).join(', '),
+    entity.mailingZip,
+  ].filter((p) => String(p || '').trim());
+  if (parts.length === 0) {
+    const composed = String(entity.corporateMailingAddress || '').trim();
+    return composed || null;
+  }
+  return parts.map((p) => String(p).trim()).join(', ');
+}
+
+function pickBankFromLocations(locations: any[] = [], mids: any[] = []): any | null {
+  for (const m of Array.isArray(mids) ? mids : []) {
+    const bd = m?.bankDetails;
+    if (bd && (bd.accountNumber || bd.accountNumberMasked || bd.routingNumber)) return bd;
+  }
+  for (const loc of Array.isArray(locations) ? locations : []) {
+    const bd = loc?.bankDetails;
+    if (bd && (bd.accountNumber || bd.accountNumberMasked || bd.routingNumber)) return bd;
+  }
+  return null;
+}
+
+function pickPhone(locations: any[] = [], deals: any[] = []): string | null {
+  for (const loc of Array.isArray(locations) ? locations : []) {
+    const p = loc?.businessPhone || loc?.phone || loc?.storePhone;
+    if (p) return String(p).trim();
+  }
+  for (const d of Array.isArray(deals) ? deals : []) {
+    const p = d?.businessPhone || d?.phone;
+    if (p) return String(p).trim();
+  }
+  return null;
+}
+
+function buildAccountSummary({
+  account = {},
+  status,
+  deals = [],
+  locations = [],
+  mids = [],
+  legalEntities = null,
+}: {
+  account?: any;
+  status: string;
+  deals?: any[];
+  locations?: any[];
+  mids?: any[];
+  legalEntities?: any[] | null;
+}) {
+  const entities = Array.isArray(legalEntities)
+    ? legalEntities
+    : Array.isArray(account.legalEntities)
+      ? account.legalEntities
+      : [];
+  const primaryEntity = entities[0] || null;
+  const bank = pickBankFromLocations(locations, mids);
+  const hasLive = (Array.isArray(mids) ? mids : []).some(isLiveMid);
+
+  return {
+    contactName: account.primaryContactName || null,
+    contactEmail: account.primaryContactEmail || null,
+    phone: pickPhone(locations, deals),
+    domain: account.domain || null,
+    hubspotCompanyId: account.hubspotCompanyId || null,
+    legalName: primaryEntity?.legalBusinessName || null,
+    taxIdMasked: maskTaxId(primaryEntity?.federalEIN),
+    taxIdType: primaryEntity?.taxIdType || null,
+    mailingAddress: formatMailingAddress(primaryEntity),
+    bankLast4: bankAccountLast4(bank),
+    bankRoutingLast4: last4Digits(bank?.routingNumber),
+    reportingMid: pickReportingMid(mids),
+    flags: {
+      processingLive: hasLive ? 'yes' : ((Array.isArray(mids) && mids.length > 0) ? 'no' : 'unknown'),
+      pci: 'unknown',
+      paperlessStatements: 'unknown',
+      posEnrolled: 'unknown',
+    },
+    attentionReason: status === 'needs_attention' ? buildAttentionReason(mids) : null,
+  };
+}
+
+function buildAccountOverview({
+  account = {},
+  status,
+  deals = [],
+  locations = [],
+  mids = [],
+}: {
+  account?: any;
+  status: string;
+  deals?: any[];
+  locations?: any[];
+  mids?: any[];
+}) {
+  const best = pickBestDeal(deals);
+  const bestDeal = best
+    ? {
+        corporateId: String(best.corporateId || ''),
+        legalName: best.legalName || best.dbaName || null,
+        handoffStage: best.handoffStage || null,
+        applicationStatus: best.applicationStatus || null,
+        pricingTier: best.pricingTier || null,
+      }
+    : null;
+
+  return {
+    bestDeal,
+    primaryCta: buildPrimaryCta({ status, bestDeal }),
+    summary: buildAccountSummary({
+      account,
+      status,
+      deals,
+      locations,
+      mids,
+      legalEntities: account.legalEntities,
+    }),
+  };
+}
+// --- END accountOverview ---
+
 const PAGE_SIZE_DEFAULT = 50;
 const ACCOUNT_FETCH_CAP = 300;
 const PROFILE_FETCH_CAP = 500;
@@ -208,6 +440,19 @@ Deno.serve(async (req) => {
       const mids = (allMids || []).filter((m: any) => dealIds.has(String(m.corporateId || '')));
       const midCounts = countMids(mids);
       const status = deriveAccountStatus({ deals, mids });
+      const legalEntities = parseEntities(account.legalEntities);
+
+      const accountForOverview = {
+        ...account,
+        legalEntities,
+      };
+      const overview = buildAccountOverview({
+        account: accountForOverview,
+        status,
+        deals,
+        locations,
+        mids,
+      });
 
       const locationById = new Map(locations.map((l: any) => [String(l.id), l]));
       const midsByLocation = mids.map((m: any) => {
@@ -232,9 +477,12 @@ Deno.serve(async (req) => {
           name: account.name,
           domain: account.domain || null,
           hubspotCompanyId: account.hubspotCompanyId || null,
-          legalEntities: parseEntities(account.legalEntities),
+          primaryContactEmail: account.primaryContactEmail || null,
+          primaryContactName: account.primaryContactName || null,
+          legalEntities,
         },
         status,
+        overview,
         midCounts,
         dealCount: deals.length,
         locationCount: locations.length,
