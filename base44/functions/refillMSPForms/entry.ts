@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
-// redeployed 2026-07-14b — force-redeploy to pick up latest GitHub-synced changes
+// redeployed 2026-08-01a — force-redeploy to pick up latest GitHub-synced changes (signer choice by agent)
 
 // Force-refills MSPWare forms for a list of application numbers using the latest payload builder.
 // POST /functions/refillMSPForms  { corporateId, applicationNos: ["161","162","163"] }
