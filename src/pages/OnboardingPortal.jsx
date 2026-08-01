@@ -27,6 +27,7 @@ import {
   peopleIdentityFieldsComplete,
 } from '@/lib/signerMissingFields';
 import { filterByIncludedLocationIds } from '@/lib/dealLocationSelection';
+import { filterByIncludedSignerIds } from '@/lib/dealSignerSelection';
 import { tryClaimBase44OauthToken } from '@/lib/consumeBase44OauthToken';
 // OnboardingSuccess no longer rendered here — submitted merchants are redirected to /onboarding/dashboard
 
@@ -469,7 +470,12 @@ export default function OnboardingPortal() {
           action: 'list',
           corporateId: id,
         });
-        const list = signerRes.data?.signers || [];
+        let list = signerRes.data?.signers || [];
+        // Defense in depth: server filters for merchant JWT; invite-token / stale
+        // deploys still honor stage.includedSignerIds (parity with locations).
+        if (stage && stage.label !== '__auto_track__' && stage.includedSignerIds?.length > 0) {
+          list = filterByIncludedSignerIds(list, stage.includedSignerIds.map(String));
+        }
         setPortalSigners(list);
         const peopleConfigured = isRosterConfiguredForPeopleStep(list);
         const kycReady = isRosterReadyForSigning(list);

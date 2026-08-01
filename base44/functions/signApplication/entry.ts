@@ -1814,12 +1814,30 @@ Deno.serve(async (req) => {
     };
 
     // ── 1. Load profile, signers, merchantMIDs, AND locations ─────────────────────
-    const [profiles, signers, allMerchantMIDs, allLocs] = await Promise.all([
+    const [profiles, signersAll, allMerchantMIDs, allLocs] = await Promise.all([
       base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantMID.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }),
     ]);
+
+    let signers = signersAll || [];
+    // Honor Applications prep includedSignerIds (same rule as portal manageSigner list).
+    // Sync with src/lib/dealSignerSelection.js — do not invent MSP fields.
+    try {
+      const stages = await base44.asServiceRole.entities.StagedApplication.filter({ corporateId }) || [];
+      const withSel = (stages as any[]).filter(
+        (s) => Array.isArray(s?.includedSignerIds) && s.includedSignerIds.length > 0
+      );
+      if (withSel.length) {
+        const preferred =
+          withSel.find((s) => s.label && s.label !== '__auto_track__') || withSel[0];
+        const includedIds = new Set((preferred.includedSignerIds || []).map(String));
+        signers = signers.filter((s: any) => s?.id != null && includedIds.has(String(s.id)));
+      }
+    } catch (selErr: any) {
+      console.warn('[signApplication] includedSignerIds filter failed (using all signers):', selErr?.message);
+    }
 
     const profile = profiles?.[0];
     if (!profile) return Response.json({ error: 'Merchant profile not found' }, { status: 404 });

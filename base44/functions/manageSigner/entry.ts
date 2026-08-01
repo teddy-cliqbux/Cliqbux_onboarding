@@ -737,6 +737,25 @@ Deno.serve(async (req) => {
     // --- LIST ---
     if (action === 'list') {
       let signers = await base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }) || [];
+      // Merchant portal: honor Applications prep includedSignerIds (filter, don't delete).
+      // Admin / Applications StageEditor must see the full roster to re-check people.
+      // Sync with src/lib/dealSignerSelection.js + dealLocationSelection pattern.
+      if (actor.actor === 'merchant') {
+        try {
+          const stages = await base44.asServiceRole.entities.StagedApplication.filter({ corporateId }) || [];
+          const withSel = (stages as any[]).filter(
+            (s) => Array.isArray(s?.includedSignerIds) && s.includedSignerIds.length > 0
+          );
+          if (withSel.length) {
+            const preferred =
+              withSel.find((s) => s.label && s.label !== '__auto_track__') || withSel[0];
+            const includedIds = new Set((preferred.includedSignerIds || []).map(String));
+            signers = signers.filter((s: any) => s?.id != null && includedIds.has(String(s.id)));
+          }
+        } catch (selErr: any) {
+          console.warn('[manageSigner.list] includedSignerIds filter failed (showing all):', selErr?.message);
+        }
+      }
       // Heal sole non-admin owner missing Control Person flags (list is lock-safe).
       // Without this, verified BOs show "Signing Locked" and get no BoldSign package.
       let healedControlPersonId: string | null = null;

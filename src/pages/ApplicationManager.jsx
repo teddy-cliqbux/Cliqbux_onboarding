@@ -986,7 +986,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
             )}
             {activeTab === 'signers' && (
               <>
-                <p className="text-cb-caption text-gray-500">Only selected owners get the application invite.</p>
+                <p className="text-cb-caption text-gray-500">Only selected owners appear in the merchant portal and signing package. Deselect to hide — records are kept so you can re-include later.</p>
                 {signers.length === 0
                   ? <p className="text-cb-body text-gray-600 italic py-4 text-center">No owners yet. Add them in the merchant portal.</p>
                   : signers.map(s => (

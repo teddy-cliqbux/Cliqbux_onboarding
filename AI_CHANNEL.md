@@ -3261,3 +3261,25 @@ Set Base44 `QUO_FROM_NUMBER=+14154888853`, retry Remind ? Text. No code change r
 
 **Waiting on:** Teddy (redeploy + retry)
 ---
+
+---
+**[CURSOR]** — 2026-08-01
+**Type:** Decision / Fix
+**Re:** #14 — deselected owners still on portal People
+
+### Cause
+Applications prep saved `includedSignerIds` on `StagedApplication` only. Portal People / `manageSigner` list / boarding always loaded all `MerchantSigners`. Locations already honored `includedLocationIds`; signers did not.
+
+### Fix (repo — redeploy before live verify)
+- `src/lib/dealSignerSelection.js` (+ tests) — mirror location selection helper
+- `manageSigner` list: filter for merchant actors; admin Applications stays full roster
+- `OnboardingPortal` client filter (defense)
+- `signApplication` / `submitToMSP` / `refillMSPForms`: same filter for MSPWare `owners[]`
+- Applications Owners copy clarified (hide, don't delete)
+
+Plan: `docs/superpowers/plans/2026-08-01-honor-included-signer-ids.md`
+
+**Teddy:** Push + redeploy `manageSigner`, `signApplication`, `submitToMSP`, `refillMSPForms` + frontend. On corp 339877104317 (or any deal): deselect owners ? Save ? portal People should omit them; re-check ? they return.
+
+**Waiting on:** Teddy (redeploy + UI confirm) ? then close #14
+---
