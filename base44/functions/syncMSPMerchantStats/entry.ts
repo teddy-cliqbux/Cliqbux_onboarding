@@ -14,6 +14,7 @@
  * Spec: docs/superpowers/specs/2026-07-31-msp-merchant-metrics-sync-design.md
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-08-01a — force redeploy after MerchantMID schema republish (volume + batch window fields) and MerchantMidBatch entity publish
 
 function __b64uDecode(str: string): Uint8Array {
   const pad = (4 - (str.length % 4)) % 4;
