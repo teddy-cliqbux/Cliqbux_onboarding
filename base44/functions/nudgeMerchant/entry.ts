@@ -3,8 +3,9 @@
  *
  * Body: { corporateId, channels: 'sms' | 'email' | 'both' }
  *
- * Email: resume link (pre-sign) or Verify & Sign invite to Control Person (at signing).
- * SMS: Quo v1 messages API — requires QUO_API_KEY + QUO_FROM_NUMBER env vars.
+ * Email / SMS: personalized by what's still needed (bank, sign, or general resume).
+ * Sign link only when portalLockStatus is signing/pending_signature; otherwise resume portal token.
+ * SMS: Quo v1 messages API — requires QUO_API_KEY + QUO_FROM_NUMBER (E.164 with +) env vars.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
@@ -111,31 +112,41 @@ function displayFirstName(firstName: string | null | undefined): string {
   return name || 'there';
 }
 
-function buildNudgeSms(firstName: string, businessName: string, link: string, intent: 'sign' | 'resume'): string {
+/** What the merchant still needs — drives warm, specific copy. */
+type NudgeFocus = 'bank' | 'sign' | 'resume';
+
+function buildNudgeSms(firstName: string, businessName: string, link: string, focus: NudgeFocus): string {
   const who = displayFirstName(firstName);
   const biz = displayBusinessName(businessName);
-  if (intent === 'sign') {
+  if (focus === 'bank') {
+    return `Hi ${who}, looks like we just need your bank account and signature to finalize — here's your link: ${link}\nReply here if you need help.`;
+  }
+  if (focus === 'sign') {
     return `Hi ${who}, your Cliqbux merchant agreement for ${biz} is ready to review and sign: ${link}\nReply here if you need help.`;
   }
   return `Hi ${who}, pick up your Cliqbux application for ${biz}: ${link}\nReply here if you need help.`;
 }
 
-function buildNudgeEmailSubject(businessName: string, intent: 'sign' | 'resume'): string {
+function buildNudgeEmailSubject(businessName: string, focus: NudgeFocus): string {
   const biz = displayBusinessName(businessName);
-  return intent === 'sign'
-    ? `Action required: review & sign — ${biz}`
-    : `Continue your Cliqbux application — ${biz}`;
+  if (focus === 'bank') return `Almost there — bank + signature — ${biz}`;
+  if (focus === 'sign') return `Action required: review & sign — ${biz}`;
+  return `Continue your Cliqbux application — ${biz}`;
 }
 
-function buildNudgeEmail(firstName: string, link: string, businessName: string, intent: 'sign' | 'resume'): string {
+function buildNudgeEmail(firstName: string, link: string, businessName: string, focus: NudgeFocus): string {
   const who = displayFirstName(firstName);
   const biz = displayBusinessName(businessName);
-  const headline = intent === 'sign'
-    ? 'Your signing link is ready'
-    : 'Continue your Cliqbux application';
-  const body = intent === 'sign'
-    ? `Your Cliqbux merchant agreement for <strong>${biz}</strong> is ready. Please review and sign — it only takes a few minutes.`
-    : `Pick up your Cliqbux application for <strong>${biz}</strong> — your progress is saved.`;
+  const headline = focus === 'bank'
+    ? 'Almost there'
+    : focus === 'sign'
+      ? 'Your signing link is ready'
+      : 'Continue your Cliqbux application';
+  const body = focus === 'bank'
+    ? `Looks like we just need your bank account and signature to finalize for <strong>${biz}</strong>.`
+    : focus === 'sign'
+      ? `Your Cliqbux merchant agreement for <strong>${biz}</strong> is ready. Please review and sign — it only takes a few minutes.`
+      : `Pick up your Cliqbux application for <strong>${biz}</strong> — your progress is saved.`;
   return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Inter,Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px;"><tr><td align="center">
   <table width="100%" style="max-width:520px;background:#fff;border-radius:16px;overflow:hidden;">
@@ -167,9 +178,10 @@ Deno.serve(async (req) => {
 
     if (!corporateId) return Response.json({ error: 'corporateId required' }, { status: 400 });
 
-    const [profiles, signers] = await Promise.all([
+    const [profiles, signers, locations] = await Promise.all([
       base44.asServiceRole.entities.MerchantCorporateProfile.filter({ corporateId }),
       base44.asServiceRole.entities.MerchantSigners.filter({ corporateId }),
+      base44.asServiceRole.entities.MerchantLocations.filter({ corporateId }),
     ]);
     const profile = profiles?.[0];
     if (!profile) return Response.json({ error: 'Merchant profile not found' }, { status: 404 });
@@ -186,11 +198,21 @@ Deno.serve(async (req) => {
     const atSigning = appStatus !== 'Submitted'
       && ['signing', 'pending_signature'].includes(String(profile.portalLockStatus || '').toLowerCase());
 
-    // Prefer Verify & Sign when we have a control person with verify path; else resume token
+    const locs = locations || [];
+    const hasLocs = locs.length > 0;
+    const needsBank = hasLocs && !locs.every((l: any) => l.bankDetails?.routingNumber);
+
+    // Personalized focus — bank wins over sign so we don't claim "ready to sign" while banking is open
+    let focus: NudgeFocus = 'resume';
+    if (needsBank) focus = 'bank';
+    else if (atSigning) focus = 'sign';
+
+    // Sign link only when packages are staged (portal lock). Otherwise resume into the portal
+    // (even if a verifyToken exists from earlier KYC — waiting-on-bank must open the app, not BoldSign).
     let link = '';
     let intent: 'sign' | 'resume' = 'resume';
 
-    if (control?.id && (atSigning || control.verifyToken || control.identityStatus)) {
+    if (focus === 'sign' && control?.id) {
       const token = control.verifyToken || generateToken();
       link = `${getPortalBaseUrl()}/verify?token=${encodeURIComponent(token)}&intent=sign`;
       intent = 'sign';
@@ -229,8 +251,8 @@ Deno.serve(async (req) => {
         try {
           await sendViaResend(
             email,
-            buildNudgeEmailSubject(businessName, intent),
-            buildNudgeEmail(firstName, link, businessName, intent),
+            buildNudgeEmailSubject(businessName, focus),
+            buildNudgeEmail(firstName, link, businessName, focus),
           );
           results.email = 'sent';
         } catch (e: any) {
@@ -244,7 +266,7 @@ Deno.serve(async (req) => {
         results.errors.push('No phone on file (signer corporatePhone)');
       } else {
         try {
-          await sendViaQuo(phone, buildNudgeSms(firstName, businessName, link, intent));
+          await sendViaQuo(phone, buildNudgeSms(firstName, businessName, link, focus));
           results.sms = 'sent';
         } catch (e: any) {
           results.errors.push(`SMS: ${e?.message || e}`);
@@ -292,6 +314,7 @@ Deno.serve(async (req) => {
       success: true,
       channels,
       intent,
+      focus,
       link,
       to: { email: email || null, phone: phone || null },
       results,

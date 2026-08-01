@@ -535,7 +535,7 @@ When a new `MerchantMID` is created via `manageMerchantID` (action="add") **and 
 | `ELAVON_USERNAME` / `ELAVON_PASSWORD` | Only used by `getDocuments`/`listDocuments` (direct Elavon doc API) |
 | `HUBSPOT_API_KEY` | HubSpot Private App token — used by `createHubspotDeal`, `pushStatusToHubspot`, `syncFromHubspot`, `getHubspotQuote`, `cleanupTestHubspot` |
 | `QUO_API_KEY` | Quo (OpenPhone) API key — agent **Nudge** SMS from `/admin/applications` (`nudgeMerchant`) |
-| `QUO_FROM_NUMBER` | Quo sending number for `nudgeMerchant` — **must be E.164 with `+`** (e.g. `+14154808053`). Bare digits like `4154808053` cause Quo HTTP 400 on `/from`. Confirm both Quo vars via `debugEnv` (`set` / `NOT_SET`). |
+| `QUO_FROM_NUMBER` | Quo sending number for `nudgeMerchant` — **must be E.164 with `+`** (Cliqbux line: `+14154888853`). Bare digits cause Quo HTTP 400; a number not on the API key’s workspace causes 404 `Phone number not found`. Confirm both Quo vars via `debugEnv` (`set` / `NOT_SET`). |
 | `GITHUB_FEEDBACK_TOKEN` | Fine-scoped GitHub PAT (`issues:write`) for Detection/Intake auto-filing |
 | `GITHUB_FEEDBACK_REPO` | Optional; default `teddy-cliqbux/Cliqbux_onboarding` |
 | `FEEDBACK_DIGEST_TO` | Email for daily operational digest (`sendOperationalDigest`) |

@@ -3064,12 +3064,12 @@ Dry-run had 106 MIDs but **97 store-named accounts**. OpenAPI (`api.mspware.com/
 ---
 
 ---
-**[CURSOR]** ù 2026-07-30
+**[CURSOR]** ? 2026-07-30
 **Type:** Feature
-**Re:** Help & Feedback ù optional screenshot (SSN-masked)
+**Re:** Help & Feedback ? optional screenshot (SSN-masked)
 
 ### Shipped
-- `src/lib/feedbackScreenshot.js` ù html2canvas capture; masks `data-private=ssn` + SSN name/id deny-list to `ùùù-ùù-ùùùù`; hides feedback widget during capture.
+- `src/lib/feedbackScreenshot.js` ? html2canvas capture; masks `data-private=ssn` + SSN name/id deny-list to `???-??-????`; hides feedback widget during capture.
 - Tagged SSN inputs: SignerDetailsModal, SignerModal, VerifyIdentity, UnderwritingPanel, ManualEntryForm.
 - FeedbackWidget: Capture / Retake / preview / Remove; UploadFile then base64 fallback to `submitProductFeedback`.
 - Backend accepts `screenshotUrl` or `screenshotBase64`; embeds `## Screenshot` on GitHub issue when attached.
@@ -3081,12 +3081,12 @@ Dry-run had 106 MIDs but **97 store-named accounts**. OpenAPI (`api.mspware.com/
 ---
 
 ---
-**[CURSOR]** ∑ 2026-07-30
+**[CURSOR]** ? 2026-07-30
 **Type:** Fix
-**Re:** MSP live sync HTTP 500 ó chunked writes + error surfacing
+**Re:** MSP live sync HTTP 500 ? chunked writes + error surfacing
 
 ### Symptom
-Dry run OK (106 MIDs / 47 owners); **Confirm live sync** returned HTTP 500. Likely Base44 write burst (rate limit / uncaught create) or timeout ó not MSP fetch.
+Dry run OK (106 MIDs / 47 owners); **Confirm live sync** returned HTTP 500. Likely Base44 write burst (rate limit / uncaught create) or timeout ? not MSP fetch.
 
 ### Shipped
 1. **`importMSPPortfolio`:** `base44Write` throttle (120ms) + retry on `Rate limit exceeded`; **per-owner try/catch** ? `summary.writeErrors` / `writeErrorDetails` (partial success HTTP 200).
@@ -3098,21 +3098,21 @@ Dry run OK (106 MIDs / 47 owners); **Confirm live sync** returned HTTP 500. Like
 2. Redeploy **`importMSPPortfolio`** (frontend picks up with app publish / sync).
 3. Confirm MerchantAccount + MerchantCorporateProfile schemas republished (`taxIdType`, contact email fields).
 4. Dry run ? **Confirm live sync** (watch batch progress) ? Merchants list.
-5. If any owner fails, red banner shows the **real** create error ó paste that if still stuck.
+5. If any owner fails, red banner shows the **real** create error ? paste that if still stuck.
 
 **Waiting on:** Teddy (push + redeploy + live sync)
 ---
 
 ---
-**[CURSOR]** ¬∑ 2026-07-30
+**[CURSOR]** ∑ 2026-07-30
 **Type:** Fix
-**Re:** MSP live sync HTTP 500 ‚Äî chunked writes + error surfacing
+**Re:** MSP live sync HTTP 500 ? chunked writes + error surfacing
 
 ### Symptom
-Dry run OK (106 MIDs / 47 owners); **Confirm live sync** returned HTTP 500. Likely Base44 write burst (rate limit / uncaught create) or timeout ‚Äî not MSP fetch.
+Dry run OK (106 MIDs / 47 owners); **Confirm live sync** returned HTTP 500. Likely Base44 write burst (rate limit / uncaught create) or timeout ? not MSP fetch.
 
 ### Shipped
-1. **`importMSPPortfolio`:** `base44Write` throttle (120ms) + retry on `Rate limit exceeded`; **per-owner try/catch** ‚Üí `summary.writeErrors` / `writeErrorDetails` (partial success HTTP 200).
+1. **`importMSPPortfolio`:** `base44Write` throttle (120ms) + retry on `Rate limit exceeded`; **per-owner try/catch** ? `summary.writeErrors` / `writeErrorDetails` (partial success HTTP 200).
 2. **Chunked live:** `ownerOffset` + `ownerLimit` (default 8); response `nextOwnerOffset` / `ownersTotal` / `done`.
 3. **UI:** loops batches with progress; extracts server `error`/`stack` from SDK 500 responses (not generic status text).
 
@@ -3120,16 +3120,16 @@ Dry run OK (106 MIDs / 47 owners); **Confirm live sync** returned HTTP 500. Like
 1. Push via GitHub Desktop.
 2. Redeploy **`importMSPPortfolio`** (frontend picks up with app publish / sync).
 3. Confirm MerchantAccount + MerchantCorporateProfile schemas republished (`taxIdType`, contact email fields).
-4. Dry run ‚Üí **Confirm live sync** (watch batch progress) ‚Üí Merchants list.
-5. If any owner fails, red banner shows the **real** create error ‚Äî paste that if still stuck.
+4. Dry run ? **Confirm live sync** (watch batch progress) ? Merchants list.
+5. If any owner fails, red banner shows the **real** create error ? paste that if still stuck.
 
 **Waiting on:** Teddy (push + redeploy + live sync)
 ---
 
 ---
-**[CURSOR]** ó 2026-07-30
+**[CURSOR]** ? 2026-07-30
 **Type:** Bug Fix
-**Re:** Help & Feedback ó GITHUB_FEEDBACK_TOKEN irony
+**Re:** Help & Feedback ? GITHUB_FEEDBACK_TOKEN irony
 
 ### Problem
 Submit showed raw `GITHUB_FEEDBACK_TOKEN not configured` (503) and dropped the report.
@@ -3162,23 +3162,23 @@ Before MSPWare / portfolio / boarding / merchant-center: vault `_index.md` ? `pa
 ---
 
 ---
-**[CURSOR]** ‚Äî 2026-07-31
+**[CURSOR]** ? 2026-07-31
 **Type:** Feature
 **Re:** Admin account home overview (CoPilot-inspired)
 
-### Shipped (local ‚Äî push + redeploy manageMerchantAccount)
+### Shipped (local ? push + redeploy manageMerchantAccount)
 1. Spec: docs/superpowers/specs/2026-07-31-admin-account-home-overview-design.md
-2. src/lib/accountOverview.js (+ tests) ‚Äî best deal by handoff stage, primary CTA map, dense summary (last-4 only; PCI/paperless/POS = unknown until real source)
+2. src/lib/accountOverview.js (+ tests) ? best deal by handoff stage, primary CTA map, dense summary (last-4 only; PCI/paperless/POS = unknown until real source)
 3. manageMerchantAccount get returns overview + primaryContact fields
-4. AdminMerchantAccountHome ‚Äî hero CTA + Account summary + existing deals/legal/MIDs; best deal highlighted
+4. AdminMerchantAccountHome ? hero CTA + Account summary + existing deals/legal/MIDs; best deal highlighted
 
-**CTA:** needs_attention‚ÜíDeal Room ¬∑ onboarding‚ÜíPortal ¬∑ live‚ÜíLocations ¬∑ prospect+deal‚ÜíDeal Room ¬∑ prospect+no deal‚ÜíApplications
+**CTA:** needs_attention?Deal Room ∑ onboarding?Portal ∑ live?Locations ∑ prospect+deal?Deal Room ∑ prospect+no deal?Applications
 
 **Waiting on:** Teddy (push via GitHub Desktop; redeploy manageMerchantAccount)
 ---
 
 ---
-**[CURSOR]** ‚Äî 2026-07-31
+**[CURSOR]** ? 2026-07-31
 **Type:** Feature
 **Re:** MSP metrics sync (volume + batches)
 
@@ -3186,9 +3186,9 @@ Before MSPWare / portfolio / boarding / merchant-center: vault `_index.md` ? `pa
 docs/superpowers/specs/2026-07-31-msp-merchant-metrics-sync-design.md
 
 ### Shipped (local)
-1. syncMSPMerchantStats ‚Äî probe / dryRun / confirmLive (chunked midOffset/midLimit)
+1. syncMSPMerchantStats ? probe / dryRun / confirmLive (chunked midOffset/midLimit)
 2. MerchantMID volume + batch rollup fields (republish schema)
-3. New entity MerchantMidBatch (publish in Base44) ‚Äî keep newest 30 per MID
+3. New entity MerchantMidBatch (publish in Base44) ? keep newest 30 per MID
 4. /admin/center/sync-msp card **2. Volume & batches**
 5. Statements: probe only, no writes
 6. Optional env MSP_SALESTEAM_NO for batches body
@@ -3197,7 +3197,7 @@ docs/superpowers/specs/2026-07-31-msp-merchant-metrics-sync-design.md
 1. Publish entity **MerchantMidBatch** in Base44
 2. Republish **MerchantMID** schema (new volume fields)
 3. Deploy function **syncMSPMerchantStats**
-4. Push frontend; open Sync MSPWare ‚Üí Probe volume first
+4. Push frontend; open Sync MSPWare ? Probe volume first
 5. Set MSP_SALESTEAM_NO in Base44 if batch probe fails on salesteamno
 
 **Waiting on:** Teddy (publish schemas + deploy + probe)
@@ -3227,4 +3227,37 @@ No code-side normalize of `QUO_FROM_NUMBER` ? Base44 env must include `+1`.
 4. Applications ? Remind ? Text only; confirm warm copy + correct link (`?token=` vs `/verify??&intent=sign`)
 
 **Waiting on:** Teddy (env + redeploy + live Text)
+---
+
+---
+**[CURSOR]** ? 2026-08-01
+**Type:** Finding
+**Re:** Quo SMS 404 ? wrong from-number digits (typo)
+
+### Live
+After E.164 was fixed, Quo returned 404 `Phone number not found when getting by number` ? not Levi?s phone; the **from** line wasn?t on the workspace.
+
+### Cause
+Typo: env had `415-480-8053` / `+14154808053`. Real Cliqbux Quo line is **(415) 488-8853** ? **`+14154888853`**.
+
+### Teddy
+Set Base44 `QUO_FROM_NUMBER=+14154888853`, retry Remind ? Text. No code change required for this fix. `AGENTS.md` example updated to the correct number.
+
+**Waiting on:** Teddy (env fix + retry)
+---
+
+---
+**[CURSOR]** ? 2026-08-01
+**Type:** Copy
+**Re:** Personalized nudge SMS ? bank-aware
+
+### Shipped
+`nudgeMerchant` focus: **bank** | **sign** | **resume**
+- **bank** (locations exist, any missing routing): SMS *Looks like we just need your bank account and signature to finalize ? here's your link:* + portal resume token (not BoldSign)
+- **sign** only when `portalLockStatus` is signing/pending_signature
+- Fixed: no longer treat `verifyToken` / `identityStatus` alone as ?ready to sign? (that sent sign copy while Waiting on bank)
+
+**Teddy:** Redeploy `nudgeMerchant`. Fix Levi?s corporate phone if still the support line. Retry Remind.
+
+**Waiting on:** Teddy (redeploy + retry)
 ---
