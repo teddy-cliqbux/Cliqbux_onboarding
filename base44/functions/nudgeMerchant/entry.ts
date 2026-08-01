@@ -100,13 +100,42 @@ function isControlPerson(s: any): boolean {
   return false;
 }
 
-function buildNudgeEmail(firstName: string, link: string, businessName: string, intent: string): string {
+/** Display name for copy — avoid "Cliqbux" twice when legalName is blank. */
+function displayBusinessName(legalName: string | null | undefined): string {
+  const name = String(legalName || '').trim();
+  return name || 'your business';
+}
+
+function displayFirstName(firstName: string | null | undefined): string {
+  const name = String(firstName || '').trim();
+  return name || 'there';
+}
+
+function buildNudgeSms(firstName: string, businessName: string, link: string, intent: 'sign' | 'resume'): string {
+  const who = displayFirstName(firstName);
+  const biz = displayBusinessName(businessName);
+  if (intent === 'sign') {
+    return `Hi ${who}, your Cliqbux merchant agreement for ${biz} is ready to review and sign: ${link}\nReply here if you need help.`;
+  }
+  return `Hi ${who}, pick up your Cliqbux application for ${biz}: ${link}\nReply here if you need help.`;
+}
+
+function buildNudgeEmailSubject(businessName: string, intent: 'sign' | 'resume'): string {
+  const biz = displayBusinessName(businessName);
+  return intent === 'sign'
+    ? `Action required: review & sign — ${biz}`
+    : `Continue your Cliqbux application — ${biz}`;
+}
+
+function buildNudgeEmail(firstName: string, link: string, businessName: string, intent: 'sign' | 'resume'): string {
+  const who = displayFirstName(firstName);
+  const biz = displayBusinessName(businessName);
   const headline = intent === 'sign'
     ? 'Your signing link is ready'
     : 'Continue your Cliqbux application';
   const body = intent === 'sign'
-    ? 'Please review and sign your merchant processing agreement. It only takes a few minutes.'
-    : 'Pick up where you left off — your progress is saved.';
+    ? `Your Cliqbux merchant agreement for <strong>${biz}</strong> is ready. Please review and sign — it only takes a few minutes.`
+    : `Pick up your Cliqbux application for <strong>${biz}</strong> — your progress is saved.`;
   return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f4f4f5;font-family:Inter,Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 16px;"><tr><td align="center">
   <table width="100%" style="max-width:520px;background:#fff;border-radius:16px;overflow:hidden;">
@@ -114,8 +143,7 @@ function buildNudgeEmail(firstName: string, link: string, businessName: string, 
     <tr><td style="padding:36px 40px;">
       <h1 style="margin:0 0 16px;font-size:22px;font-weight:800;color:#111827;">${headline}</h1>
       <p style="margin:0 0 24px;font-size:15px;color:#374151;line-height:1.6;">
-        Hi ${firstName || 'there'},<br><br>${body}<br><br>
-        <strong>${businessName || 'Cliqbux'}</strong>
+        Hi ${who},<br><br>${body}
       </p>
       <a href="${link}" style="display:inline-block;background:#FEAC27;color:#111;font-weight:700;padding:14px 28px;border-radius:12px;text-decoration:none;">Continue →</a>
     </td></tr>
@@ -152,7 +180,7 @@ Deno.serve(async (req) => {
 
     const email = (control?.signerEmail || profile.signerEmail || '').trim().toLowerCase();
     const phone = normalizePhone(control?.corporatePhone || profile.corporatePhone || profile.signerPhone);
-    const businessName = profile.legalName || 'Cliqbux';
+    const businessName = String(profile.legalName || '').trim();
     const firstName = control?.firstName || profile.firstName || '';
     const appStatus = String(profile.applicationStatus || '');
     const atSigning = appStatus !== 'Submitted'
@@ -199,10 +227,11 @@ Deno.serve(async (req) => {
         results.errors.push('No email on file');
       } else {
         try {
-          const subject = intent === 'sign'
-            ? `Action Required: Review & Sign — ${businessName}`
-            : `Continue your Cliqbux merchant application`;
-          await sendViaResend(email, subject, buildNudgeEmail(firstName, link, businessName, intent));
+          await sendViaResend(
+            email,
+            buildNudgeEmailSubject(businessName, intent),
+            buildNudgeEmail(firstName, link, businessName, intent),
+          );
           results.email = 'sent';
         } catch (e: any) {
           results.errors.push(`Email: ${e?.message || e}`);
@@ -215,10 +244,7 @@ Deno.serve(async (req) => {
         results.errors.push('No phone on file (signer corporatePhone)');
       } else {
         try {
-          const smsBody = intent === 'sign'
-            ? `Cliqbux: please review & sign your merchant application: ${link}`
-            : `Cliqbux: continue your merchant application: ${link}`;
-          await sendViaQuo(phone, smsBody);
+          await sendViaQuo(phone, buildNudgeSms(firstName, businessName, link, intent));
           results.sms = 'sent';
         } catch (e: any) {
           results.errors.push(`SMS: ${e?.message || e}`);

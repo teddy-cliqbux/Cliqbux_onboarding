@@ -3202,3 +3202,29 @@ docs/superpowers/specs/2026-07-31-msp-merchant-metrics-sync-design.md
 
 **Waiting on:** Teddy (publish schemas + deploy + probe)
 ---
+
+---
+**[CURSOR]** ? 2026-08-01
+**Type:** Fix + Copy
+**Re:** Quo SMS Remind ? E.164 from-number + warm named nudge copy
+
+### Root cause (live)
+1. Missing `QUO_FROM_NUMBER` ? clear error.
+2. Then Quo **400** on `/from`: env was bare digits `4154808053`. Quo requires E.164 (`+14154808053`) or `PN?`.
+
+### Shipped (local)
+1. `nudgeMerchant` ? warm named SMS + aligned email for **resume** (fill) and **sign** intents (`buildNudgeSms` / `buildNudgeEmail` / subjects). Fallbacks: `Hi there`, `your business`.
+2. `debugEnv` ? `QUO_API_KEY` / `QUO_FROM_NUMBER` presence only (`set` / `NOT_SET`).
+3. `AGENTS.md` env table ? E.164-with-`+` reminder.
+
+### Not shipped (by Teddy request)
+No code-side normalize of `QUO_FROM_NUMBER` ? Base44 env must include `+1`.
+
+### Teddy checklist
+1. Set Base44 `QUO_FROM_NUMBER` = `+14154808053` (not bare digits)
+2. Confirm `QUO_API_KEY` set
+3. Redeploy `nudgeMerchant` + `debugEnv`
+4. Applications ? Remind ? Text only; confirm warm copy + correct link (`?token=` vs `/verify??&intent=sign`)
+
+**Waiting on:** Teddy (env + redeploy + live Text)
+---

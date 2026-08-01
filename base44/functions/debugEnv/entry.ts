@@ -10,9 +10,14 @@ Deno.serve(async (req) => {
 
   const publicUrl = Deno.env.get('PUBLIC_APP_URL');
   const appId = Deno.env.get('BASE44_APP_ID');
+  const quoKey = Deno.env.get('QUO_API_KEY');
+  const quoFrom = Deno.env.get('QUO_FROM_NUMBER');
   return Response.json({
     PUBLIC_APP_URL: publicUrl || 'NOT_SET',
     BASE44_APP_ID: appId || 'NOT_SET',
-    resolved: publicUrl && publicUrl.startsWith('http') ? publicUrl.replace(/\/$/, '') : (appId ? `https://${appId}.base44.app` : 'https://onboarding.cliqbux.com')
+    resolved: publicUrl && publicUrl.startsWith('http') ? publicUrl.replace(/\/$/, '') : (appId ? `https://${appId}.base44.app` : 'https://onboarding.cliqbux.com'),
+    // Presence only — never echo secrets or the from-number value
+    QUO_API_KEY: quoKey ? 'set' : 'NOT_SET',
+    QUO_FROM_NUMBER: quoFrom ? 'set' : 'NOT_SET',
   });
 });
