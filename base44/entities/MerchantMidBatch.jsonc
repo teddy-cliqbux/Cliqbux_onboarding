@@ -5,7 +5,7 @@
   "properties": {
     "merchantMidId": {
       "type": "string",
-      "description": "FK → MerchantMID.id"
+      "description": "FK \u2192 MerchantMID.id"
     },
     "elavonMID": {
       "type": "string",
@@ -17,7 +17,7 @@
     },
     "merchantBatchNo": {
       "type": "string",
-      "description": "MSP merchantbatchno — unique with merchantMidId for upsert"
+      "description": "MSP merchantbatchno \u2014 unique with merchantMidId for upsert"
     },
     "batchNum": {
       "type": "number",
