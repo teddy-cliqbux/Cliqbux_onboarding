@@ -3176,3 +3176,29 @@ Before MSPWare / portfolio / boarding / merchant-center: vault `_index.md` ? `pa
 
 **Waiting on:** Teddy (push via GitHub Desktop; redeploy manageMerchantAccount)
 ---
+
+---
+**[CURSOR]** — 2026-07-31
+**Type:** Feature
+**Re:** MSP metrics sync (volume + batches)
+
+### Spec
+docs/superpowers/specs/2026-07-31-msp-merchant-metrics-sync-design.md
+
+### Shipped (local)
+1. syncMSPMerchantStats — probe / dryRun / confirmLive (chunked midOffset/midLimit)
+2. MerchantMID volume + batch rollup fields (republish schema)
+3. New entity MerchantMidBatch (publish in Base44) — keep newest 30 per MID
+4. /admin/center/sync-msp card **2. Volume & batches**
+5. Statements: probe only, no writes
+6. Optional env MSP_SALESTEAM_NO for batches body
+
+### Teddy checklist
+1. Publish entity **MerchantMidBatch** in Base44
+2. Republish **MerchantMID** schema (new volume fields)
+3. Deploy function **syncMSPMerchantStats**
+4. Push frontend; open Sync MSPWare → Probe volume first
+5. Set MSP_SALESTEAM_NO in Base44 if batch probe fails on salesteamno
+
+**Waiting on:** Teddy (publish schemas + deploy + probe)
+---

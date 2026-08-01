@@ -1,0 +1,72 @@
+{
+  "name": "MerchantMidBatch",
+  "type": "object",
+  "description": "MSPWare commission batch row for a processing account (MID). Synced by syncMSPMerchantStats from GET /merchants/{mid}/batches. Keep newest 30 per MerchantMID. Publish this entity in Base44 before live sync or creates return ENTITY_SCHEMA_MISSING.",
+  "properties": {
+    "merchantMidId": {
+      "type": "string",
+      "description": "FK → MerchantMID.id"
+    },
+    "elavonMID": {
+      "type": "string",
+      "description": "Elavon / MSP merchant id used for the API path"
+    },
+    "corporateId": {
+      "type": "string",
+      "description": "Denormalized HubSpot deal id / corporateId from parent MerchantMID"
+    },
+    "merchantBatchNo": {
+      "type": "string",
+      "description": "MSP merchantbatchno — unique with merchantMidId for upsert"
+    },
+    "batchNum": {
+      "type": "number",
+      "description": "MSP batchnum"
+    },
+    "dateCreated": {
+      "type": "string",
+      "description": "MSP datecreated (vendor string)"
+    },
+    "totalNetAmt": {
+      "type": "number",
+      "description": "MSP totalnetamt"
+    },
+    "amtPurchase": {
+      "type": "number",
+      "description": "MSP amtpurchase"
+    },
+    "amtReturn": {
+      "type": "number",
+      "description": "MSP amtreturn"
+    },
+    "numPurchase": {
+      "type": "number",
+      "description": "MSP numpurchase"
+    },
+    "numReturn": {
+      "type": "number",
+      "description": "MSP numreturn"
+    },
+    "averageTicket": {
+      "type": "number",
+      "description": "MSP averageticket"
+    },
+    "tidNum": {
+      "type": "string",
+      "description": "MSP tidnum"
+    },
+    "applicationNo": {
+      "type": "string",
+      "description": "MSP applicationno"
+    },
+    "syncedAt": {
+      "type": "string",
+      "description": "ISO timestamp when this row was last upserted from MSP"
+    }
+  },
+  "required": [
+    "merchantMidId",
+    "elavonMID",
+    "merchantBatchNo"
+  ]
+}

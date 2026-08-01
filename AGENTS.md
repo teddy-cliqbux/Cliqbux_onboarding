@@ -489,6 +489,7 @@ Each location links to a `legalEntity.entityId` in the profile's embedded array.
 | `pollMSPStatus` | Polls MSPWare status for all Pending MID records (both Locations and MerchantMIDs) |
 | `importExistingMIDs` | TIN-matches MSPWare approved apps to a corporateId; creates MerchantMID records |
 | `importMSPPortfolio` | MSP **Merchants** API → Merchant Center: **Owner (email)** → **Legal Entity** (EIN/SSN) → **MID**. Rate gate ≤8 req/s; **HTTP 429 counted + UI banner** (never silent). Second-pass merge by tax id / corporate_name. `taxIdType` EIN\|SSN. Live writes: **chunked** (`ownerOffset`/`ownerLimit`, default 8 owners/call; UI loops until `done`), **Base44 write throttle + rate-limit retry**, **per-owner try/catch** (`summary.writeErrors` — HTTP 200 partial success, not whole-job 500). Admin-only. `{ dryRun: true }` / `{ confirmLive: true, ownerOffset?, ownerLimit? }`. No HubSpot. UI: `/admin/center/sync-msp`. |
+| `syncMSPMerchantStats` | Separate metrics sync: `GET /merchants/{mid}/statistics` + `/batches` → `MerchantMID` volume fields + last 30 `MerchantMidBatch` rows. Probe / dryRun / confirmLive (`midOffset`/`midLimit`). Statements probe-only. Admin-only. UI: `/admin/center/sync-msp` card 2. |
 | `probeMSPMerchantData` | Admin read-only: Merchants API vs applications coverage + sample `GET /merchants/{mid}` field shape. |
 | `migrateToMerchantMIDs` | One-time migration: copies any records left in the legacy MerchantProcessingConcept table into MerchantMID, and derives MerchantMID records from MerchantLocations boarding data for locations that still don't have one |
 | `manageMSPTemplate` | Reads/fills MSPWare templates. Actions: `read`, `fill_icpls`, `fill_cd`, `create_cd`. Template #6 = ICPLS, Template #154 = Cash Discount (pricing_method: `"CLEAR"`). |
@@ -529,6 +530,7 @@ When a new `MerchantMID` is created via `manageMerchantID` (action="add") **and 
 | `MSP_SALESPERSON_ID` | `76764` |
 | `MSP_CD_TEMPLATE_NO` | Cash Discount MSPWare template number (default `133`). Set if #133 stops cloning. |
 | `MSP_DEFAULT_TEMPLATE_NO` | ICPLS template number (default `209`) |
+| `MSP_SALESTEAM_NO` | Optional sales team number for MSP `/merchants/{mid}/batches` (and related). Used by `syncMSPMerchantStats`. |
 | `MSP_SUBMIT_ENABLED` | `true` to actually submit to Elavon; omit for safe draft-only mode |
 | `ELAVON_USERNAME` / `ELAVON_PASSWORD` | Only used by `getDocuments`/`listDocuments` (direct Elavon doc API) |
 | `HUBSPOT_API_KEY` | HubSpot Private App token — used by `createHubspotDeal`, `pushStatusToHubspot`, `syncFromHubspot`, `getHubspotQuote`, `cleanupTestHubspot` |

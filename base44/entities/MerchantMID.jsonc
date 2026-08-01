@@ -145,6 +145,70 @@
     "processingStartDate": {
       "type": "string",
       "description": "ISO date when this MID started processing. For existing accounts, pulled from MSPWare created_on."
+    },
+    "volumeCurrentMonth": {
+      "type": "number",
+      "description": "MSP GET /merchants/{mid}/statistics volume_current_month. Synced by syncMSPMerchantStats. Republish schema or field strips."
+    },
+    "volumeLastMonth": {
+      "type": "number",
+      "description": "MSP statistics volume_last_month"
+    },
+    "volumeYtd": {
+      "type": "number",
+      "description": "MSP statistics volume_year_to_date"
+    },
+    "volumeQtd": {
+      "type": "number",
+      "description": "MSP statistics volume_quarter_to_date"
+    },
+    "volumeTotal": {
+      "type": "number",
+      "description": "MSP statistics volume_total"
+    },
+    "dateFirstDeposit": {
+      "type": "string",
+      "description": "MSP statistics date_first_deposit (vendor string as returned)"
+    },
+    "dateLastDeposit": {
+      "type": "string",
+      "description": "MSP statistics date_last_deposit (vendor string as returned)"
+    },
+    "batchCountWindow": {
+      "type": "number",
+      "description": "Count of MerchantMidBatch rows retained for this MID after last batches sync (cap 30)"
+    },
+    "batchVolumeWindow": {
+      "type": "number",
+      "description": "Sum of totalNetAmt across retained batches in the sync window"
+    },
+    "lastBatchDate": {
+      "type": "string",
+      "description": "dateCreated of the newest retained batch"
+    },
+    "lastBatchNetAmt": {
+      "type": "number",
+      "description": "totalNetAmt of the newest retained batch"
+    },
+    "lastBatchNo": {
+      "type": "string",
+      "description": "merchantbatchno of the newest retained batch"
+    },
+    "mspStatsSyncedAt": {
+      "type": "string",
+      "description": "ISO timestamp of last successful statistics pull"
+    },
+    "mspBatchesSyncedAt": {
+      "type": "string",
+      "description": "ISO timestamp of last successful batches pull"
+    },
+    "mspStatsError": {
+      "type": "string",
+      "description": "Last statistics sync error for this MID; null/empty on success"
+    },
+    "mspBatchesError": {
+      "type": "string",
+      "description": "Last batches sync error for this MID; null/empty on success"
     }
   },
   "required": [

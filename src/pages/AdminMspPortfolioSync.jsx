@@ -1,6 +1,8 @@
 /**
  * Admin MSPWare portfolio sync — /admin/center/sync-msp
- * Probe → dry run → confirm live (chunked). Owner → Legal Entity → MID. No HubSpot.
+ * 1) Identity: Probe → dry run → confirm live (Owner → Legal Entity → MID)
+ * 2) Volume: Probe → dry run → confirm live (statistics + last 30 batches)
+ * No HubSpot. Nothing submitted to Elavon.
  */
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -8,6 +10,7 @@ import { Loader2, RefreshCw, Search } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 const LIVE_OWNER_LIMIT = 8;
+const LIVE_MID_LIMIT = 12;
 
 function rateLimit429(result) {
   return result?.rateLimit?.rateLimit429Count
@@ -78,6 +81,51 @@ function mergeLiveBatch(acc, batch) {
   };
 }
 
+function mergeVolumeLive(acc, batch) {
+  if (!acc) {
+    return {
+      ...batch,
+      entities: [...(batch.entities || [])],
+      summary: { ...(batch.summary || {}) },
+    };
+  }
+  const a = acc.summary || {};
+  const b = batch.summary || {};
+  return {
+    ...acc,
+    ...batch,
+    success: !!(batch.success && acc.success),
+    dryRun: false,
+    confirmLive: true,
+    midOffset: 0,
+    midsProcessed: (acc.midsProcessed || 0) + (batch.midsProcessed || 0),
+    nextMidOffset: batch.nextMidOffset,
+    done: batch.done,
+    rateLimit: {
+      ...(acc.rateLimit || {}),
+      ...(batch.rateLimit || {}),
+      mspRequestCount: (acc.rateLimit?.mspRequestCount || 0) + (batch.rateLimit?.mspRequestCount || 0),
+      rateLimit429Count: (acc.rateLimit?.rateLimit429Count || 0) + (batch.rateLimit?.rateLimit429Count || 0),
+    },
+    summary: {
+      ...a,
+      eligibleCount: b.eligibleCount ?? a.eligibleCount,
+      midsProcessed: (a.midsProcessed || 0) + (b.midsProcessed || 0),
+      statsOk: (a.statsOk || 0) + (b.statsOk || 0),
+      statsFail: (a.statsFail || 0) + (b.statsFail || 0),
+      batchesOk: (a.batchesOk || 0) + (b.batchesOk || 0),
+      batchesFail: (a.batchesFail || 0) + (b.batchesFail || 0),
+      batchRowsUpserted: (a.batchRowsUpserted || 0) + (b.batchRowsUpserted || 0),
+      batchRowsDeleted: (a.batchRowsDeleted || 0) + (b.batchRowsDeleted || 0),
+      writeErrors: (a.writeErrors || 0) + (b.writeErrors || 0),
+      writeErrorDetails: [...(a.writeErrorDetails || []), ...(b.writeErrorDetails || [])],
+      mspRequestCount: (a.mspRequestCount || 0) + (b.mspRequestCount || 0),
+      rateLimit429Count: (a.rateLimit429Count || 0) + (b.rateLimit429Count || 0),
+    },
+    entities: [...(acc.entities || []), ...(batch.entities || [])],
+  };
+}
+
 export default function AdminMspPortfolioSync() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -85,6 +133,13 @@ export default function AdminMspPortfolioSync() {
   const [probeResult, setProbeResult] = useState(null);
   const [dryResult, setDryResult] = useState(null);
   const [liveResult, setLiveResult] = useState(null);
+
+  const [volBusy, setVolBusy] = useState('');
+  const [volError, setVolError] = useState('');
+  const [volProgress, setVolProgress] = useState('');
+  const [volProbe, setVolProbe] = useState(null);
+  const [volDry, setVolDry] = useState(null);
+  const [volLive, setVolLive] = useState(null);
 
   const runProbe = async () => {
     setBusy('probe');
@@ -166,6 +221,92 @@ export default function AdminMspPortfolioSync() {
     }
   };
 
+  const runVolProbe = async () => {
+    setVolBusy('probe');
+    setVolError('');
+    try {
+      const res = await base44.functions.invoke('syncMSPMerchantStats', {
+        probe: true,
+        sampleSize: 3,
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      setVolProbe(res.data);
+    } catch (err) {
+      console.error('[AdminMspPortfolioSync] vol probe', err);
+      setVolError(extractInvokeError(err));
+    } finally {
+      setVolBusy('');
+    }
+  };
+
+  const runVolDry = async () => {
+    setVolBusy('dry');
+    setVolError('');
+    setVolLive(null);
+    setVolProgress('');
+    try {
+      const res = await base44.functions.invoke('syncMSPMerchantStats', {
+        dryRun: true,
+        midOffset: 0,
+        midLimit: LIVE_MID_LIMIT,
+      });
+      if (res.data?.error) throw new Error(res.data.error);
+      setVolDry(res.data);
+    } catch (err) {
+      console.error('[AdminMspPortfolioSync] vol dry', err);
+      setVolError(extractInvokeError(err));
+    } finally {
+      setVolBusy('');
+    }
+  };
+
+  const runVolLive = async () => {
+    setVolBusy('live');
+    setVolError('');
+    setVolProgress('');
+    let offset = 0;
+    let merged = null;
+    let batchNum = 0;
+    try {
+      while (true) {
+        batchNum += 1;
+        setVolProgress(`Volume batch ${batchNum} (MIDs ${offset + 1}–…)…`);
+        const res = await base44.functions.invoke('syncMSPMerchantStats', {
+          confirmLive: true,
+          midOffset: offset,
+          midLimit: LIVE_MID_LIMIT,
+        });
+        if (res.data?.error) throw new Error(res.data.error);
+        const batch = res.data;
+        merged = mergeVolumeLive(merged, batch);
+        setVolLive({ ...merged });
+        const total = batch.midsTotal || 0;
+        const next = batch.nextMidOffset ?? (offset + (batch.midsProcessed || LIVE_MID_LIMIT));
+        setVolProgress(
+          batch.done
+            ? `Done — ${merged.midsProcessed || next}/${total} MIDs`
+            : `Batch ${batchNum} done — ${next}/${total} MIDs…`,
+        );
+        if (batch.done) break;
+        if (next <= offset) {
+          throw new Error('Volume sync did not advance midOffset — aborting');
+        }
+        offset = next;
+      }
+      if (merged?.summary?.writeErrors > 0) {
+        const details = (merged.summary.writeErrorDetails || []).slice(0, 5).join('; ');
+        setVolError(
+          `${merged.summary.writeErrors} MID write error(s)${details ? `: ${details}` : ''}`,
+        );
+      }
+    } catch (err) {
+      console.error('[AdminMspPortfolioSync] vol live', err);
+      setVolError(extractInvokeError(err));
+    } finally {
+      setVolBusy('');
+    }
+  };
+
   const display = liveResult || dryResult;
   const summary = display?.summary;
   const entities = display?.entities || [];
@@ -175,26 +316,32 @@ export default function AdminMspPortfolioSync() {
   const sync429 = rateLimit429(display);
   const any429 = probe429 + sync429;
 
+  const volDisplay = volLive || volDry;
+  const volSummary = volDisplay?.summary;
+  const vol429 = rateLimit429(volProbe) + rateLimit429(volDisplay);
+  const pageBusy = !!busy || !!volBusy;
+
   return (
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="font-display text-cb-display text-white">Sync from MSPWare</h1>
         <p className="text-cb-body-lg text-gray-400 mt-1 max-w-2xl">
-          Pull live merchants into Merchant Center as{' '}
+          Identity import builds{' '}
           <span className="text-gray-300">Owner → Legal Entity → MID</span>
-          {' '}(contact email; EIN for corps / SSN for sole props).
-          Throttled to ≤8 MSP calls/sec. Live writes in batches of {LIVE_OWNER_LIMIT} owners. No HubSpot. Nothing submitted to Elavon.
+          . Volume sync pulls processing statistics and the last 30 commission batches per MID.
+          Throttled to ≤8 MSP calls/sec. No HubSpot. Nothing submitted to Elavon.
         </p>
       </div>
 
       <div className="bg-cb-surface border border-cb-border rounded-cb px-4 py-4 space-y-3">
+        <h2 className="font-display text-cb-title text-white">1. Identity portfolio</h2>
         <p className="text-cb-caption text-gray-500">
-          Probe first (owner clustering), then dry-run, then confirm live. Live runs in chunks so it won&apos;t time out or rate-limit the whole portfolio.
+          Probe first (owner clustering), then dry-run, then confirm live. Live runs in chunks of {LIVE_OWNER_LIMIT} owners.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            disabled={!!busy}
+            disabled={pageBusy}
             onClick={runProbe}
             className="inline-flex items-center gap-2 text-cb-caption font-semibold px-3 py-2 rounded-cb border border-cb-border text-gray-300 hover:text-white disabled:opacity-40"
           >
@@ -203,7 +350,7 @@ export default function AdminMspPortfolioSync() {
           </button>
           <button
             type="button"
-            disabled={!!busy}
+            disabled={pageBusy}
             onClick={runDry}
             className="inline-flex items-center gap-2 text-cb-caption font-semibold px-3 py-2 rounded-cb border border-cb-border text-gray-300 hover:text-white disabled:opacity-40"
           >
@@ -212,7 +359,7 @@ export default function AdminMspPortfolioSync() {
           </button>
           <button
             type="button"
-            disabled={!!busy || !dryResult?.success}
+            disabled={pageBusy || !dryResult?.success}
             onClick={() => {
               if (!window.confirm(
                 'Live sync will create Merchant Accounts (by owner email), legal entities, locations, and MIDs in batches. HubSpot will not be touched. Continue?',
@@ -239,21 +386,166 @@ export default function AdminMspPortfolioSync() {
         )}
       </div>
 
+      <div className="bg-cb-surface border border-cb-border rounded-cb px-4 py-4 space-y-3">
+        <h2 className="font-display text-cb-title text-white">2. Volume &amp; batches</h2>
+        <p className="text-cb-caption text-gray-500">
+          For each MID with an Elavon ID: pull MSP statistics (MTD / prior / YTD) and up to 30 recent batches
+          (6-month window). Statements are probed only — not stored yet. Live chunks of {LIVE_MID_LIMIT} MIDs.
+          Republish <span className="text-gray-300">MerchantMID</span> fields and publish{' '}
+          <span className="text-gray-300">MerchantMidBatch</span> before live writes.
+          Optional env <span className="font-mono text-gray-400">MSP_SALESTEAM_NO</span> if batches require a team number.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={pageBusy}
+            onClick={runVolProbe}
+            className="inline-flex items-center gap-2 text-cb-caption font-semibold px-3 py-2 rounded-cb border border-cb-border text-gray-300 hover:text-white disabled:opacity-40"
+          >
+            {volBusy === 'probe' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+            Probe volume
+          </button>
+          <button
+            type="button"
+            disabled={pageBusy}
+            onClick={runVolDry}
+            className="inline-flex items-center gap-2 text-cb-caption font-semibold px-3 py-2 rounded-cb border border-cb-border text-gray-300 hover:text-white disabled:opacity-40"
+          >
+            {volBusy === 'dry' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            Dry run volume
+          </button>
+          <button
+            type="button"
+            disabled={pageBusy || !volDry?.success}
+            onClick={() => {
+              if (!window.confirm(
+                'Live volume sync will write statistics onto MerchantMIDs and upsert up to 30 MerchantMidBatch rows per MID. Continue?',
+              )) return;
+              runVolLive();
+            }}
+            className="inline-flex items-center gap-2 text-cb-caption font-semibold px-3 py-2 rounded-cb bg-cb-accent text-cb-bg hover:opacity-90 disabled:opacity-40"
+          >
+            {volBusy === 'live' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+            Confirm live volume
+          </button>
+        </div>
+        {volBusy === 'live' && volProgress && (
+          <p className="text-cb-caption text-cb-accent">{volProgress}</p>
+        )}
+        {!volBusy && volProgress && volLive && (
+          <p className="text-cb-caption text-gray-500">{volProgress}</p>
+        )}
+      </div>
+
       {error && (
         <p className="text-cb-caption text-cb-danger border-l-2 border-cb-danger pl-3 whitespace-pre-wrap break-words">{error}</p>
+      )}
+      {volError && (
+        <p className="text-cb-caption text-cb-danger border-l-2 border-cb-danger pl-3 whitespace-pre-wrap break-words">{volError}</p>
       )}
 
       {any429 > 0 && (
         <p className="text-cb-caption text-amber-400 border-l-2 border-amber-500 bg-cb-surface pl-3 py-2 rounded-r-cb">
-          MSP returned {any429}× HTTP 429 (rate limit). Throttle is ≤8/sec; results may be incomplete if fetch errors remain.
-          {probe429 > 0 ? ` Probe: ${probe429}.` : ''}
-          {sync429 > 0 ? ` Sync: ${sync429}.` : ''}
+          Identity sync: MSP returned {any429}× HTTP 429 (rate limit). Results may be incomplete.
         </p>
+      )}
+      {vol429 > 0 && (
+        <p className="text-cb-caption text-amber-400 border-l-2 border-amber-500 bg-cb-surface pl-3 py-2 rounded-r-cb">
+          Volume sync: MSP returned {vol429}× HTTP 429 (rate limit). Results may be incomplete.
+        </p>
+      )}
+
+      {volProbe?.success && (
+        <section className="space-y-3">
+          <h2 className="font-display text-cb-title text-white">Volume probe</h2>
+          <p className="text-cb-caption text-gray-500">
+            Eligible MIDs: {volProbe.eligibleCount ?? '—'}
+            {' · '}
+            Sample: {volProbe.sampleSize ?? '—'}
+            {' · '}
+            MSP requests: {volProbe.rateLimit?.mspRequestCount ?? '—'}
+            {' · '}
+            Sales team env: {volProbe.salesteamnoConfigured ? 'set' : 'empty'}
+          </p>
+          <ul className="space-y-2">
+            {(volProbe.results || []).map((r) => (
+              <li
+                key={r.merchantMidId || r.elavonMID}
+                className="bg-cb-surface border border-cb-border rounded-cb px-4 py-3"
+              >
+                <p className="text-cb-body font-semibold text-white">
+                  {r.dbaName || r.elavonMID}
+                </p>
+                <p className="text-cb-caption text-gray-500 mt-0.5 font-mono">{r.elavonMID}</p>
+                <p className="text-cb-caption text-gray-400 mt-1">
+                  Stats: {r.statistics?.ok ? 'OK' : `fail (${r.statistics?.status})`}
+                  {r.statistics?.mapped?.volumeCurrentMonth != null
+                    ? ` · MTD $${r.statistics.mapped.volumeCurrentMonth}`
+                    : ''}
+                  {r.statistics?.error ? ` — ${r.statistics.error}` : ''}
+                </p>
+                <p className="text-cb-caption text-gray-400">
+                  Batches: {r.batches?.ok ? 'OK' : `fail (${r.batches?.status})`}
+                  {r.batches?.rowCount != null ? ` · ${r.batches.rowCount} rows` : ''}
+                  {r.batches?.error ? ` — ${r.batches.error}` : ''}
+                </p>
+                <p className="text-cb-caption text-gray-500">
+                  Statements probe: {r.statements?.ok ? 'OK' : `HTTP ${r.statements?.status}`}
+                  {' '}(not stored)
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {volSummary && (
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <h2 className="font-display text-cb-title text-white">
+              {volDisplay?.dryRun ? 'Volume dry-run' : 'Volume live summary'}
+            </h2>
+            {volDisplay?.dryRun && <span className="text-cb-caption text-cb-accent">No writes</span>}
+            {!volDisplay?.dryRun && <span className="text-cb-caption text-cb-success">Written</span>}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              { label: 'Eligible MIDs', value: volSummary.eligibleCount },
+              { label: 'MIDs processed', value: volSummary.midsProcessed },
+              { label: 'Stats OK', value: volSummary.statsOk },
+              { label: 'Stats fail', value: volSummary.statsFail },
+              { label: 'Batches OK', value: volSummary.batchesOk },
+              { label: 'Batches fail', value: volSummary.batchesFail },
+              { label: 'Batch rows upserted', value: volSummary.batchRowsUpserted },
+              { label: 'Batch rows deleted', value: volSummary.batchRowsDeleted },
+              { label: 'Write errors', value: volSummary.writeErrors },
+              { label: 'MSP requests', value: volSummary.mspRequestCount ?? volDisplay?.rateLimit?.mspRequestCount },
+              { label: 'HTTP 429', value: volSummary.rateLimit429Count ?? volDisplay?.rateLimit?.rateLimit429Count ?? 0 },
+            ].map((k) => (
+              <div key={k.label} className="bg-cb-surface border border-cb-border rounded-cb px-3 py-2">
+                <p className="text-cb-caption text-gray-500">{k.label}</p>
+                <p className="font-display text-cb-title text-white tabular-nums mt-0.5">{k.value ?? 0}</p>
+              </div>
+            ))}
+          </div>
+          {volSummary.writeErrorDetails?.length > 0 && (
+            <details className="text-cb-caption text-cb-danger" open>
+              <summary className="cursor-pointer hover:underline">
+                Write errors ({volSummary.writeErrorDetails.length})
+              </summary>
+              <ul className="mt-2 space-y-1 list-disc pl-4 text-gray-400">
+                {volSummary.writeErrorDetails.map((n) => (
+                  <li key={n}>{n}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </section>
       )}
 
       {probeResult?.success && (
         <section className="space-y-3">
-          <h2 className="font-display text-cb-title text-white">Probe report</h2>
+          <h2 className="font-display text-cb-title text-white">Identity probe report</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
               { label: 'Merchants API total', value: probeResult.merchants?.total },
