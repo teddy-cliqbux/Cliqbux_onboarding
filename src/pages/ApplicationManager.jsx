@@ -950,7 +950,7 @@ function StageEditor({ stage, corporateId, merchantName, onSaved, onPricingSaved
           <div className="px-6 py-5 space-y-3">
             {activeTab === 'locations' && (
               <>
-                <p className="text-cb-caption text-gray-500">Only selected locations will appear in the merchant's portal.</p>
+                <p className="text-cb-caption text-gray-500">Only selected locations/MIDs appear in the portal and are prepared/signed in MSPWare. Deselect junk MIDs so they do not get drafts or packages.</p>
                 {locations.length === 0
                   ? <p className="text-cb-body text-gray-600 italic py-4 text-center">No locations yet. Add them in the merchant portal.</p>
                   : locations.map(loc => {

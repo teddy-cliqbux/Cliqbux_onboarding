@@ -3283,3 +3283,25 @@ Plan: `docs/superpowers/plans/2026-08-01-honor-included-signer-ids.md`
 
 **Waiting on:** Teddy (redeploy + UI confirm) ? then close #14
 ---
+
+---
+**[CURSOR]** — 2026-08-05
+**Type:** Fix
+**Re:** Too many MSPWare signing packages / Prepare form HTTP 429 (Imas / Estorya)
+
+### Cause
+`prepareMSPForms` / `submitToMSP` / `signApplication` walked **every** MerchantMID on the deal. Applications `includedMidIds` was saved but ignored — junk MIDs (Test DBA, duplicate Estorya/Imas) got drafts + GET /form storms ? 429.
+
+### Fix (repo)
+- `src/lib/dealMidSelection.js` (+ tests): resolve `includedMidIds` (fallback `includedLocationIds`)
+- Wired into `prepareMSPForms`, `submitToMSP`, `signApplication` (incl. statusOnly poll)
+- Applications Locations copy clarified
+
+### Ops still needed on live deal
+1. Applications prep ? check **only** Imas Kusina Union City + good Estorya ? Save
+2. `retractMSPApplication` (or delete draft MID) on junk MIDs; void orphan New packages in MSPWare
+3. Redeploy `prepareMSPForms`, `submitToMSP`, `signApplication` + frontend
+4. Wait for rate limit ? Prepare form again (expect 2 rows)
+
+**Waiting on:** Teddy (redeploy + cleanup + verify)
+---

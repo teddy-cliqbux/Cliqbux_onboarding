@@ -164,10 +164,40 @@ Deno.serve(async (req) => {
     }
 
     // Create/fill drafts via submitToMSP (never submits to Elavon unless env gate)
+    // Honor Applications prep includedMidIds (fallback includedLocationIds) so
+    // deselected junk MIDs are not drafted/prepared. Sync: src/lib/dealMidSelection.js
+    let effectiveMidIds = midIds?.length ? midIds.map(String) : null;
+    let effectiveLocationIds: string[] | null = null;
+    if (!effectiveMidIds?.length) {
+      try {
+        const stages = await base44.asServiceRole.entities.StagedApplication.filter({ corporateId }) || [];
+        const withMid = (stages as any[]).filter(
+          (s) => Array.isArray(s?.includedMidIds) && s.includedMidIds.length > 0,
+        );
+        if (withMid.length) {
+          const preferred =
+            withMid.find((s) => s.label && s.label !== '__auto_track__') || withMid[0];
+          effectiveMidIds = (preferred.includedMidIds || []).map(String);
+        } else {
+          const withLoc = (stages as any[]).filter(
+            (s) => Array.isArray(s?.includedLocationIds) && s.includedLocationIds.length > 0,
+          );
+          if (withLoc.length) {
+            const preferred =
+              withLoc.find((s) => s.label && s.label !== '__auto_track__') || withLoc[0];
+            effectiveLocationIds = (preferred.includedLocationIds || []).map(String);
+          }
+        }
+      } catch (selErr: any) {
+        console.warn('[prepareMSPForms] stage MID scope failed (all MIDs):', selErr?.message);
+      }
+    }
+
     let submitResult: any = null;
     try {
       const submitPayload: Record<string, any> = { corporateId };
-      if (midIds?.length) submitPayload.midIds = midIds;
+      if (effectiveMidIds?.length) submitPayload.midIds = effectiveMidIds;
+      else if (effectiveLocationIds?.length) submitPayload.locationIds = effectiveLocationIds;
       const inv = await base44.functions.invoke('submitToMSP', submitPayload);
       submitResult = inv?.data ?? inv;
     } catch (e: any) {
@@ -195,9 +225,12 @@ Deno.serve(async (req) => {
     let mids = await base44.asServiceRole.entities.MerchantMID.filter({ corporateId }) || [];
     const DONE = ['Pending MID', 'Active', 'Active (Existing)'];
     mids = mids.filter((m: any) => !DONE.includes(m.applicationStepStatus));
-    if (midIds?.length) {
-      const want = new Set(midIds.map(String));
+    if (effectiveMidIds?.length) {
+      const want = new Set(effectiveMidIds.map(String));
       mids = mids.filter((m: any) => want.has(String(m.id)));
+    } else if (effectiveLocationIds?.length) {
+      const wantLoc = new Set(effectiveLocationIds.map(String));
+      mids = mids.filter((m: any) => m?.locationId != null && wantLoc.has(String(m.locationId)));
     }
 
     const mspBase = (Deno.env.get('MSP_BASE_URL') || 'https://api.msppulsepoint.com/v2').replace(/\/$/, '');

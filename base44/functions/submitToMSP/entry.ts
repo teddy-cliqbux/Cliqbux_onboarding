@@ -1898,10 +1898,38 @@ Deno.serve(async (req) => {
     // Filter merchantMIDs if caller specified specific IDs
     let merchantMIDs = allMerchantMIDs;
     if (midIds?.length) {
-      merchantMIDs = merchantMIDs.filter((c: any) => midIds.includes(c.id));
+      merchantMIDs = merchantMIDs.filter((c: any) => midIds.includes(c.id) || midIds.map(String).includes(String(c.id)));
     } else if (locationIds?.length) {
       // Backward-compat: callers that pass locationIds get merchantMIDs for those locations
-      merchantMIDs = merchantMIDs.filter((c: any) => locationIds.includes(c.locationId));
+      merchantMIDs = merchantMIDs.filter((c: any) => locationIds.includes(c.locationId) || locationIds.map(String).includes(String(c.locationId)));
+    } else {
+      // Applications prep scope — sync with src/lib/dealMidSelection.js
+      try {
+        const stages = await base44.asServiceRole.entities.StagedApplication.filter({ corporateId }) || [];
+        const withMid = (stages as any[]).filter(
+          (s) => Array.isArray(s?.includedMidIds) && s.includedMidIds.length > 0,
+        );
+        if (withMid.length) {
+          const preferred =
+            withMid.find((s) => s.label && s.label !== '__auto_track__') || withMid[0];
+          const want = new Set((preferred.includedMidIds || []).map(String));
+          merchantMIDs = merchantMIDs.filter((c: any) => want.has(String(c.id)));
+        } else {
+          const withLoc = (stages as any[]).filter(
+            (s) => Array.isArray(s?.includedLocationIds) && s.includedLocationIds.length > 0,
+          );
+          if (withLoc.length) {
+            const preferred =
+              withLoc.find((s) => s.label && s.label !== '__auto_track__') || withLoc[0];
+            const wantLoc = new Set((preferred.includedLocationIds || []).map(String));
+            merchantMIDs = merchantMIDs.filter(
+              (c: any) => c?.locationId != null && wantLoc.has(String(c.locationId)),
+            );
+          }
+        }
+      } catch (selErr: any) {
+        console.warn('[submitToMSP] stage MID scope failed (all MIDs):', selErr?.message);
+      }
     }
 
     const isPortalAdminFn = (s: any) => s?.isPortalAdmin === true;

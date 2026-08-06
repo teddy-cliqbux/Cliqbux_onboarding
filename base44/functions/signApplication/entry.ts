@@ -1845,9 +1845,34 @@ Deno.serve(async (req) => {
     // ── statusOnly / restoreOnly: read existing packages — no fill, no create, no lock mutate ──
     if (statusOnly) {
       const DONE = ['Pending MID', 'Active', 'Active (Existing)'];
-      const withApps = (allMerchantMIDs || []).filter((c: any) =>
+      let withApps = (allMerchantMIDs || []).filter((c: any) =>
         c.mspApplicationNo && !DONE.includes(c.applicationStepStatus)
       );
+      // Same stage scope as Prepare/Sign — avoid polling junk MIDs (HTTP 429 storm)
+      try {
+        const stages = await base44.asServiceRole.entities.StagedApplication.filter({ corporateId }) || [];
+        const withMid = (stages as any[]).filter(
+          (s) => Array.isArray(s?.includedMidIds) && s.includedMidIds.length > 0,
+        );
+        if (withMid.length) {
+          const preferred =
+            withMid.find((s) => s.label && s.label !== '__auto_track__') || withMid[0];
+          const want = new Set((preferred.includedMidIds || []).map(String));
+          withApps = withApps.filter((c: any) => want.has(String(c.id)));
+        } else {
+          const withLoc = (stages as any[]).filter(
+            (s) => Array.isArray(s?.includedLocationIds) && s.includedLocationIds.length > 0,
+          );
+          if (withLoc.length) {
+            const preferred =
+              withLoc.find((s) => s.label && s.label !== '__auto_track__') || withLoc[0];
+            const wantLoc = new Set((preferred.includedLocationIds || []).map(String));
+            withApps = withApps.filter(
+              (c: any) => c?.locationId != null && wantLoc.has(String(c.locationId)),
+            );
+          }
+        }
+      } catch (_) { /* non-fatal — show all */ }
       const applications: any[] = [];
       for (const merchantMID of withApps) {
         const mspApplicationNo = String(merchantMID.mspApplicationNo);
@@ -2051,9 +2076,37 @@ Deno.serve(async (req) => {
 
     // ── 2. Filter to signable merchantMIDs, verifying MSP drafts still exist ─────
     const DONE_STATUSES = ['Active', 'Active (Existing)', 'Pending MID'];
-    const candidateMerchantMIDs = (allMerchantMIDs || []).filter((c: any) =>
+    let candidateMerchantMIDs = (allMerchantMIDs || []).filter((c: any) =>
       !DONE_STATUSES.includes(c.applicationStepStatus)
     );
+
+    // Honor Applications prep includedMidIds / includedLocationIds — sync src/lib/dealMidSelection.js
+    try {
+      const stages = await base44.asServiceRole.entities.StagedApplication.filter({ corporateId }) || [];
+      const withMid = (stages as any[]).filter(
+        (s) => Array.isArray(s?.includedMidIds) && s.includedMidIds.length > 0,
+      );
+      if (withMid.length) {
+        const preferred =
+          withMid.find((s) => s.label && s.label !== '__auto_track__') || withMid[0];
+        const want = new Set((preferred.includedMidIds || []).map(String));
+        candidateMerchantMIDs = candidateMerchantMIDs.filter((c: any) => want.has(String(c.id)));
+      } else {
+        const withLoc = (stages as any[]).filter(
+          (s) => Array.isArray(s?.includedLocationIds) && s.includedLocationIds.length > 0,
+        );
+        if (withLoc.length) {
+          const preferred =
+            withLoc.find((s) => s.label && s.label !== '__auto_track__') || withLoc[0];
+          const wantLoc = new Set((preferred.includedLocationIds || []).map(String));
+          candidateMerchantMIDs = candidateMerchantMIDs.filter(
+            (c: any) => c?.locationId != null && wantLoc.has(String(c.locationId)),
+          );
+        }
+      }
+    } catch (selErr: any) {
+      console.warn('[signApplication] stage MID scope failed (all MIDs):', selErr?.message);
+    }
 
     // For any merchantMID with a stored mspApplicationNo, verify it still exists in MSP.
     // ONLY clear the ID on an explicit 404 — any other failure (auth, network, rate limit)
