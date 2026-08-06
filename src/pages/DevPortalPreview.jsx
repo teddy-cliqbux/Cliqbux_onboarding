@@ -145,7 +145,7 @@ export default function DevPortalPreview() {
         if (el.style.opacity === '0') el.style.opacity = '1';
         if (el.style.transform && el.style.transform !== 'none') el.style.transform = 'none';
       });
-      const { default: html2canvas } = await import('html2canvas');
+      const { default: html2canvas } = await import('html2canvas-pro');
       const snap = async (el, name) => {
         const canvas = await html2canvas(el, { backgroundColor: '#0E1319', scale: 0.85, logging: false });
         const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.85));

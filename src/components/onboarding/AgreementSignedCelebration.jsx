@@ -3,11 +3,17 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 
 const SPRING = { type: 'spring', stiffness: 150, damping: 20 };
+const MARK_SRC = '/brand/cliqbux-mark.png';
+const MARK_W = 96;
+const MARK_H = 108;
 
 /**
  * Signature moment after BoldSign completes — Cliqbux shield "stamps" the
  * agreement, then everyone proceeds to Merchant Center (Onboarding Center).
  * Processor submit lives on Applications / Deal Room only.
+ *
+ * Stamp motion stays the same; after it settles we swap to a static mark
+ * (no leftover rotate/transform) so the logo reads crisp and upright.
  */
 export default function AgreementSignedCelebration({
   merchantName,
@@ -18,6 +24,7 @@ export default function AgreementSignedCelebration({
 }) {
   const reduceMotion = useReducedMotion();
   const [stamped, setStamped] = useState(!!reduceMotion);
+  const [logoSettled, setLogoSettled] = useState(!!reduceMotion);
 
   useEffect(() => {
     if (reduceMotion) return undefined;
@@ -27,12 +34,12 @@ export default function AgreementSignedCelebration({
 
   return (
     <div className="relative overflow-hidden rounded-cb border border-cb-border bg-cb-surface-raised px-6 py-10 sm:px-10 sm:py-12">
-      {/* Quiet gold wash — atmosphere, not a card stack */}
+      {/* Quiet gold wash — atmosphere, not a card stack (hex rgba: html2canvas-safe) */}
       <div
         className="pointer-events-none absolute inset-0 opacity-40"
         style={{
           background:
-            'radial-gradient(ellipse 70% 55% at 50% 20%, color-mix(in srgb, var(--cb-accent) 28%, transparent), transparent 70%)',
+            'radial-gradient(ellipse 70% 55% at 50% 20%, rgba(254, 172, 39, 0.28), transparent 70%)',
         }}
         aria-hidden
       />
@@ -47,30 +54,44 @@ export default function AgreementSignedCelebration({
             transition={SPRING}
             aria-hidden
           />
-          {/* Shield stamp */}
-          <motion.img
-            src="/brand/cliqbux-mark.png"
-            alt=""
-            width={88}
-            height={98}
-            draggable={false}
-            className="relative z-10 object-contain drop-shadow-sm"
-            initial={
-              reduceMotion
-                ? false
-                : { opacity: 0, scale: 2.4, rotate: -18, y: -36 }
-            }
-            animate={
-              stamped
-                ? { opacity: 1, scale: 1, rotate: -6, y: 0 }
-                : { opacity: 0, scale: 2.4, rotate: -18, y: -36 }
-            }
-            transition={
-              reduceMotion
-                ? { duration: 0 }
-                : { type: 'spring', stiffness: 220, damping: 16, mass: 0.85 }
-            }
-          />
+          {/* After stamp: static mark — upright + no GPU transform blur */}
+          {logoSettled ? (
+            <img
+              src={MARK_SRC}
+              alt=""
+              width={MARK_W}
+              height={MARK_H}
+              draggable={false}
+              className="relative z-10 h-[98px] w-auto max-w-[88px] object-contain select-none"
+            />
+          ) : (
+            <motion.img
+              src={MARK_SRC}
+              alt=""
+              width={MARK_W}
+              height={MARK_H}
+              draggable={false}
+              className="relative z-10 h-[98px] w-auto max-w-[88px] object-contain select-none"
+              initial={
+                reduceMotion
+                  ? false
+                  : { opacity: 0, scale: 2.4, rotate: -18, y: -36 }
+              }
+              animate={
+                stamped
+                  ? { opacity: 1, scale: 1, rotate: 0, y: 0 }
+                  : { opacity: 0, scale: 2.4, rotate: -18, y: -36 }
+              }
+              transition={
+                reduceMotion
+                  ? { duration: 0 }
+                  : { type: 'spring', stiffness: 220, damping: 16, mass: 0.85 }
+              }
+              onAnimationComplete={() => {
+                if (stamped) setLogoSettled(true);
+              }}
+            />
+          )}
           {/* Stamp impact ring */}
           {!reduceMotion && stamped && (
             <motion.span

@@ -3325,3 +3325,18 @@ Plan: `docs/superpowers/plans/2026-08-05-open-feedback-issues.md`
 
 **Waiting on:** Teddy (push/redeploy + Imas cleanup verify)
 ---
+
+---
+**[CURSOR]** — 2026-08-05
+**Type:** Fix
+**Re:** Post-sign logo crispness + Help & Feedback screenshot `color()` error
+
+### Logo (AgreementSignedCelebration)
+- Stamp animation unchanged in motion path; final settle is upright (`rotate: 0`) then swaps to a **static** `<img>` so leftover GPU transforms don't leave the mark askew/soft.
+- Gold wash uses `rgba(254,172,39,0.28)` instead of `color-mix`.
+
+### Screenshot
+- Feedback capture + dev harness now import `html2canvas-pro` (supports modern CSS `color()` / oklch). Stock html2canvas kept for jspdf transitive.
+
+**Waiting on:** Teddy push + redeploy frontend; re-test Capture on signed celebration page.
+---

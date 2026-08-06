@@ -1,5 +1,6 @@
 /**
- * In-page feedback screenshot with SSN-only DOM masking before html2canvas.
+ * In-page feedback screenshot with SSN-only DOM masking before html2canvas-pro.
+ * html2canvas-pro supports modern CSS color() / oklch / color-mix (stock html2canvas throws).
  * See docs/superpowers/specs/2026-07-29-feedback-fix-loop-design.md
  */
 
@@ -95,7 +96,7 @@ function canvasToBlob(canvas) {
  * Masks SSN fields and hides the feedback widget during capture.
  */
 export async function captureFeedbackScreenshot() {
-  const html2canvas = (await import('html2canvas')).default;
+  const html2canvas = (await import('html2canvas-pro')).default;
   const restoreMask = applySsnMasks(document);
   const restoreWidget = hideFeedbackWidgets();
   try {
