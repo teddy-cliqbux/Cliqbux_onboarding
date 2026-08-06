@@ -77,6 +77,7 @@ Deno.serve(async (req) => {
       hubspotQuoteUrl: profile.hubspotQuoteUrl,
       pricingTier: profile.pricingTier,
       applicationStatus: profile.applicationStatus,
+      portalLockStatus: profile.portalLockStatus || 'unlocked',
       quoteSignedAt: profile.quoteSignedAt || null,
       equipmentPaidAt: profile.equipmentPaidAt || null,
       equipmentShippingStatus: profile.equipmentShippingStatus || null,

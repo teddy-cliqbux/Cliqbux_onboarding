@@ -52,11 +52,32 @@ describe('deriveLocationStatus', () => {
       'submitted'
     );
   });
+
+  it('returns signed when agreement signed / all_signed lock and not submitted', () => {
+    assert.equal(
+      deriveLocationStatus(loc, [{ locationId: 'L1', applicationStepStatus: 'Ready to Submit' }], {
+        portalLockStatus: 'all_signed',
+      }),
+      'signed'
+    );
+    assert.equal(
+      deriveLocationStatus(loc, [], { agreementSigned: true }),
+      'signed'
+    );
+  });
+
+  it('keeps draft when lock is signing but agreement not signed', () => {
+    assert.equal(
+      deriveLocationStatus(loc, [], { portalLockStatus: 'signing' }),
+      'draft'
+    );
+  });
 });
 
 describe('labels and primary mid', () => {
-  it('labels action_needed', () => {
+  it('labels action_needed and signed', () => {
     assert.equal(locationStatusLabel('action_needed'), 'Action needed');
+    assert.equal(locationStatusLabel('signed'), 'Signed');
   });
 
   it('picks live MID with elavonMID', () => {

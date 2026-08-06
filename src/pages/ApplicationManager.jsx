@@ -20,6 +20,15 @@ import {
   resolveIncludedLocationIdsFromStages,
   filterByIncludedLocationIds,
 } from '@/lib/dealLocationSelection';
+import {
+  resolveDealMidScopeFromStages,
+  filterMidsByDealScope,
+} from '@/lib/dealMidSelection';
+import {
+  shouldShowProcessorSubmit,
+  shouldShowOpenToPrep,
+  midsNeedProcessorSubmit,
+} from '@/lib/applicationRowCta';
 import PricingEditorPanel from '@/components/pricing/PricingEditorPanel';
 import { isPricingComplete, TIER_LABELS } from '@/lib/pricingPresets';
 import {
@@ -1464,7 +1473,13 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
         console.warn('[ApplicationRow] signing lock heal skipped:', healErr?.message || healErr);
       }
 
-      const midsWithApp = loadedMids.filter(m => m.mspApplicationNo);
+      // Only poll MSP form health for deal-selected MIDs (junk MIDs must not drive stuck/Remind)
+      const healthScope = resolveDealMidScopeFromStages([
+        ...(adminStages || []),
+        ...(trackStage ? [trackStage] : []),
+      ]);
+      const scopedMids = filterMidsByDealScope(loadedMids, healthScope);
+      const midsWithApp = scopedMids.filter(m => m.mspApplicationNo);
       if (midsWithApp.length > 0) {
         setLoadingMsp(true);
         const statuses = {};
@@ -1493,7 +1508,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     } finally {
       setLoadingDetail(false);
     }
-  }, [corporateId]);
+  }, [corporateId, adminStages, trackStage]);
 
   // Expand-only by default; prefetch when on Sign / signing lock so incomplete
   // forms show Open to fix instead of Remind without requiring expand.
@@ -1567,14 +1582,14 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     || null;
 
   // Agent deal selection — only show MIDs/locations the rep included for this wave
-  const includedLocIds = resolveIncludedLocationIdsFromStages([
+  const dealStages = [
     ...(adminStages || []),
     ...(trackStage ? [trackStage] : []),
-  ]);
+  ];
+  const includedLocIds = resolveIncludedLocationIdsFromStages(dealStages);
+  const midScope = resolveDealMidScopeFromStages(dealStages);
   const visibleLocations = filterByIncludedLocationIds(locations, includedLocIds);
-  const visibleMids = includedLocIds?.length
-    ? (mids || []).filter((m) => includedLocIds.includes(String(m.locationId)))
-    : mids;
+  const visibleMids = filterMidsByDealScope(mids || [], midScope);
 
   const pipeline = resolvePipelineProgress({
     profile,
@@ -1615,11 +1630,18 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
   });
   const isStuck = rowMode.mode === 'stuck';
   const needsSubmitAfterSign = !!rowMode.agreementSigned && !isSubmitted;
-  const BOARDING_DONE = ['Pending MID', 'Active', 'Active (Existing)'];
-  const midsNeedProcessor = !healthReady
-    || visibleMids.length === 0
-    || visibleMids.some((m) => !BOARDING_DONE.includes(m.applicationStepStatus));
-  const showProcessorSubmit = (needsSubmitAfterSign || isSubmitted || agreementSigned) && midsNeedProcessor;
+  const midsNeedProcessor = midsNeedProcessorSubmit(visibleMids);
+  const showProcessorSubmit = shouldShowProcessorSubmit({
+    needsSubmitAfterSign,
+    isSubmitted,
+    agreementSigned,
+    visibleMids,
+  });
+  const showOpenToPrep = shouldShowOpenToPrep({
+    isSubmitted,
+    mode: rowMode.mode,
+    needsSubmitAfterSign,
+  });
 
   useEffect(() => {
     onModeChange?.(corporateId, rowMode.mode);
@@ -1948,7 +1970,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           )}
 
           {/* Open to prep stays visible in prep + nudge (expand must not replace it with Remind only). Stuck uses Open to fix. */}
-          {!isSubmitted && rowMode.mode !== 'underwriting' && rowMode.mode !== 'stuck' && (
+          {showOpenToPrep && (
             <button
               type="button"
               onClick={openMerchantView}
@@ -1998,7 +2020,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
             </button>
           )}
 
-          {rowMode.mode === 'nudge' && needsSubmitAfterSign && (
+          {rowMode.mode === 'nudge' && needsSubmitAfterSign && midsNeedProcessor && (
             <button
               type="button"
               onClick={submitToProcessor}
@@ -2208,7 +2230,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-cb-caption text-gray-500">
                       MIDs ({visibleMids.length})
-                      {includedLocIds?.length ? (
+                      {(midScope?.midIds?.length || midScope?.locationIds?.length) ? (
                         <span className="text-gray-600"> · selected for this deal</span>
                       ) : null}
                       {' '}{loadingMsp && <Loader2 className="inline w-3 h-3 animate-spin ml-1" />}

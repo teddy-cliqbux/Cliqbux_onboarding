@@ -75,7 +75,11 @@ export default function MerchantLocationDetail() {
     : '/locations';
   const primary = location ? primaryMidForLocation(location, mids) : null;
   const status = location
-    ? deriveLocationStatus(location, mids, { applicationStatus: profile?.applicationStatus })
+    ? deriveLocationStatus(location, mids, {
+        applicationStatus: profile?.applicationStatus,
+        portalLockStatus: profile?.portalLockStatus,
+        agreementSigned: String(profile?.portalLockStatus || '').toLowerCase() === 'all_signed',
+      })
     : 'draft';
 
   if (loading) {

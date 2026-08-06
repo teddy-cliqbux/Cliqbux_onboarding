@@ -11,6 +11,8 @@ import {
   locationStatusTone,
   primaryMidForLocation,
 } from '@/lib/locationStatus';
+import { isApplicationSigned } from '@/lib/signerLifecycle';
+import { isEffectivelyRequiredSigner } from '@/lib/signerRules';
 
 function StatusDot({ status }) {
   const tone = locationStatusTone(status);
@@ -52,6 +54,7 @@ export default function MerchantLocationsHome() {
   const [profile, setProfile] = useState(null);
   const [locations, setLocations] = useState([]);
   const [merchantIDs, setMerchantIDs] = useState([]);
+  const [signers, setSigners] = useState([]);
   const [openChecklistCount, setOpenChecklistCount] = useState(0);
   const [accountName, setAccountName] = useState('');
   const [isAgentViewer, setIsAgentViewer] = useState(false);
@@ -109,6 +112,16 @@ export default function MerchantLocationsHome() {
       );
 
       try {
+        const sig = await invokePortalFunction('manageSigner', {
+          action: 'list',
+          corporateId,
+        });
+        setSigners(sig.data?.signers || []);
+      } catch {
+        setSigners([]);
+      }
+
+      try {
         const cl = await invokePortalFunction('manageMerchantChecklist', {
           action: 'list',
           corporateId,
@@ -134,9 +147,17 @@ export default function MerchantLocationsHome() {
   const quoteMissing =
     profile?.applicationStatus === 'Submitted' && !profile?.hubspotQuoteUrl && !profile?.equipmentPaidAt;
 
+  const agreementSigned =
+    String(profile?.portalLockStatus || '').toLowerCase() === 'all_signed'
+    || (signers || []).some(
+      (s) => isEffectivelyRequiredSigner(s, signers) && isApplicationSigned(s.identityStatus)
+    );
+
   const rows = (locations || []).map((loc) => {
     const status = deriveLocationStatus(loc, merchantIDs, {
       applicationStatus: profile?.applicationStatus,
+      portalLockStatus: profile?.portalLockStatus,
+      agreementSigned,
       openChecklistCount,
       quoteMissing,
     });
@@ -146,7 +167,7 @@ export default function MerchantLocationsHome() {
     return { loc, status, mid, canAgentDelete };
   });
 
-  const order = { action_needed: 0, in_review: 1, submitted: 2, draft: 3, live: 4 };
+  const order = { action_needed: 0, in_review: 1, signed: 2, submitted: 3, draft: 4, live: 5 };
   rows.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
 
   const addLocation = () => {

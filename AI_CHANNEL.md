@@ -3305,3 +3305,23 @@ Plan: `docs/superpowers/plans/2026-08-01-honor-included-signer-ids.md`
 
 **Waiting on:** Teddy (redeploy + cleanup + verify)
 ---
+
+---
+**[CURSOR]** — 2026-08-05
+**Type:** Fix
+**Re:** Open feedback #18 / #19 / #17 (Applications desk + location Signed)
+
+### Done (repo)
+1. **#18** Applications `visibleMids` now uses `resolveDealMidScopeFromStages` / `filterMidsByDealScope` (`includedMidIds` first). MSP health prefetch scoped the same way so junk MIDs do not drive stuck/Remind.
+2. **#19** CTA helpers in `src/lib/applicationRowCta.js`: Submit no longer treats `!healthReady` as needs-processor; hide **Open to prep** when agreement signed; hide **Submit** when all visible MIDs are Pending MID / Active / Active (Existing).
+3. **#17** `deriveLocationStatus` adds `signed` from `portalLockStatus === all_signed` or `agreementSigned`. `getMerchantData` exposes `portalLockStatus`. `/locations` loads signers for CP signed check.
+
+### Ops still on corp 338922234596 (#16)
+- Redeploy frontend + `getMerchantData` (+ boarding MID filter if not live)
+- Prep: only keep Imas Kusina Union City + Estorya; retract junk MID drafts
+- Prepare form → expect 2 rows
+
+Plan: `docs/superpowers/plans/2026-08-05-open-feedback-issues.md`
+
+**Waiting on:** Teddy (push/redeploy + Imas cleanup verify)
+---

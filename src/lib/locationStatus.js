@@ -5,6 +5,7 @@
 
 export const LOCATION_STATUSES = [
   'draft',
+  'signed',
   'submitted',
   'in_review',
   'live',
@@ -19,6 +20,8 @@ const REVIEW_MID = new Set(['Pending MID', 'In Review']);
  * @param {object[]} mids - MerchantMID rows for this location
  * @param {object} [opts]
  * @param {string} [opts.applicationStatus]
+ * @param {string} [opts.portalLockStatus]
+ * @param {boolean} [opts.agreementSigned] — Control Person application signed
  * @param {number} [opts.openChecklistCount]
  * @param {boolean} [opts.quoteMissing]
  */
@@ -33,6 +36,9 @@ export function deriveLocationStatus(location, mids = [], opts = {}) {
   );
   const anyPending = locMids.some((m) => REVIEW_MID.has(m.applicationStepStatus));
   const submitted = String(opts.applicationStatus || '') === 'Submitted';
+  const lock = String(opts.portalLockStatus || '').toLowerCase();
+  const agreementSigned =
+    !!opts.agreementSigned || lock === 'all_signed';
 
   if (hasError || openChecklist || opts.quoteMissing) {
     return 'action_needed';
@@ -40,12 +46,15 @@ export function deriveLocationStatus(location, mids = [], opts = {}) {
   if (anyLive) return 'live';
   if (anyPending || (submitted && locMids.length > 0)) return 'in_review';
   if (submitted) return 'submitted';
+  // Agreement signed, not yet submitted to underwriting — do not label Draft
+  if (agreementSigned) return 'signed';
   return 'draft';
 }
 
 export function locationStatusLabel(status) {
   const map = {
     draft: 'Draft',
+    signed: 'Signed',
     submitted: 'Submitted',
     in_review: 'In review',
     live: 'Live',
@@ -58,7 +67,7 @@ export function locationStatusLabel(status) {
 export function locationStatusTone(status) {
   if (status === 'live') return 'success';
   if (status === 'action_needed') return 'danger';
-  if (status === 'in_review' || status === 'submitted') return 'accent';
+  if (status === 'in_review' || status === 'submitted' || status === 'signed') return 'accent';
   return 'neutral';
 }
 
