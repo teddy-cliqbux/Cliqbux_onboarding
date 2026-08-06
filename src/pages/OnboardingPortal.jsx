@@ -1052,7 +1052,9 @@ export default function OnboardingPortal() {
             sticky lock banner there so it does not steal viewport / trap scroll
             under the BoldSign iframe (Trisha Mobile Test 2026-07-24). Agents still
             unlock from Deal Room / other locked steps. */}
-        {formsLocked && step !== STEP_VERIFICATION && (
+        {formsLocked
+          && step !== STEP_VERIFICATION
+          && String(profile?.applicationStatus || '') !== 'Submitted' && (
           <div className="w-full max-w-4xl mb-4 sticky top-16 z-30">
             <FormsLockedBanner
               profile={profile}

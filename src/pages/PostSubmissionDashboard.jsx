@@ -21,9 +21,6 @@ import {
   setMerchantToken,
   merchantTokenHasImp,
 } from '@/lib/merchantAuthFetch';
-import FormsLockedBanner from '@/components/onboarding/FormsLockedBanner';
-import { isPortalFormsLocked } from '@/lib/portalLock';
-
 const QUOTE_POLL_MS = 10_000;
 
 /** One tasteful gold burst — signature moment for application submitted. */
@@ -89,11 +86,8 @@ export default function PostSubmissionDashboard() {
   const [loading, setLoading] = useState(true);
   const [showShipping, setShowShipping] = useState(false);
   const [agentPreview, setAgentPreview] = useState(false);
-  /** Workspace / impersonation — unlock stays agent-only; merchants never see it here. */
-  const [isAgentViewer, setIsAgentViewer] = useState(false);
   /** QuoteSignModal open — drives 10s pull poll (HubSpot tier has no workflow webhooks). */
   const [quoteModalOpen, setQuoteModalOpen] = useState(false);
-  const [unlocking, setUnlocking] = useState(false);
   const [openChecklistCount, setOpenChecklistCount] = useState(0);
   const [accountName, setAccountName] = useState('');
   const lifecycleAtModalOpen = useRef(null);
@@ -155,7 +149,6 @@ export default function PostSubmissionDashboard() {
           return;
         }
         setAgentPreview(isAgent && !submitted);
-        setIsAgentViewer(isAgent);
         if (submitted && !isAgent) {
           fireSubmissionCelebration(corporateId);
         }
@@ -334,34 +327,8 @@ export default function PostSubmissionDashboard() {
           </div>
         </div>
 
-        {/* Unlock is agent/admin only — merchants never unlock from Merchant Center. */}
-        {isAgentViewer && isPortalFormsLocked(profile) && (
-          <FormsLockedBanner
-            profile={profile}
-            unlocking={unlocking}
-            canUnlock
-            onUnlock={async () => {
-              if (!profile?.corporateId || unlocking) return;
-              setUnlocking(true);
-              try {
-                const res = await invokePortalFunction('demoteApplication', {
-                  corporateId: profile.corporateId,
-                  reason: 'Application demoted for modifications',
-                });
-                if (res.data?.error) {
-                  throw new Error(res.data.error);
-                }
-                navigate(`/?dealId=${encodeURIComponent(profile.corporateId)}`, { replace: true });
-              } catch (err) {
-                throw err instanceof Error
-                  ? err
-                  : new Error(err?.message || 'Could not unlock the application.');
-              } finally {
-                setUnlocking(false);
-              }
-            }}
-          />
-        )}
+        {/* No forms-lock / Unlock banner here — post-signing Merchant Center is setup-only.
+            Agents unlock from Applications or Deal Room. */}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {Object.values(statusCards).map((card) => {

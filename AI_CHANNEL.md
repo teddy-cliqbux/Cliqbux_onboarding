@@ -3340,3 +3340,13 @@ Plan: `docs/superpowers/plans/2026-08-05-open-feedback-issues.md`
 
 **Waiting on:** Teddy push + redeploy frontend; re-test Capture on signed celebration page.
 ---
+
+---
+**[CURSOR]** — 2026-08-06
+**Type:** Fix
+**Re:** No Unlock / forms-lock banner on post-signing Merchant Center
+
+Removed `FormsLockedBanner` (and Unlock & Modify) from `PostSubmissionDashboard`. Unlock remains on Applications / Deal Room only. Also hide the sticky lock banner on `OnboardingPortal` when `applicationStatus === Submitted`.
+
+**Waiting on:** Teddy push + redeploy frontend
+---
