@@ -14,6 +14,7 @@ import { lifecycleLabel, lifecycleDotClass } from '@/lib/signerLifecycle';
 import { TIER_LABELS } from '@/lib/pricingPresets';
 import InstallerRunbook from '@/components/merchant-center/InstallerRunbook';
 import HandoffPanel from '@/components/deal-room/HandoffPanel';
+import UnderwritingRequestsPanel from '@/components/deal-room/UnderwritingRequestsPanel';
 import { HANDOFF_STAGE_LABELS } from '@/lib/onboardingFacts';
 
 const inputCls = 'w-full bg-cb-bg border border-cb-border rounded-cb px-3.5 py-2.5 text-cb-body text-white placeholder:text-gray-500 transition-colors hover:border-cb-border-strong focus:outline-none focus:ring-2 focus:ring-cb-accent focus:border-transparent';
@@ -764,6 +765,15 @@ export default function ApplicationDealRoom() {
                           Escalate FulSer
                         </button>
                       </div>
+
+                      <UnderwritingRequestsPanel
+                        corporateId={corporateId}
+                        mid={selectedMid}
+                        legalEntities={data.legalEntities || []}
+                        signers={data.signers || []}
+                        profile={profile}
+                        locations={data.locations || []}
+                      />
 
                       <div className="rounded-cb border border-cb-border bg-cb-bg p-3 space-y-2">
                         <p className="text-cb-caption text-gray-500">Log email / note on this MID</p>
