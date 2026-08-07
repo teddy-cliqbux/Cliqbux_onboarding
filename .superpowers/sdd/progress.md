@@ -16,3 +16,10 @@ Task 3: complete (commits 8ff982b..0e3c023, review approved)
 
 Task 4: complete with concerns (manageUnderwritingRequest — no live Resend/Gmail smoke; entity publish pending)
 
+
+Task 4: complete (commits 0e3c023..b57b499, review approved after TIN redact fix)
+Carry: Elavon PDF fetch auth if Base44 URLs private; entity publish; visual QA overlays; sole-prop SSN prefill later.
+
+Task 5: complete (`completeUnderwritingRequest` — token get + submitSignature PDF stamp; UploadFile https guard for Elavon attach)
+Carry: publish/redeploy; visual QA overlays; Task 6 merchant page.
+
