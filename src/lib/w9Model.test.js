@@ -35,6 +35,11 @@ describe('mapOwnershipToW9TaxClass', () => {
     assert.deepEqual(result, { taxClassification: 'llc', llcTaxClass: 'C' });
   });
 
+  it('maps LIMITED_COMPANY + DISREGARDED_ENTITY to llc with D class', () => {
+    const result = mapOwnershipToW9TaxClass('LIMITED_COMPANY', 'DISREGARDED_ENTITY');
+    assert.deepEqual(result, { taxClassification: 'llc', llcTaxClass: 'D' });
+  });
+
   it('maps SOLE_PROPRIETORSHIP to individual', () => {
     const result = mapOwnershipToW9TaxClass('SOLE_PROPRIETORSHIP', 'SOLE_PROP');
     assert.deepEqual(result, { taxClassification: 'individual' });

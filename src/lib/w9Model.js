@@ -68,6 +68,7 @@ function mapLlcTaxClass(taxClassType) {
     case 'LLC_CORPORATION':
       return 'C';
     case 'LLC':
+    case 'DISREGARDED_ENTITY':
       return 'D';
     case 'LLC_PARTNERSHIP':
       return 'P';
