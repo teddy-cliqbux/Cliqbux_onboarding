@@ -1,7 +1,7 @@
 # IRS Form W-9 (fw9.pdf) AcroForm field map
 
-Source PDF: `assets/irs/fw9.pdf` (copy of IRS `fw9`, Rev. March 2024).  
-Inspector: `node scripts/inspect-w9-fields.mjs` (2026-08-07).  
+Source PDF: `assets/irs/fw9.pdf` (copy of IRS `fw9`, Rev. March 2024). **Canonical copy** — after updating, run `node scripts/sync-w9-pdf.mjs` to refresh `public/irs/fw9.pdf`.  
+Inspectors: `node scripts/inspect-w9-fields.mjs` (field names), `node scripts/inspect-w9-widgets.mjs` (widget rects).  
 Page 0 size: **611.976 × 791.968 pt**. pdf-lib strips XFA on load (warning is expected).
 
 ## Domain → AcroForm mapping
@@ -51,7 +51,7 @@ Digits only from `tin` (9 digits). `tinType`:
 
 No AcroForm fields exist for Part II signature/date. `fillW9Pdf` draws after field fill, before `form.flatten()`.
 
-Widget probe (`scripts/inspect-w9-widgets.mjs`): lowest form field is EIN row at **y ≈ 348**. Part II “Sign Here” sits below certification text.
+Widget probe (`node scripts/inspect-w9-widgets.mjs`): lowest AcroForm widget is EIN row `f1_14[0]` at **y ≈ 348**. Part II “Sign Here” sits below certification text — overlay coords are placed manually below that row and kept in sync with `W9_SIGNATURE_OVERLAY` / `W9_DATE_OVERLAY` in `src/lib/w9PdfFill.js`.
 
 | Overlay | x | y | width | height | Content |
 |---|---|---|---|---|---|
