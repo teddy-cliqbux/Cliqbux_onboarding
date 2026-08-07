@@ -286,19 +286,15 @@ function tinMaskedFromSnapshot(snapshot: Record<string, any> | null): string | n
 function stripTinFromListRow(row: any): any {
   const snapshot = parsePrefillSnapshot(row?.prefillSnapshot);
   const tinMasked = tinMaskedFromSnapshot(snapshot);
-  const { tokenHash: _th, ...rest } = row || {};
+  const { tokenHash: _th, prefillSnapshot: _rawPs, ...rest } = row || {};
   let safeSnapshot: string | undefined;
   if (snapshot) {
     const { tin: _tin, ...restFields } = snapshot;
     safeSnapshot = JSON.stringify({ ...restFields, tinMasked: tinMasked || undefined });
-  } else if (row?.prefillSnapshot != null) {
-    safeSnapshot = typeof row.prefillSnapshot === 'string'
-      ? row.prefillSnapshot
-      : JSON.stringify(row.prefillSnapshot);
   }
   return {
     ...rest,
-    prefillSnapshot: safeSnapshot,
+    ...(safeSnapshot !== undefined ? { prefillSnapshot: safeSnapshot } : {}),
     tinMasked: tinMasked || null,
   };
 }

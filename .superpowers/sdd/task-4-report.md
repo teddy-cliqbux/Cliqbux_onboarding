@@ -59,6 +59,7 @@ Code path complete; blocked on publish + env until Teddy redeploys.
 3. **`UNDERWRITING_ELAVON_DOCS_TO`** returned as UI hint only — agent must still pass `to` on `sendToElavon`.
 4. **Signed PDF fetch** for Elavon attach uses bare `fetch(signedPdfUrl)` — if Base44 private URLs need auth headers, Task 5/upload path may need a signed/proxy fetch.
 5. Raw magic token is **not** returned in JSON (delivered via email/SMS only).
+6. **Fixed:** `stripTinFromListRow` no longer passes through unparsed `prefillSnapshot` when `parsePrefillSnapshot` fails — field omitted instead of leaking raw TIN JSON (`fix(uw): redact unparseable W-9 prefill snapshots on list`).
 
 ---
 
