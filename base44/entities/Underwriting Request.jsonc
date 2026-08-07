@@ -1,0 +1,115 @@
+{
+  "name": "UnderwritingRequest",
+  "type": "object",
+  "description": "MID-scoped underwriting document requests (W-9 first). Agent creates in Deal Room; merchant completes via magic link at /uw/:token.",
+  "properties": {
+    "corporateId": {
+      "type": "string",
+      "description": "FK → MerchantCorporateProfile.corporateId (HubSpot deal id)"
+    },
+    "merchantAccountId": {
+      "type": "string",
+      "description": "FK → MerchantAccount.id — optional; set when profile is linked to an account"
+    },
+    "midId": {
+      "type": "string",
+      "description": "FK → MerchantMID.id — request is scoped to one MID"
+    },
+    "legalEntityId": {
+      "type": "string",
+      "description": "entityId from profile/account legalEntities[] used for W-9 prefill"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["w9"],
+      "description": "Request kind — extensible; v1 ships w9 only"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "sent",
+        "opened",
+        "signed",
+        "sent_to_elavon",
+        "cancelled",
+        "expired",
+        "send_failed"
+      ],
+      "default": "draft",
+      "description": "Lifecycle: draft → sent → opened → signed → sent_to_elavon; send_failed / cancelled / expired are terminal or retry paths"
+    },
+    "recipientName": {
+      "type": "string",
+      "description": "Display name for the merchant contact receiving the request"
+    },
+    "recipientEmail": {
+      "type": "string",
+      "description": "Email for Resend delivery — required when channels includes email"
+    },
+    "recipientPhone": {
+      "type": "string",
+      "description": "E.164 phone for Quo SMS — required when channels includes sms"
+    },
+    "channels": {
+      "type": "string",
+      "enum": ["email", "sms", "both"],
+      "default": "both",
+      "description": "Delivery channels — same vocabulary as nudgeMerchant"
+    },
+    "agentNote": {
+      "type": "string",
+      "description": "Optional note shown in email/SMS and on the merchant /uw page"
+    },
+    "prefillSnapshot": {
+      "type": "string",
+      "description": "JSON string of W-9 field values at send; updated to final values on sign"
+    },
+    "tokenHash": {
+      "type": "string",
+      "description": "HMAC/SHA hash of opaque magic-link token — never store raw token"
+    },
+    "tokenExpiresAt": {
+      "type": "string",
+      "description": "ISO 8601 expiry — default 7 days from send"
+    },
+    "signedPdfUrl": {
+      "type": "string",
+      "description": "Base44 private file URL or id for the stamped signed W-9 PDF"
+    },
+    "sentAt": {
+      "type": "string",
+      "description": "ISO timestamp when email/SMS was dispatched"
+    },
+    "openedAt": {
+      "type": "string",
+      "description": "ISO timestamp when merchant first opened /uw/:token"
+    },
+    "signedAt": {
+      "type": "string",
+      "description": "ISO timestamp when merchant submitted signature"
+    },
+    "sentToElavonAt": {
+      "type": "string",
+      "description": "ISO timestamp when signed PDF was emailed to Elavon via Gmail"
+    },
+    "elavonGmailMessageId": {
+      "type": "string",
+      "description": "Gmail message id after successful sendToElavon (dedup / audit)"
+    },
+    "createdByEmail": {
+      "type": "string",
+      "description": "CliqBux agent workspace email that created the request"
+    },
+    "lastError": {
+      "type": "string",
+      "description": "Last channel or Gmail failure message — ops-visible for send_failed / retry"
+    }
+  },
+  "required": [
+    "corporateId",
+    "midId",
+    "type",
+    "status"
+  ]
+}
