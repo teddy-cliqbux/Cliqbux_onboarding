@@ -1,3 +1,4 @@
+// redeployed 2026-08-08a — force redeploy after GitHub sync (elavon UW emails + W9 signature size)
 // redeployed 2026-07-31a — force redeploy after MerchantAccount schema republish (taxIdType on legal entities)
 /**
  * manageMerchantAccount — admin-only Merchant Account portfolio hub.
