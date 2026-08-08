@@ -1,66 +1,48 @@
-# Task 3 Report: UnderwritingRequest entity schema
+# Task 3 Report — Admin sidebar Underwriting item
 
-**Status:** DONE  
-**Branch:** `feature/underwriting-w9-request`  
-**Commit:** `0e3c023` — feat(uw): add UnderwritingRequest entity schema  
+**Issue:** #23  
+**Branch:** `feature/underwriting-room`  
 **Date:** 2026-08-07
-
----
 
 ## Summary
 
-Added Base44 entity schema `UnderwritingRequest` for MID-scoped underwriting document requests (W-9 v1). Matches structure and description style of `Underwriting Message.jsonc`. All brief properties declared; required fields: `corporateId`, `midId`, `type`, `status`.
+Added an **Underwriting** nav item to the admin Merchant Center sidebar under **Work**, immediately after **Onboarding**. Both items navigate to `/admin/applications` in v1 (approved). Merchant-facing `MerchantCenterShell` was not modified.
 
----
+## Files changed
 
-## File Created
+| File | Change |
+|------|--------|
+| `src/components/admin/AdminMerchantCenterShell.jsx` | Import `Shield`; add Underwriting button under Work |
 
-| File | Purpose |
-|---|---|
-| `base44/entities/Underwriting Request.jsonc` | Entity schema for persistence in Base44 |
+## Implementation
 
----
+1. **Icon:** `Shield` from `lucide-react` (alphabetically placed in import list).
+2. **Nav item:** Button matching the existing Onboarding pattern — `navigate('/admin/applications')`, `navLinkClass({ isActive: false })`, same icon sizing/stroke.
+3. **Placement:** Work section, directly after Onboarding, before Installations / Sync MSPWare / Team.
 
-## Schema highlights
+## Out of scope (per brief)
 
-| Field | Notes |
-|---|---|
-| `type` | enum `w9` (extensible) |
-| `status` | `draft` \| `sent` \| `opened` \| `signed` \| `sent_to_elavon` \| `cancelled` \| `expired` \| `send_failed` — default `draft` |
-| `channels` | string enum `email` \| `sms` \| `both` (matches `nudgeMerchant`, not array) |
-| `prefillSnapshot` | string (JSON blob) per brief |
-| `tokenHash` | never raw token |
-| Timestamps | `sentAt`, `openedAt`, `signedAt`, `sentToElavonAt`, `tokenExpiresAt` — ISO strings |
+- `MerchantCenterShell.jsx` — untouched; no Underwriting item for merchants.
+- `ApplicationDealRoom`, CTA lib files — not modified.
 
----
+## Verification
 
-## Deviations from design spec
-
-Design doc (`docs/superpowers/specs/2026-08-07-underwriting-w9-request-design.md`) lists `channels` as `['email']` \| `['sms']` \| `['email','sms']`. Task brief and user instruction require a **string** enum matching `nudgeMerchant`; implemented as `email` \| `sms` \| `both`.
-
----
-
-## Rollout (Teddy)
-
-**Publish entity** in Base44 Dashboard before live create/update works — undeclared keys are stripped on save (AGENTS.md Lesson #4).
-
-1. Push branch → GitHub Desktop as usual  
-2. Base44 Dashboard → Entities → publish `UnderwritingRequest`  
-3. Proceed to Task 4+ (`manageUnderwritingRequest`, `completeUnderwritingRequest`)
-
----
-
-## Commit
-
-```
-feat(uw): add UnderwritingRequest entity schema
-
-Teddy must Publish entity in Base44 Dashboard before live create works.
-```
-
----
+| Check | Result |
+|-------|--------|
+| `Shield` imported from lucide-react | Pass |
+| Underwriting button after Onboarding in Work section | Pass |
+| Navigates to `/admin/applications` | Pass (code review) |
+| Same styling pattern as Onboarding | Pass |
+| `MerchantCenterShell` has no Underwriting | Pass (grep: no matches) |
+| Linter on changed file | Pass (no diagnostics) |
+| Manual UI at `/admin/center` | Not run in this session — verify after deploy/publish |
 
 ## Concerns / follow-ups
 
-- None blocking. Functions in later tasks should treat `prefillSnapshot` as JSON.parse/stringify at boundaries.
-- Uniqueness rule (one non-terminal request per `midId` + `type`) is enforced in application code, not entity schema.
+- **v1 routing:** Onboarding and Underwriting both land on `/admin/applications`. A dedicated underwriting route/filter can be wired in a later task.
+- **Active state:** Both Work buttons use `isActive: false`; neither highlights when the user is on the applications desk. Consider shared active detection if UX feedback is needed.
+- **Manual QA:** Confirm sidebar item and click-through as admin after push/publish.
+
+## Commit
+
+See git log on `feature/underwriting-room` for the Task 3 commit hash.
