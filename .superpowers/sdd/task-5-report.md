@@ -1,72 +1,71 @@
-# Task 5 Report: `completeUnderwritingRequest` (token + PDF)
+# Task 5 Report — AI_CHANNEL + issue #23 (#23)
 
-**Status:** DONE  
-**Branch:** `feature/underwriting-w9-request`  
-**Commit:** `feat(uw): token-gated W-9 complete and PDF stamp`  
-**Date:** 2026-08-07
+**Branch:** `feature/underwriting-room`  
+**Date:** 2026-08-07  
+**Scope:** Append-only `AI_CHANNEL.md` entry; GitHub #23 close deferred.
 
----
+## Status
 
-## Summary
+**DONE** — channel entry appended and committed.  
+**DONE_WITH_CONCERNS** — #23 not closed (GitHub CLI unavailable on this machine).
 
-Implemented token-gated `base44/functions/completeUnderwritingRequest/entry.ts` with `get` + `submitSignature`. Token hashing matches Task 4 (`sha256(rawToken + MERCHANT_JWT_SECRET)` hex). PDF fill inlined from `src/lib/w9PdfFill.js`; template fetched from `${PUBLIC_APP_URL}/irs/fw9.pdf` (fallbacks included). Signed PDF uploaded via `asServiceRole.integrations.Core.UploadFile` and stored only when the URL is public `https://` (Task 4 Elavon-attach carry).
+## What shipped (feature branch, Tasks 1–4)
 
----
-
-## File Created
-
-| File | Purpose |
+| Area | Change |
 |---|---|
-| `base44/functions/completeUnderwritingRequest/entry.ts` | Merchant magic-link W-9 get + sign |
+| Rename | Deal Room → **Underwriting Room** in agent CTAs, page chrome, portal-lock copy, installations/QA launch text |
+| `ApplicationDealRoom` | Removed `HandoffPanel`, `InstallerRunbook`, checklist **Request document** |
+| Admin nav | Merchant Center sidebar Work → **Underwriting** → `/admin/applications` |
+| Kept | UW threads + AWB, W-9 panel, Unlock & Modify / submit, notes, tasks, snapshot |
+| Route | Unchanged: `/admin/applications/:corporateId` |
+| Backend | None — **frontend-only** redeploy |
 
-`public/irs/fw9.pdf` already present (synced from `assets/irs/fw9.pdf`) — included in commit if dirty.
+## Task 5 deliverable
 
----
+- Appended `[CURSOR]` entry to end of `AI_CHANNEL.md` (append-only; no earlier entries modified).
+- This report.
 
-## Actions
+## Branch commits (vs main)
 
-| Action | Behavior |
-|---|---|
-| `get` | Hash token → lookup; cancelled/invalid → 410/404; expired (unsigned) → 410 + mark `expired`; signed → `{ status, fields, signedPdfUrl, viewOnly: true }`; else mark `opened` once, return full TIN fields + `agentNote` + optional `midLabel` + `expiresAt` |
-| `submitSignature` | Validate fields; require PNG data URL or typed `signatureName`; if already signed → existing URL (`idempotent: true`); fill+flatten PDF; UploadFile; persist `signed` / `signedPdfUrl` / `prefillSnapshot` / `signedAt` |
+```
+c277151 Add Underwriting Room (#23) design spec and implementation plan.
+9c1a89a feat(uw-room): rename CTA and agent lock copy to Underwriting Room
+488feb3 Strip non-UW panels from ApplicationDealRoom (#23).
+b4613a3 Add Underwriting item to admin Merchant Center sidebar (#23).
+001ff45 Rename agent CTAs from Deal Room to Underwriting Room (#23).
+```
 
-`saveDraft` omitted (optional per plan/spec).
+(Task 5 commit adds after the above.)
 
----
+## GitHub #23 close
 
-## Auth
+**Not closed.** `gh` is not installed / not on PATH in this environment (`gh auth status` → command not found).
 
-- **Token only** — no `auth.me()`, no merchant JWT gate.
-- Same `hashToken` formula as `manageUnderwritingRequest`.
+### After live frontend publish, Teddy (or agent with `gh`):
 
----
+```powershell
+gh auth login
+gh issue comment 23 --repo teddy-cliqbux/Cliqbux_onboarding --body "Underwriting Room shipped on feature/underwriting-room: stripped HandoffPanel/InstallerRunbook/Request document; renamed CTAs; sidebar Underwriting → /admin/applications. Frontend-only redeploy. Route unchanged."
+gh issue close 23 --repo teddy-cliqbux/Cliqbux_onboarding --reason completed
+```
 
-## Task 4 carry (signedPdfUrl)
+Adjust `--repo` if the remote slug differs.
 
-`uploadSignedPdf` rejects non-`https://` UploadFile results so `sendToElavon` can bare-`fetch` the PDF for Gmail attach.
+## Redeploy notes
 
----
+- **Frontend publish only** — no Base44 function redeploy required for #23 scope.
+- Do **not** set `MSP_SUBMIT_ENABLED` for this work.
 
-## Smoke / verification (not live)
+## Concerns / carry-forward
 
-**Idempotent re-submit plan** (after publish + entity live):
+1. **#23 close blocked** — needs `gh` auth + post-publish smoke on live app.
+2. **Merchant delete copy** — three strings in `OnboardingLocations.jsx` / `MerchantLocationsHome.jsx` still say "Deal Room" (Task 4 carry; cosmetic).
+3. **Orphan components** — `HandoffPanel.jsx` / `InstallerRunbook.jsx` remain in repo (comments only); not mounted from Underwriting Room.
 
-1. Admin `send` a W-9 → open `/uw/{token}` (or invoke `get`).
-2. `submitSignature` with valid fields + PNG → note `signedPdfUrl`.
-3. Call `submitSignature` again with same token → expect same URL + `idempotent: true`.
-4. `get` → `viewOnly: true` + same URL.
-5. Confirm `curl -I signedPdfUrl` returns 200 (public https).
+## Verification checklist (post-publish)
 
----
-
-## Concerns / follow-ups
-
-1. Publish/redeploy function + `UnderwritingRequest` entity before live use.
-2. Visual QA of signature/date overlays still deferred (Task 2 carry).
-3. Task 6 merchant page not started here.
-
----
-
-## Next
-
-Task 6 — `/uw/:token` merchant UI.
+- [ ] Admin sidebar Work → Underwriting opens `/admin/applications`
+- [ ] Applications row opens `/admin/applications/:corporateId` with "Underwriting room" chrome
+- [ ] No HandoffPanel, InstallerRunbook, or Request document on that page
+- [ ] UW threads, W-9 panel, Unlock, notes/tasks, snapshot still present
+- [ ] Close GitHub #23

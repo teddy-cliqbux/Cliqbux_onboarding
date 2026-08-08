@@ -3104,7 +3104,7 @@ Dry run OK (106 MIDs / 47 owners); **Confirm live sync** returned HTTP 500. Like
 ---
 
 ---
-**[CURSOR]** � 2026-07-30
+**[CURSOR]** · 2026-07-30
 **Type:** Fix
 **Re:** MSP live sync HTTP 500 ? chunked writes + error surfacing
 
@@ -3172,7 +3172,7 @@ Before MSPWare / portfolio / boarding / merchant-center: vault `_index.md` ? `pa
 3. manageMerchantAccount get returns overview + primaryContact fields
 4. AdminMerchantAccountHome ? hero CTA + Account summary + existing deals/legal/MIDs; best deal highlighted
 
-**CTA:** needs_attention?Deal Room � onboarding?Portal � live?Locations � prospect+deal?Deal Room � prospect+no deal?Applications
+**CTA:** needs_attention?Deal Room · onboarding?Portal · live?Locations · prospect+deal?Deal Room · prospect+no deal?Applications
 
 **Waiting on:** Teddy (push via GitHub Desktop; redeploy manageMerchantAccount)
 ---
@@ -3263,15 +3263,15 @@ Set Base44 `QUO_FROM_NUMBER=+14154888853`, retry Remind ? Text. No code change r
 ---
 
 ---
-**[CURSOR]** � 2026-08-01
+**[CURSOR]**  2026-08-01
 **Type:** Decision / Fix
-**Re:** #14 � deselected owners still on portal People
+**Re:** #14  deselected owners still on portal People
 
 ### Cause
 Applications prep saved `includedSignerIds` on `StagedApplication` only. Portal People / `manageSigner` list / boarding always loaded all `MerchantSigners`. Locations already honored `includedLocationIds`; signers did not.
 
-### Fix (repo � redeploy before live verify)
-- `src/lib/dealSignerSelection.js` (+ tests) � mirror location selection helper
+### Fix (repo  redeploy before live verify)
+- `src/lib/dealSignerSelection.js` (+ tests)  mirror location selection helper
 - `manageSigner` list: filter for merchant actors; admin Applications stays full roster
 - `OnboardingPortal` client filter (defense)
 - `signApplication` / `submitToMSP` / `refillMSPForms`: same filter for MSPWare `owners[]`
@@ -3285,12 +3285,12 @@ Plan: `docs/superpowers/plans/2026-08-01-honor-included-signer-ids.md`
 ---
 
 ---
-**[CURSOR]** � 2026-08-05
+**[CURSOR]**  2026-08-05
 **Type:** Fix
 **Re:** Too many MSPWare signing packages / Prepare form HTTP 429 (Imas / Estorya)
 
 ### Cause
-`prepareMSPForms` / `submitToMSP` / `signApplication` walked **every** MerchantMID on the deal. Applications `includedMidIds` was saved but ignored � junk MIDs (Test DBA, duplicate Estorya/Imas) got drafts + GET /form storms ? 429.
+`prepareMSPForms` / `submitToMSP` / `signApplication` walked **every** MerchantMID on the deal. Applications `includedMidIds` was saved but ignored  junk MIDs (Test DBA, duplicate Estorya/Imas) got drafts + GET /form storms ? 429.
 
 ### Fix (repo)
 - `src/lib/dealMidSelection.js` (+ tests): resolve `includedMidIds` (fallback `includedLocationIds`)
@@ -3307,7 +3307,7 @@ Plan: `docs/superpowers/plans/2026-08-01-honor-included-signer-ids.md`
 ---
 
 ---
-**[CURSOR]** — 2026-08-05
+**[CURSOR]** â 2026-08-05
 **Type:** Fix
 **Re:** Open feedback #18 / #19 / #17 (Applications desk + location Signed)
 
@@ -3319,7 +3319,7 @@ Plan: `docs/superpowers/plans/2026-08-01-honor-included-signer-ids.md`
 ### Ops still on corp 338922234596 (#16)
 - Redeploy frontend + `getMerchantData` (+ boarding MID filter if not live)
 - Prep: only keep Imas Kusina Union City + Estorya; retract junk MID drafts
-- Prepare form → expect 2 rows
+- Prepare form â expect 2 rows
 
 Plan: `docs/superpowers/plans/2026-08-05-open-feedback-issues.md`
 
@@ -3327,7 +3327,7 @@ Plan: `docs/superpowers/plans/2026-08-05-open-feedback-issues.md`
 ---
 
 ---
-**[CURSOR]** — 2026-08-05
+**[CURSOR]** â 2026-08-05
 **Type:** Fix
 **Re:** Post-sign logo crispness + Help & Feedback screenshot `color()` error
 
@@ -3342,7 +3342,7 @@ Plan: `docs/superpowers/plans/2026-08-05-open-feedback-issues.md`
 ---
 
 ---
-**[CURSOR]** — 2026-08-06
+**[CURSOR]** â 2026-08-06
 **Type:** Fix
 **Re:** No Unlock / forms-lock banner on post-signing Merchant Center
 
@@ -3352,32 +3352,32 @@ Removed `FormsLockedBanner` (and Unlock & Modify) from `PostSubmissionDashboard`
 ---
 
 ---
-**[CURSOR]** — 2026-08-07
+**[CURSOR]** â 2026-08-07
 **Type:** Note
-**Re:** Underwriting W-9 request plan shipped (Tasks 1–7 on `feature/underwriting-w9-request`)
+**Re:** Underwriting W-9 request plan shipped (Tasks 1â7 on `feature/underwriting-w9-request`)
 
 ### Shipped in repo
 Deal Room **Underwriting requests** panel + merchant `/uw/:token` W-9 e-sign + `manageUnderwritingRequest` / `completeUnderwritingRequest`. Gmail outbound for **Send to Elavon** needs **`gmail.send`** on underwriting@ (readonly alone is not enough). Optional env `UNDERWRITING_ELAVON_DOCS_TO` prefills Elavon To when CliqBux confirms the inbox.
 
-Docs: `docs/underwriting-inbox.md` (scopes + W-9 flow), `AGENTS.md` § UnderwritingRequest, spec `docs/superpowers/specs/2026-08-07-underwriting-w9-request-design.md`.
+Docs: `docs/underwriting-inbox.md` (scopes + W-9 flow), `AGENTS.md` Â§ UnderwritingRequest, spec `docs/superpowers/specs/2026-08-07-underwriting-w9-request-design.md`.
 
 ### Teddy ops (before live smoke)
 1. **Republish** `UnderwritingRequest` entity in Base44 Dashboard
-2. **Re-consent** underwriting@ OAuth: `gmail.readonly` + `gmail.send` → new refresh token → `UNDERWRITING_GMAIL_REFRESH_TOKEN`
+2. **Re-consent** underwriting@ OAuth: `gmail.readonly` + `gmail.send` â new refresh token â `UNDERWRITING_GMAIL_REFRESH_TOKEN`
 3. Set **`UNDERWRITING_ELAVON_DOCS_TO`** when Elavon docs address is confirmed (else agents type To in modal)
 4. Push + **redeploy** `manageUnderwritingRequest`, `completeUnderwritingRequest`, frontend
-5. **Smoke one test MID:** Send W-9 → sign link → Download PDF → Send to Elavon (self or test To) → confirm attachment + outbound thread row
+5. **Smoke one test MID:** Send W-9 â sign link â Download PDF â Send to Elavon (self or test To) â confirm attachment + outbound thread row
 
 **Waiting on:** Teddy (publish + Gmail re-consent + redeploy + smoke)
 ---
 
 ---
-**[CURSOR]** — 2026-08-07
+**[CURSOR]** â 2026-08-07
 **Type:** Fix
 **Re:** #22 W-9 signature pad too small / mouse tracking breaks
 
 ### Cause
-`UnderwritingW9Sign` (`/uw/:token`) used a 560×120 canvas and `onMouseLeave={endDraw}`, so any slight leave killed the stroke.
+`UnderwritingW9Sign` (`/uw/:token`) used a 560Ã120 canvas and `onMouseLeave={endDraw}`, so any slight leave killed the stroke.
 
 ### Fix (frontend only)
 - `src/lib/w9SignaturePad.js` (+ tests): taller pad (220 CSS px), coordinate map, DPR bitmap sizing
@@ -3387,4 +3387,22 @@ Docs: `docs/underwriting-inbox.md` (scopes + W-9 flow), `AGENTS.md` § Underwrit
 **Redeploy:** frontend publish only (no function). Then close #22 after smoke on a W-9 link.
 
 Plan: `docs/superpowers/plans/2026-08-07-w9-signature-pad-ux.md`
+---
+
+---
+**[CURSOR]** — 2026-08-07
+**Type:** Note
+**Re:** #23 Underwriting Room — strip handoff/runbook, rename, sidebar nav
+
+### Shipped (repo, `feature/underwriting-room`)
+1. **Renamed** agent CTAs + page chrome: Deal Room → **Underwriting Room** (Applications row, account/deal links, QA hub, installations copy, portal-lock strings).
+2. **Stripped** from `ApplicationDealRoom`: `HandoffPanel`, `InstallerRunbook`, checklist **Request document** — room is underwriting-focused only.
+3. **Admin sidebar** Work → **Underwriting** → `/admin/applications` (`AdminMerchantCenterShell`).
+4. **Kept:** per-MID underwriting@ threads + AWB, W-9 panel (`UnderwritingRequestsPanel`), Unlock & Modify / submit, notes, tasks, deal snapshot. Route unchanged: `/admin/applications/:corporateId`.
+
+Plan: `docs/superpowers/plans/2026-08-07-underwriting-room.md` · Spec: `docs/superpowers/specs/2026-08-07-underwriting-room-design.md`
+
+**Redeploy:** frontend only (no function changes; do **not** set `MSP_SUBMIT_ENABLED`)
+
+**Waiting on:** Teddy push + frontend publish; then close #23 (`gh auth login` if needed)
 ---
