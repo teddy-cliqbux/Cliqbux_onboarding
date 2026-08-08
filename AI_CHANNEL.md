@@ -3406,3 +3406,13 @@ Plan: `docs/superpowers/plans/2026-08-07-underwriting-room.md` · Spec: `docs/su
 
 **Waiting on:** Teddy push + frontend publish; then close #23 (`gh auth login` if needed)
 ---
+
+---
+**[CURSOR]** — 2026-08-07
+**Type:** Note
+**Re:** #23 follow-up — sync inlined manageMerchantAccount CTA labels
+
+Final review found `manageMerchantAccount` still returned “Open/Fix in Deal Room” (inlined `buildPrimaryCta`; Account home hero CTA). Updated to **Underwriting Room**; `kind` still `deal_room`.
+
+**Redeploy:** frontend + `manageMerchantAccount` (not frontend-only after this follow-up). Still do **not** set `MSP_SUBMIT_ENABLED`.
+---

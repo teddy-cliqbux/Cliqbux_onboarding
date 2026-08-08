@@ -149,7 +149,7 @@ function buildPrimaryCta({ status, bestDeal = null }: { status: string; bestDeal
   const corporateId = bestDeal ? String(bestDeal.corporateId || '').trim() || null : null;
 
   if (status === 'needs_attention' && corporateId) {
-    return { label: 'Fix in Deal Room', kind: 'deal_room', corporateId };
+    return { label: 'Fix in Underwriting Room', kind: 'deal_room', corporateId };
   }
   if (status === 'onboarding' && corporateId) {
     return { label: 'Continue onboarding', kind: 'portal', corporateId, destination: 'portal' };
@@ -158,13 +158,13 @@ function buildPrimaryCta({ status, bestDeal = null }: { status: string; bestDeal
     return { label: 'Open locations', kind: 'locations', corporateId, destination: 'locations' };
   }
   if (status === 'prospect' && corporateId) {
-    return { label: 'Open Deal Room', kind: 'deal_room', corporateId };
+    return { label: 'Open Underwriting Room', kind: 'deal_room', corporateId };
   }
   if (status === 'prospect' && !corporateId) {
     return { label: 'Start application', kind: 'quick_stage', corporateId: null };
   }
   if (corporateId) {
-    return { label: 'Open Deal Room', kind: 'deal_room', corporateId };
+    return { label: 'Open Underwriting Room', kind: 'deal_room', corporateId };
   }
   return { label: 'Open Applications', kind: 'applications', corporateId: null };
 }
