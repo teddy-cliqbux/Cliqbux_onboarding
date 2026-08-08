@@ -138,7 +138,7 @@ export default function AdminMerchantDashboard() {
     {
       to: '/admin/center/installations',
       title: 'Installations',
-      body: 'Jump into Deal Room runbooks for go-live work.',
+      body: 'Launch into Applications and merchant accounts for go-live and underwriting work.',
       icon: Wrench,
       cta: 'Open installations',
     },

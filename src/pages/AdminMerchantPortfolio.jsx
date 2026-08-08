@@ -277,7 +277,7 @@ export default function AdminMerchantPortfolio({ mode: modeProp = 'all' }) {
                       className="inline-flex items-center gap-1.5 text-cb-caption font-semibold px-2.5 py-1.5 rounded-cb bg-cb-accent text-cb-bg hover:opacity-90"
                     >
                       <FolderOpen className="w-3.5 h-3.5" />
-                      Deal Room
+                      Underwriting Room
                     </Link>
                   </div>
                 </div>

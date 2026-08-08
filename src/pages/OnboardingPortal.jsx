@@ -1051,7 +1051,7 @@ export default function OnboardingPortal() {
         {/* On Sign & Submit the merchant is already in the signing UI — hide the
             sticky lock banner there so it does not steal viewport / trap scroll
             under the BoldSign iframe (Trisha Mobile Test 2026-07-24). Agents still
-            unlock from Deal Room / other locked steps. */}
+            unlock from Underwriting Room / other locked steps. */}
         {formsLocked
           && step !== STEP_VERIFICATION
           && String(profile?.applicationStatus || '') !== 'Submitted' && (
