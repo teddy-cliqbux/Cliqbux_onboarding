@@ -1,57 +1,46 @@
-# Task 6 Report: Confirm Locations / Account / Detail use the shell
+# Task 6 Report: Merchant W-9 page `/uw/:token`
 
 **STATUS:** DONE  
-**Branch:** `feature/merchant-center-pos-shell`  
-**COMMIT:** `e197b8e` — fix: shell props on Locations, Account, Detail loading states  
-**Date:** 2026-07-24
+**Branch:** `feature/underwriting-w9-request`  
+**Commit:** `e92167b` — feat(uw): merchant W-9 review and sign page  
+**Date:** 2026-08-07
 
 ---
 
 ## Summary
 
-Audited `MerchantLocationsHome`, `MerchantAccountPage`, and `MerchantLocationDetail` under `MerchantCenterShell`. All three pages already used the shell with full-width content (no `max-w-3xl` hero/table clipping). Main render paths already passed `showDealLink` + `corporateId`. Small fixes: resolve `corporateId` from session/URL before profile loads so Setup stays in the sidebar during loading, and preserve `dealId` on Location detail cross-links.
+Public merchant page at `/uw/:token` loads a token-gated W-9 via `completeUnderwritingRequest` (`get` → review/edit fields → draw or type signature → `submitSignature`). Uses `cb-*` tokens on `portal-bg` with a white form card for readability. Handles loading, expired (410), error, form, sign, and signed + download states.
 
 ---
 
-## Files Modified
+## Files
 
 | File | Change |
 |---|---|
-| `src/pages/MerchantLocationsHome.jsx` | Loading shell gets `corporateId` / `showDealLink`; derive `corporateId` from session + `?dealId=` |
-| `src/pages/MerchantAccountPage.jsx` | Derive `corporateId` from session + URL for shell props during loading |
-| `src/pages/MerchantLocationDetail.jsx` | Same `corporateId` derivation; loading shell props; back link + account link preserve `dealId` |
+| `src/pages/UnderwritingW9Sign.jsx` | New — W-9 review, canvas/typed signature, submit |
+| `src/App.jsx` | Public route `/uw/:token` (no admin/merchant JWT gate) |
 
 ---
 
-## Audit results
+## API wiring
 
-### Shell props (`showDealLink` + `corporateId`)
-
-| Page | Main render | Loading state | Notes |
-|---|---|---|---|
-| Locations home | Already had props | **Fixed** — was missing both | Also passes `openChecklistCount` |
-| Account | Already had props | **Fixed** via early `corporateId` | No checklist badge on Account (expected) |
-| Location detail | Already had props | **Fixed** — `showDealLink` was unconditional; `corporateId` was undefined until profile loaded | |
-
-Setup dashboard (`PostSubmissionDashboard`) unchanged — already passes `showDealLink` + `corporateId` + `openChecklistCount`.
-
-### Layout / width
-
-- Grep found **no `max-w-3xl`** on any of the three pages.
-- Content uses natural full width inside shell `max-w-[1400px]` main.
-- Only narrow constraint: empty-state helper copy on Locations home (`max-w-sm mx-auto`) — intentional, not a table clip.
-- Location list, Account sections, and Location detail grids already span the wide main column correctly.
+- **Pattern:** `base44.functions.invoke('completeUnderwritingRequest', …)` first (same as `/verify` + `verifySignerToken`); fallback raw `fetch` to `/api/apps/{appId}/functions/completeUnderwritingRequest` if invoke fails.
+- **get:** Prefills form from `fields`; `viewOnly` + `signedPdfUrl` → signed confirmation; 410 / `TOKEN_EXPIRED` → expired UI.
+- **submitSignature:** Sends `fields` + PNG `signatureDataUrl` (canvas draw or typed name rendered to canvas).
 
 ---
 
-## Residual risks
+## Manual check (not run against live staging)
 
-- **Manual smoke not run** — verify Setup / Locations / Account mobile bottom nav and desktop sidebar with a real merchant JWT or impersonation token.
-- **Location list links for non-live locations** still route to onboarding portal (`/?dealId=…`) without shell — existing behavior, not changed in this task.
-- **Account page** does not show checklist badge count on Setup nav item (only Locations home and Setup dashboard pass `openChecklistCount`).
+| URL | Expected |
+|---|---|
+| `/uw/test` | Expired or invalid token error UI |
+| Valid sent token | Form → sign → download link |
+
+Deploy `completeUnderwritingRequest` + publish `UnderwritingRequest` entity before live happy path.
 
 ---
 
-## Tests
+## Out of scope
 
-No automated tests added (layout/chrome props only).
+Task 7+ (Deal Room panel), push, automated tests.

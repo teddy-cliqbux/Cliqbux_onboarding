@@ -1,46 +1,29 @@
-﻿### Task 2: `SetupStatusCard` presentational component
+﻿### Task 2: Pin IRS PDF + AcroForm field map + fill helper
 
 **Files:**
-- Create: `src/components/merchant-center/SetupStatusCard.jsx`
+- Create: `assets/irs/fw9.pdf` (copy from IRS or Teddy’s `fw9 (1).pdf`)
+- Create: `assets/irs/fw9-field-map.md`
+- Create: `scripts/inspect-w9-fields.mjs` (one-off: list AcroForm names via `pdf-lib`)
+- Create: `src/lib/w9PdfFill.js` (Node-testable fill; Deno function will inline equivalent)
+- Create: `src/lib/w9PdfFill.test.js`
+- Modify: `package.json` — add `pdf-lib` dependency + `"test:w9": "node --test src/lib/w9*.test.js"`
 
 **Interfaces:**
-- Consumes: card `{ title, value, caption }` + optional `icon` React node
-- Produces: `<SetupStatusCard title value caption icon? />`
+- Produces: `async fillW9Pdf(pdfBytes: Uint8Array, fields, signaturePngBytes?: Uint8Array): Promise<Uint8Array>`
+  - Sets text/checkbox fields per `fw9-field-map.md`
+  - Draws signature image on signature line page (coordinates documented in map after inspect)
+  - Sets date field
+  - `form.flatten()` before save so Elavon gets a non-editable signed PDF
 
-- [ ] **Step 1: Implement component**
+- [ ] **Step 1: Add `pdf-lib`**, copy PDF into `assets/irs/fw9.pdf`, run inspect script, write `fw9-field-map.md` with real field names (do not guess — inspect output is source of truth).
 
-```jsx
-// src/components/merchant-center/SetupStatusCard.jsx
-export default function SetupStatusCard({ title, value, caption, icon = null }) {
-  return (
-    <div className="bg-cb-surface rounded-cb border border-cb-border p-4 flex items-start justify-between gap-3 min-h-[5.5rem]">
-      <div className="min-w-0">
-        <p className="text-cb-caption uppercase text-gray-500 mb-1">{title}</p>
-        <p className="font-display text-cb-title text-white truncate">{value}</p>
-        {caption && (
-          <p className="text-cb-caption normal-case tracking-normal font-normal text-gray-500 mt-1 truncate">
-            {caption}
-          </p>
-        )}
-      </div>
-      {icon && (
-        <div className="flex-shrink-0 w-9 h-9 rounded-cb bg-cb-accent-muted flex items-center justify-center text-cb-accent">
-          {icon}
-        </div>
-      )}
-    </div>
-  );
-}
-```
+- [ ] **Step 2: Write a test** that loads the pinned PDF, fills sample fields, asserts output bytes longer than input and that re-load has flattened form (0 editable fields or getForm throws / empty).
 
-- [ ] **Step 2: Smoke-check in browser later (Task 4)** â€” no separate unit test required for pure markup
+- [ ] **Step 3: Implement `fillW9Pdf` to pass**
 
-- [ ] **Step 3: Stage**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add src/components/merchant-center/SetupStatusCard.jsx
+git add assets/irs package.json package-lock.json scripts/inspect-w9-fields.mjs src/lib/w9PdfFill.js src/lib/w9PdfFill.test.js
+git commit --trailer "Co-authored-by: Cursor <cursoragent@cursor.com>" -m "feat(uw): pin IRS W-9 PDF and pdf-lib fill helper"
 ```
-
----
-
-

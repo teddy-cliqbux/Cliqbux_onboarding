@@ -2,6 +2,7 @@
 
 **Status:** DONE  
 **Branch:** `feature/underwriting-w9-request`  
+**Commit:** `0e3c023` — feat(uw): add UnderwritingRequest entity schema  
 **Date:** 2026-08-07
 
 ---

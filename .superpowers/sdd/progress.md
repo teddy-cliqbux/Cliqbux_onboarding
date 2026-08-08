@@ -38,3 +38,10 @@ Task 7: complete (commits e92167b..b51885e, review approved with minor nits)
 
 Task 8: complete (docs + AGENTS + AI_CHANNEL + vault link; Teddy ops pending)
 
+
+Task 8: complete (commits b51885e..282bd28, docs done)
+
+
+Task 8: complete (commits b51885e..84bafc8, AI_CHANNEL append-only restored)
+All tasks 1-8 complete. Final review pending.
+

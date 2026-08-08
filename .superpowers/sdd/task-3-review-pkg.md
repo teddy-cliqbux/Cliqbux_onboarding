@@ -1,244 +1,245 @@
 ﻿# Review package Task 3
-BASE: bb78eb67f3bbcf0a51b37e86c8b75ac7ba4b7fb0
-HEAD: e7a7e041671faf350b43973aa9493038d93920d0
+Base: 8ff982b93d2e134adcc69a0a12667a188a9c5a7c
+Head: 0e3c023a217614aa162f93b13578cb0ef2e90d01
 ## Commits
-e7a7e04 feat: rebuild MerchantCenterShell with POS-style sidebar
+0e3c023 feat(uw): add UnderwritingRequest entity schema
+
 ## Stat
- .../merchant-center/MerchantCenterShell.jsx        | 179 +++++++++++----------
- 1 file changed, 96 insertions(+), 83 deletions(-)
+ .superpowers/sdd/task-3-report.md          |  69 ++++++++---------
+ base44/entities/Underwriting Request.jsonc | 115 +++++++++++++++++++++++++++++
+ 2 files changed, 145 insertions(+), 39 deletions(-)
+
 ## Diff
 ```diff
-diff --git a/src/components/merchant-center/MerchantCenterShell.jsx b/src/components/merchant-center/MerchantCenterShell.jsx
-index b025d9b..bca7add 100644
---- a/src/components/merchant-center/MerchantCenterShell.jsx
-+++ b/src/components/merchant-center/MerchantCenterShell.jsx
-@@ -1,15 +1,32 @@
- import { NavLink, useNavigate } from 'react-router-dom';
- import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
- import { signOut } from '@/lib/merchantCenterAuth';
+diff --git a/.superpowers/sdd/task-3-report.md b/.superpowers/sdd/task-3-report.md
+index b41b3b2..6fe7b6e 100644
+--- a/.superpowers/sdd/task-3-report.md
++++ b/.superpowers/sdd/task-3-report.md
+@@ -1,74 +1,65 @@
+-# Task 3 Report: Rebuild MerchantCenterShell (POS chrome)
++# Task 3 Report: UnderwritingRequest entity schema
  
-+function navLinkClass({ isActive }) {
-+  return `flex items-center gap-2 px-3 py-2 rounded-cb text-cb-body font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent ${
-+    isActive
-+      ? 'bg-cb-accent-muted text-cb-accent'
-+      : 'text-gray-400 hover:text-white'
-+  }`;
+ **Status:** DONE  
+-**Branch:** `feature/merchant-center-pos-shell`  
+-**Commit:** `e7a7e04` ΓÇö feat: rebuild MerchantCenterShell with POS-style sidebar  
+-**Date:** 2026-07-24
++**Branch:** `feature/underwriting-w9-request`  
++**Date:** 2026-08-07
+ 
+ ---
+ 
+ ## Summary
+ 
+-Rewrote `MerchantCenterShell.jsx` from fixed top header + `max-w-3xl` layout to POS-style chrome: fixed left sidebar (desktop), top bar, wide main canvas, and mobile bottom nav strip. All prop names unchanged; `dealHref` logic preserved.
++Added Base44 entity schema `UnderwritingRequest` for MID-scoped underwriting document requests (W-9 v1). Matches structure and description style of `Underwriting Message.jsonc`. All brief properties declared; required fields: `corporateId`, `midId`, `type`, `status`.
+ 
+ ---
+ 
+-## Files Modified
++## File Created
+ 
+-| File | Change |
++| File | Purpose |
+ |---|---|
+-| `src/components/merchant-center/MerchantCenterShell.jsx` | Full layout rewrite |
++| `base44/entities/Underwriting Request.jsonc` | Entity schema for persistence in Base44 |
+ 
+ ---
+ 
+-## Layout
++## Schema highlights
+ 
+-| Region | Classes / behavior |
++| Field | Notes |
+ |---|---|
+-| Outer | `portal-bg min-h-screen flex` |
+-| Sidebar (md+) | `w-56 fixed`, `CliqbuxLogo`, nav links, Sign out footer |
+-| Main column | `flex-1 md:pl-56 min-h-screen flex flex-col` |
+-| Top bar | `h-14`, subtitle caption + title chip, Sign out on mobile |
+-| Main content | `max-w-[1400px] mx-auto`, `pb-20` on mobile for bottom nav |
+-| Mobile nav | Fixed bottom strip ΓÇö Setup / Locations / Account + checklist badge |
++| `type` | enum `w9` (extensible) |
++| `status` | `draft` \| `sent` \| `opened` \| `signed` \| `sent_to_elavon` \| `cancelled` \| `expired` \| `send_failed` ΓÇö default `draft` |
++| `channels` | string enum `email` \| `sms` \| `both` (matches `nudgeMerchant`, not array) |
++| `prefillSnapshot` | string (JSON blob) per brief |
++| `tokenHash` | never raw token |
++| Timestamps | `sentAt`, `openedAt`, `signedAt`, `sentToElavonAt`, `tokenExpiresAt` ΓÇö ISO strings |
+ 
+ ---
+ 
+-## Nav order
++## Deviations from design spec
+ 
+-1. **Setup** ΓÇö only when `showDealLink && corporateId` (same `dealHref` as before)
+-2. **Locations** ΓÇö `/locations?dealId=ΓÇª`
+-3. **Account** ΓÇö `/account?dealId=ΓÇª`
+-
+-Active link: `bg-cb-accent-muted text-cb-accent`. Checklist badge: danger pill on Setup (sidebar + mobile).
++Design doc (`docs/superpowers/specs/2026-08-07-underwriting-w9-request-design.md`) lists `channels` as `['email']` \| `['sms']` \| `['email','sms']`. Task brief and user instruction require a **string** enum matching `nudgeMerchant`; implemented as `email` \| `sms` \| `both`.
+ 
+ ---
+ 
+-## Props (unchanged)
+-
+-`title`, `subtitle`, `corporateId`, `openChecklistCount`, `children`, `showDealLink`
+-
+----
++## Rollout (Teddy)
+ 
+-## Tests
++**Publish entity** in Base44 Dashboard before live create/update works ΓÇö undeclared keys are stripped on save (AGENTS.md Lesson #4).
+ 
+-**Manual check deferred** ΓÇö brief Step 2: verify `/locations` and `/account` after Task 5. No automated tests added.
++1. Push branch ΓåÆ GitHub Desktop as usual  
++2. Base44 Dashboard ΓåÆ Entities ΓåÆ publish `UnderwritingRequest`  
++3. Proceed to Task 4+ (`manageUnderwritingRequest`, `completeUnderwritingRequest`)
+ 
+ ---
+ 
+-## Lint
+-
+-No linter errors on `MerchantCenterShell.jsx`.
+-
+----
++## Commit
+ 
+-## Concerns
++```
++feat(uw): add UnderwritingRequest entity schema
+ 
+-- Top bar has no page-title prop yet (brief non-goal for v1); left side empty on desktop ΓÇö acceptable per spec.
+-- Mobile bottom nav may overlap very tall sticky footers; `pb-20` on main should cover most cases.
++Teddy must Publish entity in Base44 Dashboard before live create works.
++```
+ 
+ ---
+ 
+-## Next Steps
++## Concerns / follow-ups
+ 
+-- Task 4/5: wire dashboard content into wide canvas; browser smoke at `/locations` and `/account`.
++- None blocking. Functions in later tasks should treat `prefillSnapshot` as JSON.parse/stringify at boundaries.
++- Uniqueness rule (one non-terminal request per `midId` + `type`) is enforced in application code, not entity schema.
+diff --git a/base44/entities/Underwriting Request.jsonc b/base44/entities/Underwriting Request.jsonc
+new file mode 100644
+index 0000000..861d7e8
+--- /dev/null
++++ b/base44/entities/Underwriting Request.jsonc	
+@@ -0,0 +1,115 @@
++{
++  "name": "UnderwritingRequest",
++  "type": "object",
++  "description": "MID-scoped underwriting document requests (W-9 first). Agent creates in Deal Room; merchant completes via magic link at /uw/:token.",
++  "properties": {
++    "corporateId": {
++      "type": "string",
++      "description": "FK ΓåÆ MerchantCorporateProfile.corporateId (HubSpot deal id)"
++    },
++    "merchantAccountId": {
++      "type": "string",
++      "description": "FK ΓåÆ MerchantAccount.id ΓÇö optional; set when profile is linked to an account"
++    },
++    "midId": {
++      "type": "string",
++      "description": "FK ΓåÆ MerchantMID.id ΓÇö request is scoped to one MID"
++    },
++    "legalEntityId": {
++      "type": "string",
++      "description": "entityId from profile/account legalEntities[] used for W-9 prefill"
++    },
++    "type": {
++      "type": "string",
++      "enum": ["w9"],
++      "description": "Request kind ΓÇö extensible; v1 ships w9 only"
++    },
++    "status": {
++      "type": "string",
++      "enum": [
++        "draft",
++        "sent",
++        "opened",
++        "signed",
++        "sent_to_elavon",
++        "cancelled",
++        "expired",
++        "send_failed"
++      ],
++      "default": "draft",
++      "description": "Lifecycle: draft ΓåÆ sent ΓåÆ opened ΓåÆ signed ΓåÆ sent_to_elavon; send_failed / cancelled / expired are terminal or retry paths"
++    },
++    "recipientName": {
++      "type": "string",
++      "description": "Display name for the merchant contact receiving the request"
++    },
++    "recipientEmail": {
++      "type": "string",
++      "description": "Email for Resend delivery ΓÇö required when channels includes email"
++    },
++    "recipientPhone": {
++      "type": "string",
++      "description": "E.164 phone for Quo SMS ΓÇö required when channels includes sms"
++    },
++    "channels": {
++      "type": "string",
++      "enum": ["email", "sms", "both"],
++      "default": "both",
++      "description": "Delivery channels ΓÇö same vocabulary as nudgeMerchant"
++    },
++    "agentNote": {
++      "type": "string",
++      "description": "Optional note shown in email/SMS and on the merchant /uw page"
++    },
++    "prefillSnapshot": {
++      "type": "string",
++      "description": "JSON string of W-9 field values at send; updated to final values on sign"
++    },
++    "tokenHash": {
++      "type": "string",
++      "description": "HMAC/SHA hash of opaque magic-link token ΓÇö never store raw token"
++    },
++    "tokenExpiresAt": {
++      "type": "string",
++      "description": "ISO 8601 expiry ΓÇö default 7 days from send"
++    },
++    "signedPdfUrl": {
++      "type": "string",
++      "description": "Base44 private file URL or id for the stamped signed W-9 PDF"
++    },
++    "sentAt": {
++      "type": "string",
++      "description": "ISO timestamp when email/SMS was dispatched"
++    },
++    "openedAt": {
++      "type": "string",
++      "description": "ISO timestamp when merchant first opened /uw/:token"
++    },
++    "signedAt": {
++      "type": "string",
++      "description": "ISO timestamp when merchant submitted signature"
++    },
++    "sentToElavonAt": {
++      "type": "string",
++      "description": "ISO timestamp when signed PDF was emailed to Elavon via Gmail"
++    },
++    "elavonGmailMessageId": {
++      "type": "string",
++      "description": "Gmail message id after successful sendToElavon (dedup / audit)"
++    },
++    "createdByEmail": {
++      "type": "string",
++      "description": "CliqBux agent workspace email that created the request"
++    },
++    "lastError": {
++      "type": "string",
++      "description": "Last channel or Gmail failure message ΓÇö ops-visible for send_failed / retry"
++    }
++  },
++  "required": [
++    "corporateId",
++    "midId",
++    "type",
++    "status"
++  ]
 +}
-+
-+function ChecklistBadge({ count }) {
-+  if (!count || count <= 0) return null;
-+  return (
-+    <span className="ml-auto inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded-full bg-cb-danger/20 text-cb-danger text-[10px] font-semibold">
-+      {count}
-+    </span>
-+  );
-+}
-+
- /**
-- * Merchant Center chrome ΓÇö Locations / Account nav + optional deal-board context.
-- * Uses cb-* tokens. Coming-soon routes still render real pages with empty states.
-+ * Merchant Center chrome ΓÇö POS-style sidebar + top bar.
-+ * Nav: Setup (optional) / Locations / Account. Uses cb-* tokens.
-  */
- export default function MerchantCenterShell({
-   title,
-   subtitle,
-   corporateId,
-   openChecklistCount = 0,
-   children,
-   showDealLink = false,
-@@ -17,116 +34,112 @@ export default function MerchantCenterShell({
-   const navigate = useNavigate();
- 
-   const dealQ = corporateId ? `?dealId=${encodeURIComponent(corporateId)}` : '';
-   const dealHref = corporateId
-     ? `/onboarding/dashboard?dealId=${encodeURIComponent(corporateId)}`
-     : '/onboarding/dashboard';
- 
-   const navItems = [
-+    ...(showDealLink && corporateId
-+      ? [{ to: dealHref, label: 'Setup', badge: openChecklistCount }]
-+      : []),
-     { to: `/locations${dealQ}`, label: 'Locations' },
-     { to: `/account${dealQ}`, label: 'Account' },
-   ];
- 
-+  const handleSignOut = () => {
-+    signOut();
-+    navigate('/');
-+  };
-+
-   return (
--    <div className="portal-bg min-h-screen" style={{ fontFamily: 'Inter, sans-serif' }}>
--      <header className="fixed top-0 left-0 right-0 z-40 bg-cb-surface/95 backdrop-blur border-b border-cb-border">
--        <div className="max-w-4xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
--          <div className="flex items-center gap-6 min-w-0">
-+    <div className="portal-bg min-h-screen flex" style={{ fontFamily: 'Inter, sans-serif' }}>
-+      {/* Desktop sidebar */}
-+      <aside
-+        className="hidden md:flex w-56 flex-col border-r border-cb-border bg-cb-surface fixed inset-y-0 left-0 z-40"
-+        aria-label="Merchant Center navigation"
-+      >
-+        <div className="px-4 py-5 border-b border-cb-border">
-+          <CliqbuxLogo size="sm" />
-+        </div>
-+        <nav className="flex-1 px-3 py-4 flex flex-col gap-1" aria-label="Merchant Center">
-+          {navItems.map((item) => (
-+            <NavLink key={item.label} to={item.to} className={navLinkClass}>
-+              {item.label}
-+              {item.badge != null && <ChecklistBadge count={item.badge} />}
-+            </NavLink>
-+          ))}
-+        </nav>
-+        <div className="px-3 py-4 border-t border-cb-border">
-+          <button
-+            type="button"
-+            onClick={handleSignOut}
-+            className="w-full text-left px-3 py-2 rounded-cb text-cb-caption normal-case tracking-normal text-gray-500 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent"
-+          >
-+            Sign out
-+          </button>
-+        </div>
-+      </aside>
-+
-+      {/* Main column */}
-+      <div className="flex-1 md:pl-56 min-h-screen flex flex-col">
-+        <header className="h-14 border-b border-cb-border bg-cb-surface/95 backdrop-blur px-4 flex items-center justify-between gap-4 sticky top-0 z-30">
-+          <div className="md:hidden shrink-0">
-             <CliqbuxLogo size="sm" />
--            <nav className="hidden sm:flex items-center gap-1" aria-label="Merchant Center">
--              {navItems.map((item) => (
--                <NavLink
--                  key={item.label}
--                  to={item.to}
--                  className={({ isActive }) =>
--                    `px-3 py-1.5 rounded-cb text-cb-caption normal-case tracking-normal font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent ${
--                      isActive
--                        ? 'bg-cb-accent-muted text-cb-accent'
--                        : 'text-gray-400 hover:text-white'
--                    }`
--                  }
--                >
--                  {item.label}
--                </NavLink>
--              ))}
--              {showDealLink && corporateId && (
--                <NavLink
--                  to={dealHref}
--                  className={({ isActive }) =>
--                    `px-3 py-1.5 rounded-cb text-cb-caption normal-case tracking-normal font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent ${
--                      isActive
--                        ? 'bg-cb-accent-muted text-cb-accent'
--                        : 'text-gray-400 hover:text-white'
--                    }`
--                  }
--                >
--                  Setup
--                  {openChecklistCount > 0 && (
--                    <span className="ml-1.5 inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded-full bg-cb-danger/20 text-cb-danger text-[10px] font-semibold">
--                      {openChecklistCount}
--                    </span>
--                  )}
--                </NavLink>
--              )}
--            </nav>
-           </div>
--          <div className="flex items-center gap-3 min-w-0">
-+          <div className="flex items-center gap-3 min-w-0 ml-auto">
-             {(title || subtitle) && (
--              <div className="text-right min-w-0 hidden md:block">
-+              <div className="text-right min-w-0">
-                 {subtitle && (
-                   <p className="text-cb-caption uppercase text-gray-500 truncate">{subtitle}</p>
-                 )}
-                 {title && (
--                  <p className="text-cb-caption normal-case tracking-normal text-gray-300 truncate max-w-[14rem]">
-+                  <p className="inline-flex items-center px-2.5 py-1 rounded-cb border border-cb-border bg-cb-surface-raised text-cb-caption normal-case tracking-normal text-gray-300 truncate max-w-[14rem]">
-                     {title}
-                   </p>
-                 )}
-               </div>
-             )}
-             <button
-               type="button"
--              onClick={() => {
--                signOut();
--                navigate('/');
--              }}
--              className="text-cb-caption normal-case tracking-normal text-gray-500 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent rounded-cb px-2 py-1"
-+              onClick={handleSignOut}
-+              className="md:hidden shrink-0 text-cb-caption normal-case tracking-normal text-gray-500 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cb-accent rounded-cb px-2 py-1"
-             >
-               Sign out
-             </button>
-           </div>
--        </div>
--        {/* Mobile nav */}
--        <nav className="sm:hidden flex border-t border-cb-border px-2 py-1 gap-1 overflow-x-auto" aria-label="Merchant Center mobile">
--          {navItems.map((item) => (
--            <NavLink
--              key={item.label}
--              to={item.to}
--              className={({ isActive }) =>
--                `px-3 py-2 rounded-cb text-cb-caption normal-case tracking-normal font-medium whitespace-nowrap ${
--                  isActive ? 'bg-cb-accent-muted text-cb-accent' : 'text-gray-400'
--                }`
--              }
--            >
--              {item.label}
--            </NavLink>
--          ))}
--          {showDealLink && corporateId && (
--            <NavLink
--              to={dealHref}
--              className={({ isActive }) =>
--                `px-3 py-2 rounded-cb text-cb-caption normal-case tracking-normal font-medium whitespace-nowrap ${
--                  isActive ? 'bg-cb-accent-muted text-cb-accent' : 'text-gray-400'
--                }`
--              }
--            >
--              Setup{openChecklistCount > 0 ? ` (${openChecklistCount})` : ''}
--            </NavLink>
--          )}
--        </nav>
--      </header>
-+        </header>
- 
--      <main className="max-w-3xl mx-auto px-4 pt-24 sm:pt-20 pb-16">
--        {children}
--      </main>
-+        <main className="flex-1 px-4 sm:px-6 py-6 pb-20 md:pb-6 w-full max-w-[1400px] mx-auto">
-+          {children}
-+        </main>
-+      </div>
-+
-+      {/* Mobile bottom nav */}
-+      <nav
-+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-cb-border bg-cb-surface/95 backdrop-blur flex items-stretch"
-+        aria-label="Merchant Center mobile"
-+      >
-+        {navItems.map((item) => (
-+          <NavLink
-+            key={item.label}
-+            to={item.to}
-+            className={({ isActive }) =>
-+              `flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-cb-caption normal-case tracking-normal font-medium ${
-+                isActive ? 'bg-cb-accent-muted text-cb-accent' : 'text-gray-400'
-+              }`
-+            }
-+          >
-+            <span className="flex items-center gap-1">
-+              {item.label}
-+              {item.badge != null && item.badge > 0 && (
-+                <span className="inline-flex items-center justify-center min-w-[1.1rem] h-4 px-1 rounded-full bg-cb-danger/20 text-cb-danger text-[10px] font-semibold">
-+                  {item.badge}
-+                </span>
-+              )}
-+            </span>
-+          </NavLink>
-+        ))}
-+      </nav>
-     </div>
-   );
- }
+
 ```
