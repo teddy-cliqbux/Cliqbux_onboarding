@@ -12,6 +12,7 @@
  * (sync with src/lib/w9PdfFill.js + assets/irs/fw9-field-map.md), UploadFile → https signedPdfUrl.
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-08-08a — force-redeploy to pick up published UnderwritingRequest entity schema
 import { PDFDocument, StandardFonts, rgb } from 'npm:pdf-lib@1.17.1';
 
 const SIGNED_STATUSES = new Set(['signed', 'sent_to_elavon']);

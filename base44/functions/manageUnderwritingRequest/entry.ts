@@ -15,6 +15,7 @@
  * Token store: sha256(token + MERCHANT_JWT_SECRET) → tokenHash (never store raw token).
  */
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+// redeployed 2026-08-08a — force-redeploy to pick up published UnderwritingRequest entity schema
 
 const TOKEN_TTL_DAYS = 7;
 const QUO_API_VERSION = '2026-03-30';
