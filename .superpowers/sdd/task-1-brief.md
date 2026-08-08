@@ -1,31 +1,52 @@
-﻿### Task 1: W-9 domain model + prefill (TDD)
+﻿### Task 1: CTA / vocabulary helper tests
 
 **Files:**
-- Create: `src/lib/w9Model.js`
-- Create: `src/lib/w9Model.test.js`
-- Create: `src/lib/w9Prefill.js`
-- Create: `src/lib/w9Prefill.test.js`
+- Modify: `src/lib/accountOverview.js`
+- Modify: `src/lib/accountOverview.test.js`
+- Modify: `src/lib/portalLock.js` (agent-facing lock strings)
+- Modify: `src/lib/applicationRowMode.js` (signed â†’ submit reason string)
 
 **Interfaces:**
-- Produces:
-  - `emptyW9Fields()` → `{ name, businessName, taxClassification, llcTaxClass, otherClassification, exemptPayeeCode, fatcaCode, address, city, state, zip, tinType: 'ein'|'ssn', tin, signatureName, signedAt }`
-  - `validateW9Fields(fields)` → `{ ok: boolean, errors: string[] }` (require name, address, city, state, zip, tin 9 digits, taxClassification)
-  - `mapOwnershipToW9TaxClass(ownershipType, taxClassType)` → `{ taxClassification, llcTaxClass? }`
-  - `buildW9Prefill({ legalEntity, controlPerson?, locationFallback? })` → W-9 fields (TIN from `federalEIN` digits only; never invent)
+- Consumes: existing `buildPrimaryCta({ status, bestDeal })`
+- Produces: labels using â€œUnderwriting Roomâ€ / â€œFix in Underwriting Roomâ€; `kind` stays `'deal_room'` (URL semantics unchanged)
 
-- [ ] **Step 1: Write failing tests** for tax-class mapping (`LIMITED_COMPANY`+`Corporation` → LLC + C; `SOLE_PROPRIETORSHIP` → individual; `CORPORATION`/`SUB_S_CORP` → c_corp / s_corp), validation (missing TIN fails; 9-digit EIN passes), prefill (entity mailing address wins over store).
+- [ ] **Step 1: Update failing expectations in `accountOverview.test.js`**
 
-- [ ] **Step 2: Run tests — expect FAIL**
+Find tests that assert `'Open Deal Room'` / `'Fix in Deal Room'` and change expected strings to `'Open Underwriting Room'` / `'Fix in Underwriting Room'`.
 
-```bash
-node --test src/lib/w9Model.test.js src/lib/w9Prefill.test.js
-```
-
-- [ ] **Step 3: Implement `w9Model.js` + `w9Prefill.js` until tests pass**
-
-- [ ] **Step 4: Commit**
+- [ ] **Step 2: Run tests â€” expect fail**
 
 ```bash
-git add src/lib/w9Model.js src/lib/w9Model.test.js src/lib/w9Prefill.js src/lib/w9Prefill.test.js
-git commit --trailer "Co-authored-by: Cursor <cursoragent@cursor.com>" -m "feat(uw): add W-9 field model and prefill helpers"
+node --test src/lib/accountOverview.test.js
 ```
+
+Expected: FAIL on Deal Room label mismatches.
+
+- [ ] **Step 3: Update `buildPrimaryCta` labels**
+
+In `src/lib/accountOverview.js`:
+
+```js
+// needs_attention
+return { label: 'Fix in Underwriting Room', kind: 'deal_room', corporateId };
+// prospect + fallback with corporateId
+return { label: 'Open Underwriting Room', kind: 'deal_room', corporateId };
+```
+
+- [ ] **Step 4: Update portalLock / applicationRowMode agent copy**
+
+Replace â€œDeal Roomâ€ with â€œUnderwriting Roomâ€ in:
+
+- `FORMS_LOCKED_MESSAGE` (agent path mention)
+- `FORMS_LOCKED_MESSAGE_ALL_SIGNED` / `_AGENT` if they mention Deal Room
+- `FORMS_LOCKED_MESSAGE` Deal Room unlock path string (~line 75)
+- `resolveApplicationRowMode` reason: `submit to processor from Applications or Underwriting Room`
+
+- [ ] **Step 5: Run tests â€” expect pass**
+
+```bash
+node --test src/lib/accountOverview.test.js src/lib/applicationRowMode.test.js
+```
+
+---
+

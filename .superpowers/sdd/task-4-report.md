@@ -1,68 +1,59 @@
-# Task 4 Report: `manageUnderwritingRequest` (admin)
+# Task 4 Report — Rename inbound CTAs / launch copy (#23)
 
-**Status:** DONE_WITH_CONCERNS  
-**Branch:** `feature/underwriting-w9-request`  
-**Commit:** (see git log — `feat(uw): admin manageUnderwritingRequest send and Elavon forward`)  
-**Date:** 2026-08-07
-
----
+**Branch:** `feature/underwriting-room`  
+**Date:** 2026-08-07  
+**Scope:** Agent-facing UI only; route URLs unchanged.
 
 ## Summary
 
-Implemented admin-only `base44/functions/manageUnderwritingRequest/entry.ts` with all brief actions: `list`, `create`, `send`, `resend`, `cancel`, `getSignedUrl`, `sendToElavon`. Prefill/validation helpers inlined from `src/lib/w9Prefill.js` + `w9Model.js` behind sync markers. Resend/Quo patterns copied from `nudgeMerchant`; Gmail token refresh + merchant-JWT rejection from `syncUnderwritingMail`.
+Replaced visible "Deal Room" / "Deal room" with "Underwriting Room" / "Underwriting room" across nine files listed in the task brief. Installations panel and dashboard tile copy now point agents to Applications / merchant accounts / Underwriting Room instead of "Deal Room runbooks."
 
----
+## Files changed
 
-## File Created
-
-| File | Purpose |
+| File | Changes |
 |---|---|
-| `base44/functions/manageUnderwritingRequest/entry.ts` | Admin Deal Room underwriting request API |
+| `src/pages/ApplicationManager.jsx` | Row CTA title/label → Underwriting room; delete-draft confirm → Underwriting Room |
+| `src/pages/AdminMerchantAccountHome.jsx` | Deal row link text → Underwriting Room |
+| `src/pages/AdminMerchantPortfolio.jsx` | Deal row link text → Underwriting Room |
+| `src/pages/AdminQaHub.jsx` | Header copy, button title (dropped handoff/runbook), link text → Underwriting Room |
+| `src/pages/AdminInstallationsPanel.jsx` | Rewrote intro + cards; no longer directs to "Deal Room runbook" |
+| `src/pages/AdminMerchantDashboard.jsx` | Installations tile body → Applications + accounts |
+| `src/pages/PostSubmissionDashboard.jsx` | Comment → Underwriting Room |
+| `src/components/onboarding/AgreementSignedCelebration.jsx` | Comment → Underwriting Room |
+| `src/pages/OnboardingPortal.jsx` | Comment → Underwriting Room |
 
----
+## Sanity check
 
-## Actions
+Applications row link unchanged: still `to={/admin/applications/${encodeURIComponent(corporateId)}}` in `ApplicationManager.jsx` (line ~2114).
 
-| Action | Behavior |
-|---|---|
-| `list` | Filter by `corporateId` (+ optional `midId`); strip `tokenHash`; derive `tinMasked` (last-4) from `prefillSnapshot`; return `elavonDocsToHint` from env if set |
-| `create` | Resolve legal entity (account → profile), build W-9 prefill, cancel other non-terminal same `midId`+`type`, status `draft`, return request + full `prefill` |
-| `send` / `resend` | Channel validation; cancel other non-terminal; `sha256(token + MERCHANT_JWT_SECRET)` → `tokenHash`; link `${PUBLIC_APP_URL}/uw/{token}`; Resend and/or Quo (SMS never includes TIN); status `sent` or `send_failed` |
-| `cancel` | → `cancelled` (refuses if already signed) |
-| `getSignedUrl` | `{ signedPdfUrl }` when status `signed` \| `sent_to_elavon` |
-| `sendToElavon` | Require agent-supplied `to`/`subject`/`bodyText` (no invented To); fetch PDF; Gmail multipart MIME send; log `UnderwritingMessage` outbound; status `sent_to_elavon`. Missing `gmail.send` → HTTP 503 + reconnect hint |
+## rg scan (post-edit)
 
----
+Command (excluding HandoffPanel / InstallerRunbook):
 
-## Auth
+```
+rg -n "Deal [Rr]oom" src/pages src/components src/lib --glob '!**/HandoffPanel.jsx' --glob '!**/InstallerRunbook.jsx'
+```
 
-- `requireAdmin`: valid merchant JWT → reject; workspace `auth.me()` required (same as `syncUnderwritingMail`).
+**Remaining hits (5 lines, 3 files):**
 
----
+| File | Line | Context |
+|---|---|---|
+| `src/pages/OnboardingLocations.jsx` | 2908 | Merchant delete-location confirm — "Deal Room views" |
+| `src/pages/OnboardingLocations.jsx` | 2927 | Merchant delete-MID confirm — "Deal Room threads" |
+| `src/pages/MerchantLocationsHome.jsx` | 182 | Merchant delete draft confirm — "Deal Room" |
+| `src/components/deal-room/HandoffPanel.jsx` | 10 | File header comment (excluded; do not delete) |
+| `src/components/merchant-center/InstallerRunbook.jsx` | 15 | File header comment (excluded; do not delete) |
 
-## Smoke / verification
+None of the remaining hits are agent CTAs. Merchant delete strings left as-is per brief ("unless easy"); can be updated in a follow-up for consistency.
 
-**Not live-smoked** in this session:
+## Not changed (per brief)
 
-- Resend / Quo delivery against published function
-- Gmail `messages/send` with real OAuth (needs `gmail.send` re-consent)
-- Entity create/list against Base44 (entity may be unpublished)
-
-Code path complete; blocked on publish + env until Teddy redeploys.
-
----
+- Route URLs (`/admin/applications/:corporateId` unchanged)
+- `HandoffPanel.jsx`, `InstallerRunbook.jsx` (not deleted; comments only)
+- `AdminMerchantCenterShell` (Task 3)
+- `AI_CHANNEL.md` (Task 5)
 
 ## Concerns / follow-ups
 
-1. **Publish `UnderwritingRequest`** in Base44 before live writes (503 `ENTITY_SCHEMA_MISSING` until then).
-2. **Gmail OAuth** must include `gmail.send`; reconnect + refresh token update documented for `docs/underwriting-inbox.md` (later plan task).
-3. **`UNDERWRITING_ELAVON_DOCS_TO`** returned as UI hint only — agent must still pass `to` on `sendToElavon`.
-4. **Signed PDF fetch** for Elavon attach uses bare `fetch(signedPdfUrl)` — if Base44 private URLs need auth headers, Task 5/upload path may need a signed/proxy fetch.
-5. Raw magic token is **not** returned in JSON (delivered via email/SMS only).
-6. **Fixed:** `stripTinFromListRow` no longer passes through unparsed `prefillSnapshot` when `parsePrefillSnapshot` fails — field omitted instead of leaking raw TIN JSON (`fix(uw): redact unparseable W-9 prefill snapshots on list`).
-
----
-
-## Next
-
-Task 5+ (`completeUnderwritingRequest`, merchant `/uw/:token`, Deal Room panel) — not started here.
+1. **Merchant delete copy** — three strings in `OnboardingLocations.jsx` and `MerchantLocationsHome.jsx` still say "Deal Room"; low priority but inconsistent with admin rename.
+2. **HandoffPanel / InstallerRunbook comments** — still say "Deal Room" in file headers; harmless until those panels are renamed in a later task.

@@ -72,7 +72,7 @@ export function buildPrimaryCta({ status, bestDeal = null } = {}) {
   const corporateId = bestDeal ? String(bestDeal.corporateId || '').trim() || null : null;
 
   if (status === 'needs_attention' && corporateId) {
-    return { label: 'Fix in Deal Room', kind: 'deal_room', corporateId };
+    return { label: 'Fix in Underwriting Room', kind: 'deal_room', corporateId };
   }
   if (status === 'onboarding' && corporateId) {
     return {
@@ -91,7 +91,7 @@ export function buildPrimaryCta({ status, bestDeal = null } = {}) {
     };
   }
   if (status === 'prospect' && corporateId) {
-    return { label: 'Open Deal Room', kind: 'deal_room', corporateId };
+    return { label: 'Open Underwriting Room', kind: 'deal_room', corporateId };
   }
   if (status === 'prospect' && !corporateId) {
     return { label: 'Start application', kind: 'quick_stage', corporateId: null };
@@ -99,7 +99,7 @@ export function buildPrimaryCta({ status, bestDeal = null } = {}) {
 
   // Fallback: deal room if we have a deal, else Applications desk
   if (corporateId) {
-    return { label: 'Open Deal Room', kind: 'deal_room', corporateId };
+    return { label: 'Open Underwriting Room', kind: 'deal_room', corporateId };
   }
   return { label: 'Open Applications', kind: 'applications', corporateId: null };
 }

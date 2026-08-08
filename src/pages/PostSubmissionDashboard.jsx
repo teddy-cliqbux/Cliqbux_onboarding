@@ -328,7 +328,7 @@ export default function PostSubmissionDashboard() {
         </div>
 
         {/* No forms-lock / Unlock banner here — post-signing Merchant Center is setup-only.
-            Agents unlock from Applications or Deal Room. */}
+            Agents unlock from Applications or Underwriting Room. */}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {Object.values(statusCards).map((card) => {

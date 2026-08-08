@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Building2, ClipboardList, FolderKanban, LayoutDashboard,
-  Link2, Loader2, RefreshCw, Search, UserPlus, Users, Wrench,
+  Link2, Loader2, RefreshCw, Search, Shield, UserPlus, Users, Wrench,
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
@@ -132,6 +132,14 @@ export default function AdminMerchantCenterShell() {
               >
                 <ClipboardList className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
                 Onboarding
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/admin/applications')}
+                className={navLinkClass({ isActive: false })}
+              >
+                <Shield className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
+                Underwriting
               </button>
               {WORK_NAV.map(({ to, label, icon: Icon }) => (
                 <NavLink key={to} to={to} className={navLinkClass}>

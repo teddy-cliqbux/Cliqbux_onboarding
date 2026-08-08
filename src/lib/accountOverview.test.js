@@ -50,10 +50,22 @@ test('pickBestDeal: within stage, newest wins', () => {
 test('CTA map by status', () => {
   const deal = { corporateId: '123', handoffStage: 'sales' };
   assert.equal(buildPrimaryCta({ status: 'needs_attention', bestDeal: deal }).kind, 'deal_room');
+  assert.equal(
+    buildPrimaryCta({ status: 'needs_attention', bestDeal: deal }).label,
+    'Fix in Underwriting Room',
+  );
   assert.equal(buildPrimaryCta({ status: 'onboarding', bestDeal: deal }).kind, 'portal');
   assert.equal(buildPrimaryCta({ status: 'live', bestDeal: deal }).kind, 'locations');
   assert.equal(buildPrimaryCta({ status: 'prospect', bestDeal: deal }).kind, 'deal_room');
+  assert.equal(
+    buildPrimaryCta({ status: 'prospect', bestDeal: deal }).label,
+    'Open Underwriting Room',
+  );
   assert.equal(buildPrimaryCta({ status: 'prospect', bestDeal: null }).kind, 'quick_stage');
+  assert.equal(
+    buildPrimaryCta({ status: 'unknown', bestDeal: deal }).label,
+    'Open Underwriting Room',
+  );
 });
 
 test('maskTaxId and bank last4 never expose full values', () => {

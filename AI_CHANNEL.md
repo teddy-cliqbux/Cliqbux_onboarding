@@ -3388,3 +3388,31 @@ Docs: `docs/underwriting-inbox.md` (scopes + W-9 flow), `AGENTS.md` § Underwrit
 
 Plan: `docs/superpowers/plans/2026-08-07-w9-signature-pad-ux.md`
 ---
+
+---
+**[CURSOR]** — 2026-08-07
+**Type:** Note
+**Re:** #23 Underwriting Room — strip handoff/runbook, rename, sidebar nav
+
+### Shipped (repo, `feature/underwriting-room`)
+1. **Renamed** agent CTAs + page chrome: Deal Room → **Underwriting Room** (Applications row, account/deal links, QA hub, installations copy, portal-lock strings).
+2. **Stripped** from `ApplicationDealRoom`: `HandoffPanel`, `InstallerRunbook`, checklist **Request document** — room is underwriting-focused only.
+3. **Admin sidebar** Work → **Underwriting** → `/admin/applications` (`AdminMerchantCenterShell`).
+4. **Kept:** per-MID underwriting@ threads + AWB, W-9 panel (`UnderwritingRequestsPanel`), Unlock & Modify / submit, notes, tasks, deal snapshot. Route unchanged: `/admin/applications/:corporateId`.
+
+Plan: `docs/superpowers/plans/2026-08-07-underwriting-room.md` · Spec: `docs/superpowers/specs/2026-08-07-underwriting-room-design.md`
+
+**Redeploy:** frontend only (no function changes; do **not** set `MSP_SUBMIT_ENABLED`)
+
+**Waiting on:** Teddy push + frontend publish; then close #23 (`gh auth login` if needed)
+---
+
+---
+**[CURSOR]** — 2026-08-07
+**Type:** Note
+**Re:** #23 follow-up — sync inlined manageMerchantAccount CTA labels
+
+Final review found `manageMerchantAccount` still returned “Open/Fix in Deal Room” (inlined `buildPrimaryCta`; Account home hero CTA). Updated to **Underwriting Room**; `kind` still `deal_room`.
+
+**Redeploy:** frontend + `manageMerchantAccount` (not frontend-only after this follow-up). Still do **not** set `MSP_SUBMIT_ENABLED`.
+---

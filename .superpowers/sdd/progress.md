@@ -1,47 +1,27 @@
-﻿# SDD Progress - underwriting-w9-request
-Branch: feature/underwriting-w9-request
+﻿# SDD Progress - underwriting-room
+Branch: feature/underwriting-room
 Started: 2026-08-07
-Plan: docs/superpowers/plans/2026-08-07-underwriting-w9-request.md
-Spec: docs/superpowers/specs/2026-08-07-underwriting-w9-request-design.md
+Plan: docs/superpowers/plans/2026-08-07-underwriting-room.md
+Spec: docs/superpowers/specs/2026-08-07-underwriting-room-design.md
 
 
-Task 1: complete (commits ed8383c..1d75a6e, review clean after DISREGARDED_ENTITY fix)
+Task 1: complete (commits c277151..9c1a89a, review clean)
+Minor carry: applicationRowMode reason assertion weak; portalLock untested; manageMerchantAccount inlined Deal Room labels.
 
 
-Task 2: complete (commits 1d75a6e..8ff982b, review approved; visual QA of signature coords deferred to Elavon smoke)
-Minor carry: visual QA signature/date overlays before live Elavon send.
+Task 2: complete (commits 9c1a89a..488feb3, review clean)
 
 
-Task 3: complete (commits 8ff982b..0e3c023, review approved)
-
-Task 4: complete with concerns (manageUnderwritingRequest — no live Resend/Gmail smoke; entity publish pending)
+Task 3: complete (commits 488feb3..b4613a3, review clean)
 
 
-Task 4: complete (commits 0e3c023..b57b499, review approved after TIN redact fix)
-Carry: Elavon PDF fetch auth if Base44 URLs private; entity publish; visual QA overlays; sole-prop SSN prefill later.
-
-Task 5: complete (`completeUnderwritingRequest` — token get + submitSignature PDF stamp; UploadFile https guard for Elavon attach)
-Carry: publish/redeploy; visual QA overlays; Task 6 merchant page.
+Task 4: complete (commits b4613a3..001ff45, review clean)
+Minor carry: merchant delete Deal Room strings; casing mix.
 
 
-Task 5: complete (commits b57b499..e1eb6da, review approved; public/irs/fw9.pdf from Task 2)
+Task 5: complete (commits 001ff45..bb91a57, review clean after append-only fix; #23 close deferred)
 
 
-Task 5: complete (commits b57b499..e1eb6da, review approved; public/irs/fw9.pdf from Task 2)
-
-
-Task 6: complete (commits e1eb6da..e92167b, review approved)
-Task 7: complete (pending review, commit b51885e)
-
-
-Task 7: complete (commits e92167b..b51885e, review approved with minor nits)
-
-Task 8: complete (docs + AGENTS + AI_CHANNEL + vault link; Teddy ops pending)
-
-
-Task 8: complete (commits b51885e..282bd28, docs done)
-
-
-Task 8: complete (commits b51885e..84bafc8, AI_CHANNEL append-only restored)
-All tasks 1-8 complete. Final review pending.
+Final review: Ready to merge after Important fix bb91a57..HEAD (manageMerchantAccount CTA).
+All tasks 1-5 complete.
 

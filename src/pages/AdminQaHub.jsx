@@ -4,7 +4,7 @@
  *
  * Admin QA hub — /admin/center
  * Lists merchants (same source as Applications) and opens each POV:
- * Portal, Merchant Center, Locations, Account (impersonate JWT), Deal Room (admin).
+ * Portal, Merchant Center, Locations, Account (impersonate JWT), Underwriting Room (admin).
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -105,7 +105,7 @@ export default function AdminQaHub() {
             <p className="text-cb-caption text-gray-500 mb-0.5">Admin</p>
             <h1 className="font-display text-cb-display text-white">QA hub</h1>
             <p className="text-cb-body-lg text-gray-400 mt-1 max-w-xl">
-              Open any test merchant as Portal, Merchant Center, Locations, Account, or Deal Room.
+              Open any test merchant as Portal, Merchant Center, Locations, Account, or Underwriting Room.
               Merchant views use a 30-minute impersonation session (saves write to the live record).
             </p>
           </div>
@@ -201,11 +201,11 @@ export default function AdminQaHub() {
                     })}
                     <Link
                       to={`/admin/applications/${encodeURIComponent(cid)}`}
-                      title="Deal Room (agent handoff, call notes, runbook)"
+                      title="Underwriting Room"
                       className="inline-flex items-center gap-1.5 text-cb-caption font-semibold px-2.5 py-1.5 rounded-cb bg-cb-accent text-cb-bg hover:opacity-90"
                     >
                       <FolderOpen className="w-3.5 h-3.5" />
-                      Deal Room
+                      Underwriting Room
                     </Link>
                   </div>
                 </div>

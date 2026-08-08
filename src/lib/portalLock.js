@@ -47,7 +47,7 @@ export function portalLockLabel(profile) {
 }
 
 export const FORMS_LOCKED_MESSAGE =
-  'Forms are locked — the merchant agreement is out for signature (or already signed). Contact Cliqbux to unlock, or open Deal Room → Unlock & Modify if you are an agent.';
+  'Forms are locked — the merchant agreement is out for signature (or already signed). Contact Cliqbux to unlock, or open Underwriting Room → Unlock & Modify if you are an agent.';
 
 export const FORMS_LOCKED_MESSAGE_AGENT =
   'Forms locked — Unlock & Modify Details retracts live signing packages so you can edit, then Prepare form and Sign again.';
@@ -56,7 +56,7 @@ export const FORMS_LOCKED_MESSAGE_ALL_SIGNED =
   'Your agreement is signed. Forms stay locked while Cliqbux reviews and submits to the processor. Contact Cliqbux if something needs to change.';
 
 export const FORMS_LOCKED_MESSAGE_ALL_SIGNED_AGENT =
-  'Agreement signed. Submit to the processor from Applications or Deal Room. Unlock only if details must change before submit.';
+  'Agreement signed. Submit to the processor from Applications or Underwriting Room. Unlock only if details must change before submit.';
 
 /** Banner body copy keyed off lock / Submitted. */
 export function formsLockedBannerMessage(profile, { canUnlock = false } = {}) {
@@ -72,7 +72,7 @@ export function formsLockedBannerMessage(profile, { canUnlock = false } = {}) {
 }
 /** Backend 423 / manageLegalEntity (etc.) error copy — match for inline unlock CTAs. */
 export const FORMS_LOCKED_API_MESSAGE =
-  'Forms are locked while the merchant agreement is in signing. Unlock from Deal Room (Applications → Deal room → Unlock & Modify), then edit.';
+  'Forms are locked while the merchant agreement is in signing. Unlock from Underwriting Room (Applications → Underwriting Room → Unlock & Modify), then edit.';
 
 export const DEMOTE_CONFIRM_MESSAGE =
   'Unlocking will retract MSPWare applications that are out for signature and invalidate all signing links. The merchant will need Prepare form → Sign again. Continue?';

@@ -1,6 +1,6 @@
 /**
  * ApplicationDealRoom — /admin/applications/:corporateId
- * Internal collaboration: notes, tasks, per-MID AWB + underwriting@ message threads.
+ * Underwriting Room: notes, tasks, per-MID AWB + underwriting@ message threads.
  * Admin-only. Merchants never see this.
  */
 import { useState, useEffect, useCallback } from 'react';
@@ -12,8 +12,6 @@ import {
 } from 'lucide-react';
 import { lifecycleLabel, lifecycleDotClass } from '@/lib/signerLifecycle';
 import { TIER_LABELS } from '@/lib/pricingPresets';
-import InstallerRunbook from '@/components/merchant-center/InstallerRunbook';
-import HandoffPanel from '@/components/deal-room/HandoffPanel';
 import UnderwritingRequestsPanel from '@/components/deal-room/UnderwritingRequestsPanel';
 import { HANDOFF_STAGE_LABELS } from '@/lib/onboardingFacts';
 
@@ -48,11 +46,6 @@ export default function ApplicationDealRoom() {
   const [noteDraft, setNoteDraft] = useState('');
   const [taskDraft, setTaskDraft] = useState('');
   const [taskAssignee, setTaskAssignee] = useState('');
-  const [docTitle, setDocTitle] = useState('');
-  const [docDetail, setDocDetail] = useState('');
-  const [docDue, setDocDue] = useState('');
-  const [savingDoc, setSavingDoc] = useState(false);
-  const [docMsg, setDocMsg] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
   const [busyId, setBusyId] = useState('');
@@ -94,7 +87,7 @@ export default function ApplicationDealRoom() {
       });
     } catch (err) {
       console.error('[DealRoom]', err);
-      setError(err?.response?.data?.error || err.message || 'Could not load deal room');
+      setError(err?.response?.data?.error || err.message || 'Could not load underwriting room');
       setData(null);
     } finally {
       setLoading(false);
@@ -164,7 +157,7 @@ export default function ApplicationDealRoom() {
     try {
       const res = await base44.functions.invoke('demoteApplication', {
         corporateId,
-        reason: 'Unlocked from Deal Room',
+        reason: 'Unlocked from Underwriting Room',
       });
       if (res.data?.error) throw new Error(res.data.error);
       await load();
@@ -262,32 +255,6 @@ export default function ApplicationDealRoom() {
       setError(err?.response?.data?.error || err.message || 'Could not add task');
     } finally {
       setSavingTask(false);
-    }
-  };
-
-  const requestMerchantDocument = async () => {
-    if (!docTitle.trim() || savingDoc) return;
-    setSavingDoc(true);
-    setDocMsg('');
-    setError('');
-    try {
-      const res = await base44.functions.invoke('manageMerchantChecklist', {
-        action: 'requestDocument',
-        corporateId,
-        title: docTitle.trim(),
-        detail: docDetail.trim(),
-        dueAt: docDue || undefined,
-        midId: selectedMidId || undefined,
-      });
-      if (res.data?.error) throw new Error(res.data.error);
-      setDocTitle('');
-      setDocDetail('');
-      setDocDue('');
-      setDocMsg('Document request sent to the merchant checklist.');
-    } catch (err) {
-      setError(err?.response?.data?.error || err.message || 'Could not request document');
-    } finally {
-      setSavingDoc(false);
     }
   };
 
@@ -497,7 +464,7 @@ export default function ApplicationDealRoom() {
             <ArrowLeft className="w-3.5 h-3.5" /> Applications
           </button>
           <div className="flex-1 min-w-0">
-            <p className="text-cb-caption text-gray-500 mb-0.5">Deal room</p>
+            <p className="text-cb-caption text-gray-500 mb-0.5">Underwriting room</p>
             {editingName ? (
               <div className="flex items-center gap-2 flex-wrap">
                 <input
@@ -633,14 +600,12 @@ export default function ApplicationDealRoom() {
 
         {loading && (
           <div className="flex items-center gap-2 text-cb-caption text-gray-500 py-16 justify-center">
-            <Loader2 className="w-4 h-4 animate-spin" /> Loading deal room…
+            <Loader2 className="w-4 h-4 animate-spin" /> Loading underwriting room…
           </div>
         )}
 
         {!loading && data && (
           <div className="space-y-6">
-            <HandoffPanel corporateId={corporateId} />
-
             {/* Underwriting / per-MID AWB threads */}
             <section className="bg-cb-surface border border-cb-border rounded-cb p-4 sm:p-5">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -868,51 +833,6 @@ export default function ApplicationDealRoom() {
 
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
               <div className="lg:col-span-3 space-y-6">
-                <InstallerRunbook
-                  corporateId={corporateId}
-                  locations={data?.locations || []}
-                />
-
-                <section className="bg-cb-surface border border-cb-border rounded-cb p-4 sm:p-5">
-                  <h2 className="font-display text-cb-title text-white mb-1">Request document</h2>
-                  <p className="text-cb-caption normal-case tracking-normal text-gray-500 mb-3">
-                    Sends an upload item to the merchant checklist in Merchant Center (not an internal Deal Room task).
-                  </p>
-                  <div className="space-y-2 mb-3">
-                    <input
-                      value={docTitle}
-                      onChange={(e) => setDocTitle(e.target.value)}
-                      placeholder="What do you need? e.g. Voided check"
-                      className={inputCls}
-                    />
-                    <input
-                      value={docDetail}
-                      onChange={(e) => setDocDetail(e.target.value)}
-                      placeholder="Short instructions for the merchant (optional)"
-                      className={inputCls}
-                    />
-                    <input
-                      type="date"
-                      value={docDue}
-                      onChange={(e) => setDocDue(e.target.value)}
-                      className={`${inputCls} sm:w-48`}
-                      aria-label="Due date"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={requestMerchantDocument}
-                    disabled={!docTitle.trim() || savingDoc}
-                    className="flex items-center justify-center gap-1.5 bg-cb-accent text-cb-bg font-semibold text-cb-caption px-3 py-2.5 rounded-cb hover:opacity-90 disabled:opacity-40"
-                  >
-                    {savingDoc ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                    Request from merchant
-                  </button>
-                  {docMsg && (
-                    <p className="mt-2 text-cb-caption normal-case tracking-normal text-cb-success">{docMsg}</p>
-                  )}
-                </section>
-
                 <section className="bg-cb-surface border border-cb-border rounded-cb p-4 sm:p-5">
                   <div className="flex items-center justify-between mb-3">
                     <h2 className="font-display text-cb-title text-white">Tasks</h2>

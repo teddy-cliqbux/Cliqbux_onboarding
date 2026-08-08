@@ -10,7 +10,7 @@ const MARK_H = 108;
 /**
  * Signature moment after BoldSign completes — Cliqbux shield "stamps" the
  * agreement, then everyone proceeds to Merchant Center (Onboarding Center).
- * Processor submit lives on Applications / Deal Room only.
+ * Processor submit lives on Applications / Underwriting Room only.
  *
  * Stamp motion stays the same; after it settles we swap to a static mark
  * (no leftover rotate/transform) so the logo reads crisp and upright.

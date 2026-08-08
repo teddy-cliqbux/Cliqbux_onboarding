@@ -1,18 +1,32 @@
-﻿### Task 3: Entity schema `UnderwritingRequest`
+﻿### Task 3: Admin sidebar Underwriting item
 
 **Files:**
-- Create: `base44/entities/Underwriting Request.jsonc`
+- Modify: `src/components/admin/AdminMerchantCenterShell.jsx`
 
-**Schema properties (all declared):**  
-`corporateId`, `merchantAccountId`, `midId`, `legalEntityId`, `type` (enum `w9`), `status` (enum per spec), `recipientName`, `recipientEmail`, `recipientPhone`, `channels` (prefer string `email|sms|both` matching `nudgeMerchant`), `agentNote`, `prefillSnapshot` (string JSON), `tokenHash`, `tokenExpiresAt`, `signedPdfUrl`, `sentAt`, `openedAt`, `signedAt`, `sentToElavonAt`, `elavonGmailMessageId`, `createdByEmail`, `lastError`
+- [ ] **Step 1: Import an icon**
 
-- [ ] **Step 1: Write JSONC** matching Base44 entity style in `Underwriting Message.jsonc` (name `UnderwritingRequest`, required: `corporateId`, `midId`, `type`, `status`).
+Add `Shield` (or `FileCheck`) from `lucide-react` next to existing icons.
 
-- [ ] **Step 2: Note in commit body:** Teddy must **Publish entity** in Base44 Dashboard before live create works.
+- [ ] **Step 2: Add Underwriting button under Work**
 
-- [ ] **Step 3: Commit**
+Immediately after the existing Onboarding button (same pattern â€” navigate to Applications desk):
 
-```bash
-git add "base44/entities/Underwriting Request.jsonc"
-git commit --trailer "Co-authored-by: Cursor <cursoragent@cursor.com>" -m "feat(uw): add UnderwritingRequest entity schema"
+```jsx
+<button
+  type="button"
+  onClick={() => navigate('/admin/applications')}
+  className={navLinkClass({ isActive: false })}
+>
+  <Shield className="w-4 h-4 flex-shrink-0" strokeWidth={2} />
+  Underwriting
+</button>
 ```
+
+Both Onboarding and Underwriting may land on `/admin/applications` in v1 (approved). Do **not** add this to merchant `MerchantCenterShell`.
+
+- [ ] **Step 3: Manual check**
+
+Open `/admin/center` as admin â†’ sidebar Work shows **Underwriting** â†’ clicks to `/admin/applications`. Merchant center has no such item.
+
+---
+

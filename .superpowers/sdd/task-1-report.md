@@ -1,157 +1,60 @@
-# Task 1 Report: W-9 domain model + prefill (TDD)
+# Task 1 Report — CTA / vocabulary helper tests (#23)
 
 **Status:** DONE  
-**Branch:** `feature/underwriting-w9-request`  
-**Commit:** `5c586f8` — feat(uw): add W-9 field model and prefill helpers  
-**Date:** 2026-08-07
-
----
+**Branch:** `feature/underwriting-room`  
+**Commit:** `9c1a89a` — feat(uw-room): rename CTA and agent lock copy to Underwriting Room
 
 ## Summary
 
-Implemented pure JS W-9 field model, validation, ownership→tax-class mapping, and legal-entity prefill helpers per the task brief. Followed TDD: failing tests first (RED), implementation (GREEN), commit on feature branch. No deviations from brief interfaces; 14 tests all pass.
+Renamed agent-facing "Deal Room" strings to "Underwriting Room" in shared lib helpers. URL semantics unchanged: `kind` remains `'deal_room'`, routes untouched.
 
----
+## TDD evidence
 
-## Files Created
+1. **Step 1 — Updated tests first** (`accountOverview.test.js`):
+   - Added label assertions for `needs_attention` → `Fix in Underwriting Room`
+   - Added label assertions for `prospect` → `Open Underwriting Room`
+   - Added fallback case (`status: 'unknown'`) → `Open Underwriting Room`
 
-| File | Purpose |
+2. **Step 2 — Expected fail** (before implementation):
+   ```
+   ✖ CTA map by status
+   actual: 'Fix in Deal Room'
+   expected: 'Fix in Underwriting Room'
+   ```
+
+3. **Step 3–4 — Implementation** updated in:
+   - `src/lib/accountOverview.js` — three `buildPrimaryCta` label strings
+   - `src/lib/portalLock.js` — `FORMS_LOCKED_MESSAGE`, `FORMS_LOCKED_MESSAGE_ALL_SIGNED_AGENT`, `FORMS_LOCKED_API_MESSAGE`
+   - `src/lib/applicationRowMode.js` — signed-locally submit reason string
+
+4. **Step 5 — All tests pass:**
+   ```
+   node --test src/lib/accountOverview.test.js src/lib/applicationRowMode.test.js
+   ℹ pass 11 / fail 0
+   ```
+
+## Files changed (committed)
+
+| File | Change |
 |---|---|
-| `src/lib/w9Model.js` | `emptyW9Fields`, `validateW9Fields`, `mapOwnershipToW9TaxClass`, `extractEinDigits` |
-| `src/lib/w9Model.test.js` | Model + validation + mapping tests (10 cases) |
-| `src/lib/w9Prefill.js` | `buildW9Prefill` from legal entity + optional control person / location fallback |
-| `src/lib/w9Prefill.test.js` | Prefill tests (4 cases) |
+| `src/lib/accountOverview.js` | CTA labels → Underwriting Room |
+| `src/lib/accountOverview.test.js` | Label assertions added |
+| `src/lib/portalLock.js` | Agent lock/unlock copy |
+| `src/lib/applicationRowMode.js` | Signed → submit reason |
 
----
+## Self-review
 
-## Interfaces (as shipped)
+**Correct per brief:**
+- `kind: 'deal_room'` preserved on all CTA returns
+- Merchant-only strings (`FORMS_LOCKED_MESSAGE_ALL_SIGNED`, `FORMS_LOCKED_MESSAGE_AGENT`, `DEMOTE_CONFIRM_MESSAGE`) left unchanged where they did not mention Deal Room
+- Did not touch `ApplicationDealRoom.jsx`, admin shell, or `AI_CHANNEL.md`
 
-```js
-emptyW9Fields() → {
-  name, businessName, taxClassification, llcTaxClass, otherClassification,
-  exemptPayeeCode, fatcaCode, address, city, state, zip,
-  tinType: 'ein'|'ssn', tin, signatureName, signedAt
-}
+**Carry-forward (later tasks, not in scope):**
+- `base44/functions/manageMerchantAccount/entry.ts` inlines a copy of `buildPrimaryCta` still using "Deal Room" labels — will drift until a follow-up task syncs it (same pattern as existing "Keep in sync" comment on `accountOverview.js`)
+- UI pages/components still show "Deal Room" in buttons, banners, and delete confirmations — expected for Tasks 2+
 
-validateW9Fields(fields) → { ok: boolean, errors: string[] }
-// Requires: name, address, city, state, zip, taxClassification, TIN (9 digits)
+**No concerns blocking merge of this task.**
 
-mapOwnershipToW9TaxClass(ownershipType, taxClassType) → { taxClassification, llcTaxClass? }
+## Test summary
 
-buildW9Prefill({ legalEntity, controlPerson?, locationFallback? }) → W-9 fields
-// TIN from federalEIN digits only; never invented
-```
-
----
-
-## TDD Evidence
-
-### RED — tests before implementation
-
-**Command:**
-```bash
-node --test src/lib/w9Model.test.js src/lib/w9Prefill.test.js
-```
-
-**Output (excerpt):**
-```
-Error [ERR_MODULE_NOT_FOUND]: Cannot find module '...\src\lib\w9Model.js'
-Error [ERR_MODULE_NOT_FOUND]: Cannot find module '...\src\lib\w9Prefill.js'
-ℹ tests 2
-ℹ pass 0
-ℹ fail 2
-```
-
-Expected failure: implementation modules did not exist yet.
-
-### GREEN — after implementation
-
-**Command:**
-```bash
-node --test src/lib/w9Model.test.js src/lib/w9Prefill.test.js
-```
-
-**Output:**
-```
-▶ emptyW9Fields
-  ✔ returns all W-9 keys with empty defaults and ein tinType
-▶ mapOwnershipToW9TaxClass
-  ✔ maps LIMITED_COMPANY + LLC_CORPORATION to llc with C class
-  ✔ maps SOLE_PROPRIETORSHIP to individual
-  ✔ maps CORPORATION to c_corp
-  ✔ maps SUB_S_CORP to s_corp
-▶ validateW9Fields
-  ✔ passes when required fields including 9-digit EIN are present
-  ✔ fails when TIN is missing
-  ✔ fails when TIN is not 9 digits
-  ✔ fails when name is missing
-  ✔ fails when taxClassification is missing
-▶ buildW9Prefill
-  ✔ prefers entity mailing address over location fallback
-  ✔ uses location fallback when entity has no mailing address
-  ✔ extracts TIN digits from federalEIN only and never invents
-  ✔ uses control person name for sole proprietorship
-ℹ tests 14
-ℹ pass 14
-ℹ fail 0
-```
-
-All tests PASS.
-
----
-
-## Self-Review
-
-### Correctness
-
-- **Tax-class mapping:** Brief cases covered. Also maps `SOLE_PROPRIETOR` (portal enum) to `individual`; LLC disregarded/partnership → `D`/`P`; partnerships, non-profit, trust for future Deal Room entities.
-- **Validation:** Required fields per brief; TIN normalized to 9 digits via digit strip.
-- **Prefill:** Mailing address wins when all four parts present; otherwise store fallback. TIN never invented. Sole prop uses control person full name for `name`, business DBA for `businessName`.
-
-### Conventions
-
-- Matches existing lib test pattern (`node:test`, `node:assert/strict`, ESM).
-- Pure functions, no React, no Base44 — scoped correctly for Task 1.
-
-### Minor notes (not blockers)
-
-1. Brief test uses `LLC_CORPORATION` (portal value) not literal string `Corporation` — correct for codebase enums.
-2. `tinType` always `ein` in prefill v1; sole-prop SSN from signer KYC deferred to later tasks (spec allows merchant fill).
-3. `extractEinDigits` exported for reuse in Task 4 server inline copy.
-4. No `package.json` test script — brief did not request; run via `node --test src/lib/w9Model.test.js src/lib/w9Prefill.test.js`.
-
-### Scope compliance
-
-- Only the four specified files created and committed.
-- No unrelated changes committed.
-- Did not push; did not start Tasks 2+.
-
----
-
-## Concerns
-
-None blocking. Sole-prop SSN prefill from control person KYC is intentionally out of scope for Task 1 (EIN-only per brief constraint).
-
----
-
-## Next Steps (out of scope for Task 1)
-
-- Task 2: Pin IRS PDF + `fillW9Pdf`
-- Task 4: Inline `buildW9Prefill` / `validateW9Fields` into `manageUnderwritingRequest`
-- Task 7: Deal Room prefill preview via client `buildW9Prefill`
-
----
-
-## Review Fix — DISREGARDED_ENTITY mapping (2026-08-07)
-
-**Commit:** `1d75a6e` — fix(uw): map DISREGARDED_ENTITY to W-9 LLC class D
-
-**Change:** `mapLlcTaxClass` now treats schema/import value `DISREGARDED_ENTITY` the same as portal `LLC` → W-9 `llcTaxClass: 'D'`. Added unit test for `LIMITED_COMPANY` + `DISREGARDED_ENTITY`.
-
-**Command:**
-```bash
-node --test src/lib/w9Model.test.js src/lib/w9Prefill.test.js
-```
-
-**Output summary:** 15 tests, 15 pass, 0 fail (includes new `DISREGARDED_ENTITY` → D case).
-
+11/11 pass (`accountOverview.test.js` + `applicationRowMode.test.js`).

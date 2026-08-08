@@ -1383,7 +1383,7 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
     if (!mid?.id || deletingMidId) return;
     const label = mid.dbaName || mid.merchantName || 'this MID';
     const ok = window.confirm(
-      `Delete draft "${label}"?\n\nThis voids the MSPWare draft (if any) and removes the MID from Merchant Center, Deal Room, and Applications. If it was the only MID on that storefront, the location is removed too.\n\nCannot delete after signing or processor boarding.`
+      `Delete draft "${label}"?\n\nThis voids the MSPWare draft (if any) and removes the MID from Merchant Center, Underwriting Room, and Applications. If it was the only MID on that storefront, the location is removed too.\n\nCannot delete after signing or processor boarding.`
     );
     if (!ok) return;
     setDeletingMidId(mid.id);
@@ -2113,11 +2113,11 @@ function ApplicationRow({ corporateId, merchantName, profile, trackStage, adminS
           <Link
             to={`/admin/applications/${encodeURIComponent(corporateId)}`}
             onClick={(e) => e.stopPropagation()}
-            title="Deal room — notes and tasks"
+            title="Underwriting room — notes and tasks"
             className="flex items-center gap-1 text-cb-caption font-medium px-2 py-1 rounded-cb border border-cb-border text-gray-400 hover:text-white hover:border-cb-border-strong transition-all"
           >
             <FolderOpen className="w-3 h-3" />
-            <span className="hidden sm:inline">Deal room</span>
+            <span className="hidden sm:inline">Underwriting room</span>
           </Link>
 
           {['signing', 'pending_signature', 'all_signed'].includes(
