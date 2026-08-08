@@ -91,7 +91,7 @@ Reuse existing patterns from `nudgeMerchant` (Resend + Quo) and `syncUnderwritin
 
 - Env: existing `UNDERWRITING_GMAIL_*` (+ same mailbox default `underwriting@cliqbux.com`)
 - OAuth scopes: upgrade from `gmail.readonly` to include **`gmail.send`** (re-consent; new refresh token in Base44)
-- `sendToElavon`: multipart MIME with PDF attachment. **To / Subject / body are agent-editable** in the confirm dialog. Prefill Subject with AWB when `MerchantMID.elavonAwb` is set. Prefill To only when a CliqBux-confirmed Elavon docs address is configured via env (`UNDERWRITING_ELAVON_DOCS_TO`); otherwise leave To blank for the agent to fill — do not invent an Elavon inbox.
+- `sendToElavon`: multipart MIME with PDF attachment. **To / Subject / body are agent-editable** in the confirm dialog. Prefill Subject with AWB when `MerchantMID.elavonAwb` is set. **Document To defaults (UI presets, ratified 2026-08-07):** `FulSerCenter@elavon.com` and `MSPFulSer@elavon.com`; agents may type an assigned Elavon rep. Optional env `UNDERWRITING_ELAVON_DOCS_TO` overrides the modal default. **Never** default or encourage `ApplicationStatus@elavon.com` for document packages — that address is status-inquiry only (Deal Room **Request status**).
 - On success: create `UnderwritingMessage` outbound row on that MID; set `status=sent_to_elavon`
 - On OAuth/scope failure: surface banner in Deal Room; signed PDF remains downloadable
 
@@ -201,7 +201,7 @@ sent|opened → expired (token past expiresAt)
 
 ## Open questions (non-blocking for plan)
 
-1. Confirm env prefill for `UNDERWRITING_ELAVON_DOCS_TO` when Teddy pins the real Elavon docs inbox (ApplicationStatus@ is status-only and must not be the default for W-9 attachments).
+1. ~~Confirm env prefill for `UNDERWRITING_ELAVON_DOCS_TO`~~ **Resolved 2026-08-07:** Document defaults are FulSer Center + MSP FulSer; ApplicationStatus@ is status-only; agents may type assigned reps. Env override remains optional.
 2. `saveDraft` mid-edit is optional; v1 requires only **Submit** (implementation may no-op or omit `saveDraft`).
 3. Signed W-9 does **not** appear on the merchant checklist in v1 (Deal Room + merchant confirmation email/page only).
 

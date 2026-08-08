@@ -51,7 +51,7 @@ Set in Base44 env:
 | `UNDERWRITING_GMAIL_USER` | Optional; default `underwriting@cliqbux.com` |
 | `UNDERWRITING_GMAIL_QUERY` | Optional Gmail search override |
 | `UNDERWRITING_GMAIL_ACCESS_TOKEN` | Optional short-lived token (skips refresh; testing only) |
-| `UNDERWRITING_ELAVON_DOCS_TO` | Optional default **To** for Deal Room **Send to Elavon** (signed W-9 PDF). Leave unset until CliqBux confirms the inbox — agents fill To manually in the modal. Never invent an Elavon address. |
+| `UNDERWRITING_ELAVON_DOCS_TO` | Optional override default **To** for Deal Room **Send to Elavon**. Built-in presets (no env required): `FulSerCenter@elavon.com`, `MSPFulSer@elavon.com`. Agents may also type an assigned Elavon rep. **Never** use `ApplicationStatus@elavon.com` for document packages — that inbox is status-inquiry only. |
 
 **OAuth scopes (re-consent required when adding send):**
 
@@ -74,7 +74,7 @@ Deal Room **Underwriting requests** (per selected MID) lets agents request a sig
 |---|---|---|
 | 1 | Agent | Deal Room → select MID → **Underwriting requests** → New W-9 → pick legal entity + recipient → Send |
 | 2 | Merchant | Opens magic link → reviews/edits prefilled fields → signs → download confirmation |
-| 3 | Agent | **Download** signed PDF; **Send to Elavon** (editable To / Subject / body; Subject prefilled with AWB when `MerchantMID.elavonAwb` is set) |
+| 3 | Agent | **Download** signed PDF; **Send to Elavon** — To presets: FulSer Center / MSP FulSer, or type assigned Elavon rep; Subject prefilled with AWB when set. Not ApplicationStatus@ (use **Request status** for that). |
 | 4 | System | Gmail send logs an outbound row on the MID `UnderwritingMessage` thread |
 
 **Functions:** `manageUnderwritingRequest` (admin: list / create / send / resend / cancel / getSignedUrl / sendToElavon), `completeUnderwritingRequest` (token: get / saveDraft / submitSignature).

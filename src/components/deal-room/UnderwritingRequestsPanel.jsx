@@ -10,6 +10,12 @@ const FN = 'manageUnderwritingRequest';
 const inputCls =
   'w-full bg-cb-bg border border-cb-border rounded-cb px-3 py-2 text-cb-body text-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-cb-accent';
 
+/** Document packages (W-9, etc.) — not ApplicationStatus@ (status-only). */
+const ELAVON_DOCS_PRESETS = [
+  { label: 'FulSer Center', email: 'FulSerCenter@elavon.com' },
+  { label: 'MSP FulSer', email: 'MSPFulSer@elavon.com' },
+];
+
 const TAX_LABELS = {
   individual: 'Individual / sole prop',
   c_corp: 'C Corporation',
@@ -295,9 +301,12 @@ export default function UnderwritingRequestsPanel({
     setError('');
     const awb = (mid?.elavonAwb || '').trim();
     const dba = mid?.dbaName || mid?.merchantName || profile?.legalName || 'Merchant';
+    const hint = (elavonDocsToHint || '').trim();
+    const defaultTo = hint
+      || ELAVON_DOCS_PRESETS[0].email;
     setElavonModal({
       requestId: req.id,
-      to: elavonDocsToHint || '',
+      to: defaultTo,
       subject: awb
         ? `W-9 — AWB ${awb} — ${dba}`
         : `W-9 — ${dba}`,
@@ -654,17 +663,36 @@ export default function UnderwritingRequestsPanel({
               </button>
             </div>
             <p className="text-cb-caption text-gray-500">
-              Emails from underwriting@ via Gmail with the signed PDF attached.
-              {!elavonDocsToHint && ' Set UNDERWRITING_ELAVON_DOCS_TO to prefill To.'}
+              Documents go to FulSer Center / MSP FulSer (or an assigned Elavon rep).
+              Use Deal Room <span className="text-gray-400">Request status</span> for ApplicationStatus@ — not this modal.
             </p>
             <div>
               <label className="block text-cb-caption text-gray-500 mb-1.5">To</label>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {ELAVON_DOCS_PRESETS.map((p) => {
+                  const active = elavonModal.to.trim().toLowerCase() === p.email.toLowerCase();
+                  return (
+                    <button
+                      key={p.email}
+                      type="button"
+                      onClick={() => setElavonModal((m) => ({ ...m, to: p.email }))}
+                      className={`text-cb-caption font-medium px-2.5 py-1.5 rounded-cb border transition-colors ${
+                        active
+                          ? 'border-cb-accent bg-cb-accent-muted text-cb-accent'
+                          : 'border-cb-border text-gray-400 hover:border-cb-border-strong hover:text-white'
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
               <input
                 type="email"
                 value={elavonModal.to}
                 onChange={(e) => setElavonModal((m) => ({ ...m, to: e.target.value }))}
                 className={inputCls}
-                placeholder="Elavon docs inbox"
+                placeholder="Or type assigned Elavon rep email"
               />
             </div>
             <div>
