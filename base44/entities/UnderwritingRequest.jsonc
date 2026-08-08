@@ -5,15 +5,15 @@
   "properties": {
     "corporateId": {
       "type": "string",
-      "description": "FK → MerchantCorporateProfile.corporateId (HubSpot deal id)"
+      "description": "FK \u2192 MerchantCorporateProfile.corporateId (HubSpot deal id)"
     },
     "merchantAccountId": {
       "type": "string",
-      "description": "FK → MerchantAccount.id — optional; set when profile is linked to an account"
+      "description": "FK \u2192 MerchantAccount.id \u2014 optional; set when profile is linked to an account"
     },
     "midId": {
       "type": "string",
-      "description": "FK → MerchantMID.id — request is scoped to one MID"
+      "description": "FK \u2192 MerchantMID.id \u2014 request is scoped to one MID"
     },
     "legalEntityId": {
       "type": "string",
@@ -21,8 +21,10 @@
     },
     "type": {
       "type": "string",
-      "enum": ["w9"],
-      "description": "Request kind — extensible; v1 ships w9 only"
+      "enum": [
+        "w9"
+      ],
+      "description": "Request kind \u2014 extensible; v1 ships w9 only"
     },
     "status": {
       "type": "string",
@@ -37,7 +39,7 @@
         "send_failed"
       ],
       "default": "draft",
-      "description": "Lifecycle: draft → sent → opened → signed → sent_to_elavon; send_failed / cancelled / expired are terminal or retry paths"
+      "description": "Lifecycle: draft \u2192 sent \u2192 opened \u2192 signed \u2192 sent_to_elavon; send_failed / cancelled / expired are terminal or retry paths"
     },
     "recipientName": {
       "type": "string",
@@ -45,17 +47,21 @@
     },
     "recipientEmail": {
       "type": "string",
-      "description": "Email for Resend delivery — required when channels includes email"
+      "description": "Email for Resend delivery \u2014 required when channels includes email"
     },
     "recipientPhone": {
       "type": "string",
-      "description": "E.164 phone for Quo SMS — required when channels includes sms"
+      "description": "E.164 phone for Quo SMS \u2014 required when channels includes sms"
     },
     "channels": {
       "type": "string",
-      "enum": ["email", "sms", "both"],
+      "enum": [
+        "email",
+        "sms",
+        "both"
+      ],
       "default": "both",
-      "description": "Delivery channels — same vocabulary as nudgeMerchant"
+      "description": "Delivery channels \u2014 same vocabulary as nudgeMerchant"
     },
     "agentNote": {
       "type": "string",
@@ -67,11 +73,11 @@
     },
     "tokenHash": {
       "type": "string",
-      "description": "HMAC/SHA hash of opaque magic-link token — never store raw token"
+      "description": "HMAC/SHA hash of opaque magic-link token \u2014 never store raw token"
     },
     "tokenExpiresAt": {
       "type": "string",
-      "description": "ISO 8601 expiry — default 7 days from send"
+      "description": "ISO 8601 expiry \u2014 default 7 days from send"
     },
     "signedPdfUrl": {
       "type": "string",
@@ -103,7 +109,7 @@
     },
     "lastError": {
       "type": "string",
-      "description": "Last channel or Gmail failure message — ops-visible for send_failed / retry"
+      "description": "Last channel or Gmail failure message \u2014 ops-visible for send_failed / retry"
     }
   },
   "required": [
