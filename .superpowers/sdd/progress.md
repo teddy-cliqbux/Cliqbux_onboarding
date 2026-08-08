@@ -1,50 +1,47 @@
-﻿# SDD Progress — merchant-center-pos-shell
-Branch: feature/merchant-center-pos-shell
-Started: 2026-07-24
-Plan: docs/superpowers/plans/2026-07-23-merchant-center-pos-shell.md
+﻿# SDD Progress - underwriting-w9-request
+Branch: feature/underwriting-w9-request
+Started: 2026-08-07
+Plan: docs/superpowers/plans/2026-08-07-underwriting-w9-request.md
+Spec: docs/superpowers/specs/2026-08-07-underwriting-w9-request-design.md
 
 
-Task 1: complete (commits 99a5a1e..13f0f86, review clean)
-
-Task 2: complete (commits 13f0f86..bb78eb6, review clean)
-
-## Task 3: Rebuild MerchantCenterShell — COMPLETE
-- Status: Complete
-- Implementer: (subagent)
-- Reviewer: Approved (coordinator — layout matches plan; props preserved)
-- Commit: e7a7e041671faf350b43973aa9493038d93920d0
-- Notes: POS sidebar + top bar + max-w 1400; title/subtitle as merchant chip right; mobile bottom nav
+Task 1: complete (commits ed8383c..1d75a6e, review clean after DISREGARDED_ENTITY fix)
 
 
-## Task 4: Compose Setup dashboard grid — COMPLETE
-- Status: Complete
-- Implementer: (subagent)
-- Reviewer: Approved with fix (showDealLink restored to true)
-- Commit: 8ea97d5 (+ 1698284)
-- Notes: Status cards + 2-col checklist/quote; celebration kept; ApplicationTracker removed
+Task 2: complete (commits 1d75a6e..8ff982b, review approved; visual QA of signature coords deferred to Elavon smoke)
+Minor carry: visual QA signature/date overlays before live Elavon send.
 
 
-## Task 5: Underwriting table polish — COMPLETE
-- Status: Complete
-- Implementer: (subagent)
-- Reviewer: Approved (coordinator)
-- Commit: b40f729
-- Notes: Full-width + Account/Status/MID table; props unchanged
+Task 3: complete (commits 8ff982b..0e3c023, review approved)
+
+Task 4: complete with concerns (manageUnderwritingRequest — no live Resend/Gmail smoke; entity publish pending)
 
 
-## Task 6: Locations/Account shell props — COMPLETE
-- Status: Complete
-- Implementer: (subagent)
-- Reviewer: Approved (coordinator)
-- Commit: e197b8e
-- Notes: Loading-state corporateId/showDealLink; dealId preserved on detail links
+Task 4: complete (commits 0e3c023..b57b499, review approved after TIN redact fix)
+Carry: Elavon PDF fetch auth if Base44 URLs private; entity publish; visual QA overlays; sole-prop SSN prefill later.
+
+Task 5: complete (`completeUnderwritingRequest` — token get + submitSignature PDF stamp; UploadFile https guard for Elavon attach)
+Carry: publish/redeploy; visual QA overlays; Task 6 merchant page.
 
 
-## Task 7: Visual QA + AI_CHANNEL — COMPLETE
-- Status: Complete
-- Reviewer: Approved (code QA; live smoke deferred to Teddy)
-- Notes: AI_CHANNEL appended
+Task 5: complete (commits b57b499..e1eb6da, review approved; public/irs/fw9.pdf from Task 2)
 
-## Branch SDD COMPLETE
-All Tasks 1–7 done on feature/merchant-center-pos-shell. Ready for Teddy push + optional finishing-a-development-branch / PR when asked.
+
+Task 5: complete (commits b57b499..e1eb6da, review approved; public/irs/fw9.pdf from Task 2)
+
+
+Task 6: complete (commits e1eb6da..e92167b, review approved)
+Task 7: complete (pending review, commit b51885e)
+
+
+Task 7: complete (commits e92167b..b51885e, review approved with minor nits)
+
+Task 8: complete (docs + AGENTS + AI_CHANNEL + vault link; Teddy ops pending)
+
+
+Task 8: complete (commits b51885e..282bd28, docs done)
+
+
+Task 8: complete (commits b51885e..84bafc8, AI_CHANNEL append-only restored)
+All tasks 1-8 complete. Final review pending.
 

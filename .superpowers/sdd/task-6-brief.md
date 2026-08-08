@@ -1,25 +1,25 @@
-﻿## Task 6: Confirm Locations / Account / Detail use the shell
+﻿### Task 6: Merchant page `/uw/:token`
 
 **Files:**
-- Modify only if props break: `MerchantLocationsHome.jsx`, `MerchantAccountPage.jsx`, `MerchantLocationDetail.jsx`
+- Create: `src/pages/UnderwritingW9Sign.jsx`
+- Modify: `src/App.jsx` â€” public route (no AdminProtectedRoute, no merchant JWT required)
 
-- [ ] **Step 1: Open each page under the new shell** â€” fix any layout that assumed `max-w-3xl` or centered hero (widen tables if clipped)
+**UI:**
+- Load via `base44.functions.invoke('completeUnderwritingRequest', { action: 'get', token })` (public function invoke â€” same as `verifySignerToken` pattern; if CORS/auth blocks anonymous invoke, use raw `fetch` to `/functions/completeUnderwritingRequest` like other public entry points).
+- Form: editable fields from model; Continue â†’ canvas draw **or** typed name â†’ Submit.
+- States: loading, expired, error, signed confirmation + download link.
+- Use `cb-*` tokens; light form surface for readability.
 
-- [ ] **Step 2: Ensure `showDealLink` is passed where Setup should appear** (Setup dashboard already passes it; Locations/Account should pass `showDealLink` + `corporateId` so Setup stays in the sidebar)
+- [ ] **Step 1: Add route + skeleton page.**
 
-Example for Locations home:
+- [ ] **Step 2: Wire get + submit + signature pad** (simple canvas; typed mode renders text to canvas before submit).
 
-```jsx
-<MerchantCenterShell
-  title={...}
-  subtitle="Merchant account"
-  corporateId={corporateId}
-  showDealLink
->
+- [ ] **Step 3: Manual check** on `/uw/test` expired state + happy path against staging function.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/pages/UnderwritingW9Sign.jsx src/App.jsx
+git commit -m "feat(uw): merchant W-9 review and sign page"
 ```
 
-- [ ] **Step 3: Stage any prop fixes**
-
----
-
-#

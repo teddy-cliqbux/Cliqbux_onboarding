@@ -1,64 +1,35 @@
-﻿## Task 4: Compose Setup dashboard grid
+﻿### Task 4: `manageUnderwritingRequest` (admin)
 
 **Files:**
-- Modify: `src/pages/PostSubmissionDashboard.jsx`
+- Create: `base44/functions/manageUnderwritingRequest/entry.ts`
 
 **Interfaces:**
-- Consumes: `deriveSetupStatusCards`, `SetupStatusCard`, existing quote/profile/MID state
-- Keeps: all `useEffect` loaders, quote poll, unlock banner, SetupGate rules
+- Auth: workspace `base44.auth.me()` only â€” reject merchant JWT (admin desk).
+- Actions:
+  - `list` `{ corporateId, midId? }` â†’ requests (mask TIN in list: show last 4 only via derived `tinMasked` from snapshot)
+  - `create` `{ corporateId, midId, legalEntityId, recipientName, recipientEmail?, recipientPhone?, channels, agentNote? }` â†’ builds prefill (inline copy of `w9Prefill` logic), status `draft`, returns request + full prefill for UI preview
+  - `send` `{ requestId }` â†’ validate channels, cancel other non-terminal same mid+type, generate 32-byte hex token, store `sha256(token + MERCHANT_JWT_SECRET)`, `tokenExpiresAt` = now+7d, send Resend and/or Quo with `${PUBLIC_APP_URL}/uw/${token}`, status `sent`, `sentAt`
+  - `resend` `{ requestId }` â†’ cancel if needed + same as send on new or same row (prefer update same row with new token if still unsigned)
+  - `cancel` `{ requestId }` â†’ `cancelled`
+  - `getSignedUrl` `{ requestId }` â†’ `{ signedPdfUrl }` if status signed|sent_to_elavon
+  - `sendToElavon` `{ requestId, to, subject, bodyText }` â†’ require signed PDF; Gmail send multipart; log `UnderwritingMessage` outbound; set `sent_to_elavon`
 
-- [ ] **Step 1: Import helpers + cards**
+**Email/SMS:** Copy Resend + Quo patterns from `nudgeMerchant/entry.ts` (normalizePhone, Quo-Api-Version `2026-03-30`, Resend from `onboarding@onboarding.cliqbuxpos.com`). SMS body must not include TIN.
 
-```jsx
-import SetupStatusCard from '@/components/merchant-center/SetupStatusCard';
-import { deriveSetupStatusCards } from '@/lib/setupStatusCards';
-import { ClipboardList, Shield, FileSignature, Truck } from 'lucide-react';
-```
+**Gmail send:** Reuse token refresh from `syncUnderwritingMail`; POST `https://gmail.googleapis.com/gmail/v1/users/me/messages/send` with raw RFC 2822 base64url MIME (PDF attachment). On missing scope, return 503 with hint to reconnect OAuth with `gmail.send`.
 
-- [ ] **Step 2: Derive cards before return**
+- [ ] **Step 1: Scaffold function** with action switch + admin gate + `list`/`create`/`cancel` (no email yet).
 
-```jsx
-const shippingTrack = locations.find((l) => l.shippingTrackingNumber);
-const statusCards = deriveSetupStatusCards({
-  openChecklistCount,
-  merchantIDs,
-  locations,
-  quoteLifecycle: lifecycle,
-  quotePaid,
-  shippingStatus: profile.equipmentShippingStatus || (quotePaid ? 'ready_to_ship' : 'hold'),
-  trackingNumber: shippingTrack?.shippingTrackingNumber || null,
-});
-```
+- [ ] **Step 2: Add `send`/`resend`** with Resend + Quo.
 
-(Use existing `quotePaid` / `lifecycle` already derived in this file via `deriveQuoteFlags`.)
+- [ ] **Step 3: Add `sendToElavon` + `getSignedUrl`.**
 
-- [ ] **Step 3: Replace the single `space-y-8` column body** with:
+- [ ] **Step 4: Manual smoke** against published app after entity publish (or document blocked until publish).
 
-1. Compact banner (not tall hero) â€” one line title + agent preview note  
-2. Agent `FormsLockedBanner` when applicable  
-3. Grid of four `SetupStatusCard`s: `grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3`  
-4. Two-column: `grid grid-cols-1 lg:grid-cols-12 gap-4`
-   - Left `lg:col-span-7`: `MerchantChecklist` + `MerchantBeforeInstall`
-   - Right `lg:col-span-5`: `EquipmentOrderPanel` + Shipping `SetupGate` card  
-5. Full width: `UnderwritingTracker` (when MIDs exist)  
-6. Full width: Menu + Legacy POS SetupGates  
-7. Remove or demote duplicate `ApplicationTracker` if it repeats underwriting (prefer keep UnderwritingTracker only; delete ApplicationTracker from this page if redundant)
-
-- [ ] **Step 4: Keep celebration** â€” `fireSubmissionCelebration` may still run; do not restore tall centered hero
-
-- [ ] **Step 5: Manual verify**
-
-- Load `/onboarding/dashboard?dealId=â€¦` (or `/center`) with merchant JWT / impersonation  
-- Status cards show numbers/labels  
-- Quote poll still advances when modal open  
-- Shipping/menu gates still lock correctly  
-
-- [ ] **Step 6: Stage**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add src/pages/PostSubmissionDashboard.jsx
+git add base44/functions/manageUnderwritingRequest/entry.ts
+git commit -m "feat(uw): admin manageUnderwritingRequest send and Elavon forward"
 ```
 
----
-
-#

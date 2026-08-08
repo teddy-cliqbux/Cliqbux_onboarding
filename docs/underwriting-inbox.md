@@ -51,14 +51,40 @@ Set in Base44 env:
 | `UNDERWRITING_GMAIL_USER` | Optional; default `underwriting@cliqbux.com` |
 | `UNDERWRITING_GMAIL_QUERY` | Optional Gmail search override |
 | `UNDERWRITING_GMAIL_ACCESS_TOKEN` | Optional short-lived token (skips refresh; testing only) |
+| `UNDERWRITING_ELAVON_DOCS_TO` | Optional default **To** for Deal Room **Send to Elavon** (signed W-9 PDF). Leave unset until CliqBux confirms the inbox — agents fill To manually in the modal. Never invent an Elavon address. |
 
-Scopes needed: `https://www.googleapis.com/auth/gmail.readonly`
+**OAuth scopes (re-consent required when adding send):**
+
+- `https://www.googleapis.com/auth/gmail.readonly` — inbound sync (`syncUnderwritingMail`)
+- `https://www.googleapis.com/auth/gmail.send` — outbound W-9 forward to Elavon (`manageUnderwritingRequest` action `sendToElavon`)
+
+After upgrading scopes, generate a **new refresh token** for underwriting@ and update `UNDERWRITING_GMAIL_REFRESH_TOKEN` in Base44. A token minted with readonly-only consent will fail `sendToElavon` with an insufficient-scope error; the Deal Room panel surfaces that banner.
 
 Default search (when query unset) includes mail to underwriting@ **and** from Elavon status/escalation addresses:
 
 `to:underwriting@cliqbux.com OR from:(ApplicationStatus@elavon.com OR MSPFulSer@elavon.com OR FulSerCenter@elavon.com) newer_than:90d`
 
 Then redeploy `syncUnderwritingMail`. From Deal Room, **Sync inbox** matches by AWB on the current deal’s MIDs.
+
+## W-9 underwriting requests (outbound send)
+
+Deal Room **Underwriting requests** (per selected MID) lets agents request a signed IRS Form W-9 from a merchant contact (email and/or SMS), collect an in-house e-sign at `/uw/:token`, then **Send to Elavon** from underwriting@ with the signed PDF attached.
+
+| Step | Who | What |
+|---|---|---|
+| 1 | Agent | Deal Room → select MID → **Underwriting requests** → New W-9 → pick legal entity + recipient → Send |
+| 2 | Merchant | Opens magic link → reviews/edits prefilled fields → signs → download confirmation |
+| 3 | Agent | **Download** signed PDF; **Send to Elavon** (editable To / Subject / body; Subject prefilled with AWB when `MerchantMID.elavonAwb` is set) |
+| 4 | System | Gmail send logs an outbound row on the MID `UnderwritingMessage` thread |
+
+**Functions:** `manageUnderwritingRequest` (admin: list / create / send / resend / cancel / getSignedUrl / sendToElavon), `completeUnderwritingRequest` (token: get / saveDraft / submitSignature).
+
+**Entity:** `UnderwritingRequest` — **republish in Base44** before live use (undeclared fields strip on save).
+
+**Design spec (canonical):** `docs/superpowers/specs/2026-08-07-underwriting-w9-request-design.md`  
+**Implementation plan:** `docs/superpowers/plans/2026-08-07-underwriting-w9-request.md`
+
+Inbound AWB status sync and W-9 outbound send share the same underwriting@ OAuth client but use different Gmail API methods (list/get vs send).
 
 ## Matching rules
 
@@ -71,6 +97,9 @@ Then redeploy `syncUnderwritingMail`. From Deal Room, **Sync inbox** matches by 
 
 - `MerchantMID.elavonAwb`
 - `UnderwritingMessage`
+- `UnderwritingRequest` — MID-scoped W-9 (and future doc types)
 - `manageApplicationDesk` — `setMidAwb`, `logUwMessage`, `deleteUwMessage`, `requestStatusInquiry`, `refreshAwbFromMsp`
+- `manageUnderwritingRequest` — W-9 create/send/resend/cancel; Gmail `sendToElavon` with PDF attachment
+- `completeUnderwritingRequest` — merchant token page `/uw/:token`
 - `submitToMSP` / `pollMSPStatus` — capture `elavonAwb` from MSP after submit
-- `syncUnderwritingMail` — Gmail pull
+- `syncUnderwritingMail` — Gmail pull (readonly scope)

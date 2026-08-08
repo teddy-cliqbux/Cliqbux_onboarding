@@ -3350,3 +3350,23 @@ Removed `FormsLockedBanner` (and Unlock & Modify) from `PostSubmissionDashboard`
 
 **Waiting on:** Teddy push + redeploy frontend
 ---
+
+---
+**[CURSOR]** — 2026-08-07
+**Type:** Note
+**Re:** Underwriting W-9 request plan shipped (Tasks 1–7 on `feature/underwriting-w9-request`)
+
+### Shipped in repo
+Deal Room **Underwriting requests** panel + merchant `/uw/:token` W-9 e-sign + `manageUnderwritingRequest` / `completeUnderwritingRequest`. Gmail outbound for **Send to Elavon** needs **`gmail.send`** on underwriting@ (readonly alone is not enough). Optional env `UNDERWRITING_ELAVON_DOCS_TO` prefills Elavon To when CliqBux confirms the inbox.
+
+Docs: `docs/underwriting-inbox.md` (scopes + W-9 flow), `AGENTS.md` § UnderwritingRequest, spec `docs/superpowers/specs/2026-08-07-underwriting-w9-request-design.md`.
+
+### Teddy ops (before live smoke)
+1. **Republish** `UnderwritingRequest` entity in Base44 Dashboard
+2. **Re-consent** underwriting@ OAuth: `gmail.readonly` + `gmail.send` → new refresh token → `UNDERWRITING_GMAIL_REFRESH_TOKEN`
+3. Set **`UNDERWRITING_ELAVON_DOCS_TO`** when Elavon docs address is confirmed (else agents type To in modal)
+4. Push + **redeploy** `manageUnderwritingRequest`, `completeUnderwritingRequest`, frontend
+5. **Smoke one test MID:** Send W-9 → sign link → Download PDF → Send to Elavon (self or test To) → confirm attachment + outbound thread row
+
+**Waiting on:** Teddy (publish + Gmail re-consent + redeploy + smoke)
+---

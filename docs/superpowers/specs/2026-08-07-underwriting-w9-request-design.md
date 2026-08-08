@@ -1,7 +1,7 @@
 # Underwriting Requests + W-9 + Outbound Gmail Send
 
 **Date:** 2026-08-07  
-**Status:** Draft — awaiting Teddy review  
+**Status:** Approved — ready to implement  
 **Repo:** Cliqbux_onboarding  
 **Surfaces:** Deal Room (`/admin/applications/:corporateId`), merchant `/uw/:token`
 

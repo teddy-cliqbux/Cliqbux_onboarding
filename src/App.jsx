@@ -8,6 +8,7 @@ import { AuthProvider } from '@/lib/AuthContext';
 import ScrollToTop from './components/ScrollToTop';
 import OnboardingPortal from './pages/OnboardingPortal';
 import VerifyIdentity from './pages/VerifyIdentity';
+import UnderwritingW9Sign from './pages/UnderwritingW9Sign';
 import PostSubmissionDashboard from './pages/PostSubmissionDashboard';
 import SystemAdminHidden from './pages/SystemAdminHidden';
 import ApplicationManager from './pages/ApplicationManager';
@@ -63,6 +64,7 @@ function App() {
           <Routes>
             <Route path="/" element={<OnboardingPortal />} />
             <Route path="/verify" element={<VerifyIdentity />} />
+            <Route path="/uw/:token" element={<UnderwritingW9Sign />} />
             <Route path="/onboarding/dashboard" element={<PostSubmissionDashboard />} />
             <Route path="/center" element={<PostSubmissionDashboard />} />
             <Route path="/center/deals/:corporateId" element={<PostSubmissionDashboard />} />

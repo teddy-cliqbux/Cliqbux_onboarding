@@ -1,78 +1,74 @@
-# Task 2 Report: SetupStatusCard presentational component
+# Task 2 Report: Pin IRS PDF + AcroForm field map + fill helper
 
 **Status:** DONE  
-**Branch:** `feature/merchant-center-pos-shell`  
-**Commit:** `bb78eb6` — feat: add SetupStatusCard metric card component  
-**Date:** 2026-07-24
+**Branch:** `feature/underwriting-w9-request`  
+**Date:** 2026-08-07
 
----
+## Deliverables
 
-## Summary
-
-Created the presentational `SetupStatusCard` React component for the Merchant Center POS-shell redesign. Implementation matches the task brief verbatim — no wiring into the dashboard yet (Task 4). Pure markup component; no unit tests required per brief.
-
----
-
-## Files Created
-
-| File | Purpose |
+| Artifact | Path |
 |---|---|
-| `src/components/merchant-center/SetupStatusCard.jsx` | Metric card UI — title, value, optional caption, optional icon |
+| Pinned PDF (source of truth) | `assets/irs/fw9.pdf` |
+| Public static copy | `public/irs/fw9.pdf` |
+| Field map (inspector output) | `assets/irs/fw9-field-map.md` |
+| Inspector script | `scripts/inspect-w9-fields.mjs` |
+| Fill helper | `src/lib/w9PdfFill.js` |
+| Tests | `src/lib/w9PdfFill.test.js` |
+| Dependency | `pdf-lib` in `package.json` |
+| Test script | `npm run test:w9` |
 
----
+## Inspector findings
 
-## Interface
+- **23 AcroForm fields** on page 0 (6-page PDF; only page 1 is fillable).
+- pdf-lib emits `Removing XFA form data` — expected; AcroForm names are authoritative.
+- **No AcroForm fields** for Part II signature or date — handled via manual page overlays documented in `fw9-field-map.md`.
 
-```jsx
-<SetupStatusCard
-  title="Needs attention"
-  value="3 open items"
-  caption="Checklist incomplete"
-  icon={<SomeIcon className="w-4 h-4" />}  // optional
-/>
-```
+## `fillW9Pdf` behavior
 
-**Props:**
-
-| Prop | Type | Required | Default |
-|---|---|---|---|
-| `title` | string | yes | — |
-| `value` | string | yes | — |
-| `caption` | string | no | — (hidden when falsy) |
-| `icon` | React node | no | `null` (icon slot hidden when falsy) |
-
----
-
-## Markup / Design
-
-- Uses `cb-*` tokens only: `bg-cb-surface`, `rounded-cb`, `border-cb-border`, `text-cb-caption`, `text-cb-title`, `bg-cb-accent-muted`, `text-cb-accent`
-- Layout: flex row with text block (left) and optional icon badge (right)
-- Title: uppercase caption; value: `font-display` title with truncate; caption: normal-case caption with truncate
-- Min height `5.5rem` for consistent card row alignment
-- Icon slot: 36×36px muted gold background, accent-colored icon
-
----
+1. Loads PDF bytes, sets text/checkbox fields per map.
+2. Maps `taxClassification` / `llcTaxClass` to Line 3a checkboxes; disregarded LLC (`D`) → Individual checkbox per IRS instructions.
+3. Splits TIN into SSN (3+2+4) or EIN (2+7) boxes by `tinType`.
+4. Draws signature PNG (or `signatureName` text fallback) and `signedAt` date on page 0.
+5. Calls `form.flatten()` before save.
 
 ## Tests
 
-**N/A** — pure presentational markup per brief. Smoke-check deferred to Task 4 dashboard wiring.
+```
+npm run test:w9
+```
 
----
+Result: **20/20 pass** (includes Task 1 `w9Model` / `w9Prefill` suites matched by `w9*.test.js` glob).
 
-## Lint
+Key assertions:
+- Filled output byte length > template.
+- Reloaded PDF has **0 editable fields** after flatten.
+- Minimal PNG signature embed succeeds.
 
-No linter errors on `SetupStatusCard.jsx`.
+## Commit
 
----
+```
+feat(uw): pin IRS W-9 PDF and pdf-lib fill helper
+```
 
-## Deviations
+Files staged per brief + `public/irs/fw9.pdf`.
 
-None. JSX copied exactly from task brief.
+## Concerns / follow-ups
 
----
+1. **Signature/date coordinates** are manual overlays (no AcroForm widgets). Visual QA on a filled sample PDF recommended before Elavon submission.
+2. **XFA strip** — pdf-lib drops XFA layer on load; AcroForm fill path verified by tests but not visually proofed.
+3. **Disregarded LLC (`D`)** maps to Individual checkbox at fill time; portal model still stores `llc` + `D` — intentional per IRS W-9 instructions.
+4. Deno boarding function (Task 3+) must **inline** equivalent logic — Base44 cannot import `w9PdfFill.js`.
 
-## Next Steps (Task 4)
+## Not in scope (Task 3+)
 
-- Wire `deriveSetupStatusCards()` output into a grid of `<SetupStatusCard />` on the Merchant Center dashboard
-- Pass Lucide (or equivalent) icons per card id
-- Browser smoke-check layout at mobile and desktop breakpoints
+- HTTP endpoint / storage upload
+- Merchant UI for W-9 capture
+- Elavon underwriting request wiring
+
+## Review fix (2026-08-07)
+
+- Added `scripts/inspect-w9-widgets.mjs` (widget rects for overlay placement) — referenced by field map.
+- Added `scripts/sync-w9-pdf.mjs` (`assets/irs/fw9.pdf` → `public/irs/fw9.pdf`).
+- Field map documents canonical PDF + sync; overlay coords tied to `w9PdfFill.js` constants.
+- `npm run test:w9`: **20/20 pass**.
+- Commit: `fix(uw): document W-9 overlay coords and PDF sync`

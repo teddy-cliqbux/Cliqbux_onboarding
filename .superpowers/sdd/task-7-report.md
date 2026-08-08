@@ -1,24 +1,89 @@
-﻿# Task 7 Report: Visual QA + AI_CHANNEL
+﻿# Task 7 Report: Deal Room `UnderwritingRequestsPanel`
 
-**Status:** DONE
-**Branch:** feature/merchant-center-pos-shell
-**Commit:** (this AI_CHANNEL + report commit)
 
-## Desktop checklist (code-verified)
-- [x] Sidebar active = bg-cb-accent-muted text-cb-accent (MerchantCenterShell navLinkClass)
-- [x] Four status cards: grid-cols-1 sm:2 xl:4 in PostSubmissionDashboard
-- [x] Two-column checklist | quote: lg:grid-cols-12 (7 + 5)
-- [x] UnderwritingTracker w-full + MID table
-- [x] QuoteSignModal iframe still bg-white (untouched)
-- [x] FormsLockedBanner still agent-only when locked
 
-## Mobile checklist (code-verified)
-- [x] Sidebar hidden md:flex; bottom nav md:hidden
-- [x] Setup badge on nav when openChecklistCount > 0
-- [x] Cards/grids stack to 1 col below breakpoints
+**STATUS:** DONE  
 
-## Live browser
-Deferred to Teddy after push (needs merchant JWT / impersonation).
+**Branch:** `feature/underwriting-w9-request`  
 
-## AI_CHANNEL
-Appended 2026-07-24 POS-shell entry.
+**Commit:** `b51885e` — feat(uw): Deal Room underwriting requests panel for W-9  
+
+**Date:** 2026-08-07
+
+
+
+---
+
+
+
+## Summary
+
+
+
+Added Deal Room MID panel for W-9 underwriting requests: list, Create & Send, Resend/Cancel, Download signed PDF, and Send to Elavon modal. Mounted under **Underwriting by MID** when a MID is selected. Client `buildW9Prefill` shows a masked preview; create still uses server-side prefill.
+
+
+
+---
+
+
+
+## Files
+
+
+
+| File | Change |
+
+|---|---|
+
+| `src/components/deal-room/UnderwritingRequestsPanel.jsx` | New — list + new W-9 form + Elavon modal |
+
+| `src/pages/ApplicationDealRoom.jsx` | Import + mount when `selectedMid` set |
+
+
+
+---
+
+
+
+## API wiring
+
+
+
+`base44.functions.invoke('manageUnderwritingRequest', …)`:
+
+
+
+| Action | UI |
+
+|---|---|
+
+| `list` | On mount / refresh / after mutations |
+
+| `create` → `send` | Create & Send |
+
+| `send` / `resend` | Draft Send / unsigned Resend |
+
+| `cancel` | Unsigned rows |
+
+| `getSignedUrl` | Download (opens URL) |
+
+| `sendToElavon` | Modal: To (hint from `elavonDocsToHint`), Subject with AWB, body |
+
+
+
+Props from parent: `corporateId`, `mid`, `legalEntities`, `signers`, `profile`, plus `locations` for client prefill address fallback.
+
+
+
+---
+
+
+
+## Out of scope
+
+
+
+Task 8 (docs / Gmail scope / AGENTS), push, live smoke (needs published entity + redeployed function).
+
+

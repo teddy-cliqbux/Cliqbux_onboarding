@@ -1,46 +1,18 @@
-﻿### Task 3: Rebuild `MerchantCenterShell` (POS chrome)
+﻿### Task 3: Entity schema `UnderwritingRequest`
 
 **Files:**
-- Modify: `src/components/merchant-center/MerchantCenterShell.jsx` (full rewrite of layout; keep prop names)
+- Create: `base44/entities/Underwriting Request.jsonc`
 
-**Interfaces:**
-- Consumes (unchanged props): `title`, `subtitle`, `corporateId`, `openChecklistCount`, `children`, `showDealLink`
-- Produces: sidebar nav to Locations / Account / Setup (when `showDealLink`), top bar with title + business name + Sign out, wide `<main>`
+**Schema properties (all declared):**  
+`corporateId`, `merchantAccountId`, `midId`, `legalEntityId`, `type` (enum `w9`), `status` (enum per spec), `recipientName`, `recipientEmail`, `recipientPhone`, `channels` (prefer string `email|sms|both` matching `nudgeMerchant`), `agentNote`, `prefillSnapshot` (string JSON), `tokenHash`, `tokenExpiresAt`, `signedPdfUrl`, `sentAt`, `openedAt`, `signedAt`, `sentToElavonAt`, `elavonGmailMessageId`, `createdByEmail`, `lastError`
 
-- [ ] **Step 1: Rewrite shell**
+- [ ] **Step 1: Write JSONC** matching Base44 entity style in `Underwriting Message.jsonc` (name `UnderwritingRequest`, required: `corporateId`, `midId`, `type`, `status`).
 
-Replace the fixed header + `max-w-3xl` main with:
+- [ ] **Step 2: Note in commit body:** Teddy must **Publish entity** in Base44 Dashboard before live create works.
 
-```jsx
-// Structure â€” keep imports: NavLink, useNavigate, CliqbuxLogo, signOut
-// Key classes:
-// - Outer: portal-bg min-h-screen flex
-// - Aside: hidden md:flex w-56 flex-col border-r border-cb-border bg-cb-surface fixed inset-y-0 left-0 z-40
-// - NavLink active: bg-cb-accent-muted text-cb-accent
-// - Main column: flex-1 md:pl-56 min-h-screen flex flex-col
-// - Top bar: h-14 border-b border-cb-border bg-cb-surface/95 backdrop-blur px-4 flex items-center justify-between
-// - Main: flex-1 px-4 sm:px-6 py-6 w-full max-w-[1400px] mx-auto
-// Mobile: top bar hamburger toggles drawer; or reuse bottom nav strip with Setup / Locations / Account
-```
-
-Nav items (order):
-
-1. Setup â€” only if `showDealLink` (href = deal dashboard URL as today)
-2. Locations â€” `/locations${dealQ}`
-3. Account â€” `/account${dealQ}`
-
-Badge: reuse open checklist count on Setup link (same danger pill as current).
-
-Top bar right: `subtitle` as caption, `title` as business name (store-switcher style bordered chip is fine), Sign out button.
-
-- [ ] **Step 2: Manual check** â€” open `/locations` and `/account` after Task 5; sidebar should appear without breaking auth
-
-- [ ] **Step 3: Stage**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add src/components/merchant-center/MerchantCenterShell.jsx
+git add "base44/entities/Underwriting Request.jsonc"
+git commit --trailer "Co-authored-by: Cursor <cursoragent@cursor.com>" -m "feat(uw): add UnderwritingRequest entity schema"
 ```
-
----
-
-

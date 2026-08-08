@@ -442,6 +442,8 @@ Quick Stage prompts for **parent company name** → creates HubSpot company + de
 
 **Deal Room v1 + phase 2:** `/admin/applications/:corporateId` — notes, tasks, snapshot, **per-MID Elavon AWB + underwriting message threads**. Gmail sync of underwriting@ via `syncUnderwritingMail` (see `docs/underwriting-inbox.md`). Manual log works without Gmail env.
 
+**UnderwritingRequest W-9 (2026-08-07):** Deal Room **Underwriting requests** panel (selected MID) — agent sends W-9 invite (email/SMS/both) via `manageUnderwritingRequest`; merchant signs at `/uw/:token` via `completeUnderwritingRequest` (in-house e-sign + stamped IRS PDF, not BoldSign). Signed PDF: Download or **Send to Elavon** from underwriting@ (Gmail **`gmail.send`** scope + optional env `UNDERWRITING_ELAVON_DOCS_TO` for default To). One active unsigned request per MID+`w9`; does **not** replace checklist **Request document**. Entity `UnderwritingRequest` must be republished in Base44. Spec: `docs/superpowers/specs/2026-08-07-underwriting-w9-request-design.md`; ops: `docs/underwriting-inbox.md` § W-9.
+
 ### Architecture: MerchantMID
 Clean three-layer model: Profile ➔ Locations ➔ MerchantMIDs.
 

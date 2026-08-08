@@ -1,41 +1,72 @@
-# Task 5 Report: Underwriting table polish
+# Task 5 Report: `completeUnderwritingRequest` (token + PDF)
 
-**STATUS:** DONE  
-**Branch:** `feature/merchant-center-pos-shell`  
-**COMMIT:** `b40f729` — feat: widen UnderwritingTracker with MID rows table  
-**Date:** 2026-07-24
+**Status:** DONE  
+**Branch:** `feature/underwriting-w9-request`  
+**Commit:** `feat(uw): token-gated W-9 complete and PDF stamp`  
+**Date:** 2026-08-07
 
 ---
 
 ## Summary
 
-Polished `UnderwritingTracker` for the wide Merchant Center canvas: removed the centered width cap and added a POS-style Account / Status / MID table below the existing stage progress strip, using the same `items` array already in the component.
+Implemented token-gated `base44/functions/completeUnderwritingRequest/entry.ts` with `get` + `submitSignature`. Token hashing matches Task 4 (`sha256(rawToken + MERCHANT_JWT_SECRET)` hex). PDF fill inlined from `src/lib/w9PdfFill.js`; template fetched from `${PUBLIC_APP_URL}/irs/fw9.pdf` (fallbacks included). Signed PDF uploaded via `asServiceRole.integrations.Core.UploadFile` and stored only when the URL is public `https://` (Task 4 Elavon-attach carry).
 
 ---
 
-## Files Modified
+## File Created
 
-| File | Change |
+| File | Purpose |
 |---|---|
-| `src/components/onboarding/UnderwritingTracker.jsx` | Removed `max-w-3xl mx-auto`; added MID rows table with empty state |
+| `base44/functions/completeUnderwritingRequest/entry.ts` | Merchant magic-link W-9 get + sign |
+
+`public/irs/fw9.pdf` already present (synced from `assets/irs/fw9.pdf`) — included in commit if dirty.
 
 ---
 
-## What changed
+## Actions
 
-1. **Full width** — outer wrapper is now `w-full` only (no `max-w-3xl mx-auto`).
-2. **MID rows table** — below the stage strip, inside the same card:
-   - Columns: Account, Status, MID
-   - Empty state: “No processing accounts yet”
-   - Dot + caption status per row (status-specific dot colors aligned with `LocationStatusTable`)
-   - Account label: `merchantName || dbaName || 'Processing account'`
-   - MID column: `elavonMID` or em dash
-3. **Unchanged** — props (`locations`, `merchantIDs`), stage progress header, and stage calculation logic.
+| Action | Behavior |
+|---|---|
+| `get` | Hash token → lookup; cancelled/invalid → 410/404; expired (unsigned) → 410 + mark `expired`; signed → `{ status, fields, signedPdfUrl, viewOnly: true }`; else mark `opened` once, return full TIN fields + `agentNote` + optional `midLabel` + `expiresAt` |
+| `submitSignature` | Validate fields; require PNG data URL or typed `signatureName`; if already signed → existing URL (`idempotent: true`); fill+flatten PDF; UploadFile; persist `signed` / `signedPdfUrl` / `prefillSnapshot` / `signedAt` |
+
+`saveDraft` omitted (optional per plan/spec).
 
 ---
 
-## Residual risks
+## Auth
 
-- **Legacy locations fallback:** when `merchantIDs` is empty, table rows use location records — Account shows `dbaName`, Status uses `applicationStepStatus`, MID column stays em dash until Elavon assigns MIDs.
-- **Status dot colors:** brief showed a single `bg-cb-accent` dot; implementation uses per-status dot colors (same palette as `LocationStatusTable`) for clearer scanning on wide layouts.
-- **No automated test** for table rendering; visual QA on Setup dashboard with 0 / 1 / many MIDs recommended.
+- **Token only** — no `auth.me()`, no merchant JWT gate.
+- Same `hashToken` formula as `manageUnderwritingRequest`.
+
+---
+
+## Task 4 carry (signedPdfUrl)
+
+`uploadSignedPdf` rejects non-`https://` UploadFile results so `sendToElavon` can bare-`fetch` the PDF for Gmail attach.
+
+---
+
+## Smoke / verification (not live)
+
+**Idempotent re-submit plan** (after publish + entity live):
+
+1. Admin `send` a W-9 → open `/uw/{token}` (or invoke `get`).
+2. `submitSignature` with valid fields + PNG → note `signedPdfUrl`.
+3. Call `submitSignature` again with same token → expect same URL + `idempotent: true`.
+4. `get` → `viewOnly: true` + same URL.
+5. Confirm `curl -I signedPdfUrl` returns 200 (public https).
+
+---
+
+## Concerns / follow-ups
+
+1. Publish/redeploy function + `UnderwritingRequest` entity before live use.
+2. Visual QA of signature/date overlays still deferred (Task 2 carry).
+3. Task 6 merchant page not started here.
+
+---
+
+## Next
+
+Task 6 — `/uw/:token` merchant UI.

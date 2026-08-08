@@ -1,31 +1,27 @@
-﻿## Task 7: Visual QA + AI_CHANNEL
+﻿### Task 7: Deal Room `UnderwritingRequestsPanel`
 
-- [ ] **Step 1: Desktop QA checklist**
-  - Sidebar active gold on Setup / Locations / Account
-  - Four status cards in a row at `xl`
-  - Two-column checklist | quote on `lg`
-  - Underwriting table full width
-  - Quote iframe still white inside modal
-  - Agent unlock banner still visible when locked
+**Files:**
+- Create: `src/components/deal-room/UnderwritingRequestsPanel.jsx`
+- Modify: `src/pages/ApplicationDealRoom.jsx` â€” render panel under Underwriting-by-MID when `selectedMid` set; pass `corporateId`, `mid`, `legalEntities`, `signers`, `profile`
 
-- [ ] **Step 2: Mobile QA**
-  - Sidebar collapses; Setup reachable with checklist badge
-  - Cards stack; no horizontal page overflow
+**UI flow:**
+1. List requests for MID (status dots + recipient + dates)
+2. New W-9: entity select â†’ recipient select (from signers) â†’ editable email/phone â†’ channels checkboxes â†’ note â†’ Create & Send (or Create draft then Send)
+3. Signed row: Download + Send to Elavon modal (To prefilled from `UNDERWRITING_ELAVON_DOCS_TO` if API returns it; Subject with AWB; body textarea)
+4. Resend / Cancel on unsigned
 
-- [ ] **Step 3: Append `AI_CHANNEL.md`** (append-only) summarizing the POS-shell redesign + files touched
+Load people from Deal Room `data.signers` already fetched by `manageApplicationDesk.get`. Prefill preview from client `buildW9Prefill` for agent confidence before send (server still authoritative on create).
 
-- [ ] **Step 4: When Teddy asks â€” commit**
+- [ ] **Step 1: Build panel component** with list + new request form.
+
+- [ ] **Step 2: Mount in Deal Room**; wire invoke `manageUnderwritingRequest`.
+
+- [ ] **Step 3: Add Send to Elavon modal.**
+
+- [ ] **Step 4: Commit**
 
 ```bash
-git add src/components/merchant-center src/pages/PostSubmissionDashboard.jsx src/pages/MerchantLocationsHome.jsx src/pages/MerchantAccountPage.jsx src/pages/MerchantLocationDetail.jsx src/components/onboarding/UnderwritingTracker.jsx src/lib/setupStatusCards.js src/lib/setupStatusCards.test.js AI_CHANNEL.md
-git commit -m "$(cat <<'EOF'
-feat: Merchant Center POS-shell Setup dashboard
-
-Match dashboard.cliqbux.com chrome (sidebar + wide grid) for onboarding
-Setup, with status cards and unchanged quote/checklist gates.
-EOF
-)"
+git add src/components/deal-room/UnderwritingRequestsPanel.jsx src/pages/ApplicationDealRoom.jsx
+git commit -m "feat(uw): Deal Room underwriting requests panel for W-9"
 ```
 
----
-
