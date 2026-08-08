@@ -69,3 +69,6 @@ Adjust `--repo` if the remote slug differs.
 - [ ] No HandoffPanel, InstallerRunbook, or Request document on that page
 - [ ] UW threads, W-9 panel, Unlock, notes/tasks, snapshot still present
 - [ ] Close GitHub #23
+
+## Fix after review (append-only)
+Restored AI_CHANNEL.md blob from 001ff45 and re-appended only the #23 entry via binary concat (prefixMatchesBaseBlob: true, mid-file deletes: 0). New commit supersedes corrupted f7858ce body for this file.

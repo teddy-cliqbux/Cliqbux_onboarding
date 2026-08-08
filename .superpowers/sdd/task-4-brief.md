@@ -1,35 +1,27 @@
-﻿### Task 4: `manageUnderwritingRequest` (admin)
+﻿### Task 4: Rename inbound CTAs / launch copy
 
-**Files:**
-- Create: `base44/functions/manageUnderwritingRequest/entry.ts`
+**Files (agent-facing UI only):**
+- Modify: `src/pages/ApplicationManager.jsx` â€” Deal room button title/label â†’ Underwriting room
+- Modify: `src/pages/AdminMerchantAccountHome.jsx` â€” â€œDeal Roomâ€ link text
+- Modify: `src/pages/AdminMerchantPortfolio.jsx` â€” â€œDeal Roomâ€ link text
+- Modify: `src/pages/AdminQaHub.jsx` â€” Deal Room button copy/title (drop â€œhandoffâ€¦runbookâ€ from title)
+- Modify: `src/pages/AdminInstallationsPanel.jsx` â€” stop pointing agents at Deal Room runbook; point to Applications / account for UW if needed, or say runbooks moved / not on this page
+- Modify: `src/pages/AdminMerchantDashboard.jsx` â€” tile body mentioning Deal Room runbooks
+- Modify: `src/pages/PostSubmissionDashboard.jsx` â€” comment â€œApplications or Underwriting Roomâ€
+- Modify: `src/components/onboarding/AgreementSignedCelebration.jsx` â€” comment only OK
+- Modify: `src/pages/OnboardingPortal.jsx` â€” comment unlock from Underwriting Room
 
-**Interfaces:**
-- Auth: workspace `base44.auth.me()` only â€” reject merchant JWT (admin desk).
-- Actions:
-  - `list` `{ corporateId, midId? }` â†’ requests (mask TIN in list: show last 4 only via derived `tinMasked` from snapshot)
-  - `create` `{ corporateId, midId, legalEntityId, recipientName, recipientEmail?, recipientPhone?, channels, agentNote? }` â†’ builds prefill (inline copy of `w9Prefill` logic), status `draft`, returns request + full prefill for UI preview
-  - `send` `{ requestId }` â†’ validate channels, cancel other non-terminal same mid+type, generate 32-byte hex token, store `sha256(token + MERCHANT_JWT_SECRET)`, `tokenExpiresAt` = now+7d, send Resend and/or Quo with `${PUBLIC_APP_URL}/uw/${token}`, status `sent`, `sentAt`
-  - `resend` `{ requestId }` â†’ cancel if needed + same as send on new or same row (prefer update same row with new token if still unsigned)
-  - `cancel` `{ requestId }` â†’ `cancelled`
-  - `getSignedUrl` `{ requestId }` â†’ `{ signedPdfUrl }` if status signed|sent_to_elavon
-  - `sendToElavon` `{ requestId, to, subject, bodyText }` â†’ require signed PDF; Gmail send multipart; log `UnderwritingMessage` outbound; set `sent_to_elavon`
+**Do not** change merchant-facing delete confirm strings that list â€œDeal Roomâ€ as a data surface unless easy â€” prefer â€œUnderwriting Roomâ€ for consistency when editing those lines.
 
-**Email/SMS:** Copy Resend + Quo patterns from `nudgeMerchant/entry.ts` (normalizePhone, Quo-Api-Version `2026-03-30`, Resend from `onboarding@onboarding.cliqbuxpos.com`). SMS body must not include TIN.
-
-**Gmail send:** Reuse token refresh from `syncUnderwritingMail`; POST `https://gmail.googleapis.com/gmail/v1/users/me/messages/send` with raw RFC 2822 base64url MIME (PDF attachment). On missing scope, return 503 with hint to reconnect OAuth with `gmail.send`.
-
-- [ ] **Step 1: Scaffold function** with action switch + admin gate + `list`/`create`/`cancel` (no email yet).
-
-- [ ] **Step 2: Add `send`/`resend`** with Resend + Quo.
-
-- [ ] **Step 3: Add `sendToElavon` + `getSignedUrl`.**
-
-- [ ] **Step 4: Manual smoke** against published app after entity publish (or document blocked until publish).
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 1: Replace visible â€œDeal Roomâ€ / â€œDeal roomâ€ strings** in the files above via search.
 
 ```bash
-git add base44/functions/manageUnderwritingRequest/entry.ts
-git commit -m "feat(uw): admin manageUnderwritingRequest send and Elavon forward"
+rg -n "Deal [Rr]oom" src/pages src/components src/lib --glob '!**/HandoffPanel.jsx' --glob '!**/InstallerRunbook.jsx'
 ```
+
+Expected after: remaining hits only in file comments inside unused panels or historical docs â€” not in agent CTAs.
+
+- [ ] **Step 2: Quick sanity** â€” Applications row still links to `/admin/applications/:corporateId`.
+
+---
 

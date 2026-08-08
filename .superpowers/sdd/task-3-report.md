@@ -45,4 +45,4 @@ Added an **Underwriting** nav item to the admin Merchant Center sidebar under **
 
 ## Commit
 
-See git log on `feature/underwriting-room` for the Task 3 commit hash.
+`b4613a3` — Add Underwriting item to admin Merchant Center sidebar (#23).
