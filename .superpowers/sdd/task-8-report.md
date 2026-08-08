@@ -38,3 +38,11 @@ Documented W-9 underwriting request flow, Gmail **`gmail.send`** scope upgrade, 
 `docs(uw): W-9 underwriting request and Gmail send scopes`
 
 No push (per task brief).
+
+---
+
+## Review fix (Critical/Important #8)
+
+Commit `282bd28` rewrote earlier `AI_CHANNEL.md` entries (encoding/punctuation). Restored file from `b51885e` and re-appended only the `[CURSOR] — 2026-08-07` W-9 entry at EOF. Verified: `git diff b51885e HEAD -- AI_CHANNEL.md` shows append-only hunks.
+
+Fix commit: `fix(uw): restore AI_CHANNEL append-only hygiene`
