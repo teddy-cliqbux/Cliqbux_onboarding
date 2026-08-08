@@ -5,6 +5,11 @@ import { base44 } from '@/api/base44Client';
 import { appParams } from '@/lib/app-params';
 import CliqbuxLogo from '@/components/onboarding/CliqbuxLogo';
 import { emptyW9Fields, validateW9Fields } from '@/lib/w9Model';
+import {
+  W9_PAD_CSS_HEIGHT,
+  bitmapSizeForPad,
+  mapPointerToCanvas,
+} from '@/lib/w9SignaturePad';
 
 const FN = 'completeUnderwritingRequest';
 
@@ -117,6 +122,7 @@ export default function UnderwritingW9Sign() {
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
   const hasInkRef = useRef(false);
+  const pointerIdRef = useRef(null);
 
   const rawToken = String(routeToken || '').trim();
 
@@ -160,6 +166,41 @@ export default function UnderwritingW9Sign() {
 
   const setField = (key, value) => setFields((prev) => ({ ...prev, [key]: value }));
 
+  const prepCanvasSurface = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const cssWidth = canvas.clientWidth || canvas.parentElement?.clientWidth || 560;
+    const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
+    const { width, height, dpr: ratio } = bitmapSizeForPad(cssWidth, W9_PAD_CSS_HEIGHT, dpr);
+    canvas.width = width;
+    canvas.height = height;
+    canvas.style.height = `${W9_PAD_CSS_HEIGHT}px`;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.scale(ratio, ratio);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, cssWidth, W9_PAD_CSS_HEIGHT);
+    ctx.strokeStyle = '#111827';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    hasInkRef.current = false;
+  }, []);
+
+  useEffect(() => {
+    if (phase !== 'sign' || signMode !== 'draw') return undefined;
+    const id = requestAnimationFrame(() => prepCanvasSurface());
+    const onResize = () => {
+      // Resize clears ink — only while idle (not mid-stroke)
+      if (!drawingRef.current) prepCanvasSurface();
+    };
+    window.addEventListener('resize', onResize);
+    return () => {
+      cancelAnimationFrame(id);
+      window.removeEventListener('resize', onResize);
+    };
+  }, [phase, signMode, prepCanvasSurface]);
+
   const handleContinue = (e) => {
     e.preventDefault();
     const validation = validateW9Fields(fields);
@@ -171,62 +212,64 @@ export default function UnderwritingW9Sign() {
     setTypedName(fields.signatureName || fields.name || '');
     setPhase('sign');
     hasInkRef.current = false;
-    requestAnimationFrame(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.strokeStyle = '#111827';
-      ctx.lineWidth = 2;
-      ctx.lineCap = 'round';
-    });
-  };
-
-  const getCanvasPoint = (evt) => {
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
-    const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
-    return {
-      x: ((clientX - rect.left) / rect.width) * canvas.width,
-      y: ((clientY - rect.top) / rect.height) * canvas.height,
-    };
   };
 
   const startDraw = (evt) => {
     if (signMode !== 'draw') return;
+    if (evt.button != null && evt.button !== 0) return;
     evt.preventDefault();
-    drawingRef.current = true;
     const canvas = canvasRef.current;
+    if (!canvas) return;
+    drawingRef.current = true;
+    pointerIdRef.current = evt.pointerId;
+    try {
+      canvas.setPointerCapture(evt.pointerId);
+    } catch { /* some browsers */ }
     const ctx = canvas.getContext('2d');
-    const { x, y } = getCanvasPoint(evt);
+    const rect = canvas.getBoundingClientRect();
+    const { x, y } = mapPointerToCanvas(evt, rect, {
+      width: rect.width,
+      height: rect.height,
+    });
     ctx.beginPath();
     ctx.moveTo(x, y);
   };
 
   const draw = (evt) => {
     if (!drawingRef.current || signMode !== 'draw') return;
+    if (pointerIdRef.current != null && evt.pointerId !== pointerIdRef.current) return;
     evt.preventDefault();
     const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    const { x, y } = getCanvasPoint(evt);
+    const rect = canvas.getBoundingClientRect();
+    const { x, y } = mapPointerToCanvas(evt, rect, {
+      width: rect.width,
+      height: rect.height,
+    });
     ctx.lineTo(x, y);
     ctx.stroke();
     hasInkRef.current = true;
   };
 
-  const endDraw = () => {
+  const endDraw = (evt) => {
+    if (pointerIdRef.current != null && evt?.pointerId != null && evt.pointerId !== pointerIdRef.current) {
+      return;
+    }
+    const canvas = canvasRef.current;
+    if (canvas && pointerIdRef.current != null) {
+      try {
+        if (canvas.hasPointerCapture?.(pointerIdRef.current)) {
+          canvas.releasePointerCapture(pointerIdRef.current);
+        }
+      } catch { /* ignore */ }
+    }
+    pointerIdRef.current = null;
     drawingRef.current = false;
   };
 
   const clearCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    hasInkRef.current = false;
+    prepCanvasSurface();
   };
 
   const handleSubmitSignature = async () => {
@@ -539,16 +582,12 @@ export default function UnderwritingW9Sign() {
                 </div>
                 <canvas
                   ref={canvasRef}
-                  width={560}
-                  height={120}
                   className="w-full border border-gray-300 rounded-cb touch-none bg-white cursor-crosshair"
-                  onMouseDown={startDraw}
-                  onMouseMove={draw}
-                  onMouseUp={endDraw}
-                  onMouseLeave={endDraw}
-                  onTouchStart={startDraw}
-                  onTouchMove={draw}
-                  onTouchEnd={endDraw}
+                  style={{ height: W9_PAD_CSS_HEIGHT, touchAction: 'none' }}
+                  onPointerDown={startDraw}
+                  onPointerMove={draw}
+                  onPointerUp={endDraw}
+                  onPointerCancel={endDraw}
                 />
               </div>
             ) : (

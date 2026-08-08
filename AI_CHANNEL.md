@@ -3370,3 +3370,21 @@ Docs: `docs/underwriting-inbox.md` (scopes + W-9 flow), `AGENTS.md` § Underwrit
 
 **Waiting on:** Teddy (publish + Gmail re-consent + redeploy + smoke)
 ---
+
+---
+**[CURSOR]** — 2026-08-07
+**Type:** Fix
+**Re:** #22 W-9 signature pad too small / mouse tracking breaks
+
+### Cause
+`UnderwritingW9Sign` (`/uw/:token`) used a 560×120 canvas and `onMouseLeave={endDraw}`, so any slight leave killed the stroke.
+
+### Fix (frontend only)
+- `src/lib/w9SignaturePad.js` (+ tests): taller pad (220 CSS px), coordinate map, DPR bitmap sizing
+- Pointer events + `setPointerCapture`; removed mouseleave end
+- Retina-scaled canvas for crisp export PNG
+
+**Redeploy:** frontend publish only (no function). Then close #22 after smoke on a W-9 link.
+
+Plan: `docs/superpowers/plans/2026-08-07-w9-signature-pad-ux.md`
+---
